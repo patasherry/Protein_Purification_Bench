@@ -46,8 +46,28 @@ async function fresh(id, fn){
     })));
     T.check('nd/unit/mg_mL', tableRows.some(r => r.name === 'Sample mg_mL' && r.val.startsWith('2.00 mg/mL')), `Expected 2.00 mg/mL for 2 mg/mL, got ${tableRows.find(r => r.name === 'Sample mg_mL')?.val}`);
 
-
     });
+
+  await fresh('nanodrop_protein_ratio_warning', async (p, h) => {
+    await h.newProject('Protein ratio warning test');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await p.waitForTimeout(500);
+    await h.step('final');
+    await p.waitForTimeout(200);
+
+    /* NanoDrop exports A260/A280. These rows correspond to A280/A260 values of 1.43 and 2.00. */
+    const readings = `Date,Sample Name,Protein (mg/mL),A280,A260/A280,Sample Type\n10/24/2026 10:00:00 AM,Ratio 0.7,1.000,1.000,0.700,1 Abs = 1 mg / mL\n10/24/2026 10:01:00 AM,Ratio 2.0,1.000,1.000,0.500,1 Abs = 1 mg / mL`;
+    await p.setInputFiles('#ndFile', {name: 'nd_ratio_warning.csv', mimeType: 'text/csv', buffer: Buffer.from(readings)});
+    await p.waitForFunction(() => document.querySelectorAll('.ndr').length === 2);
+    const warnings = await p.$$eval('.ndr', rows => rows.map(r => ({
+      name: r.querySelector('input[data-ndk="name"]')?.value?.trim(),
+      warning: r.querySelector('.nd-purity')?.textContent?.trim() || ''
+    })));
+    const low = warnings.find(r => r.name === 'Ratio 0.7');
+    const normal = warnings.find(r => r.name === 'Ratio 2.0');
+    T.check('nd/ratio/outside-warning', !!low && /ratio outside expected range for pure protein/i.test(low.warning), `Expected a pure-protein ratio warning for 0.7, got ${low?.warning || 'none'}`);
+    T.check('nd/ratio/in-range-no-warning', !!normal && !normal.warning, `Expected no warning for ratio 2.0, got ${normal?.warning || 'none'}`);
+  });
 
   T.done();
 })();
