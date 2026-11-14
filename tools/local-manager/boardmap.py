@@ -88,6 +88,17 @@ def clean_homework(items, advisers, domains, earlier=(), limit=3):
     return out
 
 
+STOP = set("""a an and are as at be been by can do does for from has have how in into is it its of on or should such than that the
+their them these they this to was what when where which while who why will with would app apps protein purification bench user users""".split())
+
+
+def keywords(question, n=6):
+    """A literature query from a homework question, for when the secretary gave no search words: its longest uncommon words."""
+    w = [x for x in re.findall(r"[A-Za-z][A-Za-z0-9\-]{2,}", question or '') if x.lower() not in STOP]
+    keep = sorted(set(w), key=lambda x: (-len(x), w.index(x)))[:n]
+    return ' '.join(sorted(keep, key=w.index))
+
+
 def pubmed(terms, n=5, timeout=20):
     """Titles, journals and years of the top PubMed hits for some keywords (NCBI E-utilities, no key needed). [] on any failure."""
     if not (terms or '').strip():

@@ -47,4 +47,6 @@ check('homework: nobody sets their own', all(h['by'] != h['to'] for h in hw), hw
 check('homework: domains matched without regard to case, search words cleaned', hw[0]['domain'] == 'Gels and densitometry' and ';' not in hw[0]['search'], hw[0])
 check('sources text says when there is nothing', bm.sources_text([], '') == '(no sources found)')
 check('pubmed with no words asks nothing', bm.pubmed('') == [])
+kw = bm.keywords('How do published size exclusion chromatography reporting standards specify the acceptable R-squared threshold for a calibration curve?')
+check('keywords from a question drop common words and keep the subject', 'chromatography' in kw and 'calibration' in kw and ' the ' not in f' {kw} ' and len(kw.split()) <= 6, kw)
 sys.exit(1 if bad else 0)
