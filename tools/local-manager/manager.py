@@ -2500,7 +2500,7 @@ def ask_gemini_search(q):
     if not GEMINI_KEY:
         return '', False
     body = json.dumps({'contents': [{'parts': [{'text': q}]}], 'tools': [{'google_search': {}}]}).encode()
-    for model in ('gemini-2.5-flash', 'gemini-2.5-flash-lite'):
+    for model in ('gemini-flash-latest', 'gemini-flash-lite-latest'):  # the 2.5 models answer 404 on Patrick's key (2026-11-14)
         wait = _gem['last'] + GEMINI_GAP - time.time()
         if wait > 0:
             time.sleep(wait)
@@ -2523,13 +2523,14 @@ def board_do_homework(s, who, ask):
     """Research and answer the homework set at the last meeting. Returns [(item, answer)] and clears the list."""
     b = s.setdefault('board', {}); items = b.pop('homework', []) or []; out = []
     for h in items[:3]:
-        papers = bm.pubmed(h.get('search', ''))
+        papers = bm.pubmed(h.get('search') or bm.keywords(h['question']))
         web, ok = ask_gemini_search(f'Research question for a protein purification figure app: {h["question"]} Give the key facts in under 250 words.') if use(s, 'gemini') else ('', False)
         adv = next((w for w in who if w[0] == h['to']), who[0])
         try:
             ans = adv[1](bm.REPORT.format(who=adv[0], by=h.get('by', ''), question=h['question'], domain=h.get('domain', ''), sources=bm.sources_text(papers, web)))
         except Exception as e:
             ans = f'(no answer: {str(e)[:100]})'
+        log(f'board homework for {adv[0]}: {len(papers)} PubMed papers, web search {"answered" if ok else "not available"}')
         out.append((dict(h, to=adv[0]), re.sub(r'<think>.*?</think>', '', str(ans), flags=re.S).strip()[:1500]))
         b.setdefault('hw_done', []).append(h['question'])
     b['hw_done'] = b.get('hw_done', [])[-40:]
