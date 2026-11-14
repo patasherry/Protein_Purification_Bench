@@ -33,19 +33,19 @@
 | 5863–6058 | `loading` | File drag-and-drop / file input handlers for chromatograms, gel images, GenBank, and PDB files |
 | 6059–6217 | `protein: sequence properties and PDB structures` | Protein MW, $\varepsilon_{280}$, pI calculations from sequence, and PDB/mmCIF 3D structure domain parsing |
 | 6218–6352 | `construct and expression panel` | UI controls, GenBank file loading/text pasting (`#gbPaste`), and SVG builder for construct cassette, expression host, and lysis parameters |
-| 6353–6586 | `NanoDrop: protein A280 readings` | NanoDrop UV-Vis spectrum/summary parser, $A_{280}$ concentration calculations, and concentration bar charts |
-| 6587–6684 | `SEC panel` | UI controls and calibration curve plots for size-exclusion chromatography standards |
-| 6685–6694 | `collapsible panel sections (remembered), each with a one-line summary when closed` | Expand/collapse accordion panel UI state persistence in `localStorage` |
-| 6695–6740 | `More options inside each section (open or closed remembered), and the settings search` | Condensed progressive disclosure sections (`details.more`), settings search filter (`#panelSearch`), and automatic expansion of non-default settings (`moreSync`) |
-| 6741–6784 | `what to do next: one suggestion above the figure, with a button that takes you there` | Guided workflow suggestion bar above figures with actionable next-step buttons |
-| 6785–6867 | `projects: everything in one JSON file` | Exporting workspace state to `.json` files and importing project files |
-| 6868–7096 | `projects: a project per purification, saved with the page (db + assets) or in this browser` | IndexedDB (`hfb-projects`) and cloud persistence for multi-project management and asset blob storage |
-| 7097–7174 | `home` | Home screen workspace project list and project creation/opening UI |
-| 7175–7698 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
-| 7699–7849 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
-| 7850–8073 | `quick fill: the lab's usual procedures, one click per step; every field stays editable` | One-click lab protocol templates (`LABQ`) populating workflow steps (IMAC, SEC, cleavage, expression, lysis) |
-| 8074–8177 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
-| 8178–8198 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
+| 6353–6589 | `NanoDrop: protein A280 readings` | NanoDrop UV-Vis spectrum/summary parser, $A_{280}$ concentration calculations, and concentration bar charts |
+| 6590–6687 | `SEC panel` | UI controls and calibration curve plots for size-exclusion chromatography standards |
+| 6688–6697 | `collapsible panel sections (remembered), each with a one-line summary when closed` | Expand/collapse accordion panel UI state persistence in `localStorage` |
+| 6698–6743 | `More options inside each section (open or closed remembered), and the settings search` | Condensed progressive disclosure sections (`details.more`), settings search filter (`#panelSearch`), and automatic expansion of non-default settings (`moreSync`) |
+| 6744–6787 | `what to do next: one suggestion above the figure, with a button that takes you there` | Guided workflow suggestion bar above figures with actionable next-step buttons |
+| 6788–6870 | `projects: everything in one JSON file` | Exporting workspace state to `.json` files and importing project files |
+| 6871–7099 | `projects: a project per purification, saved with the page (db + assets) or in this browser` | IndexedDB (`hfb-projects`) and cloud persistence for multi-project management and asset blob storage |
+| 7100–7177 | `home` | Home screen workspace project list and project creation/opening UI |
+| 7178–7701 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
+| 7702–7852 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
+| 7853–8076 | `quick fill: the lab's usual procedures, one click per step; every field stays editable` | One-click lab protocol templates (`LABQ`) populating workflow steps (IMAC, SEC, cleavage, expression, lysis) |
+| 8077–8180 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
+| 8181–8201 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
 
 ---
 
