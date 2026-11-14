@@ -3349,6 +3349,14 @@ function calib(g){
   return y => { let i = 0; while (i < m.length - 2 && y > m[i+1].y) i++; const a = m[i], b = m[i+1], t = (y - a.y)/((b.y - a.y) || 1e-9);
     return Math.pow(10, Math.log10(a.kda) + t*(Math.log10(b.kda) - Math.log10(a.kda))); };
 }
+/* goodness of the linear log(MW)-versus-migration ladder calibration fit */
+function ladderRSquared(g){
+  const m = g.marks.filter(k => k.kda > 0); if (!calib(g) || m.length < 3) return null;
+  const xm = m.reduce((s, k) => s + k.y, 0)/m.length, ym = m.reduce((s, k) => s + Math.log10(k.kda), 0)/m.length;
+  let xx = 0, xy = 0, ss = 0; m.forEach(k => { const x = k.y - xm, y = Math.log10(k.kda) - ym; xx += x*x; xy += x*y; ss += y*y; }); if (!(xx > 0) || !(ss > 0)) return null;
+  const slope = xy/xx, err = m.reduce((s, k) => { const e = Math.log10(k.kda) - (ym + slope*(k.y - xm)); return s + e*e; }, 0);
+  return Math.max(0, Math.min(1, 1 - err/ss));
+}
 /* ladder marks that stop calib: same position, or sizes not decreasing down the gel */
 function calibBad(g){ const m = g.marks.filter(k => k.kda > 0).slice().sort((a, b) => a.y - b.y), bad = [];
   m.forEach((q, i) => { if (!isFinite(q.y)) bad.push(q.kda + ' (no position)'); else if (i && (+q.y <= +m[i-1].y || +q.kda >= +m[i-1].kda)) bad.push(m[i-1].kda + ' and ' + q.kda); }); return bad; }
@@ -5284,7 +5292,8 @@ function renderBandTable(g){
   const cols = anyG ? 8 : 6;
   const anySat = lanes.some(ln => !ln.marker && ln.bands.some(b => b.sat));
   const note = (anySat ? 'Saturated bands read low, so a shorter exposure gives truer percentages. ' : '') + (!cal ? (g.marks.length >= 2 ? 'Check the ladder: ' + (calibBad(g).length ? 'marks ' + calibBad(g).join(', ') + ' kDa are at the same position or out of order. ' : '') + 'Each band must have a distinct position, with sizes decreasing from top to bottom.' : 'Find or mark the ladder to get sizes in kDa.') : !anyT ? 'Mark the target band to estimate purity.' : !anyC && opt.purBase === 'tagged' ? 'Mark one contaminant band to calculate purity.' : '');
-  el.innerHTML = head + rows + (note ? `<tr><td colspan="${cols}" class="empty-row">${note}</td></tr>` : '');
+  const r2 = ladderRSquared(g), fit = r2 == null ? '' : `<tr><td colspan="${cols}" class="empty-row">Ladder calibration linear fit R&sup2;: ${fmt(r2, 3)}</td></tr>`;
+  el.innerHTML = head + rows + fit + (note ? `<tr><td colspan="${cols}" class="empty-row">${note}</td></tr>` : '');
 }
 document.querySelectorAll('[data-tagmode]').forEach(b => b.addEventListener('click', () => { tagMode = b.dataset.tagmode; if (tagMode) marking = null; render(); }));
 function chipAct(e){
