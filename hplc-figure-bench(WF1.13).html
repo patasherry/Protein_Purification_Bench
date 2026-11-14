@@ -1005,13 +1005,17 @@ button,input,select,textarea{font-family:inherit}
         <label class="f secstd">Calibration<select id="sec-cal" data-sec="cal" aria-label="Column calibration"></select></label>
       </div>
       <p class="hint" id="sec-calname"></p>
-      <div class="row3">
+      <div class="row">
         <label class="f">Units<select id="sec-unit" data-sec="unit"><option value="mL">mL</option><option value="min">min</option></select></label>
+        <label class="f" id="sec-flow-label"><span>Flow rate (<span class="unit" data-unit="mL/min">mL/min</span>)</span><input type="number" step="any" min="0" id="sec-flow" data-sec="flow" placeholder="e.g. 0.5" aria-label="Flow rate (mL/min)"></label>
+      </div>
+      <div class="row">
         <label class="f">V₀ (void)<input type="number" step="0.01" id="sec-v0" data-sec="v0" placeholder="optional"></label>
         <label class="f">Vₜ (bed volume)<input type="number" step="0.01" id="sec-vt" data-sec="vt" placeholder="optional"></label>
       </div>
       <p class="hint" id="sec-v0note"></p>
       <p class="hint warnc" id="sec-warn" hidden></p>
+      <p class="hint warnc" id="sec-flow-warn" hidden></p>
       <div class="secstd">
       <label class="f">Standards<select id="sec-set" data-sec="set"></select></label>
       <div class="known" id="secStdList"></div>
@@ -2074,18 +2078,18 @@ function applyInjShift(r){
 /* column presets: the bed volume is the column's geometric volume; V0 is a typical starting value (about 36% of the bed for
    Superdex and Superose), so measure it with blue dextran or use a large standard for real work */
 const SEC_COLUMNS = {
-  s200i3: {name: 'Superdex 200 Increase 3.2/300', vt: 2.4, re: /200.*3\.2[\/_\s-]*300|3\.2[\/_\s-]*300.*200/i},
-  s75i3: {name: 'Superdex 75 Increase 3.2/300', vt: 2.4, re: /75.*3\.2[\/_\s-]*300|3\.2[\/_\s-]*300.*75/i},
-  s200i5: {name: 'Superdex 200 Increase 5/150 GL', vt: 3, re: /200.*5[\/_\s-]*150|5[\/_\s-]*150.*200/i},
-  s75i5: {name: 'Superdex 75 Increase 5/150 GL', vt: 3, re: /75.*5[\/_\s-]*150|5[\/_\s-]*150.*75/i},
-  hl16s200: {name: 'HiLoad 16/600 Superdex 200 pg', vt: 120, re: /16[\/_\s-]*600.*200|200.*16[\/_\s-]*600|hiload(?!.*(26|75))/i},
-  hl16s75: {name: 'HiLoad 16/600 Superdex 75 pg', vt: 120, re: /16[\/_\s-]*600.*75|75.*16[\/_\s-]*600/i},
-  hl26s200: {name: 'HiLoad 26/600 Superdex 200 pg', vt: 320, re: /26[\/_\s-]*600.*200|200.*26[\/_\s-]*600/i},
-  hl26s75: {name: 'HiLoad 26/600 Superdex 75 pg', vt: 320, re: /26[\/_\s-]*600.*75|75.*26[\/_\s-]*600/i},
-  s6i: {name: 'Superose 6 Increase 10/300 GL', vt: 24, re: /superose\s*6|s6\s*i\b|\bs6\b/i},
-  s75i: {name: 'Superdex 75 Increase 10/300 GL', vt: 24, re: /(?:75\s*inc|s75\s*i\b|s75|sd ?75|superdex ?75)(?!.*(?<![\d.])(16|26|3\.2|5)[\/_\s-]*(600|300|150)(?!\d))/i},
-  s200i: {name: 'Superdex 200 Increase 10/300 GL', vt: 24, re: /(?:200\s*inc|s200\s*i\b|sd200\s*i|200i|s200|sd ?200|superdex ?200)(?!.*(?<![\d.])(16|26|3\.2|5)[\/_\s-]*(600|300|150)(?!\d))/i},
-  custom: {name: 'Other column', vt: '', re: null}};
+  s200i3: {name: 'Superdex 200 Increase 3.2/300', vt: 2.4, maxFlow: 0.5, re: /200.*3\.2[\/_\s-]*300|3\.2[\/_\s-]*300.*200/i},
+  s75i3: {name: 'Superdex 75 Increase 3.2/300', vt: 2.4, maxFlow: 0.5, re: /75.*3\.2[\/_\s-]*300|3\.2[\/_\s-]*300.*75/i},
+  s200i5: {name: 'Superdex 200 Increase 5/150 GL', vt: 3, maxFlow: 1, re: /200.*5[\/_\s-]*150|5[\/_\s-]*150.*200/i},
+  s75i5: {name: 'Superdex 75 Increase 5/150 GL', vt: 3, maxFlow: 1, re: /75.*5[\/_\s-]*150|5[\/_\s-]*150.*75/i},
+  hl16s200: {name: 'HiLoad 16/600 Superdex 200 pg', vt: 120, maxFlow: 5, re: /16[\/_\s-]*600.*200|200.*16[\/_\s-]*600|hiload(?!.*(26|75))/i},
+  hl16s75: {name: 'HiLoad 16/600 Superdex 75 pg', vt: 120, maxFlow: 5, re: /16[\/_\s-]*600.*75|75.*16[\/_\s-]*600/i},
+  hl26s200: {name: 'HiLoad 26/600 Superdex 200 pg', vt: 320, maxFlow: 10, re: /26[\/_\s-]*600.*200|200.*26[\/_\s-]*600/i},
+  hl26s75: {name: 'HiLoad 26/600 Superdex 75 pg', vt: 320, maxFlow: 10, re: /26[\/_\s-]*600.*75|75.*26[\/_\s-]*600/i},
+  s6i: {name: 'Superose 6 Increase 10/300 GL', vt: 24, maxFlow: 2, re: /superose\s*6|s6\s*i\b|\bs6\b/i},
+  s75i: {name: 'Superdex 75 Increase 10/300 GL', vt: 24, maxFlow: 2, re: /(?:75\s*inc|s75\s*i\b|s75|sd ?75|superdex ?75)(?!.*(?<![\d.])(16|26|3\.2|5)[\/_\s-]*(600|300|150)(?!\d))/i},
+  s200i: {name: 'Superdex 200 Increase 10/300 GL', vt: 24, maxFlow: 2, re: /(?:200\s*inc|s200\s*i\b|sd200\s*i|200i|s200|sd ?200|superdex ?200)(?!.*(?<![\d.])(16|26|3\.2|5)[\/_\s-]*(600|300|150)(?!\d))/i},
+  custom: {name: 'Other column', vt: '', maxFlow: 5, re: null}};
 const SEC_ORDER = ['s200i3', 's75i3', 's200i5', 's75i5', 'hl26s75', 'hl26s200', 'hl16s75', 'hl16s200', 's6i', 's75i', 's200i'];
 function secColumnGuess(r){ const t = (r.colLog || '') + ' ' + (r.file || '') + ' ' + (r.method || '') + ' ' + (r.name || ''); return SEC_ORDER.find(k => SEC_COLUMNS[k].re.test(t)) || 'custom'; }
 const SEC_STD_SETS = {
@@ -2094,7 +2098,7 @@ const SEC_STD_SETS = {
   cyLMW: {name: 'Cytiva LMW calibration kit', stds: [['Conalbumin', 75], ['Ovalbumin', 44], ['Carbonic anhydrase', 29], ['Ribonuclease A', 13.7], ['Aprotinin', 6.5]]},
   custom: {name: 'Your own standards', stds: []}};
 function newSecCal(col, unit){ const c = SEC_COLUMNS[col] || SEC_COLUMNS.custom, vt = c.vt === '' ? '' : (unit === 'min' ? '' : c.vt);
-  return {id: 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: c.name, col, unit: unit || 'mL', v0: vt === '' ? '' : Math.round(vt*0.36*100)/100, v0est: true, vt, set: 'biorad',
+  return {id: 'sc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: c.name, col, unit: unit || 'mL', flow: '', v0: vt === '' ? '' : Math.round(vt*0.36*100)/100, v0est: true, vt, set: 'biorad',
     stds: SEC_STD_SETS.biorad.stds.map(([name, kda, off]) => ({name, kda, ve: '', off: !!off}))}; }
 function secCals(){ const ok = c => c && typeof c === 'object' && !Array.isArray(c); if (!Array.isArray(opt.secCals)) opt.secCals = (opt.secCals && typeof opt.secCals === 'object') ? [opt.secCals] : []; if (!opt.secCals.every(ok)) opt.secCals = opt.secCals.filter(ok); opt.secCals.forEach(c => { c.unit = c.unit || 'mL'; c.stds = Array.isArray(c.stds) ? c.stds.filter(s => s && typeof s === 'object') : []; }); return opt.secCals; }
 /* the calibration a run uses: its own choice, else one for its column and units, made on first use */
@@ -6590,6 +6594,7 @@ function renderSec(){
   $('#sec-calname').textContent = c.name;
   $('#sec-set').innerHTML = Object.entries(SEC_STD_SETS).map(([k, v]) => `<option value="${k}" ${k === c.set ? 'selected' : ''}>${esc(v.name)}</option>`).join('');
   const put = (sel, v) => { const e = $(sel); if (e !== document.activeElement) e.value = v; }; put('#sec-unit', c.unit); put('#sec-v0', c.v0); put('#sec-vt', c.vt);
+  put('#sec-flow', c.flow != null && c.flow !== '' ? c.flow : (f && f.kind === 'run' && f.run && f.run.mFlow ? f.run.mFlow : ''));
   $('#sec-v0note').textContent = c.v0est && c.v0 !== '' ? 'Typical V₀ for this column. Measure yours with blue dextran.' : '';
   const lst = $('#secStdList'), lkey = c.id + '|' + c.unit + '|' + (c.stds || []).length + '|' + c.set;
   if (!(lst._k === lkey && lst.contains(document.activeElement))) { lst._k = lkey; lst.innerHTML = (c.stds || []).map((q, i) => `<div class="krow sec${q.off ? ' off' : ''}">
@@ -6618,10 +6623,19 @@ function renderSec(){
       });
     })
   );
+  const maxFlow = colP && colP.maxFlow ? colP.maxFlow : (colP && colP.vt > 100 ? 10 : 5);
+  const flVal = numOr(c.flow != null && c.flow !== '' ? c.flow : (f && f.kind === 'run' && f.run ? uvFlow(f.run) : NaN), NaN);
+  const badFlow = isFinite(flVal) && flVal > maxFlow;
+  const flowMsg = badFlow ? "Flow rate exceeds the recommended maximum for this column. Check whether the value was entered in µL/min (uL/min) instead of mL/min." : '';
   const warnEl = $('#sec-warn');
   if (warnEl) {
-    const msg = badVe ? "Elution volume is outside the column's void-to-total range. Check that the value is in column volumes, not minutes." : '';
+    const veMsg = badVe ? "Elution volume is outside the column's void-to-total range. Check that the value is in column volumes, not minutes." : '';
+    const msg = [veMsg, flowMsg].filter(Boolean).join(' ');
     warnEl.textContent = msg; warnEl.hidden = !msg;
+  }
+  const flowWarnEl = $('#sec-flow-warn');
+  if (flowWarnEl) {
+    flowWarnEl.textContent = flowMsg; flowWarnEl.hidden = !flowMsg;
   }
   $('#o-secMono').placeholder = numOr(opt.protKda, 0) > 0 ? `${opt.protKda} (from the gel settings)` : 'for oligomer state';
 }
@@ -6631,6 +6645,7 @@ function onSec(el){
   else if (k === 'col') { const p = SEC_COLUMNS[el.value]; c.col = el.value; if (p && el.value !== 'custom') { c.name = p.name; if (c.unit === 'mL') { c.vt = p.vt; c.v0 = Math.round(p.vt*0.36*100)/100; c.v0est = true; } } }
   else if (k === 'unit') { if (c.unit !== el.value) { const had = c.v0 !== '' || c.vt !== '' || (c.stds || []).some(q => q.ve !== ''); c.unit = el.value; c.v0 = c.vt = ''; (c.stds || []).forEach(q => { q.ve = ''; }); if (had) toast(`Units changed to ${el.value}, so V₀, Vₜ and the standard volumes were cleared. Enter them again in ${el.value}.`); } }
   else if (k === 'v0' || k === 'vt') { c[k] = el.value === '' ? '' : +el.value; if (k === 'v0') c.v0est = false; }
+  else if (k === 'flow') { c.flow = el.value === '' ? '' : +el.value; const f = curFig(); if (f && f.kind === 'run' && f.run) f.run.mFlow = el.value; }
   else if (k === 'set') { c.set = el.value; const st = SEC_STD_SETS[el.value]; if (st && st.stds.length) c.stds = st.stds.map(([name, kda, off]) => ({name, kda, off: !!off, ve: ((c.stds || []).find(q => q.name === name) || {}).ve ?? ''})); }
   else if (k === 'std') { const q = c.stds[+el.dataset.i]; if (!q) return; const fld = el.dataset.f; if (fld === 'use') q.off = !el.checked; else q[fld] = fld === 'name' ? el.value : el.value === '' ? '' : +el.value; }
   if (k === 'std' && el.dataset.f === 'use') el.closest('.krow').classList.toggle('off', !el.checked);
