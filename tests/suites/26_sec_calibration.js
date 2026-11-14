@@ -455,5 +455,73 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     T.check('no page errors', !o.errs.length, o.errs.join(' | '));
     await o.close();
   });
+
+  await T.t('sec_flow_rate_unit_and_range_warning', async () => {
+    const o = await open(), p2 = o.p, h2 = H(p2);
+    p2.on('dialog', d => d.accept());
+    const openFolds = loc => loc.evaluate(e => {
+      let d = e.closest('details');
+      while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+    });
+
+    await h2.newProject('SEC Flow Warning Test');
+    await h2.addRun(path.join(DATA, 'chrom/sec_semicolon_unicorn7.csv'));
+    let rs = (await h2.timeline()).find(x => /^run:/.test(x.k));
+    if (rs) await h2.step(rs.k);
+    if (await p2.isVisible('#moreBtn') && /More options/i.test(await p2.locator('#moreBtn').textContent().catch(() => ''))) {
+      await p2.click('#moreBtn').catch(() => {});
+      await h2.wait(300);
+    }
+    const sc = p2.locator('#o-secStds');
+    await openFolds(sc);
+    if (!(await sc.isChecked())) { await sc.check({force: true}); await h2.wait(300); }
+
+    const flowInput = p2.locator('#sec-flow');
+    const flowInputExists = await flowInput.count() > 0;
+
+    // (3) Asserts the text 'mL/min' appears adjacent to the flow-rate input
+    let unitLabelVisible = false;
+    if (flowInputExists) {
+      unitLabelVisible = await p2.evaluate(() => {
+        const input = document.querySelector('#sec-flow');
+        if (!input) return false;
+        const parent = input.closest('label') || input.parentElement;
+        const text = parent ? parent.textContent : '';
+        return /mL\s*\/\s*min/.test(text);
+      });
+    }
+    T.check('sec_flow_unit_label_adjacent', unitLabelVisible, 'visible mL/min unit label adjacent to flow-rate input');
+
+    // (1) Enters 300 as the flow rate and asserts a warning message is visible in the DOM
+    if (flowInputExists) {
+      await flowInput.fill('300');
+      await flowInput.dispatchEvent('input');
+      await flowInput.dispatchEvent('change');
+      await h2.wait(300);
+    }
+    const warnLocator = p2.locator('#sec-flow-warn, #sec-warn, .warnc:not([hidden])').filter({hasText: /µL\/min|uL\/min|flow rate/i});
+    const warnCount = await warnLocator.count();
+    let warnVis1 = false;
+    for (let i = 0; i < warnCount; i++) {
+      if (await warnLocator.nth(i).isVisible()) { warnVis1 = true; break; }
+    }
+    T.check('sec_flow_warning_visible_at_300', warnVis1, 'warning message visible in DOM when flow rate is 300');
+
+    // (2) Enters 0.3 and asserts no warning is visible
+    if (flowInputExists) {
+      await flowInput.fill('0.3');
+      await flowInput.dispatchEvent('input');
+      await flowInput.dispatchEvent('change');
+      await h2.wait(300);
+    }
+    let warnVis2 = false;
+    for (let i = 0; i < warnCount; i++) {
+      if (await warnLocator.nth(i).isVisible()) { warnVis2 = true; break; }
+    }
+    T.check('sec_flow_warning_gone_at_0p3', !warnVis2 && flowInputExists, 'no warning visible when flow rate is 0.3');
+
+    T.check('no page errors', !o.errs.length, o.errs.join(' | '));
+    await o.close();
+  });
   T.done();
 })();
