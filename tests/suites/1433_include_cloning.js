@@ -6,7 +6,17 @@ const {open, H, suite, fs} = require('../lib/harness');
 
 (async () => {
   const T = suite('1433_include_cloning');
-  const sw = p => p.locator('#npCloning'), head = p => p.locator('#projType');
+  const sw = p => p.locator('#npCloning');
+  const head = p => {
+    const loc = p.locator('#projType');
+    return {
+      getAttribute: (...a) => loc.getAttribute(...a),
+      click: async (...a) => {
+        await p.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
+        return loc.click(...a);
+      }
+    };
+  };
   const on = async l => await l.getAttribute('aria-checked') === 'true';
   // every stage, unfolded first (#1436 folds a long Cloning group in the step list)
   const cloneRows = async h => { await h.allSteps(); return (await h.timeline()).filter(x => /^clone:/.test(x.k)); };
@@ -45,6 +55,15 @@ const {open, H, suite, fs} = require('../lib/harness');
       T.check('off/no-cloning-steps', (await cloneRows(h)).length === 0, JSON.stringify(await cloneRows(h)));
       T.check('off/starts-at-construct', await p.locator('#tl [data-step="construct"]').evaluate(e => !!e.closest('.cur, [aria-current]')), 'the construct step is not the current one');
       T.check('off/header-off', !(await on(head(p))), 'the header switch reads on');
+      T.check('settings-block-contains-both', await p.evaluate(() => {
+        const d = document.querySelector('details.proj-settings');
+        if (!d) return false;
+        const bar = document.getElementById('projBar');
+        const toggle = d.querySelector('.clone-toggle');
+        const nameInp = d.querySelector('input[type=text][name=projName]');
+        return !d.open && toggle !== null && nameInp !== null &&
+          (!bar || (!bar.querySelector(':scope > .clone-toggle') && !bar.querySelector(':scope > input[name=projName]')));
+      }), 'Include Cloning toggle and Project Name field must both live inside a closed <details> settings block');
       await h.step('transform');
       T.check('off/no-template-selector', await p.locator('#clonePanel [data-cl=tpl]').count() === 0, 'the cloning templates show with cloning off');
       // switching on in the project reveals the template selector
