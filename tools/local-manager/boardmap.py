@@ -19,6 +19,7 @@ back with ideas the project does not have yet. Prefer research outside this repo
 methods and reporting standards, journal figure rules, how other software handles the same task, what scientists expect.
 A good question is specific and answerable in an afternoon, and its answer would change what the app should do.
 Do not repeat a question from the list of earlier homework. Domains of the project: {domains}.
+{aim}
 Advisers, by their exact names: {advisers}. Give exactly one question to EACH of them, written to that exact name in "to".
 Return ONE JSON object: {{"homework": [{{"to": "adviser name", "by": "adviser name", "domain": "one of the domains",
 "question": "one sentence", "search": "3 to 6 keywords for a literature search, or empty if not a literature question"}}]}}.
@@ -69,7 +70,30 @@ def domain_code(domain, app_text, rows, cap=7000):
     return '\n'.join(out)[:cap + 400]
 
 
-def clean_homework(items, advisers, domains, earlier=(), limit=3):
+def aim_text(next_domain):
+    """The secretary's instruction to aim homework at the next meeting's domain, so the answers arrive where they can be used."""
+    return (f'The NEXT meeting looks at the domain "{next_domain}". Every question must serve that domain, so the answers are '
+            f'ready when it meets: set "domain" to "{next_domain}" for each.') if next_domain else ''
+
+
+def related(question, answer, issues, need=3):
+    """Open issues a homework answer bears on: titles sharing at least `need` uncommon words with the question and answer."""
+    hw = {w.lower() for w in re.findall(r'[A-Za-z][A-Za-z0-9\-]{4,}', (question or '') + ' ' + (answer or '')[:1500]) if w.lower() not in STOP}
+    out = []
+    for i in issues:
+        tw = {w.lower() for w in re.findall(r'[A-Za-z][A-Za-z0-9\-]{4,}', i.get('title', '')) if w.lower() not in STOP}
+        if len(hw & tw) >= need:
+            out.append(i['number'])
+    return out[:3]
+
+
+def cites_code(prop_text, code):
+    """True when a proposal names something from the focus code (a function or variable name), not only the map's wording."""
+    ids = {w for w in re.findall(r'\b[A-Za-z_][A-Za-z0-9_]{3,}\b', code or '') if re.search(r'[A-Z_]|\d', w[1:]) or '_' in w}
+    return any(w in ids for w in re.findall(r'\b[A-Za-z_][A-Za-z0-9_]{3,}\b', prop_text or ''))
+
+
+def clean_homework(items, advisers, domains, earlier=(), limit=3, default_domain=''):
     """The homework the secretary returned, kept to real advisers and real domains, one question per adviser, none repeated."""
     doms, seen, out = {d.lower(): d for d in domains}, {q.lower() for q in earlier}, []
     norm = lambda x: re.sub(r'^the\s+', '', re.sub(r'[^a-z0-9 ]', '', str(x).lower())).strip()
@@ -84,7 +108,7 @@ def clean_homework(items, advisers, domains, earlier=(), limit=3):
             continue
         by = real(h.get('by', ''))
         out.append({'to': to, 'by': by if by and by != to else next((a for a in advisers if a != to), to),
-                    'domain': doms.get(str(h.get('domain', '')).strip().lower(), ''), 'question': q,
+                    'domain': doms.get(str(h.get('domain', '')).strip().lower(), '') or default_domain, 'question': q,
                     'search': re.sub(r'[^\w\s\-]', ' ', str(h.get('search', '')))[:80].strip()})
         seen.add(q.lower())
         if len(out) >= limit:

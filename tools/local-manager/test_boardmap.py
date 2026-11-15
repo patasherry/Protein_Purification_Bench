@@ -53,4 +53,12 @@ hw2 = bm.clean_homework([{'to': 'Local AI', 'by': 'gemini', 'question': 'Q one'}
 check('homework reaches an adviser whose name was written differently', [h['to'] for h in hw2] == ['the local AI', 'Gemini'] and hw2[0]['by'] == 'Gemini' and hw2[1]['by'] == 'the local AI', hw2)
 check('wikipedia with no words asks nothing', bm.wikipedia('') == [])
 check('sources text lists Wikipedia', 'Wikipedia:' in bm.sources_text([], '', [{'title': 'T', 'snippet': 's', 'url': 'u'}]))
+check('the aim names the next domain', 'Size exclusion' in bm.aim_text('Size exclusion: calibration and mass') and bm.aim_text('') == '')
+hw3 = bm.clean_homework([{'to': 'Gemini', 'by': 'the local AI', 'question': 'Q three'}], ['the local AI', 'Gemini'], ['Gels'], default_domain='Gels')
+check('homework without a domain takes the next meeting\'s', hw3 and hw3[0]['domain'] == 'Gels', hw3)
+iss = [{'number': 1476, 'title': 'Flag saturated bands in the band table'}, {'number': 1490, 'title': 'Report CDS feature count when a GenBank file has multiple ORFs'}]
+check('an answer about saturated bands finds the saturated-band issue only', bm.related('How do gel programs detect pixel saturation in bands?', 'Saturated bands are flagged in the band table when pixels clip.', iss) == [1476])
+code = 'function bandEnergy(g, lane){ const satRatio = DET.satRatio; return laneTrack(g, lane); }'
+check('a proposal naming a function in the code cites it', bm.cites_code('Use DET.satRatio in bandEnergy to flag clipping', code))
+check('a proposal that only restates the map does not', not bm.cites_code('Background subtraction methods and stain linearity for densitometry', code))
 sys.exit(1 if bad else 0)
