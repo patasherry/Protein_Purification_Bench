@@ -210,6 +210,8 @@ module.exports = async ({github, context, core}) => {
       if (ls.some(l => ['for-codex', 'for-claude-code', 'for-claude-first', 'for-claude-cloud', 'for-copilot'].includes(l))) return ['work', 'With the retry workers'];
       if (ls.includes(L.queue) && ls.includes('ag-returned')) return ['work', 'Queued for the PC: Antigravity handed it back'];
       if (ls.includes(L.queue) || ls.includes('jules-queue')) return ['work', 'Queued'];
+      if (ls.includes('awaiting-parts')) return ['work', 'Split into jobs, being worked on in order'];
+      if (ls.includes('needs-previous')) return ['work', 'Waits for the part before it'];
       if (ls.includes(L.parked)) return ['parked', 'Parked'];
       return ['work', ls.filter(isState).join(', ') || 'No state']; };
     const openNow = open.filter(i => i.state !== 'closed');
