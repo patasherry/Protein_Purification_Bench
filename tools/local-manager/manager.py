@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import reviewer as rv  # noqa: E402  (shares the token, model and GitHub helper)
 import relay as rl  # noqa: E402  (offline relay protocol: pure text, docs/RELAY.md)
 import routing as rt  # noqa: E402  (which queued issues go to Antigravity: pure functions)
+import planner as pl  # noqa: E402  (splitting a big request into jobs: pure functions)
 import boardmap as bm  # noqa: E402  (the board's map of the project and its homework: docs/BOARD_MAP.md)
 
 cfg, REPO, gh = rv.cfg, rv.REPO, rv.gh
@@ -494,6 +495,79 @@ def issues_q():
 ALL_RUNNING = {'jules-running', 'antigravity-running', 'agy-running', 'codex-running', 'openclaw-running', 'copilot-running', 'claude-code-running', 'claude-cloud-running'}
 ALL_DONE = {'jules-done', 'antigravity-done', 'agy-done', 'codex-done', 'openclaw-done', 'copilot-done', 'claude-code-done', 'claude-cloud-done'}
 ALL_QUEUES = {QUEUE, QUEUE_OLD, 'for-antigravity', 'for-claude-first', 'for-claude-code', 'for-claude-cloud', 'for-codex', 'for-openclaw', 'for-copilot', 'relay-pending', 'needs-relay', 'relay-from-board'}
+
+
+def plan(s):
+    """Split Patrick's big requests (`from-patrick` + `needs-plan`) into job cards, queue the parts one after another, and close
+    the request when its parts are done. The local AI writes the split (Gemini on the cloud copy). planner.py checks it, and a
+    split that fails the check is left for the lead with the reasons. plan_requests: false in the settings file turns it off."""
+    if not cfg.get('plan_requests', True):
+        return
+    st = s.setdefault('plans', {})
+    # a part whose predecessor has closed is queued (or sent to Patrick, if it sets a scientific constant)
+    for i in issues('needs-previous'):
+        w = pl.waits_on(i.get('body') or '')
+        try:
+            done = not w or gh(f'repos/{REPO}/issues/{w}')['state'] == 'closed'
+        except Exception:
+            continue
+        if done:
+            sci = 'needs-owner' in {l['name'] for l in i['labels']}
+            label(i['number'], add=[] if sci else [QUEUE], remove=['needs-previous'])
+            if sci:
+                post(i['number'], f'**Needs your OK, Patrick:** the part before this one is done. This part sets a scientific constant or a reported number. Reply **OK** to start it, or **No** to skip it.')
+            log(f'#{i["number"]}: the part before it closed, ' + ('sent to Patrick' if sci else 'queued'))
+    # a request whose parts are all closed is closed too
+    for i in issues('awaiting-parts'):
+        kids = st.get(str(i['number']), {}).get('kids') or []
+        try:
+            if kids and all(gh(f'repos/{REPO}/issues/{k}')['state'] == 'closed' for k in kids):
+                post(i['number'], f'Every part is closed ({", ".join(f"#{k}" for k in kids)}), so this request is done. Reopen it if something is missing.')
+                if not DRY:
+                    gh(f'repos/{REPO}/issues/{i["number"]}', 'PATCH', {'state': 'closed', 'state_reason': 'completed'})
+                log(f'#{i["number"]}: all parts closed, request closed')
+        except Exception:
+            continue
+    # split one new big request a pass (the local model can take several minutes)
+    for i in issues('needs-plan'):
+        n, names = str(i['number']), {l['name'] for l in i['labels']}
+        if 'from-patrick' not in names or n in st or 'awaiting-parts' in names:
+            continue
+        try:
+            rows = bm.codemap_rows((ROOT / 'docs' / 'CODEMAP.md').read_text(encoding='utf-8'))
+        except Exception:
+            rows = {}
+        suites = sorted(x.stem for x in (ROOT / 'tests' / 'suites').glob('*.js'))
+        q = pl.PLAN.format(most=8, sections='; '.join(rows) or 'see docs/CODEMAP.md', suites=', '.join(suites), title=i['title'], body=(i.get('body') or '')[:9000])
+        r = None
+        try:
+            r = helper_json(ask_gemini(q)) if CLOUD else local_json('You plan software work carefully and keep the requester\'s own words.', q)
+        except Exception as e:
+            log(f'#{n}: plan failed ({str(e)[:80]})')
+        jobs, probs = pl.validate((r or {}).get('jobs'), (i.get('body') or '') + ' ' + i['title'], list(rows), suites)
+        if not jobs:
+            st[n] = {'failed': probs[:5], 'at': time.time()}
+            post(i['number'], 'The local AI tried to split this request into jobs and the split did not pass its checks, so it stays with the lead:\n' + '\n'.join(f'- {x}' for x in probs[:5]))
+            log(f'#{n}: split rejected ({"; ".join(probs[:3])})')
+            return
+        if DRY:
+            log(f'[dry] #{n}: would file {len(jobs)} parts: ' + ' | '.join(j['title'] for j in jobs))
+            return
+        kids, prev = [], None
+        for k, j in enumerate(jobs, 1):
+            labs = ['split-job'] + (['needs-previous'] if prev else [QUEUE]) + (['needs-owner'] if j['science'] else ['owner-approved'])
+            if j['science'] and not prev:
+                labs.remove(QUEUE)
+            kid = gh(f'repos/{REPO}/issues', 'POST', {'title': j['title'], 'body': pl.card(j, k, len(jobs), i['number'], prev), 'labels': labs})['number']
+            if j['science'] and not prev:
+                post(kid, '**Needs your OK, Patrick:** this part sets a scientific constant or a reported number. Reply **OK** to start it, or **No** to skip it.')
+            kids.append(kid); prev = kid
+        st[n] = {'kids': kids, 'at': time.time()}
+        label(i['number'], add=['awaiting-parts'], remove=['needs-plan'])
+        post(i['number'], f'Split into {len(kids)} jobs by the local AI, done in this order:\n' + '\n'.join(f'{k}. #{kid}: {j["title"]}' + (' (waits for your OK: it sets a scientific constant)' if j['science'] else '') for k, (kid, j) in enumerate(zip(kids, jobs), 1))
+             + '\n\nThe first is queued now, and each later one is queued when the one before it closes. This request closes when they all have. If the split looks wrong, close the parts and add `for-coordinator` here.')
+        log(f'#{n}: split into {len(kids)} parts ({", ".join(f"#{k}" for k in kids)})')
+        return
 
 
 def triage(s):
@@ -3354,7 +3428,7 @@ def one_pass():
     # Behind 'questions' they used to wait out the whole question ladder, which routinely holds a pass for 20 to 45
     # minutes: #1060 sat on relay-from-board with no request posted because of that, and it reads as a stall.
     for name, duty in (('relay', relay), ('owner', owner_replies), ('owner merge', owner_merge_replies), ('science inbox', science_inbox),
-                       ('review', lambda s: None if DRY else rv.one_pass()), ('gate', gate), ('lead review', lead_review), ('claude jobs', claude_jobs), ('codex jobs', codex_jobs), ('agy jobs', lambda s: bg_worker(s, 'agy')), ('copilot', copilot), ('antigravity', antigravity), ('antigravity app', antigravity_app), ('antigravity stall', antigravity_stall), ('openclaw', openclaw), ('ux', ux_scope), ('board', board), ('triage', triage), ('stuck', stuck), ('advise', advise), ('digest', digest), ('update', self_update)):
+                       ('review', lambda s: None if DRY else rv.one_pass()), ('gate', gate), ('lead review', lead_review), ('claude jobs', claude_jobs), ('codex jobs', codex_jobs), ('agy jobs', lambda s: bg_worker(s, 'agy')), ('copilot', copilot), ('antigravity', antigravity), ('antigravity app', antigravity_app), ('antigravity stall', antigravity_stall), ('openclaw', openclaw), ('ux', ux_scope), ('board', board), ('plan', plan), ('triage', triage), ('stuck', stuck), ('advise', advise), ('digest', digest), ('update', self_update)):
         if CLOUD and name in PC_ONLY:
             continue
         if not CLOUD and LOCAL_ROLE == 'coder' and name == 'review':
