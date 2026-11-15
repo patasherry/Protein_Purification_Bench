@@ -5898,7 +5898,20 @@ function toCanvas(src, w, h){
 async function imageToCanvas(file){
   if (/\.tiff?$/i.test(file.name) || /tiff/.test(file.type)) {
     await tiffLib(); const buf = await file.arrayBuffer(); const ifds = window.UTIF.decode(buf); window.UTIF.decodeImage(buf, ifds[0]);
-    const rgba = window.UTIF.toRGBA8(ifds[0]), w = ifds[0].width, h = ifds[0].height;
+    const ifd = ifds[0], w = ifd.width, h = ifd.height, n = w*h;
+    const bps = ifd.t258 ? ifd.t258[0] : 1, spp = ifd.t277 ? ifd.t277[0] : (ifd.t258 ? ifd.t258.length : 1), intp = ifd.t262 ? ifd.t262[0] : 1;
+    let rgba;
+    if (bps === 16 && spp === 1 && ifd.data) {
+      const raw = ifd.data; let mx = 0;
+      for (let i = 0; i < n; i++) { const v = raw[2*i] | (raw[2*i+1] << 8); if (v > mx) mx = v; }
+      const ceil = mx <= 4095 ? 4095 : mx <= 16383 ? 16383 : 65535;
+      rgba = new Uint8ClampedArray(n*4);
+      for (let i = 0; i < n; i++) {
+        let px = Math.round((raw[2*i] | (raw[2*i+1] << 8)) * 255 / ceil);
+        if (intp === 0) px = 255 - px;
+        const qi = i*4; rgba[qi] = rgba[qi+1] = rgba[qi+2] = px; rgba[qi+3] = 255;
+      }
+    } else rgba = window.UTIF.toRGBA8(ifd);
     const c0 = document.createElement('canvas'); c0.width = w; c0.height = h; c0.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, w*h*4), w, h), 0, 0);
     return toCanvas(c0, w, h);
   }
