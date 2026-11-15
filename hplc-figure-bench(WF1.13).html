@@ -86,6 +86,11 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-gel-upload.has-img{border-style:solid;cursor:default;padding:10px}
 .clone .cl-gel-preview{display:flex;flex-direction:column;align-items:center}
 .clone .cl-gel-img{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);object-fit:contain}
+.clone .cl-gel-canvas{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);object-fit:contain;cursor:crosshair}
+.clone .cl-gel-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-bottom:8px;padding:6px;background:var(--well);border-radius:var(--r-s);font-size:12px}
+.clone .cl-gel-toolbar span{color:var(--muted);font-size:11.5px}
+.clone .cl-gel-toolbar input[type="range"]{vertical-align:middle}
+.clone .cl-gel-toolbar .btn.active{background:var(--accent);color:#fff}
 .clone .cl-gel-info{font-size:12px;color:var(--muted);margin:4px 0 2px}
 .clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
 .clone .cl-ag-section{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
@@ -3080,6 +3085,114 @@ function processGel(g){
   x2.putImageData(img, 0, 0);
   g.pix = {w: ow, h: oh, d: dk, q: dq}; g._bands = null;
   g.out = {url: c2.toDataURL('image/jpeg', 0.92), w: ow, h: oh}; g.hist = hist; g.crop = {l, r: rr, t, b};
+}
+function defaultAgaroseAdj(){
+  return { rot: 0, brightness: 100, contrast: 100, crop: null };
+}
+function renderAgaroseGel(s){
+  if (!s || !s.gel) return;
+  const g = s.gel;
+  const canvas = document.querySelector('#ag-gel-canvas') || document.querySelector('.cl-gel-canvas');
+  if (!canvas) return;
+  const adj = g.adjustments = g.adjustments || defaultAgaroseAdj();
+  const src = g.uneditedImage || g.origImage || g.image;
+  if (!src && !g._srcCanvas) return;
+
+  const doRender = (imgSource) => {
+    const W = imgSource.naturalWidth || imgSource.width;
+    const H = imgSource.naturalHeight || imgSource.height;
+    if (!W || !H) return;
+
+    const rot = +adj.rot || 0;
+    const brightness = adj.brightness != null ? +adj.brightness : 100;
+    const contrast = adj.contrast != null ? +adj.contrast : 100;
+    const crop = adj.crop;
+
+    if (rot === 0 && (!crop || crop.w <= 0 || crop.h <= 0) && brightness === 100 && contrast === 100) {
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(imgSource, 0, 0);
+      const renderedUrl = canvas.toDataURL('image/png');
+      g.image = renderedUrl;
+      const imgEl = document.querySelector('.cl-gel-preview .cl-gel-img');
+      if (imgEl) imgEl.src = renderedUrl;
+      return;
+    }
+
+    let c1;
+    if (rot === 0) {
+      c1 = document.createElement('canvas');
+      c1.width = W; c1.height = H;
+      const x1 = c1.getContext('2d');
+      x1.drawImage(imgSource, 0, 0);
+    } else {
+      const rad = rot * Math.PI / 180;
+      const cos = Math.abs(Math.cos(rad));
+      const sin = Math.abs(Math.sin(rad));
+      const rotW = Math.max(1, Math.round(W * cos + H * sin));
+      const rotH = Math.max(1, Math.round(W * sin + H * cos));
+      c1 = document.createElement('canvas');
+      c1.width = rotW; c1.height = rotH;
+      const x1 = c1.getContext('2d');
+      x1.translate(rotW / 2, rotH / 2);
+      x1.rotate(rad);
+      x1.drawImage(imgSource, -W / 2, -H / 2);
+    }
+
+    let c2 = c1;
+    if (crop && crop.w > 0 && crop.h > 0) {
+      const cx = Math.max(0, Math.min(c1.width - 1, Math.round(crop.x * c1.width)));
+      const cy = Math.max(0, Math.min(c1.height - 1, Math.round(crop.y * c1.height)));
+      const cw = Math.max(1, Math.min(c1.width - cx, Math.round(crop.w * c1.width)));
+      const ch = Math.max(1, Math.min(c1.height - cy, Math.round(crop.h * c1.height)));
+      c2 = document.createElement('canvas');
+      c2.width = cw; c2.height = ch;
+      const x2 = c2.getContext('2d');
+      x2.drawImage(c1, cx, cy, cw, ch, 0, 0, cw, ch);
+    }
+
+    if (brightness !== 100 || contrast !== 100) {
+      const x2 = c2.getContext('2d');
+      const imgData = x2.getImageData(0, 0, c2.width, c2.height);
+      const d = imgData.data;
+      const bMult = brightness / 100;
+      const cMult = contrast / 100;
+      for (let i = 0; i < d.length; i += 4) {
+        for (let j = 0; j < 3; j++) {
+          let v = d[i + j] * bMult;
+          v = (v - 128) * cMult + 128;
+          d[i + j] = v < 0 ? 0 : (v > 255 ? 255 : Math.round(v));
+        }
+      }
+      x2.putImageData(imgData, 0, 0);
+    }
+
+    canvas.width = c2.width;
+    canvas.height = c2.height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, c2.width, c2.height);
+    ctx.drawImage(c2, 0, 0);
+
+    const renderedUrl = canvas.toDataURL('image/png');
+    g.image = renderedUrl;
+    const imgEl = document.querySelector('.cl-gel-preview .cl-gel-img');
+    if (imgEl) imgEl.src = renderedUrl;
+  };
+
+  if (g._srcCanvas) {
+    doRender(g._srcCanvas);
+  } else if (g._srcImg && g._srcImgUrl === src) {
+    doRender(g._srcImg);
+  } else {
+    const img = new Image();
+    img.onload = () => {
+      g._srcImg = img;
+      g._srcImgUrl = src;
+      doRender(img);
+    };
+    img.src = src;
+  }
 }
 /* ---------- auto crop: find the stained lanes, their spacing, and the top and bottom of the bands ---------- */
 function autoCrop(g){
@@ -7370,6 +7483,18 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         duration: str(s.gel.duration),
         bottomToTop: !!s.gel.bottomToTop,
         showMigration: !!s.gel.showMigration,
+        adjustments: s.gel.adjustments ? {
+          rot: numOr(s.gel.adjustments.rot, 0),
+          brightness: numOr(s.gel.adjustments.brightness, 100),
+          contrast: numOr(s.gel.adjustments.contrast, 100),
+          crop: s.gel.adjustments.crop ? {
+            x: numOr(s.gel.adjustments.crop.x, 0),
+            y: numOr(s.gel.adjustments.crop.y, 0),
+            w: numOr(s.gel.adjustments.crop.w, 1),
+            h: numOr(s.gel.adjustments.crop.h, 1)
+          } : null
+        } : null,
+        uneditedImage: str(s.gel.uneditedImage || s.gel.origImage || s.gel.image),
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
         lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? {label: str(l.label), type: str(l.type), expected: str(l.expected)} : l) : [],
         results: obj(s.gel.results)
@@ -7851,7 +7976,7 @@ const clTypeSel = () => `<div class="cl-type"><button type="button" class="tgl" 
 function clAgaroseHtml(s){
   if (!s || s.kind !== 'gel') return '';
   const g = s.gel = s.gel || {};
-  const hasImg = !!(g && g.image);
+  const hasImg = !!(g && (g.image || g.origImage));
   const canRestore = !!(g && g.origImage && (g.image !== g.origImage || g.name !== g.origName || g.replaced));
   const a0 = s.at && s.at[0] ? s.at[0] : null;
   const f0 = a0 ? a0.f : {};
@@ -7871,13 +7996,46 @@ function clAgaroseHtml(s){
   const ladderProd = hasTxt(g.ladderProduct) ? g.ladderProduct : (hasTxt(f0.ladder) ? f0.ladder : '1 kb ladder');
   const ladderCat = hasTxt(g.ladderCat) ? g.ladderCat : 'N3232S';
   const ladderSizes = hasTxt(g.ladderSizes) ? g.ladderSizes : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
+  const adj = g.adjustments = g.adjustments || defaultAgaroseAdj();
+  const rot = +adj.rot || 0;
+  const brightness = adj.brightness != null ? +adj.brightness : 100;
+  const contrast = adj.contrast != null ? +adj.contrast : 100;
 
   return `<div class="cl-wide cl-gel-box">
     <div class="cl-gel-upload${hasImg ? ' has-img' : ''}" data-cl-drop="gel" data-stg="${esc(s.id)}" tabindex="0" role="region" aria-label="Agarose gel image upload">
       <input type="file" class="cl-gel-file" data-cl-file="${esc(s.id)}" accept="image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" hidden>
       ${hasImg ? `
+        <div class="cl-gel-toolbar" id="ag-adj-toolbar">
+          <div style="display:flex;align-items:center;gap:4px">
+            <button type="button" class="btn quiet${g._cropMode ? ' active' : ''}" id="ag-adj-crop" data-ag-adj="crop" title="Drag a rectangle on the image to crop">Crop</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span>Rotate:</span>
+            <input type="range" id="ag-adj-rot" class="ag-rotation" data-ag-adj="rot" min="-180" max="180" step="1" value="${rot}" style="width:90px" title="Rotation (-180° to 180°)">
+            <button type="button" class="btn quiet" id="ag-adj-rot-dec" data-ag-adj="rot-step" data-step="-1" title="Tilt -1°">-1°</button>
+            <input type="number" id="ag-adj-rot-val" class="ag-rot-val" data-ag-adj="rot-val" min="-180" max="180" step="1" value="${rot}" style="width:4.5em;text-align:center" title="Rotation angle">
+            <button type="button" class="btn quiet" id="ag-adj-rot-inc" data-ag-adj="rot-step" data-step="1" title="Tilt +1°">+1°</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span>Brightness:</span>
+            <input type="range" id="ag-adj-brightness" class="ag-brightness" data-ag-adj="brightness" min="0" max="200" step="1" value="${brightness}" style="width:75px" title="Brightness (0-200, default 100)">
+            <input type="number" id="ag-adj-brightness-val" class="ag-brightness-val" data-ag-adj="brightness-val" min="0" max="200" step="1" value="${brightness}" style="width:4em;text-align:center">
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span>Contrast:</span>
+            <input type="range" id="ag-adj-contrast" class="ag-contrast" data-ag-adj="contrast" min="0" max="200" step="1" value="${contrast}" style="width:75px" title="Contrast (0-200, default 100)">
+            <input type="number" id="ag-adj-contrast-val" class="ag-contrast-val" data-ag-adj="contrast-val" min="0" max="200" step="1" value="${contrast}" style="width:4em;text-align:center">
+          </div>
+          <div>
+            <button type="button" class="btn quiet" id="ag-adj-reset" data-ag-adj="reset">Reset adjustments</button>
+          </div>
+        </div>
         <div class="cl-gel-preview">
-          <img class="cl-gel-img" src="${esc(g.image)}" alt="${esc(g.name || 'Agarose gel')}">
+          <div class="cl-gel-canvas-wrap" style="position:relative;display:inline-block">
+            <canvas class="cl-gel-canvas" id="ag-gel-canvas"></canvas>
+            <div id="ag-crop-rect" style="display:none;position:absolute;border:2px dashed #00e5ff;background:rgba(0,229,255,0.18);pointer-events:none"></div>
+          </div>
+          <img class="cl-gel-img" src="${esc(g.image || g.origImage)}" alt="${esc(g.name || 'Agarose gel')}" style="display:none">
           <div class="cl-gel-info"><span class="cl-gel-name">${esc(g.name || 'Gel image')}</span></div>
         </div>
         <div class="cl-gel-acts">
@@ -7950,6 +8108,10 @@ async function handleAgaroseGelUpload(file, s){
         image: dataUrl,
         origName: file.name,
         origImage: dataUrl,
+        uneditedImage: dataUrl,
+        adjustments: defaultAgaroseAdj(),
+        _srcCanvas: canvas,
+        _srcImg: null,
         rawId,
         origRawId: rawId,
         replaced: false,
@@ -7962,6 +8124,10 @@ async function handleAgaroseGelUpload(file, s){
       s.gel.name = file.name;
       s.gel.rawId = rawId;
       s.gel.replaced = true;
+      s.gel.uneditedImage = dataUrl;
+      s.gel.adjustments = defaultAgaroseAdj();
+      s.gel._srcCanvas = canvas;
+      s.gel._srcImg = null;
     }
     if (s.at && s.at.length) {
       s.at.forEach(a => { if (a.f && (!a.f.gel || a.f.gel === s.gel.origName)) a.f.gel = s.gel.name; });
@@ -8022,8 +8188,10 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
 /* redrawn only when its content changed, and never under the cursor: typing in a field must not lose the focus */
 function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(curStep === 'transform' || curStep.startsWith('clone:'))) return; const h = clPanelHtml(), ae = document.activeElement, inside = el.contains(ae);
   if (h === clHtml && !force) return; if (!force && inside && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
-  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'laneK', 'laneIdx'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
-  clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } }
+  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'laneK', 'laneIdx', 'agAdj'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
+  clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); }
+  const c = CL(), id = curStep.startsWith('clone:') ? curStep.slice(6) : '', s = c.stages.find(x => x.id === id);
+  if (s && s.kind === 'gel' && s.gel && (s.gel.image || s.gel.origImage)) renderAgaroseGel(s); }
 function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
 function onCloneField(e){ const t = e.target, c = CL();
@@ -8031,6 +8199,34 @@ function onCloneField(e){ const t = e.target, c = CL();
     if (t.files && t.files.length) {
       const s = c.stages.find(x => 'clone:' + x.id === curStep);
       if (s) handleAgaroseGelUpload(t.files[0], s);
+    }
+    return;
+  }
+  if (t.dataset.agAdj) {
+    const s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s && s.gel) {
+      const g = s.gel;
+      const adj = g.adjustments = g.adjustments || defaultAgaroseAdj();
+      const k = t.dataset.agAdj;
+      const val = parseFloat(t.value);
+      if (k === 'rot' || k === 'rot-val') {
+        adj.rot = isNaN(val) ? 0 : Math.max(-180, Math.min(180, val));
+        const other = $(k === 'rot' ? '#ag-adj-rot-val' : '#ag-adj-rot');
+        if (other && other !== t) other.value = adj.rot;
+      } else if (k === 'brightness' || k === 'brightness-val') {
+        adj.brightness = isNaN(val) ? 100 : Math.max(0, Math.min(200, val));
+        const other = $(k === 'brightness' ? '#ag-adj-brightness-val' : '#ag-adj-brightness');
+        if (other && other !== t) other.value = adj.brightness;
+      } else if (k === 'contrast' || k === 'contrast-val') {
+        adj.contrast = isNaN(val) ? 100 : Math.max(0, Math.min(200, val));
+        const other = $(k === 'contrast' ? '#ag-adj-contrast-val' : '#ag-adj-contrast');
+        if (other && other !== t) other.value = adj.contrast;
+      }
+      renderAgaroseGel(s);
+      if (e.type === 'change') {
+        if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+        queueSave();
+      }
     }
     return;
   }
@@ -8069,6 +8265,40 @@ function onCloneField(e){ const t = e.target, c = CL();
   if (t.dataset.cf) { const k = t.dataset.cf; if (t.type === 'checkbox') { if (t.checked) r.a.f[k] = true; else delete r.a.f[k]; } else if (t.value === '') delete r.a.f[k]; else r.a.f[k] = t.value;
     clChanged(t.tagName === 'SELECT' || t.type === 'checkbox' || e.type === 'change'); } }
 function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) { setCloning(sw.getAttribute('aria-checked') !== 'true'); return; }
+  const adjBtn = e.target.closest('[data-ag-adj]');
+  if (adjBtn) {
+    const act = adjBtn.dataset.agAdj, c = CL(), s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s && s.gel) {
+      const g = s.gel;
+      const adj = g.adjustments = g.adjustments || defaultAgaroseAdj();
+      if (act === 'reset') {
+        g.adjustments = defaultAgaroseAdj();
+        const rotSl = $('#ag-adj-rot'); if (rotSl) rotSl.value = 0;
+        const rotVal = $('#ag-adj-rot-val'); if (rotVal) rotVal.value = 0;
+        const bSl = $('#ag-adj-brightness'); if (bSl) bSl.value = 100;
+        const bVal = $('#ag-adj-brightness-val'); if (bVal) bVal.value = 100;
+        const cSl = $('#ag-adj-contrast'); if (cSl) cSl.value = 100;
+        const cVal = $('#ag-adj-contrast-val'); if (cVal) cVal.value = 100;
+        renderAgaroseGel(s);
+        if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+        queueSave();
+        toast('Reset adjustments');
+      } else if (act === 'rot-step') {
+        const step = parseFloat(adjBtn.dataset.step) || 0;
+        adj.rot = Math.max(-180, Math.min(180, (adj.rot || 0) + step));
+        const rotSl = $('#ag-adj-rot'); if (rotSl) rotSl.value = adj.rot;
+        const rotVal = $('#ag-adj-rot-val'); if (rotVal) rotVal.value = adj.rot;
+        renderAgaroseGel(s);
+        if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+        queueSave();
+      } else if (act === 'crop') {
+        g._cropMode = !g._cropMode;
+        adjBtn.classList.toggle('active', !!g._cropMode);
+        toast(g._cropMode ? 'Drag a rectangle on the gel to crop' : 'Crop mode off');
+      }
+    }
+    return;
+  }
   const b = e.target.closest('[data-cl]'); if (!b) return; const c = CL(), w = b.dataset.cl, v = b.dataset.v || '', s = c.stages.find(x => 'clone:' + x.id === curStep), i = s ? c.stages.indexOf(s) : -1;
   const arm = k => { if (clArm === k) { clArm = ''; return true; } clArm = k; renderClone(true); return false; };
   if (w !== 'rmat' && w !== 'rmst') clArm = '';
@@ -8108,6 +8338,10 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
       s.gel.image = s.gel.origImage; s.gel.name = s.gel.origName;
       if (s.gel.origRawId) s.gel.rawId = s.gel.origRawId;
       s.gel.replaced = false;
+      s.gel.uneditedImage = s.gel.origImage;
+      s.gel._srcCanvas = null;
+      s.gel._srcImg = null;
+      s.gel.adjustments = defaultAgaroseAdj();
       if (s.at && s.at.length) s.at.forEach(a => { if (a.f && a.f.gel) a.f.gel = s.gel.name; });
       if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
       clChanged(true); toast('Restored original gel image');
@@ -8147,6 +8381,72 @@ function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('ar
 $('#clonePanel').addEventListener('input', onCloneField);
 $('#clonePanel').addEventListener('change', onCloneField);
 $('#clonePanel').addEventListener('click', onCloneClick);
+let agCropDrag = null;
+$('#clonePanel').addEventListener('mousedown', e => {
+  const canvas = e.target.closest('#ag-gel-canvas');
+  if (!canvas) return;
+  const wrap = canvas.closest('.cl-gel-canvas-wrap');
+  if (!wrap) return;
+  const rect = canvas.getBoundingClientRect();
+  agCropDrag = {
+    canvas,
+    wrap,
+    startX: e.clientX - rect.left,
+    startY: e.clientY - rect.top,
+    rectEl: wrap.querySelector('#ag-crop-rect')
+  };
+  if (agCropDrag.rectEl) {
+    agCropDrag.rectEl.style.display = 'block';
+    agCropDrag.rectEl.style.left = agCropDrag.startX + 'px';
+    agCropDrag.rectEl.style.top = agCropDrag.startY + 'px';
+    agCropDrag.rectEl.style.width = '0px';
+    agCropDrag.rectEl.style.height = '0px';
+  }
+  e.preventDefault();
+});
+window.addEventListener('mousemove', e => {
+  if (!agCropDrag) return;
+  const rect = agCropDrag.canvas.getBoundingClientRect();
+  const curX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  const curY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+  const x = Math.min(agCropDrag.startX, curX);
+  const y = Math.min(agCropDrag.startY, curY);
+  const w = Math.abs(curX - agCropDrag.startX);
+  const h = Math.abs(curY - agCropDrag.startY);
+  if (agCropDrag.rectEl) {
+    agCropDrag.rectEl.style.left = x + 'px';
+    agCropDrag.rectEl.style.top = y + 'px';
+    agCropDrag.rectEl.style.width = w + 'px';
+    agCropDrag.rectEl.style.height = h + 'px';
+  }
+});
+window.addEventListener('mouseup', e => {
+  if (!agCropDrag) return;
+  const { canvas, wrap, startX, startY, rectEl } = agCropDrag;
+  agCropDrag = null;
+  if (rectEl) rectEl.style.display = 'none';
+  const rect = canvas.getBoundingClientRect();
+  const curX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  const curY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+  const w = Math.abs(curX - startX);
+  const h = Math.abs(curY - startY);
+  if (w > 8 && h > 8 && rect.width > 0 && rect.height > 0) {
+    const c = CL(), s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s && s.gel) {
+      const g = s.gel;
+      const adj = g.adjustments = g.adjustments || defaultAgaroseAdj();
+      const nx = Math.min(startX, curX) / rect.width;
+      const ny = Math.min(startY, curY) / rect.height;
+      const nw = w / rect.width;
+      const nh = h / rect.height;
+      adj.crop = { x: nx, y: ny, w: nw, h: nh };
+      renderAgaroseGel(s);
+      if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+      queueSave();
+      toast('Cropped image');
+    }
+  }
+});
 $('#clonePanel').addEventListener('dragover', e => {
   const dropZone = e.target.closest('[data-cl-drop="gel"]');
   if (dropZone) { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('over'); }
