@@ -2494,12 +2494,16 @@ def board_domain(s):
     return d['name'], d['body'], bm.domain_code(d, app, rows)
 
 
+_gsearch = {'off_until': 0}  # Gemini search refused with 429: the free key has no search quota, so stop asking for a day
+
+
 def ask_gemini_search(q):
     """Gemini with Google Search grounding, for board homework: (text with its web sources listed, ok). Google does not offer
     search on every free key, so a refusal just means the homework is answered from PubMed and the adviser's own knowledge."""
-    if not GEMINI_KEY:
+    if not GEMINI_KEY or not cfg.get('homework_web_search', True) or time.time() < _gsearch['off_until']:
         return '', False
     body = json.dumps({'contents': [{'parts': [{'text': q}]}], 'tools': [{'google_search': {}}]}).encode()
+    refused = 0
     for model in ('gemini-flash-latest', 'gemini-flash-lite-latest'):  # the 2.5 models answer 404 on Patrick's key (2026-11-14)
         wait = _gem['last'] + GEMINI_GAP - time.time()
         if wait > 0:
@@ -2515,7 +2519,11 @@ def ask_gemini_search(q):
             src = '\n'.join(f'- {w.get("title", "")}: {w.get("uri", "")}' for w in web if w.get('uri'))[:2000]
             return (txt[:3000] + ('\nSources:\n' + src if src else '')), True
         except Exception as e:
+            refused += getattr(e, 'code', 0) == 429
             log(f'board homework: Gemini search on {model} unavailable ({str(e)[:80]})')
+    if refused == 2:  # both models out of search quota (on 2026-11-14 the free key had none): PubMed and Wikipedia carry the homework
+        _gsearch['off_until'] = time.time() + 86400
+        log('board homework: Gemini search is not available on this key, skipped for a day')
     return '', False
 
 
