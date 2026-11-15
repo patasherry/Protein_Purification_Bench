@@ -85,12 +85,14 @@ const {open, H, suite, src} = require('../lib/harness');
     T.check('search_placeholder_text', searchPlaceholder === 'Search settings/data/files', 'Search placeholder should be "Search settings/data/files" to reduce ambiguity');
 
     // 7. Project name field has an explicit visible label beside it that stays visible at narrow width (#1038)
+    await p.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
     const projLab = p.locator('label[for="projName"]');
     const projLabText = (await projLab.count()) ? (await projLab.textContent()).trim() : '';
     const projPlaceholder = await p.getAttribute('#projName', 'placeholder');
     T.check('proj_name_label_visible', (await projLab.count()) === 1 && (await projLab.isVisible()) && /^project(\s+name)?$/i.test(projLabText) && /^project(\s+name)?$/i.test(projPlaceholder || ''), `label="${projLabText}" placeholder="${projPlaceholder}"`);
     const {p: pNarrow, errs: errsN, close: closeN} = await open({width: 390, height: 844}), hN = H(pNarrow);
     await hN.newProject('UX save');
+    await pNarrow.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
     const narrowGeom = await pNarrow.evaluate(() => {
       const lab = document.querySelector('label[for="projName"]'), inp = document.getElementById('projName');
       if (!lab || !inp) return null;

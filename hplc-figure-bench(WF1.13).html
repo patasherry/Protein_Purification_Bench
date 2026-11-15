@@ -60,8 +60,11 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 @media (max-width:560px){.pcard.has-del{grid-template-columns:minmax(0,1fr)}.pcard .pd,.pcard .pacts{grid-column:1;grid-row:auto}.pcard .pacts{justify-content:flex-start}}
 .home-where{margin:0;color:var(--muted);font-size:12.5px}
 .home-alt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.projbar{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 260px}
+.projbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;flex:1 1 260px}
 .projbar .pb-sep{color:var(--line2);font-size:18px} .projbar .pb-lab{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.proj-settings{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted)}
+.proj-settings-body{display:inline-flex;align-items:center;gap:8px}
 .np-type{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center} .np-type .hint{margin:0}
 /* Include Cloning switch (#1433): one on/off control, a real button so Space and Enter work */
 .tgl{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;color:var(--ink);background:transparent;border:0;padding:2px 0;cursor:pointer}
@@ -541,9 +544,15 @@ button,input,select,textarea{font-family:inherit}
 <header class="top">
   <h1><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M1.5 15.5h3.2c1.6 0 2-1.4 2.6-4.4C8 7.6 8.6 3 10 3s2 4.6 2.7 8.1c.6 3 1 4.4 2.6 4.4h5.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="5.5" y="18.2" width="11" height="2.3" rx="1.15" fill="currentColor" opacity=".55"/></svg>Protein Purification Bench</h1>
   <div class="projbar" id="projBar" hidden>
-    <span class="pb-sep" aria-hidden="true">/</span><label for="projName" class="pb-lab">Project name</label>
-    <input type="text" id="projName" class="projname" aria-label="Project name" placeholder="Project name" spellcheck="false">
-    <button type="button" id="projType" class="tgl projtype" role="switch" aria-checked="false" title="Whether this project includes cloning. Switching it off hides the cloning steps and keeps every record."><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button>
+    <span class="pb-sep" aria-hidden="true">/</span>
+    <details class="proj-settings" id="projSettings">
+      <summary id="projSettingsSum">Project settings</summary>
+      <div class="proj-settings-body">
+        <label for="projName" class="pb-lab">Project name</label>
+        <input type="text" id="projName" name="projName" class="projname" aria-label="Project name" placeholder="Project name" spellcheck="false">
+        <button type="button" id="projType" class="tgl projtype clone-toggle" role="switch" aria-checked="false" title="Whether this project includes cloning. Switching it off hides the cloning steps and keeps every record."><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button>
+      </div>
+    </details>
     <span class="savestate" id="saveState" role="status" aria-live="polite"></span>
     <details class="rawfiles" id="rawPanel" hidden><summary id="rawSum">Raw files</summary><div class="rawlist" id="rawList"></div></details>
   </div>

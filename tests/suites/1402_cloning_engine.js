@@ -40,6 +40,7 @@ const {open, H, suite, fs, path, DATA} = require('../lib/harness');
       await cl(p).locator('[data-cext=note]').fill('Whole-plasmid sequencing, synthetic record'); await cl(p).locator('[data-cext=note]').dispatchEvent('change'); await h.wait(300);
       T.check('entry/verified-with-evidence', await cl(p).locator('.cl-flag').count() === 0, 'the flag stayed after the evidence was entered');
       // cloning can be added later, and nothing is lost
+      await p.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
       await p.locator('#projType').click(); await h.wait(500);
       T.check('entry/cloning-added-later', (await rows(h)).some(x => x.k === 'clone:setup'), JSON.stringify(await rows(h)));
       T.check('entry/no page errors', errs.length === 0, errs.join(' | '));
@@ -198,6 +199,7 @@ const {open, H, suite, fs, path, DATA} = require('../lib/harness');
       const tl = await h.timeline();
       T.check('legacy/opens', tl.length > 3 && tl.some(x => x.k === 'construct'), JSON.stringify(tl.map(x => x.k)));
       T.check('legacy/no-cloning-rows', !tl.some(x => /^clone:/.test(x.k)), JSON.stringify(tl.map(x => x.k)));
+      await p.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
       const inProj = await p.locator('#projType').isVisible();
       // a project saved before #1402 holds no cloning record, so Include Cloning opens off (#1433)
       if (inProj) T.check('legacy/cloning-off', await p.locator('#projType').getAttribute('aria-checked') === 'false', await p.locator('#projType').getAttribute('aria-checked'));
