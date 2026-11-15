@@ -2639,6 +2639,17 @@ def board_do_homework(s, who, ask):
         out.append((dict(h, to=adv[0]), re.sub(r'<think>.*?</think>', '', str(ans), flags=re.S).strip()[:1500]))
         b.setdefault('hw_done', []).append(h['question'])
     b['hw_done'] = b.get('hw_done', [])[-40:]
+    # an answer that bears on an open board or request issue goes onto it too, so the worker or the lead sees it in time
+    # (2026-11-14: the 12-bit TIFF answer came after the saturated-band issue it corrected had merged)
+    if out and not DRY:
+        try:
+            cands = [i for lab in ('from-board', 'split-job', 'from-patrick') for i in issues(lab)]
+        except Exception:
+            cands = []
+        for h, a in out:
+            for n in bm.related(h['question'], a, cands):
+                post(n, f'**Board homework that bears on this** ({h["to"]}, {h.get("domain") or "general"}): _{h["question"]}_\n\n{a[:1500]}')
+                log(f'board homework posted to #{n}')
     if items:
         log(f'board: {len(out)} homework answers read out')
     return out
@@ -2652,12 +2663,14 @@ def board_set_homework(s, who, meeting):
     except Exception:
         doms = []
     try:
-        r = helper_json(sec[1](bm.HOMEWORK.format(domains='; '.join(doms) or 'any', advisers=', '.join(w[0] for w in who), meeting=meeting[-9000:]
+        nxt = bm.pick_domain(bm.parse_map((ROOT / 'docs' / 'BOARD_MAP.md').read_text(encoding='utf-8')), s.get('board', {}).get('dom_seen', {})) if doms else None
+        nxt = nxt['name'] if nxt else ''
+        r = helper_json(sec[1](bm.HOMEWORK.format(domains='; '.join(doms) or 'any', aim=bm.aim_text(nxt), advisers=', '.join(w[0] for w in who), meeting=meeting[-9000:]
                                                   + '\n\nEarlier homework (do not repeat):\n' + '\n'.join(s.get('board', {}).get('hw_done', [])[-20:]))))
     except Exception as e:
         log(f'board: no homework set ({str(e)[:80]})')
         return []
-    hw = bm.clean_homework((r or {}).get('homework'), [w[0] for w in who], doms, s.get('board', {}).get('hw_done', []))
+    hw = bm.clean_homework((r or {}).get('homework'), [w[0] for w in who], doms, s.get('board', {}).get('hw_done', []), default_domain=nxt)
     s.setdefault('board', {})['homework'] = hw
     return hw
 
@@ -2785,7 +2798,8 @@ def board_round(s, topic=''):
         ctx = (f'This meeting\'s domain, from docs/BOARD_MAP.md: {dname}\n{dbody}\n\n' if dname else '') + f'Its code as it is in the app now:\n```js\n{fcode}\n```\n\n' + ctx
     focus = (f'THIS MEETING\'S FOCUS is {"the domain " + chr(34) + dname + chr(34) if dname else "the app section `" + fname + "`"}, whose entry and code open the context. At least two of your proposals must be about it: '
              f'read that code and the questions worth exploring, and look for a bug, a number or unit that could be wrong, a missing check, a control that confuses, '
-             f'or something the homework answers show the app should do. Recent work is already well covered, so do not propose it again.\n\n') if fname else ''
+             f'or something the homework answers show the app should do. Recent work is already well covered, so do not propose it again. '
+             f'In "evidence", name the function or variable in that code your proposal is about: a proposal that only restates the map\'s "worth exploring" lines is dropped.\n\n') if fname else ''
     if CLOUD:
         who = [('Gemini Flash', lambda q: ask_gemini(q, ['gemini-flash-latest', 'gemini-2.5-flash']), 'gemini'),
                ('Gemini Flash Lite', lambda q: ask_gemini(q, ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite']), 'gemini')]
@@ -2833,6 +2847,11 @@ def board_round(s, topic=''):
             if bad:
                 fake.append(f'"{cand["title"]}" by {name} (names files that do not exist: {", ".join(bad[:4])})')
                 continue
+            if fcode and dname and not bm.cites_code(prop_text(cand), fcode):  # restating the map instead of reading the code
+                tw = [w for w in re.findall(r'[a-z]{5,}', cand['title'].lower()) if w not in bm.STOP]
+                if tw and sum(w in dbody.lower() for w in tw) >= 0.6 * len(tw):
+                    notes.append(f'dropped "{cand["title"]}" by {name}: it restates the map and names nothing in the code')
+                    continue
             d = dup_of(cand, mem)
             if d:  # tell that adviser it is a repeat and ask once for something else
                 retry = ask(name, f, PROPOSE_DUP.format(title=cand['title'], of=d[0], why=d[1]) + (f'\n\nFocus section `{fname}`:\n```js\n{fcode}\n```' if fname else '') + '\n\n' + ctx[-6000:])
