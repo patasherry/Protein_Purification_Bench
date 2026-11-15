@@ -2527,13 +2527,35 @@ def ask_gemini_search(q):
     return '', False
 
 
+def codex_research(s, items):
+    """ChatGPT (the Codex CLI, whose web search is on by default) researches all of a meeting's homework questions in one
+    run, to spare the ChatGPT allowance: {"1": "facts with source links", ...}. {} when it is off, missing or fails.
+    homework_codex: false in the settings file turns it off."""
+    if not items or not cfg.get('homework_codex', True) or not shutil.which('codex') or not use(s, 'codex'):
+        return {}
+    qs = '\n'.join(f'{i + 1}. {h["question"]}' for i, h in enumerate(items))
+    try:
+        r = helper_json(ask_codex('You are researching questions for the Direction board of Protein Purification Bench, a browser app that makes '
+                                  'figures and Methods text from protein purification data. Search the web for each question below. For each, give the '
+                                  '3 to 5 most useful facts in plain sentences, each followed by its source link. Say plainly when you found nothing. '
+                                  'Do not edit any file. Return ONLY one JSON object: {"1": "facts with links", "2": "..."}.\n\n' + qs))
+        log(f'board homework: ChatGPT researched {len([k for k in (r or {}) if r.get(k)])} of {len(items)} questions')
+        return r if isinstance(r, dict) else {}
+    except Exception as e:
+        log(f'board homework: ChatGPT research failed ({str(e)[:80]})')
+        return {}
+
+
 def board_do_homework(s, who, ask):
     """Research and answer the homework set at the last meeting. Returns [(item, answer)] and clears the list."""
-    b = s.setdefault('board', {}); items = b.pop('homework', []) or []; out = []
-    for h in items[:3]:
+    b = s.setdefault('board', {}); items = (b.pop('homework', []) or [])[:3]; out = []
+    gpt = codex_research(s, items)
+    for i, h in enumerate(items):
         terms = h.get('search') or bm.keywords(h['question'])
         papers, wiki = bm.pubmed(terms), bm.wikipedia(bm.keywords(h['question'], 4))
         web, ok = ask_gemini_search(f'Research question for a protein purification figure app: {h["question"]} Give the key facts in under 250 words.') if use(s, 'gemini') else ('', False)
+        if gpt.get(str(i + 1)):
+            web, ok = (web + '\n\n' if web else '') + 'ChatGPT web research:\n' + str(gpt[str(i + 1)])[:2500], True
         adv = next((w for w in who if w[0] == h['to']), who[0])
         try:
             ans = adv[1](bm.REPORT.format(who=adv[0], by=h.get('by', ''), question=h['question'], domain=h.get('domain', ''), sources=bm.sources_text(papers, web, wiki)))

@@ -156,5 +156,5 @@ def sources_text(papers, web, wiki=()):
     if papers:
         parts.append('PubMed:\n' + '\n'.join(f'- {p["title"]} ({p["journal"]}, {p["year"]}) {p["url"]}' for p in papers))
     if web:
-        parts.append('Web search (Gemini with Google Search):\n' + web)
+        parts.append('Web research:\n' + web)
     return '\n\n'.join(parts) or '(no sources found)'
