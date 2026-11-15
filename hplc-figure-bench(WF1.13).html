@@ -5292,7 +5292,7 @@ function renderBandTable(g){
   $('#g-bandUndo').disabled = !(g && g.bandHist && g.bandHist.length);
   if (!g.pix) { el.innerHTML = ''; return; }
   const LLt = laneLinks(), anyT = (g.tags || []).some(t => isProt(t.kind)), anyG = (g.tags || []).some(t => t.kind === 'tagged') || !!cleavePlan(g), anyC = (g.tags || []).some(t => t.kind === 'contam');
-  const head = `<tr><th>Lane</th><th>Label</th><th>Goes with</th><th>Target (kDa)</th>${anyG ? '<th>Tagged (kDa)</th><th>Cleaved</th>' : ''}<th>Purity</th><th>Bands, strongest first: size (kDa) and % of lane</th></tr>`;
+  const head = `<tr><th>Lane</th><th>Label</th><th>Goes with</th><th>Target (kDa)</th>${anyG ? '<th>Tagged (kDa)</th><th>Cleaved</th>' : ''}<th>Purity</th><th>Bands, strongest first: apparent MW (kDa) and % of lane</th></tr>`;
   const rows = lanes.map(ln => { const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a);
     const who = a === 'marker' ? 'Ladder' : r ? `<span title="${esc(r.name)}">${esc(shortRunName(r))}</span>` : '';
     if (ln.marker) { const mk = g.marks.slice().sort((p, q) => p.y - q.y).map(m => m.kda).join(', '); return `<tr><td>${ln.i + 1}</td><td>${esc(ln.label)}</td><td>${who}</td><td></td>${anyG ? '<td></td><td></td>' : ''}<td></td><td style="text-align:left">${mk ? 'marked: ' + mk : 'not marked yet'}</td></tr>`; }
