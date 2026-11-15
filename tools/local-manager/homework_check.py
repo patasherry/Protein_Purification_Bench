@@ -5,6 +5,7 @@ It searches PubMed and Wikipedia with a sample question and asks Gemini with Goo
 settings file as the manager, and prints what each one returned. It never prints the Gemini key and posts nothing.
 """
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -15,7 +16,7 @@ import boardmap as bm  # noqa: E402
 Q = 'How do size exclusion chromatography columns get calibrated with protein standards to estimate molecular weight?'
 conf = Path.home() / '.hfb-reviewer.json'
 cfg = json.loads(conf.read_text(encoding='utf-8-sig')) if conf.exists() else {}
-key = cfg.get('gemini_key', '')
+key = cfg.get('gemini_key') or os.environ.get('GEMINI_API_KEY', '')  # the same two places the manager looks
 
 print('Question:', Q)
 kw = bm.keywords(Q)
@@ -33,7 +34,7 @@ for w in wiki[:3]:
 
 print('\n3. Gemini with Google Search:')
 if not key:
-    print('   no gemini_key in', conf)
+    print('   no Gemini key: neither gemini_key in', conf, 'nor the GEMINI_API_KEY environment variable')
 for model in ('gemini-flash-latest', 'gemini-flash-lite-latest'):
     if not key:
         break
