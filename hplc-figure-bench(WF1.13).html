@@ -7455,6 +7455,31 @@ function clShortLabel(stg){
   }
   return CL_SHORT[stg.kind] || (clTitle(stg).length > 10 ? clTitle(stg).slice(0, 9) + '…' : clTitle(stg));
 }
+/* Agarose ladder sizes are stored in bp, including values typed in kb. NEB 100 bp DNA Ladder N3231S: NEB product page, accessed 2026-11-15. */
+const AG_LADDERS = {
+  neb100:{name:'NEB 100 bp DNA Ladder', manufacturer:'New England Biolabs', catalog:'N3231S', sizes:'100 bp, 200 bp, 300 bp, 400 bp, 500 bp, 517 bp, 600 bp, 700 bp, 800 bp, 900 bp, 1000 bp, 1200 bp, 1517 bp'},
+  custom:{name:'Custom ladder', manufacturer:'', catalog:'', sizes:''}
+};
+function agSizes(v){ const out = []; String(v || '').replace(/(\d+(?:\.\d+)?)\s*(kb|bp)?/gi, (_, n, u) => { const z = +n*(String(u || 'bp').toLowerCase() === 'kb' ? 1000 : 1); if (isFinite(z) && z > 0 && !out.some(x => Math.abs(x - z) < 1e-6)) out.push(z); return _; }); return out.sort((a, b) => b - a); }
+function agLadderKnown(g){ return !!(g && hasTxt(g.ladderProduct) && agSizes(g.ladderSizes).length); }
+function agCalibration(g){ const p = (g && Array.isArray(g.calPoints) ? g.calPoints : []).map(q => ({y:+q.y, bp:+q.bp})).filter(q => isFinite(q.y) && q.y >= 0 && isFinite(q.bp) && q.bp > 0); if (p.length < 2) return null;
+  const xm = p.reduce((s, q) => s + Math.log10(q.bp), 0)/p.length, ym = p.reduce((s, q) => s + q.y, 0)/p.length;
+  let xx = 0, xy = 0; p.forEach(q => { const x = Math.log10(q.bp) - xm, y = q.y - ym; xx += x*x; xy += x*y; }); if (!(xx > 0)) return null;
+  const slope = xy/xx; if (!isFinite(slope) || Math.abs(slope) < 1e-12) return null; return {slope, intercept: ym - slope*xm, n:p.length};
+}
+function agEstimate(fit, y){ const bp = Math.pow(10, ((+y) - fit.intercept)/fit.slope); return isFinite(bp) && bp > 0 ? bp : null; }
+function agBpText(bp){ return `${Math.round(bp)} bp`; }
+function agCalibrationHtml(s){ const g = s.gel || {}, ladder = (g.lanes || []).find(l => l.type === 'DNA ladder'); if (!ladder) return '';
+  const sizes = agSizes(g.ladderSizes), points = Array.isArray(g.calPoints) ? g.calPoints : [], known = agLadderKnown(g), fit = known ? agCalibration(g) : null;
+  const status = !known ? 'Band sizes cannot be estimated: identify the ladder and enter its fragment sizes.' : !fit ? 'Band sizes cannot be estimated: match at least two ladder bands.' : `Migration = ${fmt(fit.slope, 3)} × log10(bp) + ${fmt(fit.intercept, 3)} (${fit.n} matched bands).`;
+  return `<div class="cl-ag-section" id="ag-calibration"><h4 style="margin:12px 0 6px;font-size:13px;font-weight:600">Ladder calibration</h4>
+    <p class="hint">Click a visible ladder band, then enter its migration distance from the well and confirm or correct its known size. Use one distance unit consistently (mm or image pixels).</p>
+    <div class="btns" id="ag-visible-bands">${sizes.map(bp => `<button type="button" class="btn quiet" data-cl="ag-pick-band" data-size="${bp}">${esc(agBpText(bp))}</button>`).join('') || '<span class="hint">Enter fragment sizes to match visible bands.</span>'}</div>
+    <div id="ag-cal-points">${points.map((q, i) => `<div class="row" style="display:flex;gap:6px;align-items:center;margin-top:5px"><label class="f" style="flex:1">Migration distance<input type="number" id="ag-cal-y-${i}" data-ag-cal="y" data-cal-idx="${i}" value="${esc(q.y == null ? '' : q.y)}" min="0" step="any"></label><label class="f" style="flex:1">Known size<select id="ag-cal-size-${i}" data-ag-cal="bp" data-cal-idx="${i}">${sizes.map(bp => `<option value="${bp}"${+q.bp === bp ? ' selected' : ''}>${esc(agBpText(bp))}</option>`).join('')}</select></label><button type="button" class="icon" data-cl="ag-remove-cal" data-cal-idx="${i}" aria-label="Remove matched ladder band">✕</button></div>`).join('')}</div>
+    <button type="button" class="btn quiet" id="ag-add-cal-point" data-cl="ag-add-cal">+ Match ladder band</button>
+    <p class="hint" id="ag-cal-status">${esc(status)}</p>
+  </div>`;
+}
 function buildAgaroseGelSVG(stg){
   const g = stg.gel = stg.gel || {};
   const a0 = stg.at && stg.at[0] ? stg.at[0] : null;
@@ -7477,7 +7502,7 @@ function buildAgaroseGelSVG(stg){
   const ladderProd = hasTxt(g.ladderProduct) ? String(g.ladderProduct) : (hasTxt(f0.ladder) ? String(f0.ladder) : '1 kb ladder');
   const ladderCat = hasTxt(g.ladderCat) ? String(g.ladderCat) : 'N3232S';
   const ladderSizesStr = hasTxt(g.ladderSizes) ? String(g.ladderSizes) : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
-  const ladderSizes = ladderSizesStr.split(/[,;\s]+/).map(Number).filter(v => v > 0);
+  const ladderSizes = agSizes(ladderSizesStr);
   if (!ladderSizes.length) {
     ladderSizes.push(100, 200, 300, 400, 500, 600, 700, 800, 900, 1000);
   }
@@ -7536,6 +7561,7 @@ function buildAgaroseGelSVG(stg){
     s.push(`<rect x="${r2(wx)}" y="${r2(gelTop + 2)}" width="${r2(ww)}" height="${r2(wellH)}" fill="#0c0d11" stroke="#333745" stroke-width="0.6" rx="1"/>`);
   });
 
+  const agFit = agLadderKnown(g) ? agCalibration(g) : null;
   lanes.forEach((l, i) => {
     const cx = gelX + (i + 0.5) * laneW;
     s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(l.label || ('Lane ' + (i + 1)))}</text>`);
@@ -7563,11 +7589,9 @@ function buildAgaroseGelSVG(stg){
   lanes.forEach((l, i) => {
     if (i === ladderLaneIdx) return;
     const expStr = l.expected ? String(l.expected).trim() : '';
-    if (!expStr) return;
-
-    let bpVal = 0;
+    let bpVal = agFit && hasTxt(l.migration) ? agEstimate(agFit, +l.migration) : 0;
     const m = expStr.match(/(\d+(?:\.\d+)?)/);
-    if (m) {
+    if (!bpVal && m) {
       const v = parseFloat(m[1]);
       bpVal = /kb/i.test(expStr) ? Math.round(v * 1000) : Math.round(v);
     }
@@ -7582,12 +7606,12 @@ function buildAgaroseGelSVG(stg){
       s.push(`<rect x="${r2(bx)}" y="${r2(y - 1.5)}" width="${r2(bw)}" height="3" fill="#ffffff" rx="1"/>`);
     }
 
-    let szLabel = `${bpVal} bp`;
-    if (bpVal >= 1000) {
+    let szLabel = `${Math.round(bpVal)} bp`;
+    if (!agFit && bpVal >= 1000) {
       const kb = (bpVal / 1000).toFixed(1);
       szLabel = `${kb} kb`;
     }
-    const fullArrowLabel = `Expected product: ${szLabel}`;
+    const fullArrowLabel = agFit && hasTxt(l.migration) ? `Estimated size: ${szLabel}` : `Expected product: ${szLabel}`;
 
     const arrowTipX = lx + laneW * 0.85;
     const arrowTailX = gelX + gelW + 8;
@@ -7869,8 +7893,10 @@ function clAgaroseHtml(s){
   const voltage = hasTxt(g.voltage) ? g.voltage : '100 V';
   const duration = hasTxt(g.duration) ? g.duration : '45 min';
   const ladderProd = hasTxt(g.ladderProduct) ? g.ladderProduct : (hasTxt(f0.ladder) ? f0.ladder : '1 kb ladder');
+  const ladderMan = hasTxt(g.ladderManufacturer) ? g.ladderManufacturer : '';
   const ladderCat = hasTxt(g.ladderCat) ? g.ladderCat : 'N3232S';
   const ladderSizes = hasTxt(g.ladderSizes) ? g.ladderSizes : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
+  const agFit = agLadderKnown(g) ? agCalibration(g) : null;
 
   return `<div class="cl-wide cl-gel-box">
     <div class="cl-gel-upload${hasImg ? ' has-img' : ''}" data-cl-drop="gel" data-stg="${esc(s.id)}" tabindex="0" role="region" aria-label="Agarose gel image upload">
@@ -7899,9 +7925,11 @@ function clAgaroseHtml(s){
       </div>
 
       <div class="cl-grid">
+        <label class="f">Saved ladder<select id="ag-ladder-preset" data-ag="ladderPreset">${Object.entries(AG_LADDERS).map(([k, v]) => `<option value="${k}"${g.ladderPreset === k ? ' selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
         <label class="f">Ladder product<input type="text" id="ag-ladder-product" data-ag="ladderProduct" value="${esc(ladderProd)}" placeholder="e.g. 1 kb DNA ladder"></label>
+        <label class="f">Manufacturer<input type="text" id="ag-ladder-manufacturer" data-ag="ladderManufacturer" value="${esc(ladderMan)}" placeholder="e.g. New England Biolabs"></label>
         <label class="f">Ladder catalog #<input type="text" id="ag-ladder-cat" data-ag="ladderCat" value="${esc(ladderCat)}" placeholder="e.g. N3232S"></label>
-        <label class="f cl-wide">Selected ladder fragment sizes (bp)<input type="text" id="ag-ladder-sizes" data-ag="ladderSizes" value="${esc(ladderSizes)}" placeholder="e.g. 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000"></label>
+        <label class="f cl-wide">Selected ladder fragment sizes (bp or kb)<input type="text" id="ag-ladder-sizes" data-ag="ladderSizes" value="${esc(ladderSizes)}" placeholder="e.g. 100 bp, 0.2 kb, 300 bp"></label>
         <label class="f">Agarose %<input type="text" id="ag-pct" data-ag="pct" value="${esc(pct)}" placeholder="e.g. 1"></label>
         <label class="f">Running buffer<input type="text" id="ag-buffer" data-ag="buffer" value="${esc(buffer)}" placeholder="e.g. TAE 1x"></label>
         <label class="f">DNA stain<input type="text" id="ag-stain" data-ag="stain" value="${esc(stain)}" placeholder="e.g. SYBR Safe"></label>
@@ -7926,6 +7954,7 @@ function clAgaroseHtml(s){
               <option value="Empty"${l.type === 'Empty' ? ' selected' : ''}>Empty</option>
             </select>
             <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2" aria-label="Lane ${idx + 1} expected size">
+            ${l.type === 'DNA ladder' ? '' : `<label class="f" style="flex:0.9">Migration<input type="number" id="ag-lane-migration-${idx}" data-lane-idx="${idx}" data-lane-k="migration" value="${esc(l.migration || '')}" min="0" step="any" aria-label="Lane ${idx + 1} observed band migration"></label><span class="hint" id="ag-estimate-${idx}" style="min-width:92px">${agFit && hasTxt(l.migration) && agEstimate(agFit, +l.migration) ? `Estimated: ${esc(agBpText(agEstimate(agFit, +l.migration)))}` : ''}</span>`}
             <button type="button" class="icon" data-cl="rm-ag-lane" data-lane-idx="${idx}" title="Remove lane" aria-label="Remove lane ${idx + 1}">✕</button>
           </div>
         `).join('')}
@@ -7933,6 +7962,7 @@ function clAgaroseHtml(s){
       <div style="margin-top:6px">
         <button type="button" class="btn quiet" id="ag-add-lane" data-cl="add-ag-lane">+ Add lane</button>
       </div>
+      ${agCalibrationHtml(s)}
     </div>
   </div>`;
 }
@@ -8034,11 +8064,22 @@ function onCloneField(e){ const t = e.target, c = CL();
     }
     return;
   }
+  if (t.dataset.agCal) {
+    const s = c.stages.find(x => 'clone:' + x.id === curStep), i = +t.dataset.calIdx;
+    if (s && s.gel && Array.isArray(s.gel.calPoints) && s.gel.calPoints[i]) {
+      s.gel.calPoints[i][t.dataset.agCal] = t.value;
+      clChanged(e.type === 'change');
+    }
+    return;
+  }
   if (t.dataset.ag) {
     const s = c.stages.find(x => 'clone:' + x.id === curStep);
     if (s) {
       s.gel = s.gel || {};
       s.gel[t.dataset.ag] = (t.type === 'checkbox') ? t.checked : t.value;
+      if (t.dataset.ag === 'ladderPreset' && AG_LADDERS[t.value] && t.value !== 'custom') {
+        const p = AG_LADDERS[t.value]; s.gel.ladderProduct = p.name; s.gel.ladderManufacturer = p.manufacturer; s.gel.ladderCat = p.catalog; s.gel.ladderSizes = p.sizes;
+      }
       if (t.dataset.ag === 'pct' && s.at && s.at[0]) s.at[0].f.pct = t.value;
       if (t.dataset.ag === 'ladderProduct' && s.at && s.at[0]) s.at[0].f.ladder = t.value;
       clChanged(e.type === 'change');
@@ -8073,6 +8114,17 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   const arm = k => { if (clArm === k) { clArm = ''; return true; } clArm = k; renderClone(true); return false; };
   if (w !== 'rmat' && w !== 'rmst') clArm = '';
   if (w === 'type') { setCloning(v === 'cloning'); return; }
+  if (w === 'ag-pick-band' && s && s.kind === 'gel') {
+    s.gel = s.gel || {}; s.gel.calPoints = Array.isArray(s.gel.calPoints) ? s.gel.calPoints : [];
+    s.gel.calPoints.push({y:'', bp:+b.dataset.size}); clChanged(true); return;
+  }
+  if (w === 'ag-add-cal' && s && s.kind === 'gel') {
+    const sizes = agSizes(s.gel && s.gel.ladderSizes); s.gel = s.gel || {}; s.gel.calPoints = Array.isArray(s.gel.calPoints) ? s.gel.calPoints : [];
+    s.gel.calPoints.push({y:'', bp:sizes[0] || ''}); clChanged(true); return;
+  }
+  if (w === 'ag-remove-cal' && s && s.kind === 'gel' && s.gel && Array.isArray(s.gel.calPoints)) {
+    s.gel.calPoints.splice(+b.dataset.calIdx, 1); clChanged(true); return;
+  }
   if (w === 'gen-ag-fig') {
     if (s && s.kind === 'gel') {
       s.gel = s.gel || {};
