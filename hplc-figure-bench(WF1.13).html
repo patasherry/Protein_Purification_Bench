@@ -80,6 +80,14 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-acts,.clone .cl-tpls{display:flex;flex-wrap:wrap;gap:6px;align-items:center} .clone .cl-acts .sp{flex:1 1 auto} .clone .cl-ck{display:grid;gap:5px}
 .clone .cl-flag{margin:0;font-size:12.5px;color:var(--warn);line-height:1.45} .clone .cl-seq{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;word-break:break-all}
 .clone .cl-lin{margin:0;font:inherit;font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--muted);border:1px solid var(--line);border-radius:var(--r-s);padding:8px 10px;max-height:260px;overflow:auto}
+.clone .cl-gel-upload{border:2px dashed var(--line);border-radius:var(--r-s);padding:14px;text-align:center;background:var(--panel);transition:border-color .15s, background .15s;cursor:pointer}
+.clone .cl-gel-upload:hover{border-color:var(--line2)}
+.clone .cl-gel-upload.over{border-color:var(--accent);background:var(--accent-soft)}
+.clone .cl-gel-upload.has-img{border-style:solid;cursor:default;padding:10px}
+.clone .cl-gel-preview{display:flex;flex-direction:column;align-items:center}
+.clone .cl-gel-img{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);object-fit:contain}
+.clone .cl-gel-info{font-size:12px;color:var(--muted);margin:4px 0 2px}
+.clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
 .projname{font:inherit;font-size:16px;font-weight:600;border:1px solid transparent;background:transparent;color:var(--ink);padding:3px 6px;border-radius:var(--r-s);min-width:0;flex:0 1 26ch}
 .projname:hover{border-color:var(--line)} .projname:focus{outline:none;border-color:var(--accent);background:var(--field)}
 .savestate{color:var(--muted);font-size:12.5px;white-space:nowrap}
@@ -7319,8 +7327,27 @@ const CL_TPL = {
 const CL_CC = ['cc_starter', 'cc_sob', 'cc_growth', 'cc_buffers', 'cc_aliquot', 'cc_batch'], clHas = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object' && !Array.isArray(pr.cloning) ? pr.cloning : {}, str = v => v == null ? '' : String(v), obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {}, ids = new Set(), uq = v => { const s = str(v); return s && !ids.has(s) && ids.add(s) ? s : ''; };
   c.type = c.type === 'cloning' || c.type === 'expression' ? c.type : ''; c.tpl = clHas(CL_TPL, c.tpl) ? c.tpl : '';
-  c.stages = (Array.isArray(c.stages) ? c.stages : []).filter(s => s && typeof s === 'object' && clHas(CL_KIND, s.kind)).map(s => ({id: uq(s.id), kind: s.kind, name: str(s.name), skip: !!s.skip,
-    at: (Array.isArray(s.at) ? s.at : []).filter(a => a && typeof a === 'object').map(a => ({id: uq(a.id), st: clHas(CL_ST, a.st) ? a.st : 'todo', from: str(a.from), f: obj(a.f), ck: obj(a.ck)})).filter(a => a.id)})).filter(s => s.id);
+  c.stages = (Array.isArray(c.stages) ? c.stages : []).filter(s => s && typeof s === 'object' && clHas(CL_KIND, s.kind)).map(s => {
+    const stg = {id: uq(s.id), kind: s.kind, name: str(s.name), skip: !!s.skip,
+      at: (Array.isArray(s.at) ? s.at : []).filter(a => a && typeof a === 'object').map(a => ({id: uq(a.id), st: clHas(CL_ST, a.st) ? a.st : 'todo', from: str(a.from), f: obj(a.f), ck: obj(a.ck)})).filter(a => a.id)};
+    if (s.gel && typeof s.gel === 'object') {
+      stg.gel = {
+        name: str(s.gel.name),
+        image: str(s.gel.image),
+        imageId: str(s.gel.imageId),
+        origName: str(s.gel.origName || s.gel.name),
+        origImage: str(s.gel.origImage || s.gel.image),
+        origImageId: str(s.gel.origImageId),
+        rawId: str(s.gel.rawId),
+        origRawId: str(s.gel.origRawId),
+        replaced: !!s.gel.replaced,
+        annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
+        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes : [],
+        results: obj(s.gel.results)
+      };
+    }
+    return stg;
+  }).filter(s => s.id);
   const e = obj(c.ext); c.ext = {src: str(e.src), ver: e.ver === 'yes' || e.ver === 'no' ? e.ver : '', note: str(e.note)};
   pr.cloning = c; return pr; }
 /* includeCloning (#1433) is the project's one on/off switch for cloning, saved with prep. A project saved before it existed
@@ -7460,8 +7487,10 @@ let clOpen = '', clArm = '', clHtml = '', clPickTpl = false;
 function clField(a, fd){ const v = a.f[fd.k] == null ? '' : a.f[fd.k], at = `data-cf="${esc(fd.k)}" data-at="${esc(a.id)}"`, lab = esc(fd.l) + (fd.ty === 'n' && fd.x ? ` (${esc(fd.x)})` : '');
   if (fd.ty === 'c') return `<label class="check cl-wide"><input type="checkbox" ${at}${v ? ' checked' : ''}> ${lab}</label>`;
   if (fd.ty === 'a' || fd.ty === 'q') return `<label class="f cl-wide">${lab}<textarea rows="2" ${at}${fd.ty === 'q' ? ' class="cl-seq" spellcheck="false"' : ''}>${esc(v)}</textarea></label>`;
-  if (fd.ty === 's' || fd.ty === 'g') { const os = fd.ty === 'g' ? gels.map(g => g.name) : fd.x.split('/'), all = os.includes(v) || !hasTxt(v) ? os : os.concat([v]);
-    return `<label class="f">${lab}<select ${at}><option value="">${fd.ty === 'g' ? (gels.length ? 'No gel linked' : 'No gel image in this project yet') : 'Not recorded'}</option>${all.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
+  if (fd.ty === 's' || fd.ty === 'g') { const stg = (clAt(a.id) || {}).s, os = fd.ty === 'g' ? gels.map(g => g.name) : fd.x.split('/');
+    if (fd.ty === 'g' && stg && stg.gel && stg.gel.name && !os.includes(stg.gel.name)) os.unshift(stg.gel.name);
+    const all = os.includes(v) || !hasTxt(v) ? os : os.concat([v]);
+    return `<label class="f">${lab}<select ${at}><option value="">${fd.ty === 'g' ? ((gels.length || (stg && stg.gel && stg.gel.name)) ? 'No gel linked' : 'No gel image in this project yet') : 'Not recorded'}</option>${all.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
   if (fd.ty === 'b') { const bs = CL().stages.filter(s => s.kind === 'cc_batch').flatMap(s => s.at).map(x => x.f.id).filter(hasTxt);
     return `<label class="f cl-wide">${lab}<input type="text" list="clBatches" ${at} value="${esc(v)}" placeholder="${bs.length ? 'Choose a batch made in this project, or type one' : 'Batch ID and aliquot'}"><datalist id="clBatches">${bs.map(b => `<option value="${esc(b)}">`).join('')}</datalist></label>`; }
   return `<label class="f">${lab}<input type="${fd.ty === 'd' ? 'date' : 'text'}"${fd.ty === 'n' ? ' inputmode="decimal"' : ''} ${at} value="${esc(v)}"></label>`; }
@@ -7617,6 +7646,68 @@ function clMethodsText(){
   return sents.join(' ');
 }
 const clTypeSel = () => `<div class="cl-type"><button type="button" class="tgl" role="switch" data-ctype="1" aria-checked="${prep.includeCloning ? 'true' : 'false'}"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button></div>`;
+function clAgaroseHtml(s){
+  if (!s || s.kind !== 'gel') return '';
+  const g = s.gel || null, hasImg = !!(g && g.image);
+  const canRestore = !!(g && g.origImage && (g.image !== g.origImage || g.name !== g.origName || g.replaced));
+  return `<div class="cl-wide cl-gel-box">
+    <div class="cl-gel-upload${hasImg ? ' has-img' : ''}" data-cl-drop="gel" data-stg="${esc(s.id)}" tabindex="0" role="region" aria-label="Agarose gel image upload">
+      <input type="file" class="cl-gel-file" data-cl-file="${esc(s.id)}" accept="image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" hidden>
+      ${hasImg ? `
+        <div class="cl-gel-preview">
+          <img class="cl-gel-img" src="${esc(g.image)}" alt="${esc(g.name || 'Agarose gel')}">
+          <div class="cl-gel-info"><span class="cl-gel-name">${esc(g.name || 'Gel image')}</span></div>
+        </div>
+        <div class="cl-gel-acts">
+          <button type="button" class="btn quiet" data-cl="gel-pick" data-stg="${esc(s.id)}">Replace image</button>
+          ${canRestore ? `<button type="button" class="btn quiet" data-cl="gel-restore" data-stg="${esc(s.id)}">Restore original</button>` : ''}
+        </div>
+      ` : `
+        <div class="cl-gel-empty">
+          <p class="hint">Drop agarose gel image here (PNG, JPEG, TIFF), or choose a file</p>
+          <button type="button" class="btn" data-cl="gel-pick" data-stg="${esc(s.id)}">Choose gel image</button>
+        </div>
+      `}
+    </div>
+  </div>`;
+}
+async function handleAgaroseGelUpload(file, s){
+  if (!file || !s) return;
+  try {
+    const canvas = await imageToCanvas(file);
+    const dataUrl = canvas.toDataURL('image/png');
+    keepRaw([file]);
+    const rf = rawFiles.find(r => r.name === file.name && r.size === file.size);
+    const rawId = rf ? rf.id : '';
+    if (!s.gel || !s.gel.origImage) {
+      s.gel = {
+        name: file.name,
+        image: dataUrl,
+        origName: file.name,
+        origImage: dataUrl,
+        rawId,
+        origRawId: rawId,
+        replaced: false,
+        annotations: (s.gel && s.gel.annotations) || [],
+        lanes: (s.gel && s.gel.lanes) || [],
+        results: (s.gel && s.gel.results) || {}
+      };
+    } else {
+      s.gel.image = dataUrl;
+      s.gel.name = file.name;
+      s.gel.rawId = rawId;
+      s.gel.replaced = true;
+    }
+    if (s.at && s.at.length) {
+      s.at.forEach(a => { if (a.f && (!a.f.gel || a.f.gel === s.gel.origName)) a.f.gel = s.gel.name; });
+    }
+    if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+    clChanged(true);
+    toast(s.gel.replaced ? `Replaced gel image with "${file.name}"` : `Uploaded gel image "${file.name}"`);
+  } catch (err) {
+    toast(`Could not open ${file.name}. Try exporting the gel as PNG or JPEG.`);
+  }
+}
 function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curStep.startsWith('clone:') ? curStep.slice(6) : '', s = c.stages.find(x => x.id === id);
   if (onC) {
     if (c.type === 'cloning') {
@@ -7644,7 +7735,7 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
   if (!s) { const tp = c.tpl && CL_TPL[c.tpl] && !clPickTpl ? `<p class="hint cl-wf">Workflow: <b>${esc(CL_TPL[c.tpl].t)}</b> · <button type="button" class="linkbtn" data-cl="chgwf">Change workflow</button></p>` : `<div class="cl-tpls">${Object.keys(CL_TPL).map(k => `<button type="button" class="btn${c.tpl === k ? ' primary' : ''}" data-cl="tpl" data-v="${k}"${c.tpl === k ? ' aria-pressed="true"' : ''}>${esc(CL_TPL[k].t)}</button>`).join('')}</div>${c.tpl && clPickTpl ? `<p class="hint cl-wf"><button type="button" class="linkbtn" data-cl="chgwf-cancel">Keep ${esc(CL_TPL[c.tpl].t)}</button></p>` : ''}`;
     return `<h2>Cloning workflow</h2>${!c.tpl && !c.stages.length ? '<p class="hint">Choose a workflow. Its stages appear in the step list, every one can be skipped or repeated, and choosing another workflow later only adds stages.</p>' : ''}
       ${tp}${addSel}${c.stages.length ? `<pre class="cl-lin" id="clLineage">${esc(clLineage())}</pre><div class="cl-acts"><button type="button" class="btn" data-cl="copy">Copy the lineage report</button></div>` : ''}${clTypeSel()}`; }
-  const d = CL_KIND[s.kind], fl = s.skip ? [] : clFlags(s), i = c.stages.indexOf(s), src = d.from ? clSources(d) : [];
+  const d = CL_KIND[s.kind], fl = s.skip ? [] : clFlags(s), i = c.stages.indexOf(s), src = d.from ? clSources(d) : [], agHtml = clAgaroseHtml(s);
   const body = (() => {
     if (s.skip) return '<p class="hint">Skipped. Its records are kept.</p>';
     if (s.at.length === 1) {
@@ -7652,11 +7743,11 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
       const ck = (d.ck || []).length ? `<div class="cl-wide cl-ck">${d.ck.map((t, j) => `<label class="check"><input type="checkbox" data-cck="${j}" data-at="${esc(a.id)}"${a.ck[j] ? ' checked' : ''}> ${esc(t)}</label>`).join('')}</div>` : '';
       return `<div class="cl-single"><div class="cl-top"><label class="f">Status<select data-cst="${esc(a.id)}">${Object.keys(CL_ST).map(k => `<option value="${k}"${k === a.st ? ' selected' : ''}>${esc(CL_ST[k])}</option>`).join('')}</select></label>
         ${d.from ? `<label class="f">Comes from<select data-cfrom="${esc(a.id)}"><option value="">${src.length ? 'Not linked' : 'Nothing to link to yet'}</option>${src.map(x => `<option value="${esc(x.a.id)}"${x.a.id === a.from ? ' selected' : ''}>${esc(x.lab)}</option>`).join('')}</select></label>` : ''}</div>
-        ${(d.ref || []).map(r => `<p class="hint cl-ref">${esc(r)}</p>`).join('')}${fl.map(f => `<p class="cl-flag">${esc(f)}</p>`).join('')}
+        ${(d.ref || []).map(r => `<p class="hint cl-ref">${esc(r)}</p>`).join('')}${fl.map(f => `<p class="cl-flag">${esc(f)}</p>`).join('')}${agHtml}
         <div class="cl-grid">${ck}${clFields(d).map(fd => clField(a, fd)).join('')}</div>
         <details class="more"${hasMore ? ' open' : ''}><summary>Date, operator and notes</summary><div class="morebody">${clField(a, {k: '_d', l: 'Date', ty: 'd'})}${clField(a, {k: '_op', l: 'Operator', ty: 't'})}${clField(a, {k: '_dev', l: 'Deviations', ty: 'a'})}${clField(a, {k: '_n', l: 'Result and notes', ty: 'a'})}</div></details></div>`;
     }
-    return `${(d.ref || []).map(r => `<p class="hint cl-ref">${esc(r)}</p>`).join('')}${fl.map(f => `<p class="cl-flag">${esc(f)}</p>`).join('')}${s.at.map((a, j) => clAttemptHtml(s, a, j)).join('')}`;
+    return `${(d.ref || []).map(r => `<p class="hint cl-ref">${esc(r)}</p>`).join('')}${fl.map(f => `<p class="cl-flag">${esc(f)}</p>`).join('')}${agHtml}${s.at.map((a, j) => clAttemptHtml(s, a, j)).join('')}`;
   })();
   return `${body}
     <div class="cl-acts">${s.skip ? '' : `<button type="button" class="btn" data-cl="addat">Record another attempt</button>`}<button type="button" class="btn quiet" data-cl="dupst">Duplicate this stage</button><button type="button" class="btn quiet" data-cl="skip">${s.skip ? 'Include this stage' : 'Skip this stage'}</button>
@@ -7671,6 +7762,13 @@ function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(
 function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
 function onCloneField(e){ const t = e.target, c = CL();
+  if (t.classList.contains('cl-gel-file')) {
+    if (t.files && t.files.length) {
+      const s = c.stages.find(x => 'clone:' + x.id === curStep);
+      if (s) handleAgaroseGelUpload(t.files[0], s);
+    }
+    return;
+  }
   if (t.dataset.cname) { const s = c.stages.find(x => 'clone:' + x.id === curStep); if (s) { s.name = t.value; const h2 = $('#ssTitle'); if (h2) h2.textContent = clTitle(s); clHtml = clPanelHtml(); clChanged(false); } return; }
   if (t.dataset.cext) { c.ext[t.dataset.cext] = t.value; clChanged(t.tagName === 'SELECT' || e.type === 'change'); return; }
   if (t.dataset.cadd) { const v = t.value, cur = c.stages.find(x => 'clone:' + x.id === curStep); if (!v) return; let s = null;
@@ -7687,6 +7785,22 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   const arm = k => { if (clArm === k) { clArm = ''; return true; } clArm = k; renderClone(true); return false; };
   if (w !== 'rmat' && w !== 'rmst') clArm = '';
   if (w === 'type') { setCloning(v === 'cloning'); return; }
+  if (w === 'gel-pick') { const box = b.closest('.cl-gel-upload') || $('#clonePanel'), inp = box.querySelector('.cl-gel-file'); if (inp) inp.click(); return; }
+  if (w === 'gel-restore') {
+    if (s && s.gel && s.gel.origImage) {
+      s.gel.image = s.gel.origImage; s.gel.name = s.gel.origName;
+      if (s.gel.origRawId) s.gel.rawId = s.gel.origRawId;
+      s.gel.replaced = false;
+      if (s.at && s.at.length) s.at.forEach(a => { if (a.f && a.f.gel) a.f.gel = s.gel.name; });
+      if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+      clChanged(true); toast('Restored original gel image');
+    }
+    return;
+  }
+  const upZone = e.target.closest('[data-cl-drop="gel"]');
+  if (upZone && !upZone.classList.contains('has-img') && !e.target.closest('button, input')) {
+    const inp = upZone.querySelector('.cl-gel-file'); if (inp) inp.click(); return;
+  }
   if (w === 'chgwf') { clPickTpl = true; renderClone(true); return; }
   if (w === 'chgwf-cancel') { clPickTpl = false; renderClone(true); return; }
   if (w === 'tpl') { clPickTpl = false; clApply(v); clChanged(true); return; }
@@ -7716,6 +7830,24 @@ function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('ar
 $('#clonePanel').addEventListener('input', onCloneField);
 $('#clonePanel').addEventListener('change', onCloneField);
 $('#clonePanel').addEventListener('click', onCloneClick);
+$('#clonePanel').addEventListener('dragover', e => {
+  const dropZone = e.target.closest('[data-cl-drop="gel"]');
+  if (dropZone) { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('over'); }
+});
+$('#clonePanel').addEventListener('dragleave', e => {
+  const dropZone = e.target.closest('[data-cl-drop="gel"]');
+  if (dropZone && !dropZone.contains(e.relatedTarget)) dropZone.classList.remove('over');
+});
+$('#clonePanel').addEventListener('drop', async e => {
+  const dropZone = e.target.closest('[data-cl-drop="gel"]');
+  if (dropZone) {
+    e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('over');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      const c = CL(), s = c.stages.find(x => 'clone:' + x.id === curStep);
+      if (s) await handleAgaroseGelUpload(e.dataTransfer.files[0], s);
+    }
+  }
+});
 $('#projType').addEventListener('click', () => setCloning(!prep.includeCloning));
 /* ---------- the step timeline ---------- */
 function prepObjFor(k){
