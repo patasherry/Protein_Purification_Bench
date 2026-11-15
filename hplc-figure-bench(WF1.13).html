@@ -3315,14 +3315,14 @@ function detectBands(g, i, sensPct, gelMax){
     for (let k = bands.length - 1; k >= 0; k--) if (bands[k].drop || (bands[k].shoulder && !(bands[k].area > 0))) bands.splice(k, 1);
   }
   bands.forEach(b => { if (b.area > 0) return; let lA = b.row, rA = b.row; while (lA > 0 && sig[lA-1] <= sig[lA]) lA--; while (rA < h-1 && sig[rA+1] <= sig[rA]) rA++; let a = 0; for (let j=lA;j<=rA;j++) a += sig[j]; b.area = a; });
-  /* saturation: a flat-topped band is wider at 97% of its height than a Gaussian can be, or hits the image pixel minimum */
+  /* saturation: a flat-topped band is wider at 97% of its height than a Gaussian can be, or has a plateau of pixels at pure black
+     (the 8-bit ceiling: g.pix.d is 255 minus grey). Being the darkest band in the image is not saturation: #1479 flagged that,
+     so the strongest band of almost every gel read as saturated. */
   const P = g.pix, lw = P ? P.w/gelLabels(g).length : 0, tr = P ? laneTrack(g, i) : null;
-  if (P && (g._maxD == null || g._maxDPix !== P)) { g._maxD = arrMax(P.d); g._maxDPix = P; }
-  const maxD = g ? g._maxD || 0 : 0;
   bands.forEach(b => { if (b.shoulder) return; let a = b.row, z = b.row; while (a > 0 && sig[a-1] >= 0.97*b.h) a--; while (z < h-1 && sig[z+1] >= 0.97*b.h) z++;
-    let bandMaxD = 0; if (P && tr) for (let y = b.hl; y <= b.hr; y++){ const x0 = Math.max(0, Math.floor((i + DET.laneLo)*lw + tr[y])), x1 = Math.min(P.w, Math.ceil((i + DET.laneHi)*lw + tr[y])), o = y*P.w; for (let x = x0; x < x1; x++) if (P.d[o + x] > bandMaxD) bandMaxD = P.d[o + x]; }
+    let nCap = 0, nAll = 0; if (P && tr) for (let y = b.hl; y <= b.hr; y++){ const x0 = Math.max(0, Math.floor((i + DET.laneLo)*lw + tr[y])), x1 = Math.min(P.w, Math.ceil((i + DET.laneHi)*lw + tr[y])), o = y*P.w; for (let x = x0; x < x1; x++){ nAll++; if (P.d[o + x] >= 254) nCap++; } }
     const flatSat = (z - a + 1)/Math.max(1, b.hr - b.hl + 1) > DET.satRatio;
-    const peakSat = maxD >= 255*(1 - DET.satRatio) && bandMaxD >= maxD - 0.5;
+    const peakSat = nCap >= Math.max(6, 0.02*nAll);  /* clipped: at least 2% of the band's pixels (and 6) at the ceiling */
     b.sat = (flatSat || peakSat) && (b.hr - b.hl + 1) >= 5 && b.h >= DET.satRatio*Math.max(gelMax || 0, mx); });
   const c = g.crop; bands.forEach(b => { b.yRot = c.t + (b.row + 0.5)/h*(c.b - c.t); b.pct = total > 0 ? 100*b.area/total : 0; });
   for (let k = bands.length - 1; k >= 0; k--) if (bands[k].shoulder && bands[k].pct < 1) bands.splice(k, 1);
