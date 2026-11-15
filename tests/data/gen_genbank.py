@@ -127,8 +127,23 @@ ORIGIN
         1 atcg
 //"""
 
+# 11. His6-GST construct with TEV cleavage site
+gb_his6_gst = """LOCUS       pHIS6GST              2000 bp    DNA     circular SYN 01-JAN-2025
+FEATURES             Location/Qualifiers
+     CDS             100..1518
+                     /label="His6-GST-Protein"
+                     /translation="MHHHHHHSSGMSPILGYWKIKGLVQPTRLLLEYLEEKYEEHLYERDEGDKWRNKKFELGLEFPNLPYYIDGDVKLTQSMAIIRYIADKHNMLGGCPKERAEISMLEGAVLDIRYGVSRIAYSKDFETLKVDFLSKLPEMLKMFEDRLCHKTYLNGDHVTHPDFMLYDALDVVLYMDPMCLDAFPKLVCFKKRIEAIPQIDKYLKSSKYIAWPLQGWQATFGGGDHPPKSDENLYFQGMSSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTFSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITLGMDELYK"
+     misc_feature    100..129
+                     /label="6xHis"
+     misc_feature    130..783
+                     /label="GST"
+ORIGIN
+        1 atcg
+//"""
+
 files = {
     'gb_origin_spanning_cassette.gb': gb_origin_spanning_cassette,
+    'gb_his6_gst.gb': gb_his6_gst,
     'gb_complement.gb': gb_complement,
     'gb_join.gb': gb_join,
     'gb_wrap.gb': gb_wrap,

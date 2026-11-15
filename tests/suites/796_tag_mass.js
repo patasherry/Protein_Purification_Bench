@@ -2,7 +2,8 @@ const { open, H, suite, path, DATA, fs } = require('../lib/harness');
 
 const T = suite('796_tag_mass');
 
-T.t('10_tag_mass_sync', async () => {
+(async () => {
+  await T.t('10_tag_mass_sync', async () => {
   const { p, close, errs } = await open();
 
   // 1. New project; add the synthetic gel stand-in and select the gel step so the gel figure is shown.
@@ -94,5 +95,19 @@ T.t('10_tag_mass_sync', async () => {
   }
 
   await close();
+  });
+
+  await T.t('20_his6_gst_preset', async () => {
+    const { p, close } = await open(), h = H(p);
+    try {
+      await h.newProject('His6-GST Preset');
+      await h.gb(path.join(DATA, 'gb', 'gb_his6_gst.gb'));
+      const preset = await p.$eval('#o-tagPreset', e => e.value);
+      T.check('20_his6_gst_preset.preset_equals_hisgst', preset === 'hisgst', `Expected preset 'hisgst', got '${preset}'`);
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
-});
+})();
