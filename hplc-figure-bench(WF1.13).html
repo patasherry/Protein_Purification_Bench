@@ -646,7 +646,7 @@ button,input,select,textarea{font-family:inherit}
       <label class="f">Protein sequence, untagged<textarea id="protSeq" data-opt="protSeq" rows="3" spellcheck="false" placeholder="Paste the sequence, or load a PDB entry"></textarea></label>
       <div class="row">
         <label class="f">Tag<select id="o-tagPreset2" data-opt="tagPreset">
-          <option value="">No tag</option><option value="sumo">His-SUMO</option><option value="his">His-tag (thrombin site)</option><option value="gst">GST</option><option value="mbp">MBP</option>
+          <option value="">No tag</option><option value="sumo">His-SUMO</option><option value="his">His-tag (thrombin site)</option><option value="gst">GST</option><option value="hisgst">His-GST</option><option value="mbp">MBP</option>
           <option value="hismbp">His-MBP</option><option value="trx">His-Trx</option><option value="gfp">GFP</option><option value="custom">Other</option></select></label>
         <label class="f">Tag end<select id="o-tagPos" data-opt="tagPos"><option value="N">N-terminal</option><option value="C">C-terminal</option></select></label>
       </div>
@@ -1188,6 +1188,7 @@ button,input,select,textarea{font-family:inherit}
             <option value="sumo">His-SUMO (~12.5 kDa)</option>
             <option value="his">His-tag (~2.2 kDa)</option>
             <option value="gst">GST (~26 kDa)</option>
+            <option value="hisgst">His-GST (~28 kDa)</option>
             <option value="mbp">MBP (~42.5 kDa)</option>
             <option value="hismbp">His-MBP (~43.5 kDa)</option>
             <option value="trx">His-Trx (~13 kDa)</option>
@@ -3491,7 +3492,7 @@ function knownFor(g, laneI, b){
   const res = out.sort((p, q) => p.d - q.d).map(x => x.k); res.tol = tol; return res;
 }
 const KNOWN_COL = {contam: '#D98200', label: '#555555', cleaved: '#1B9E77', uncleaved: '#7F3C8D', freetag: '#C05600'};
-const TAG_PRESETS = {his: ['His-tag', 2.2], sumo: ['His-SUMO', 12.5], gst: ['GST', 26], mbp: ['MBP', 42.5], hismbp: ['His-MBP', 43.5], trx: ['His-Trx', 13], gfp: ['GFP', 27], custom: ['tag', null]};
+const TAG_PRESETS = {his: ['His-tag', 2.2], sumo: ['His-SUMO', 12.5], gst: ['GST', 26], hisgst: ['His-GST', 28], mbp: ['MBP', 42.5], hismbp: ['His-MBP', 43.5], trx: ['His-Trx', 13], gfp: ['GFP', 27], custom: ['tag', null]};
 /* expected cleaved, uncleaved and free-tag sizes; protein size comes from the setting or from bands already marked as target / tagged */
 function cleavePlan(g){
   if (!opt.cleaveDetect) return null;
@@ -4481,7 +4482,7 @@ function splitOrf(tx, ps, inner){
   /* the tag in parts: the His run with its linker, then any larger tag (SUMO, GST, MBP ...) */
   const off = cterm ? bnd : 0, hm = /H{6,10}/.exec(tagPart), segs = [];
   const tagName = (a, b) => { const f = (inner || []).find(x => x.a <= b && x.b >= a && TAG_NAME_RE.some(([re]) => re.test(x.label))); if (f) return TAG_NAME_RE.find(([re]) => re.test(f.label))[1];
-    if (cut && cut.k === 'sumo') return 'SUMO'; const p = {gst: 'GST', mbp: 'MBP', hismbp: 'MBP', trx: 'Trx', gfp: 'GFP'}[opt.tagPreset]; return p || 'tag'; };
+    if (cut && cut.k === 'sumo') return 'SUMO'; const p = {gst: 'GST', hisgst: 'GST', mbp: 'MBP', hismbp: 'MBP', trx: 'Trx', gfp: 'GFP'}[opt.tagPreset]; return p || 'tag'; };
   if (hm) { const hEnd = hm.index + hm[0].length, rest = tagPart.length - hEnd;
     if (!cterm) { if (rest > 25) {
         /* the larger tag starts where the file's feature starts, or at SUMO's own first residues; the linker between (often a thrombin site) stays with His */
@@ -6260,7 +6261,7 @@ $('#protUse').addEventListener('click', () => applyProt());
 function useOrf(m, quiet){ if (!m || !m.tagSeq) { if (m) { opt.protSeq = m.protSeq; opt.protSrc = prep.gb ? prep.gb.name : ''; applyProt(quiet); } return; }
   const names = m.tagParts.join(' ');
   opt.protSeq = m.protSeq; opt.tagSeq = m.tagSeq; opt.tagPos = m.cterm ? 'C' : 'N'; opt.protSrc = prep.gb ? prep.gb.name : '';
-  opt.tagPreset = m.cut && m.cut.k === 'sumo' ? 'sumo' : /GST/.test(names) ? 'gst' : /MBP/.test(names) ? (/His/.test(names) ? 'hismbp' : 'mbp') : /Trx/.test(names) ? 'trx' : /GFP/.test(names) ? 'gfp' : /^His\d+$/.test(names) ? 'his' : 'custom';
+  opt.tagPreset = m.cut && m.cut.k === 'sumo' ? 'sumo' : /GST/.test(names) ? (/His/.test(names) ? 'hisgst' : 'gst') : /MBP/.test(names) ? (/His/.test(names) ? 'hismbp' : 'mbp') : /Trx/.test(names) ? 'trx' : /GFP/.test(names) ? 'gfp' : /^His\d+$/.test(names) ? 'his' : 'custom';
   applyProt(quiet); }
 async function loadGenBank(f){
   if (/\.dna$/i.test(f.name)) { toast(`${f.name} is a SnapGene file. In SnapGene choose Export, then GenBank (.gb), and drop that file here.`); return; }
