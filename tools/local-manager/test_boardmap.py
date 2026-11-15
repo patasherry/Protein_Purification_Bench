@@ -49,4 +49,8 @@ check('sources text says when there is nothing', bm.sources_text([], '') == '(no
 check('pubmed with no words asks nothing', bm.pubmed('') == [])
 kw = bm.keywords('How do published size exclusion chromatography reporting standards specify the acceptable R-squared threshold for a calibration curve?')
 check('keywords from a question drop common words and keep the subject', 'chromatography' in kw and 'calibration' in kw and ' the ' not in f' {kw} ' and len(kw.split()) <= 6, kw)
+hw2 = bm.clean_homework([{'to': 'Local AI', 'by': 'gemini', 'question': 'Q one'}, {'to': 'Gemini', 'by': 'the Local AI', 'question': 'Q two'}], ['the local AI', 'Gemini'], [])
+check('homework reaches an adviser whose name was written differently', [h['to'] for h in hw2] == ['the local AI', 'Gemini'] and hw2[0]['by'] == 'Gemini' and hw2[1]['by'] == 'the local AI', hw2)
+check('wikipedia with no words asks nothing', bm.wikipedia('') == [])
+check('sources text lists Wikipedia', 'Wikipedia:' in bm.sources_text([], '', [{'title': 'T', 'snippet': 's', 'url': 'u'}]))
 sys.exit(1 if bad else 0)
