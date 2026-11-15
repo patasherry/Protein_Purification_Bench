@@ -6260,7 +6260,8 @@ function loadGenBankText(text, fname){
     if (m && m.src === 'gb' && !cleanSeq(opt.protSeq)) useOrf(m, true);
     else if (m && m.src === 'gb' && ((m.match && !m.match.ok) || (m.tagSeq && m.tagSeq !== (cleanSeq(opt.tagSeq) || TAG_SEQ[opt.tagPreset] || '')))) { prep.prevProt = {protSeq: opt.protSeq, tagSeq: opt.tagSeq, tagPreset: opt.tagPreset, tagPos: opt.tagPos, protSrc: opt.protSrc}; useOrf(m, true); }
     if (!cur || cur === 'overlay') { if (runs.filter(r => r.inWf).length >= 2) cur = 'workflow'; }
-    render(); toast((m && m.src === 'gb' ? `Loaded ${gb.name}: ORF of ${m.tx.length} residues${m.cut ? `, cut by ${m.cut.name}` : ''}.${prep.prevProt ? ' The Protein section now uses this ORF.' : ''}` : `Loaded ${gb.name}, but found no ORF to draw.`) + (gb.recs > 1 ? ` Only the first of ${gb.recs} records was read.` : '') + (gb.lenBad ? ` Warning: the sequence has ${gb.seq.length} bases but LOCUS says ${gb.len}.` : '')); }
+    const nCds = gb.feats.filter(f => f.type === 'CDS').length;
+    render(); toast((m && m.src === 'gb' ? `Loaded ${gb.name}: ORF of ${m.tx.length} residues${nCds > 1 ? ` (first of ${nCds} CDS features)` : ''}${m.cut ? `, cut by ${m.cut.name}` : ''}.${prep.prevProt ? ' The Protein section now uses this ORF.' : ''}` : `Loaded ${gb.name}, but found no ORF to draw.`) + (gb.recs > 1 ? ` Only the first of ${gb.recs} records was read.` : '') + (gb.lenBad ? ` Warning: the sequence has ${gb.seq.length} bases but LOCUS says ${gb.len}.` : '')); }
   catch (e) { toast(e.message === 'protein record' ? `${fname} is a protein GenBank record. The Construct section needs a DNA record (plasmid).` : `Could not read ${fname} as GenBank. Export it from SnapGene or Benchling as GenBank (.gb).`); }
 }
 function renderPrep(){
@@ -6282,7 +6283,8 @@ function renderPrep(){
     if (sel._h !== h) { sel._h = h; sel.innerHTML = h; } if (sel !== document.activeElement) sel.value = cid; $('#pr-protease').placeholder = !String(prep.protease || '').trim() && cleaveProtease() ? `${cleaveProtease()} (construct)` : 'e.g. Ulp1'; } $('#gbClear').hidden = !prep.gb; $('#gbPick').textContent = prep.gb ? 'Load another GenBank file' : 'Load GenBank file';
   const m = prep.gb || cleanSeq(opt.protSeq) ? constructModel() : null, st = $('#gbStatus'); let h = '';
   if (prep.gb) { if (!m || m.src !== 'gb') h = `No ORF found in ${esc(prep.gb.name)}.`;
-    else { h = `${esc(prep.gb.name)}, ${prep.gb.len.toLocaleString('en-US')} bp. ORF ${m.tx.length} residues, ${fmt(m.mTag, 1)} kDa${m.cut ? `, ${esc(m.cut.name)} site after residue ${m.cterm ? m.segs.find(x => x.kind === 'prot').b : m.segs.find(x => x.kind === 'prot').a - 1}` : ''}${m.prom ? `, ${esc(m.prom)} promoter` : ''}.`;
+    else { const nCds = (prep.gb.feats || []).filter(f => f.type === 'CDS').length;
+      h = `${esc(prep.gb.name)}, ${prep.gb.len.toLocaleString('en-US')} bp. ORF ${m.tx.length} residues${nCds > 1 ? ` (first of ${nCds} CDS features)` : ''}, ${fmt(m.mTag, 1)} kDa${m.cut ? `, ${esc(m.cut.name)} site after residue ${m.cterm ? m.segs.find(x => x.kind === 'prot').b : m.segs.find(x => x.kind === 'prot').a - 1}` : ''}${m.prom ? `, ${esc(m.prom)} promoter` : ''}.`;
       const th = m.tx.indexOf('LVPRGS'); if (th >= 0 && !(m.cut && m.cut.k === 'thrombin')) h += ` Also has a thrombin site (LVPRGS, residues ${th + 1} to ${th + 6}).`;
       const mt = m.match, ps = cleanSeq(opt.protSeq);
       if (!ps) h += ' <button type="button" class="linkbtn" id="gbUse">Use this ORF for the Protein section</button>';

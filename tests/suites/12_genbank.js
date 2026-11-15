@@ -29,9 +29,12 @@ const files = {
     await h.gb(files.comp);
     const st = await status();
     const txt = await svgText();
+    const toasts = (await h.toasts()).join(' | ');
 
     T.check('comp.status_loaded', st.includes('pCOMP') && st.includes('1,000 bp'), `status: ${st}`);
     T.check('comp.orf_residues', st.includes('255 residues'), `status: ${st}`);
+    T.check('comp.toast_cds_count', toasts.includes('2 CDS') && toasts.includes('255 residues'), `toasts: ${toasts}`);
+    T.check('comp.status_cds_count', st.includes('2 CDS'), `status: ${st}`);
     T.check('comp.tagged_mass', st.includes('28.7 kDa') || txt.includes('28.7 kDa'), `status: ${st}, svg: ${txt}`);
     T.check('comp.protease_site', st.includes('thrombin site') || txt.includes('thrombin'), `status: ${st}, svg: ${txt}`);
     T.check('comp.promoter', st.includes('T7 promoter') || txt.includes('T7'), `status: ${st}, svg: ${txt}`);
