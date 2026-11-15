@@ -85,9 +85,13 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-gel-upload.over{border-color:var(--accent);background:var(--accent-soft)}
 .clone .cl-gel-upload.has-img{border-style:solid;cursor:default;padding:10px}
 .clone .cl-gel-preview{display:flex;flex-direction:column;align-items:center}
-.clone .cl-gel-img{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);object-fit:contain}
+.clone .cl-gel-img,.clone .cl-gel-canvas{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);object-fit:contain}
 .clone .cl-gel-info{font-size:12px;color:var(--muted);margin:4px 0 2px}
 .clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
+.clone .cl-gel-adjust{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:7px 10px;margin-bottom:8px;font-size:12px;color:var(--muted)}
+.clone .cl-gel-adjust label{display:flex;align-items:center;gap:5px}.clone .cl-gel-adjust input[type=range]{width:88px}.clone .cl-gel-adjust input[type=number]{width:3.8em;min-height:26px;padding:2px 4px}
+.clone .cl-gel-adjust .rot-step{min-width:25px;padding-inline:5px}.clone .cl-gel-adjust .rot-out{font-variant-numeric:tabular-nums;min-width:3.2em;text-align:center;color:var(--ink)}
+.clone .cl-gel-canvas.cropping{cursor:crosshair}
 .clone .cl-ag-section{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
 .clone .cl-ag-lanes .row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
 .projname{font:inherit;font-size:16px;font-weight:600;border:1px solid transparent;background:transparent;color:var(--ink);padding:3px 6px;border-radius:var(--r-s);min-width:0;flex:0 1 26ch}
@@ -7890,7 +7894,10 @@ function clAgaroseHtml(s){
   const orient = g.orientation || (g.bottomToTop ? 'bottom-to-top' : '');
   const imager = g.instrument || g.imager || '';
   const exposure = g.exposure != null ? String(g.exposure) : '';
-  const brightness = g.brightness || (g.adjustments && g.adjustments.brightness) || '';
+  const adj = g.adjustments || {};
+  const rotation = Math.max(-180, Math.min(180, numOr(adj.rotation, 0)));
+  const brightness = Math.max(0, numOr(adj.brightness != null ? adj.brightness : g.brightness, 100));
+  const contrast = Math.max(0, numOr(adj.contrast, 100));
   const hasBrightnessAdj = g.adjBrightnessContrast != null ? !!g.adjBrightnessContrast : !!((g.adjustments && ((g.adjustments.brightness != null && g.adjustments.brightness !== '100' && g.adjustments.brightness !== '') || (g.adjustments.contrast != null && g.adjustments.contrast !== '100' && g.adjustments.contrast !== ''))) || (g.brightness && g.brightness !== '100' && g.brightness !== '0'));
   const lanesAdj = !!g.lanesCroppedRearranged;
   const notes = hasTxt(g.notes) ? String(g.notes) : (g.deviations || f0._n || f0._dev || '');
@@ -7900,7 +7907,15 @@ function clAgaroseHtml(s){
       <input type="file" class="cl-gel-file" data-cl-file="${esc(s.id)}" accept="image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" hidden>
       ${hasImg ? `
         <div class="cl-gel-preview">
-          <img class="cl-gel-img" src="${esc(g.image)}" alt="${esc(g.name || 'Agarose gel')}">
+          <div class="cl-gel-adjust" role="toolbar" aria-label="Gel image adjustments">
+            <button type="button" class="btn quiet" data-cl="gel-crop" aria-pressed="false">Crop</button>
+            <label>Rotation <button type="button" class="btn quiet rot-step" data-cl="gel-rotate-step" data-v="-1" aria-label="Rotate one degree counterclockwise">−</button><input type="range" id="ag-rotation" data-ag-adj="rotation" min="-180" max="180" step="1" value="${rotation}" aria-label="Rotation in degrees"><button type="button" class="btn quiet rot-step" data-cl="gel-rotate-step" data-v="1" aria-label="Rotate one degree clockwise">+</button><output class="rot-out" id="ag-rotation-out">${rotation}°</output></label>
+            <label>Brightness <input type="range" id="ag-brightness" data-ag-adj="brightness" min="0" max="200" step="1" value="${brightness}"><output id="ag-brightness-out">${brightness}</output></label>
+            <label>Contrast <input type="range" id="ag-contrast" data-ag-adj="contrast" min="0" max="200" step="1" value="${contrast}"><output id="ag-contrast-out">${contrast}</output></label>
+            <button type="button" class="btn quiet" data-cl="gel-adjust-reset">Reset adjustments</button>
+          </div>
+          <img class="cl-gel-img" src="${esc(g.image)}" alt="" hidden>
+          <canvas class="cl-gel-canvas" data-ag-preview="${esc(s.id)}" role="img" aria-label="${esc(g.name || 'Agarose gel')}"></canvas>
           <div class="cl-gel-info"><span class="cl-gel-name">${esc(g.name || 'Gel image')}</span></div>
         </div>
         <div class="cl-gel-acts">
@@ -7942,7 +7957,6 @@ function clAgaroseHtml(s){
         </select></label>
         <label class="f">Imaging instrument<input type="text" id="ag-instrument" data-ag="instrument" value="${esc(imager)}" placeholder="e.g. GelDoc, transilluminator"></label>
         <label class="f">Exposure / acquisition<input type="text" id="ag-exposure" data-ag="exposure" value="${esc(exposure)}" placeholder="e.g. 500 ms, auto"></label>
-        <label class="f">Brightness adjustment<input type="number" id="ag-brightness" data-ag="brightness" data-ag-adj="brightness" value="${esc(brightness)}" placeholder="e.g. 100 or 120"></label>
         <label class="check cl-wide"><input type="checkbox" id="ag-bottom-to-top" data-ag="bottomToTop"${g.bottomToTop ? ' checked' : ''}> Run bottom-to-top (shows migration-direction arrow)</label>
         <label class="check cl-wide"><input type="checkbox" id="ag-show-migration" data-ag="showMigration"${g.showMigration ? ' checked' : ''}> Show migration-direction arrow</label>
         <label class="check cl-wide"><input type="checkbox" id="ag-adj-brightness" data-ag="adjBrightnessContrast"${hasBrightnessAdj ? ' checked' : ''}> Brightness or contrast adjusted</label>
@@ -8059,10 +8073,26 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
       <button type="button" class="btn danger${clArm === 'st:' + s.id ? ' armed' : ''}" data-cl="rmst">${clArm === 'st:' + s.id ? 'Remove? Click again' : 'Remove this stage'}</button></div>
     <div class="cl-grid"><label class="f">Stage name<input type="text" data-cname="1" value="${esc(s.name)}" placeholder="${esc(d.t)}"></label>${addSel}</div>`; }
 /* redrawn only when its content changed, and never under the cursor: typing in a field must not lose the focus */
+let agCropStage = '', agCropDrag = null;
+function agAdjust(g){ const a = g.adjustments || {}; return {rotation: Math.max(-180, Math.min(180, numOr(a.rotation, 0))), brightness: Math.max(0, numOr(a.brightness != null ? a.brightness : g.brightness, 100)), contrast: Math.max(0, numOr(a.contrast, 100)), crop: a.crop && a.crop.r > a.crop.l && a.crop.b > a.crop.t ? a.crop : {l: 0, t: 0, r: 1, b: 1}}; }
+function drawAgaroseGelPreview(s, sel){ const g = s && s.gel, can = $('#clonePanel canvas[data-ag-preview]'); if (!g || !can || !g.image) return;
+  const img = new Image(); img.onload = () => { const a = agAdjust(g), w = img.naturalWidth, h = img.naturalHeight; if (!w || !h) return;
+    can.width = w; can.height = h; const out = can.getContext('2d'), work = document.createElement('canvas'); work.width = w; work.height = h; const x = work.getContext('2d'), c = a.crop, sx = c.l*w, sy = c.t*h, sw = (c.r-c.l)*w, sh = (c.b-c.t)*h;
+    if (a.brightness !== 100 || a.contrast !== 100) x.filter = `brightness(${a.brightness}%) contrast(${a.contrast}%)`;
+    x.drawImage(img, sx, sy, sw, sh, 0, 0, w, h); out.save(); out.translate(w/2, h/2); out.rotate(a.rotation*Math.PI/180); out.drawImage(work, -w/2, -h/2); out.restore();
+    if (sel) { const l = Math.min(sel.x0, sel.x1)*w, t = Math.min(sel.y0, sel.y1)*h, rw = Math.abs(sel.x1-sel.x0)*w, rh = Math.abs(sel.y1-sel.y0)*h; out.save(); out.setLineDash([6, 4]); out.lineWidth = Math.max(1, Math.min(w, h)/250); out.strokeStyle = '#0058c4'; out.strokeRect(l, t, rw, rh); out.restore(); }
+  }; img.src = g.image;
+}
+function initAgaroseGelPreview(s){ const can = $('#clonePanel canvas[data-ag-preview]'); if (!can || !s || !s.gel) return; drawAgaroseGelPreview(s);
+  const pos = e => { const r = can.getBoundingClientRect(); return {x: Math.max(0, Math.min(1, (e.clientX-r.left)/r.width)), y: Math.max(0, Math.min(1, (e.clientY-r.top)/r.height))}; };
+  can.addEventListener('pointerdown', e => { if (agCropStage !== s.id) return; e.preventDefault(); const p = pos(e); agCropDrag = {x0: p.x, y0: p.y, x1: p.x, y1: p.y}; can.setPointerCapture(e.pointerId); drawAgaroseGelPreview(s, agCropDrag); });
+  can.addEventListener('pointermove', e => { if (!agCropDrag || agCropStage !== s.id) return; const p = pos(e); agCropDrag.x1 = p.x; agCropDrag.y1 = p.y; drawAgaroseGelPreview(s, agCropDrag); });
+  can.addEventListener('pointerup', e => { if (!agCropDrag || agCropStage !== s.id) return; const d = agCropDrag; agCropDrag = null; const l = Math.min(d.x0, d.x1), t = Math.min(d.y0, d.y1), r = Math.max(d.x0, d.x1), b = Math.max(d.y0, d.y1); if (r-l > .01 && b-t > .01) { s.gel.adjustments = s.gel.adjustments || {}; s.gel.adjustments.crop = {l, t, r, b}; if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1; } agCropStage = ''; clChanged(true); });
+}
 function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(curStep === 'transform' || curStep.startsWith('clone:'))) return; const h = clPanelHtml(), ae = document.activeElement, inside = el.contains(ae);
   if (h === clHtml && !force) return; if (!force && inside && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
   const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'agAdj', 'laneK', 'laneIdx'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
-  clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } }
+  clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } const s = CL().stages.find(x => 'clone:' + x.id === curStep); if (s && s.kind === 'gel') initAgaroseGelPreview(s); }
 function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
 function onCloneField(e){ const t = e.target, c = CL();
@@ -8079,14 +8109,20 @@ function onCloneField(e){ const t = e.target, c = CL();
       s.gel = s.gel || {};
       const k = t.dataset.ag || t.dataset.agAdj;
       s.gel[k] = (t.type === 'checkbox') ? t.checked : t.value;
-      if (k === 'brightness' || k === 'contrast') {
+      if (k === 'rotation' || k === 'brightness' || k === 'contrast') {
         s.gel.adjustments = s.gel.adjustments || {};
         s.gel.adjustments[k] = t.value;
+      }
+      if (k === 'brightness' || k === 'contrast') {
         if (t.value && t.value !== '100' && t.value !== '0') {
           s.gel.adjBrightnessContrast = true;
           const chk = document.querySelector('#ag-adj-brightness');
           if (chk) chk.checked = true;
         }
+      }
+      if (k === 'rotation' || k === 'brightness' || k === 'contrast') {
+        const out = $('#ag-' + k + '-out'); if (out) out.value = out.textContent = t.value + (k === 'rotation' ? '°' : '');
+        drawAgaroseGelPreview(s);
       }
       if (k === 'orientation') {
         s.gel.bottomToTop = (t.value === 'bottom-to-top');
@@ -8166,6 +8202,18 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
     return;
   }
   if (w === 'gel-pick') { const box = b.closest('.cl-gel-upload') || $('#clonePanel'), inp = box.querySelector('.cl-gel-file'); if (inp) inp.click(); return; }
+  if (w === 'gel-crop') {
+    if (s && s.gel) { agCropStage = agCropStage === s.id ? '' : s.id; agCropDrag = null; b.setAttribute('aria-pressed', agCropStage === s.id ? 'true' : 'false'); const can = $('#clonePanel canvas[data-ag-preview]'); if (can) can.classList.toggle('cropping', agCropStage === s.id); }
+    return;
+  }
+  if (w === 'gel-rotate-step') {
+    if (s && s.gel) { const input = $('#ag-rotation'); s.gel.adjustments = s.gel.adjustments || {}; const v = Math.max(-180, Math.min(180, numOr(s.gel.adjustments.rotation, 0) + numOr(b.dataset.v, 0))); s.gel.adjustments.rotation = v; if (input) input.value = v; const out = $('#ag-rotation-out'); if (out) out.value = out.textContent = v + '°'; if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1; drawAgaroseGelPreview(s); clChanged(false); }
+    return;
+  }
+  if (w === 'gel-adjust-reset') {
+    if (s && s.gel) { delete s.gel.adjustments; delete s.gel.brightness; s.gel.adjBrightnessContrast = false; agCropStage = ''; agCropDrag = null; if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1; clChanged(true); toast('Reset gel image adjustments'); }
+    return;
+  }
   if (w === 'gel-restore') {
     if (s && s.gel && s.gel.origImage) {
       s.gel.image = s.gel.origImage; s.gel.name = s.gel.origName;
