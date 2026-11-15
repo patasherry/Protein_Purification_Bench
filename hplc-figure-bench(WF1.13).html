@@ -1692,9 +1692,9 @@ function parseAkta(text, fname){
   const lines = text.split(/\r\n|\n|\r/); let u = -1, d = ',';
   for (let i=0;i<Math.min(50, lines.length) && u < 0;i++) for (const dd of [',', '	', ';']) {
     const c = (dd === '	' ? lines[i].split('	') : csvSplit(lines[i], dd)).map(s => s.trim());
-    if (c.length >= 4 && /^(ml|min)$/i.test(c[0]) && c.filter((s,k) => k%2 === 0 && /^(ml|min)$/i.test(s)).length >= 2) { u = i; d = dd; break; }
+    if (c.length >= 4 && /^(ml|min|µl|ul)$/i.test(c[0]) && c.filter((s,k) => k%2 === 0 && /^(ml|min|µl|ul)$/i.test(s)).length >= 2) { u = i; d = dd; break; }
     /* an export of the UV curve alone: its name row (UV 1_280) over a single ml,mAU pair */
-    if (i > 0 && c.filter(Boolean).length === 2 && /^(ml|min)$/i.test(c[0]) && /^m?AU$/i.test(c[1]) && curveKind(((dd === '	' ? lines[i-1].split('	') : csvSplit(lines[i-1], dd))[0] || '').trim(), c[1]) === 'uv') { u = i; d = dd; break; }
+    if (i > 0 && c.filter(Boolean).length === 2 && /^(ml|min|µl|ul)$/i.test(c[0]) && /^m?AU$/i.test(c[1]) && curveKind(((dd === '	' ? lines[i-1].split('	') : csvSplit(lines[i-1], dd))[0] || '').trim(), c[1]) === 'uv') { u = i; d = dd; break; }
   }
   if (u < 1) return null;
   const sp = L => d === '\t' ? L.split('\t') : csvSplit(L, d);
@@ -1716,7 +1716,7 @@ function parseAkta(text, fname){
     for (const cv of uvs) {
       let hasX = false, hasY = false;
       for (let i=u+1;i<lines.length;i++) { const f = sp(lines[i]); hasX = hasX || isFinite(toNum(f[cv.col] || '', d !== ',')); hasY = hasY || isFinite(toNum(f[cv.col+1] || '', d !== ',')); }
-      const axis = /^min$/i.test(cv.xu) ? 'time' : 'volume', xu = /^ml$/i.test(cv.xu) ? 'mL' : cv.xu;
+      const axis = /^min$/i.test(cv.xu) ? 'time' : 'volume', xu = /^ml$/i.test(cv.xu) ? 'mL' : /^(µl|ul)$/i.test(cv.xu) ? 'µL' : cv.xu;
       if (!hasX) missing.push(`${cv.name} ${axis} (${xu})`);
       if (!hasY) missing.push(`${cv.name} absorbance (${cv.yu})`);
       if (hasX && hasY) missing.push(`${cv.name} paired ${axis}/absorbance data points (at least 2)`);
@@ -2048,7 +2048,7 @@ function integrateRegion(xs, ys, a, b, mode){
 }
 /* mass (mg) = (area in AU·mL) / (A280 of 1 mg/mL per cm × path in cm) */
 /* ---------- size exclusion (SEC) ---------- */
-const xUnit = run => /min/i.test((run && run.xu) || '') ? 'min' : 'mL';
+const xUnit = run => { const u = (typeof run === 'string' ? run : (run && (run.xUnit || run.xu))) || ''; if (/min/i.test(u)) return 'min'; if (/µl|ul/i.test(u)) return 'µL'; return 'mL'; };
 const SEC_RE = /(^|[^a-z])(sec|superdex|superose|gel ?filtration|size ?exclusion|hiload|s200|s75|s6|sd ?200|sd ?75|sepharose ?6|sephacryl|yarra|tskgel|advancebio sec)([^a-z]|$)/i;
 /* a run is auto-detected as SEC only on a strong signal: the file, method or column name says so. A flat gradient and conductivity prove nothing (isocratic runs, desalting), so use the SEC switch on the run card for those */
 function secGuess(r){
@@ -4642,8 +4642,8 @@ function constructSVG(W, H, fs, aw){
 const COND_KEYS = ['mCol', 'mCV', 'mBufA', 'mBufB', 'mFlow', 'mTemp', 'mGrad', 'mWash', 'mLoad', 'mFrac', 'mInst', 'mOther'];
 /* what was done to a pool before the next column: concentrated, diluted, exchanged, filtered or held */
 const BTW_T = {conc: 'Concentrated', dil: 'Diluted', exch: 'Buffer exchanged', filt: 'Filtered', hold: 'Held overnight'};
-const btwOf = r => { if (!r || !prep.btw || !prep.btw[r.id]) return null; const p = r.fracs ? poolRows(r) : null; return Object.assign({how: 'conc', _poolVol: p && xUnit(r) === 'mL' && p.vol > 0 ? +fmt(p.vol, 1) : 0}, prep.btw[r.id]); };
-const btwShort = b => { const vo = numOr(b.vOut, 0); return b.how === 'dil' ? (vo > 0 ? `Diluted to ${fmtAuto(vo)} mL` : 'Diluted') : b.how === 'exch' ? 'Buffer exchanged' : b.how === 'filt' ? 'Filtered' : b.how === 'hold' ? 'Held overnight' : vo > 0 ? `Conc. to ${fmtAuto(vo)} mL` : 'Concentrated'; };
+const btwOf = r => { if (!r || !prep.btw || !prep.btw[r.id]) return null; const p = r.fracs ? poolRows(r) : null, u = xUnit(r) === 'min' ? 'mL' : xUnit(r); return Object.assign({how: 'conc', unit: u, _poolVol: p && (xUnit(r) === 'mL' || xUnit(r) === 'µL') && p.vol > 0 ? +fmt(p.vol, 1) : 0}, prep.btw[r.id]); };
+const btwShort = (b, r) => { const run = (r && (r.xu || r.xUnit)) ? r : (b && (b.xu || b.xUnit)) ? b : null, rec = (b && (b.how || b.vOut != null)) ? b : (run && (btwOf(run) || (prep.btw && prep.btw[run.id]))) || b || {}, u = (rec && rec.unit) || (run && xUnit(run) !== 'min' ? xUnit(run) : '') || (typeof r === 'string' ? r : '') || (b && typeof b === 'object' && xUnit(b) !== 'min' ? xUnit(b) : '') || 'mL', vo = numOr(rec.vOut, 0); return rec.how === 'dil' ? (vo > 0 ? `Diluted to ${fmtAuto(vo)} ${u}` : 'Diluted') : rec.how === 'exch' ? 'Buffer exchanged' : rec.how === 'filt' ? 'Filtered' : rec.how === 'hold' ? 'Held overnight' : vo > 0 ? `Conc. to ${fmtAuto(vo)} ${u}` : 'Concentrated'; };
 const arrowNote = r => String(r.note || '').trim();
 /* the share of a measured output loaded on the next step, for a well-mixed sample: loaded / output. Neither volume (older projects) means all of it, only the kept volume means the rest;
    loaded plus kept above the output is not a split, and counts as all until fixed */
@@ -4651,23 +4651,25 @@ function btwSplit(b){ const vo = numOr(b && b.vOut, null), vk = numOr(b && b.vKe
   if (vl == null && vk == null) return {f: 1, set: false}; const bad = !(vo > 0) ? 'novol' : vl != null && vl < 0 || vk != null && vk < 0 ? 'neg' : vl === 0 ? 'zero' : (vl || 0) + (vk || 0) > vo*(1 + 1e-9) ? 'over' : '';
   if (bad) return {f: 1, set: false, bad, vo, vl, vk}; if (vl == null) vl = vo - vk; return {f: vl/vo, set: true, vo, vl, vk}; }
 function btwMg(r){ const b = btwOf(r); if (!b) return null; const ms = poolMeas(r), c = ms.src === 'btw' ? ms.c : null, vo = numOr(b.vOut, null); if (c == null || vo == null) return null; const p = poolRows(r), mg = c*vo; return {mg, pct: p && p.mgArea > 0 ? 100*mg/p.mgArea : null}; }
-function btwSentence(b){
-  const dv = String(b.device || '').trim(), mw = String(b.mwco || '').trim(), nt = String(b.note || '').trim().replace(/\.$/, ''), vi = numOr(b.vIn, 0) || numOr(b._poolVol, 0), vo = numOr(b.vOut, 0);
-  const how = {conc: 'concentrated', dil: 'diluted', exch: 'buffer exchanged', filt: 'filtered', hold: 'held overnight'}[b.how] || 'concentrated';
+function btwSentence(b, r){
+  const run = (r && (r.xu || r.xUnit)) ? r : (b && (b.xu || b.xUnit)) ? b : null, rec = (b && (b.how || b.vOut != null || b.vIn != null)) ? b : (run && (btwOf(run) || (prep.btw && prep.btw[run.id]))) || b || {}, u = (rec && rec.unit) || (run && xUnit(run) !== 'min' ? xUnit(run) : '') || (typeof r === 'string' ? r : '') || (b && typeof b === 'object' && xUnit(b) !== 'min' ? xUnit(b) : '') || 'mL';
+  const dv = String(rec.device || '').trim(), mw = String(rec.mwco || '').trim(), nt = String(rec.note || '').trim().replace(/\.$/, ''), vi = numOr(rec.vIn, 0) || numOr(rec._poolVol, 0), vo = numOr(rec.vOut, 0);
+  const how = {conc: 'concentrated', dil: 'diluted', exch: 'buffer exchanged', filt: 'filtered', hold: 'held overnight'}[rec.how] || 'concentrated';
   const kit = [dv, mw ? unitIf(mw, 'kDa') + ' MWCO' : ''].filter(Boolean).join(', ');
-  return `The pool was then ${how}${kit ? ` (${kit})` : ''}${vi > 0 && vo > 0 ? ` from ${fmtAuto(vi)} mL to ${fmtAuto(vo)} mL` : vo > 0 ? ` to ${fmtAuto(vo)} mL` : ''}${nt ? `${/^(into|in|to|against|with|at)\b/i.test(nt) ? ' ' : ', '}${nt}` : ''}.`;
+  return `The pool was then ${how}${kit ? ` (${kit})` : ''}${vi > 0 && vo > 0 ? ` from ${fmtAuto(vi)} ${u} to ${fmtAuto(vo)} ${u}` : vo > 0 ? ` to ${fmtAuto(vo)} ${u}` : ''}${nt ? `${/^(into|in|to|against|with|at)\b/i.test(nt) ? ' ' : ', '}${nt}` : ''}.`;
 }
-function manSentence(o, Lt, wf){ const m = o.man, t = x => String(x == null ? '' : x).trim().replace(/\.$/, ''), rs = t(m.resin), bf = t(m.buffer), wa = t(m.wash), el = t(m.elution), nt = t(m.note), vo = numOr(m.vol, 0);
-  const i = wf.indexOf(o), first = !wf.slice(0, i).some(x => !x.prep || x.prep === 'manual'), src = first && LYS_KEYS.some(q => hasTxt(prep[q])) ? 'the clarified lysate' : first ? 'the sample' : 'the pool';
-  const head = `${o.name}${Lt ? ` (panel ${Lt})` : ''}: `, gap = w => `[${w} not entered]`;
+function manSentence(o, Lt, wf){ const m = (o && o.man) || o || {}, t = x => String(x == null ? '' : x).trim().replace(/\.$/, ''), rs = t(m.resin), bf = t(m.buffer), wa = t(m.wash), el = t(m.elution), nt = t(m.note), vo = numOr(m.vol, 0);
+  const i = wf ? wf.indexOf(o) : -1, first = !wf || !wf.slice(0, i).some(x => !x.prep || x.prep === 'manual'), src = first && LYS_KEYS.some(q => hasTxt(prep[q])) ? 'the clarified lysate' : first ? 'the sample' : 'the pool';
+  const head = `${o.name || ''}${Lt ? ` (panel ${Lt})` : ''}${o.name ? ': ' : ''}`, gap = w => `[${w} not entered]`, u = (m && m.unit) || (o && xUnit(o) !== 'min' ? xUnit(o) : '') || 'mL';
   let b = m.kind === 'batch' ? `${src} was bound in batch to ${rs || gap('resin')}${bf ? ` in ${bf}` : ''}${wa ? `, washed with ${wa}` : ''}${el ? ` and eluted with ${el}` : ''}`
     : m.kind === 'precip' ? `the protein was precipitated${rs ? ` with ${rs}` : ''}${el ? ` (${el})` : ''}${bf ? ` and resuspended in ${bf}` : ''}`
     : m.kind === 'dialysis' ? `the sample was dialyzed${rs ? ` (${rs})` : ''}${bf ? ` against ${bf}` : ` ${gap('buffer')}`}${el ? `, ${el}` : ''}`
-    : m.kind === 'conc' ? `the sample was concentrated${rs ? ` (${rs})` : ''}${vo > 0 ? ` to ${fmtAuto(vo)} mL` : ''}${bf ? ` in ${bf}` : ''}${el ? `, ${el}` : ''}`
+    : m.kind === 'conc' ? `the sample was concentrated${rs ? ` (${rs})` : ''}${vo > 0 ? ` to ${fmtAuto(vo)} ${u}` : ''}${bf ? ` in ${bf}` : ''}${el ? `, ${el}` : ''}`
     : m.kind === 'other' ? (el || bf || rs ? [rs, bf, el].filter(Boolean).join(', ') : nt || gap('details'))
     : `${src} was loaded onto ${rs || gap('column or resin')}${bf ? ` equilibrated in ${bf}` : ''}${wa ? `, washed with ${wa}` : ''}${el ? ` and eluted with ${el}` : ''}`;
   const tail = nt && !(m.kind === 'other' && !(el || bf || rs)) ? ` ${nt.replace(/^./, c => c.toUpperCase())}.` : '';
   return `${head}${b}.${tail}`; }
+window.btwSentence = btwSentence; window.btwShort = btwShort; window.manSentence = manSentence;
 /* the column, from the run's file name and method (HisTrap FF 1 mL, Resource Q 6 mL ...), or the SEC calibration's column */
 function guessColumn(r){
   const t = ' ' + [r.file, r.method, r.name].filter(Boolean).join(' ').replace(/[_]+/g, ' ') + ' ';
@@ -4828,7 +4830,7 @@ function methodsText(){
     }
     if (pr && pr.measured && pr.src !== 'btw') { const epStr = pr.src === 'nd' ? epPhrase(ndEpsUsed(r)) : ''; t += pr.concentrated ? ` The pool was concentrated to ${fmtAuto(pr.measVol)} mL and measured at ${fmtAuto(pr.conc)} mg/mL by NanoDrop (${sig2(pr.mg)} mg${epStr}).` : ` The pool measured ${fmtAuto(pr.conc)} mg/mL by NanoDrop (${sig2(pr.mg)} mg${epStr}).`; }
     else if (pr && pr.measured && pr.src === 'btw') t += ' Its concentration was adjusted.';
-    const bw = btwOf(r); if (bw) t += ' ' + btwSentence(bw);
+    const bw = btwOf(r); if (bw) t += ' ' + btwSentence(bw, r);
     P.push(t); });
   if (prep.on && (hasTxt(prep.store) || hasTxt(prep.finBuffer))) { const fb = v(prep.finBuffer), stx = v(prep.store);
     P.push(fb ? `The final sample was in ${fb.replace(/\.$/, '')}.${stx ? ` Storage: ${lc(stx).replace(/\.$/, '')}.` : ''}` : `Final sample and storage: ${lc(stx).replace(/\.$/, '')}.`); }
