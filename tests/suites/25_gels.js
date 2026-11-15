@@ -458,4 +458,79 @@ await T.t('strong-band-not-saturated', async () => {
   }
 });
 
+function makeTiff16(w, h, getPixel) {
+  const numTags = 9, ifdOffset = 8, dataOffset = ifdOffset + 2 + numTags * 12 + 4;
+  const buf = Buffer.alloc(dataOffset + w * h * 2);
+  buf.write('II', 0); buf.writeUInt16LE(42, 2); buf.writeUInt32LE(ifdOffset, 4); buf.writeUInt16LE(numTags, ifdOffset);
+  const tags = [
+    [256, 4, 1, w], [257, 4, 1, h], [258, 3, 1, 16], [259, 3, 1, 1], [262, 3, 1, 1],
+    [273, 4, 1, dataOffset], [277, 3, 1, 1], [278, 4, 1, h], [279, 4, 1, w * h * 2]
+  ];
+  tags.sort((a, b) => a[0] - b[0]);
+  tags.forEach(([tag, type, count, val], idx) => {
+    const o = ifdOffset + 2 + idx * 12;
+    buf.writeUInt16LE(tag, o); buf.writeUInt16LE(type, o + 2); buf.writeUInt32LE(count, o + 4);
+    if (type === 3) buf.writeUInt16LE(val, o + 8); else buf.writeUInt32LE(val, o + 8);
+  });
+  buf.writeUInt32LE(0, ifdOffset + 2 + numTags * 12);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      buf.writeUInt16LE(getPixel(x, y), dataOffset + (y * w + x) * 2);
+    }
+  }
+  return buf;
+}
+
+await T.t('tiff-12bit-depth', async () => {
+  const a = await start(), p = a.p;
+  try {
+    const tiffBuf = makeTiff16(300, 360, (x, y) => {
+      const lane = Math.floor(x / 100), dx = Math.abs(x % 100 - 50);
+      const wProfile = Math.exp(-0.5 * Math.pow(dx / 24, 2));
+      let val = 100;
+      if (lane === 0) {
+        val += 1500 * Math.exp(-0.5 * Math.pow((y - 72) / 4, 2)) * wProfile;
+        val += 1500 * Math.exp(-0.5 * Math.pow((y - 145) / 4, 2)) * wProfile;
+        val += 1500 * Math.exp(-0.5 * Math.pow((y - 216) / 4, 2)) * wProfile;
+        val += 1500 * Math.exp(-0.5 * Math.pow((y - 288) / 4, 2)) * wProfile;
+      } else if (lane === 1) {
+        val += 4150 * Math.exp(-0.5 * Math.pow((y - 120) / 6, 2)) * wProfile;
+        val += 500 * Math.exp(-0.5 * Math.pow((y - 230) / 6, 2)) * wProfile;
+      } else {
+        val += 350 * Math.exp(-0.5 * Math.pow((y - 120) / 6, 2)) * wProfile;
+      }
+      return Math.min(4095, Math.round(val));
+    });
+
+    await p.setInputFiles('#gelFile', { name: 'camera12.tiff', mimeType: 'image/tiff', buffer: tiffBuf });
+    await p.waitForTimeout(1500);
+    await set(p, '#g-invert', true);
+    await set(p, '#g-n', 3);
+    await set(p, '#g-labels', 'M, A, B');
+
+    const res = await p.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('#bandTable tbody tr'));
+      const rA = rows.find(r => r.cells[1] && r.cells[1].textContent.trim() === 'A');
+      const rB = rows.find(r => r.cells[1] && r.cells[1].textContent.trim() === 'B');
+      if (!rA || !rB) return null;
+      const getChips = r => Array.from(r.cells[r.cells.length - 1].querySelectorAll('.bchip')).map(ch => ({
+        text: ch.textContent.trim(),
+        sat: ch.classList.contains('sat') || /saturated/i.test(ch.textContent),
+        pct: parseFloat((ch.textContent.match(/\(([\d.]+)%/) || [])[1] || '0')
+      }));
+      return {
+        bandsA: getChips(rA),
+        bandsB: getChips(rB),
+        textA: rA.cells[rA.cells.length - 1].textContent.trim(),
+        textB: rB.cells[rB.cells.length - 1].textContent.trim()
+      };
+    });
+
+    T.check('tiff-12bit.bands-nonzero-area', res && res.bandsB.length > 0 && res.bandsB.every(b => b.pct > 0), JSON.stringify(res));
+    T.check('tiff-12bit.clipped-band-saturated', res && res.bandsA.some(b => b.sat), JSON.stringify(res));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
