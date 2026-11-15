@@ -88,6 +88,8 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-gel-img{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);object-fit:contain}
 .clone .cl-gel-info{font-size:12px;color:var(--muted);margin:4px 0 2px}
 .clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
+.clone .cl-ag-section{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.clone .cl-ag-lanes .row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
 .projname{font:inherit;font-size:16px;font-weight:600;border:1px solid transparent;background:transparent;color:var(--ink);padding:3px 6px;border-radius:var(--r-s);min-width:0;flex:0 1 26ch}
 .projname:hover{border-color:var(--line)} .projname:focus{outline:none;border-color:var(--accent);background:var(--field)}
 .savestate{color:var(--muted);font-size:12.5px;white-space:nowrap}
@@ -7341,8 +7343,19 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         rawId: str(s.gel.rawId),
         origRawId: str(s.gel.origRawId),
         replaced: !!s.gel.replaced,
+        figGenerated: !!s.gel.figGenerated,
+        ladderProduct: str(s.gel.ladderProduct),
+        ladderCat: str(s.gel.ladderCat),
+        ladderSizes: str(s.gel.ladderSizes),
+        pct: str(s.gel.pct),
+        buffer: str(s.gel.buffer),
+        stain: str(s.gel.stain),
+        voltage: str(s.gel.voltage),
+        duration: str(s.gel.duration),
+        bottomToTop: !!s.gel.bottomToTop,
+        showMigration: !!s.gel.showMigration,
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
-        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes : [],
+        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? {label: str(l.label), type: str(l.type), expected: str(l.expected)} : l) : [],
         results: obj(s.gel.results)
       };
     }
@@ -7425,6 +7438,179 @@ function clShortLabel(stg){
     return nm.length > 10 ? nm.slice(0, 9) + '…' : nm;
   }
   return CL_SHORT[stg.kind] || (clTitle(stg).length > 10 ? clTitle(stg).slice(0, 9) + '…' : clTitle(stg));
+}
+function buildAgaroseGelSVG(stg){
+  const g = stg.gel = stg.gel || {};
+  const a0 = stg.at && stg.at[0] ? stg.at[0] : null;
+  const f0 = a0 ? a0.f : {};
+  const fs = fontSize(), okabe = PAL.okabe;
+  const pad = 16;
+
+  const lanes = (g.lanes && g.lanes.length) ? g.lanes : [
+    {label: 'M', type: 'DNA ladder', expected: ''},
+    {label: 'PCR-1', type: 'Sample', expected: f0.expSize || '1200 bp'},
+    {label: 'NTC', type: 'No-template control', expected: ''}
+  ];
+  const nLanes = Math.max(1, lanes.length);
+
+  const pct = hasTxt(g.pct) ? String(g.pct) : (hasTxt(f0.pct) ? String(f0.pct) : '1');
+  const buffer = hasTxt(g.buffer) ? String(g.buffer) : 'TAE 1x';
+  const stain = hasTxt(g.stain) ? String(g.stain) : 'SYBR Safe';
+  const voltage = hasTxt(g.voltage) ? String(g.voltage) : '100 V';
+  const duration = hasTxt(g.duration) ? String(g.duration) : '45 min';
+  const ladderProd = hasTxt(g.ladderProduct) ? String(g.ladderProduct) : (hasTxt(f0.ladder) ? String(f0.ladder) : '1 kb ladder');
+  const ladderCat = hasTxt(g.ladderCat) ? String(g.ladderCat) : 'N3232S';
+  const ladderSizesStr = hasTxt(g.ladderSizes) ? String(g.ladderSizes) : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
+  const ladderSizes = ladderSizesStr.split(/[,;\s]+/).map(Number).filter(v => v > 0);
+  if (!ladderSizes.length) {
+    ladderSizes.push(100, 200, 300, 400, 500, 600, 700, 800, 900, 1000);
+  }
+  ladderSizes.sort((a, b) => b - a);
+
+  const laneDetails = lanes.map((l, idx) => `Lane ${idx + 1}: ${l.label || ('Lane ' + (idx + 1))} (${l.type || 'Sample'}${l.expected ? `, expected: ${l.expected}` : ''})`).join('; ');
+  const ladderDesc = `${ladderProd}${ladderCat ? ` (Cat. #${ladderCat})` : ''}`;
+  const condDesc = `${pct.replace(/%$/, '')}% agarose, ${buffer}, ${stain}, ${voltage}, ${duration}`;
+  const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + condDesc.length);
+
+  const ladderW = 48;
+  const gelX = pad + ladderW;
+  const gelW = Math.max(160, nLanes * 52);
+  const laneW = gelW / nLanes;
+  const rightSpace = 150 + ((g.bottomToTop || g.showMigration) ? 36 : 0);
+  const W = Math.max(numOr(opt.w, 3.5) * 72, gelX + gelW + rightSpace + pad, pad * 2 + maxLegChars * fs * 0.56);
+
+  const laneLabelH = fs * 2;
+  const gelTop = pad + laneLabelH + 6;
+  const gelH = Math.max(180, ladderSizes.length * fs * 1.45 + 32);
+  const wellH = 8;
+
+  const minSize = Math.min(100, ...ladderSizes);
+  const maxSize = Math.max(1500, ...ladderSizes);
+  const logMin = Math.log10(minSize);
+  const logMax = Math.log10(maxSize * 1.1);
+
+  const bandY = bp => {
+    const l = Math.log10(Math.max(minSize * 0.9, Math.min(maxSize * 1.1, bp)));
+    const frac = (logMax - l) / (logMax - logMin);
+    return gelTop + wellH + 14 + frac * (gelH - wellH - 26);
+  };
+
+  let ladderLaneIdx = lanes.findIndex(l => /ladder|marker|^m$/i.test(l.type) || /^m$/i.test(l.label));
+  if (ladderLaneIdx < 0) ladderLaneIdx = 0;
+
+  const s = [];
+  s.push(svgHead(W, 300).replace('<svg ', '<svg data-dpi="600" '));
+  s.push('<defs>');
+  s.push(`<marker id="ag-arr" viewBox="0 0 10 10" refX="7" refY="3.5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0 0, 10 3.5, 0 7" fill="${okabe[0]}"/></marker>`);
+  s.push(`<marker id="ag-arr-mig" viewBox="0 0 10 10" refX="7" refY="3.5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0 0, 10 3.5, 0 7" fill="${okabe[3]}"/></marker>`);
+  s.push('</defs>');
+  if (opt.bg) s.push(`<rect width="${r2(W)}" height="100%" fill="#ffffff"/>`);
+
+  if (g.image) {
+    s.push(`<image href="${esc(g.image)}" x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" preserveAspectRatio="none"/>`);
+    s.push(`<rect x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" fill="none" stroke="#222222" stroke-width="0.75"/>`);
+  } else {
+    s.push(`<rect x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" fill="#16181e" rx="3" stroke="#222222" stroke-width="0.75"/>`);
+  }
+
+  lanes.forEach((_, i) => {
+    const lx = gelX + i * laneW;
+    const wx = lx + laneW * 0.2;
+    const ww = laneW * 0.6;
+    s.push(`<rect x="${r2(wx)}" y="${r2(gelTop + 2)}" width="${r2(ww)}" height="${r2(wellH)}" fill="#0c0d11" stroke="#333745" stroke-width="0.6" rx="1"/>`);
+  });
+
+  lanes.forEach((l, i) => {
+    const cx = gelX + (i + 0.5) * laneW;
+    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(l.label || ('Lane ' + (i + 1)))}</text>`);
+  });
+
+  const lLaneX = gelX + ladderLaneIdx * laneW;
+  const minDy = fs * 1.15;
+  let prevLy = -Infinity;
+  s.push(`<text x="${r2(gelX - 10)}" y="${r2(gelTop + 4)}" text-anchor="end" font-size="${r2(fs * 0.75)}" font-weight="bold" fill="#555555">bp</text>`);
+  prevLy = gelTop + 4;
+  ladderSizes.forEach(sz => {
+    const y = bandY(sz);
+    const ly = Math.max(y, prevLy + minDy);
+    prevLy = ly;
+    if (!g.image) {
+      const bx = lLaneX + laneW * 0.15;
+      const bw = laneW * 0.7;
+      const intens = (sz === 1000 || sz === 500) ? 0.95 : 0.65;
+      s.push(`<rect x="${r2(bx)}" y="${r2(y - 1.2)}" width="${r2(bw)}" height="2.4" fill="#e4ebf5" opacity="${intens}" rx="1"/>`);
+    }
+    s.push(`<polyline points="${r2(gelX - 8)},${r2(ly)} ${r2(gelX - 4)},${r2(y)} ${r2(gelX - 1)},${r2(y)}" fill="none" stroke="#666666" stroke-width="0.75"/>`);
+    s.push(`<text x="${r2(gelX - 10)}" y="${r2(ly + 2.5)}" text-anchor="end" font-size="${r2(fs * 0.82)}" fill="#333333">${sz}</text>`);
+  });
+
+  lanes.forEach((l, i) => {
+    if (i === ladderLaneIdx) return;
+    const expStr = l.expected ? String(l.expected).trim() : '';
+    if (!expStr) return;
+
+    let bpVal = 0;
+    const m = expStr.match(/(\d+(?:\.\d+)?)/);
+    if (m) {
+      const v = parseFloat(m[1]);
+      bpVal = /kb/i.test(expStr) ? Math.round(v * 1000) : Math.round(v);
+    }
+    if (!bpVal) return;
+
+    const y = bandY(bpVal);
+    const lx = gelX + i * laneW;
+
+    if (!g.image) {
+      const bx = lx + laneW * 0.15;
+      const bw = laneW * 0.7;
+      s.push(`<rect x="${r2(bx)}" y="${r2(y - 1.5)}" width="${r2(bw)}" height="3" fill="#ffffff" rx="1"/>`);
+    }
+
+    let szLabel = `${bpVal} bp`;
+    if (bpVal >= 1000) {
+      const kb = (bpVal / 1000).toFixed(1);
+      szLabel = `${kb} kb`;
+    }
+    const fullArrowLabel = `Expected product: ${szLabel}`;
+
+    const arrowTipX = lx + laneW * 0.85;
+    const arrowTailX = gelX + gelW + 8;
+    s.push(`<line x1="${r2(arrowTailX)}" y1="${r2(y)}" x2="${r2(arrowTipX)}" y2="${r2(y)}" stroke="${okabe[0]}" stroke-width="1.2" marker-end="url(#ag-arr)"/>`);
+    s.push(`<text x="${r2(arrowTailX + 4)}" y="${r2(y + 3)}" font-size="${r2(fs * 0.9)}" font-weight="bold" fill="${okabe[0]}">${esc(fullArrowLabel)}</text>`);
+  });
+
+  if (g.bottomToTop || g.showMigration) {
+    const ax = W - pad - 14;
+    const topY = gelTop + 14;
+    const botY = gelTop + gelH - 14;
+    if (g.bottomToTop) {
+      s.push(`<line x1="${r2(ax)}" y1="${r2(botY)}" x2="${r2(ax)}" y2="${r2(topY)}" stroke="${okabe[3]}" stroke-width="1.5" marker-end="url(#ag-arr-mig)"/>`);
+      s.push(`<text x="${r2(ax + 9)}" y="${r2((topY + botY) / 2 + 3)}" font-size="${r2(fs * 0.75)}" font-weight="bold" fill="${okabe[3]}" transform="rotate(-90 ${r2(ax + 9)} ${r2((topY + botY) / 2 + 3)})" text-anchor="middle">Migration</text>`);
+    } else {
+      s.push(`<line x1="${r2(ax)}" y1="${r2(topY)}" x2="${r2(ax)}" y2="${r2(botY)}" stroke="${okabe[3]}" stroke-width="1.5" marker-end="url(#ag-arr-mig)"/>`);
+      s.push(`<text x="${r2(ax + 9)}" y="${r2((topY + botY) / 2 + 3)}" font-size="${r2(fs * 0.75)}" font-weight="bold" fill="${okabe[3]}" transform="rotate(90 ${r2(ax + 9)} ${r2((topY + botY) / 2 + 3)})" text-anchor="middle">Migration</text>`);
+    }
+  }
+
+  const legY0 = Math.max(gelTop + gelH, prevLy + 6) + 16;
+  const legX = pad;
+  const legW = W - pad * 2;
+  s.push(`<line x1="${r2(legX)}" y1="${r2(legY0)}" x2="${r2(legX + legW)}" y2="${r2(legY0)}" stroke="#d8dce6" stroke-width="0.8"/>`);
+
+  const legTitleY = legY0 + fs * 1.5;
+  s.push(`<text x="${r2(legX)}" y="${r2(legTitleY)}" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">Figure Legend</text>`);
+
+  const legLanesY = legTitleY + fs * 1.45;
+  s.push(`<text x="${r2(legX)}" y="${r2(legLanesY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Lane contents: </tspan>${esc(laneDetails)}</text>`);
+
+  const legCondY = legLanesY + fs * 1.4;
+  s.push(`<text x="${r2(legX)}" y="${r2(legCondY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Ladder: </tspan>${esc(ladderDesc)} · <tspan font-weight="bold">Conditions: </tspan>${esc(condDesc)}</text>`);
+
+  const H = legCondY + pad + 8;
+  s[0] = svgHead(W, H).replace('<svg ', '<svg data-dpi="600" ');
+  s.push('</svg>');
+
+  return {svg: s.join(''), geo: {W, H, dpi: 600, font: 'Arial'}};
 }
 function buildCloneTrackerSVG(k){
   const c = CL(), fs = fontSize(), lw = Math.max(0.1, numOr(opt.lw, 0.75)), aw = Math.max(0.5, Math.min(lw, 1.5 * fs / 8)), okabe = PAL.okabe;
@@ -7648,8 +7834,28 @@ function clMethodsText(){
 const clTypeSel = () => `<div class="cl-type"><button type="button" class="tgl" role="switch" data-ctype="1" aria-checked="${prep.includeCloning ? 'true' : 'false'}"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button></div>`;
 function clAgaroseHtml(s){
   if (!s || s.kind !== 'gel') return '';
-  const g = s.gel || null, hasImg = !!(g && g.image);
+  const g = s.gel = s.gel || {};
+  const hasImg = !!(g && g.image);
   const canRestore = !!(g && g.origImage && (g.image !== g.origImage || g.name !== g.origName || g.replaced));
+  const a0 = s.at && s.at[0] ? s.at[0] : null;
+  const f0 = a0 ? a0.f : {};
+
+  if (!g.lanes || !g.lanes.length) {
+    g.lanes = [
+      {label: 'M', type: 'DNA ladder', expected: ''},
+      {label: 'PCR-1', type: 'Sample', expected: f0.expSize || '1200 bp'},
+      {label: 'NTC', type: 'No-template control', expected: ''}
+    ];
+  }
+  const pct = hasTxt(g.pct) ? g.pct : (hasTxt(f0.pct) ? f0.pct : '1');
+  const buffer = hasTxt(g.buffer) ? g.buffer : 'TAE 1x';
+  const stain = hasTxt(g.stain) ? g.stain : 'SYBR Safe';
+  const voltage = hasTxt(g.voltage) ? g.voltage : '100 V';
+  const duration = hasTxt(g.duration) ? g.duration : '45 min';
+  const ladderProd = hasTxt(g.ladderProduct) ? g.ladderProduct : (hasTxt(f0.ladder) ? f0.ladder : '1 kb ladder');
+  const ladderCat = hasTxt(g.ladderCat) ? g.ladderCat : 'N3232S';
+  const ladderSizes = hasTxt(g.ladderSizes) ? g.ladderSizes : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
+
   return `<div class="cl-wide cl-gel-box">
     <div class="cl-gel-upload${hasImg ? ' has-img' : ''}" data-cl-drop="gel" data-stg="${esc(s.id)}" tabindex="0" role="region" aria-label="Agarose gel image upload">
       <input type="file" class="cl-gel-file" data-cl-file="${esc(s.id)}" accept="image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" hidden>
@@ -7669,6 +7875,49 @@ function clAgaroseHtml(s){
         </div>
       `}
     </div>
+
+    <div class="cl-ag-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h4 style="margin:0;font-size:13px;font-weight:600">Publication Figure &amp; Annotation</h4>
+        <button type="button" class="btn primary" id="cl-gen-ag-fig" data-cl="gen-ag-fig">Generate figure</button>
+      </div>
+
+      <div class="cl-grid">
+        <label class="f">Ladder product<input type="text" id="ag-ladder-product" data-ag="ladderProduct" value="${esc(ladderProd)}" placeholder="e.g. 1 kb DNA ladder"></label>
+        <label class="f">Ladder catalog #<input type="text" id="ag-ladder-cat" data-ag="ladderCat" value="${esc(ladderCat)}" placeholder="e.g. N3232S"></label>
+        <label class="f cl-wide">Selected ladder fragment sizes (bp)<input type="text" id="ag-ladder-sizes" data-ag="ladderSizes" value="${esc(ladderSizes)}" placeholder="e.g. 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000"></label>
+        <label class="f">Agarose %<input type="text" id="ag-pct" data-ag="pct" value="${esc(pct)}" placeholder="e.g. 1"></label>
+        <label class="f">Running buffer<input type="text" id="ag-buffer" data-ag="buffer" value="${esc(buffer)}" placeholder="e.g. TAE 1x"></label>
+        <label class="f">DNA stain<input type="text" id="ag-stain" data-ag="stain" value="${esc(stain)}" placeholder="e.g. SYBR Safe"></label>
+        <label class="f">Voltage<input type="text" id="ag-voltage" data-ag="voltage" value="${esc(voltage)}" placeholder="e.g. 100 V"></label>
+        <label class="f">Duration<input type="text" id="ag-duration" data-ag="duration" value="${esc(duration)}" placeholder="e.g. 45 min"></label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-bottom-to-top" data-ag="bottomToTop"${g.bottomToTop ? ' checked' : ''}> Run bottom-to-top (shows migration-direction arrow)</label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-show-migration" data-ag="showMigration"${g.showMigration ? ' checked' : ''}> Show migration-direction arrow</label>
+      </div>
+
+      <h4 style="margin:12px 0 6px;font-size:13px;font-weight:600">Lanes Setup</h4>
+      <div class="cl-ag-lanes" id="ag-lane-list" style="display:grid;gap:6px">
+        ${g.lanes.map((l, idx) => `
+          <div class="row" style="display:flex;gap:6px;align-items:center" data-lane-row="${idx}">
+            <span style="font-size:12px;font-weight:600;min-width:24px">#${idx + 1}</span>
+            <input type="text" id="ag-lane-label-${idx}" class="ag-lane-label" data-lane-idx="${idx}" data-lane-k="label" value="${esc(l.label)}" placeholder="Label (e.g. M, PCR-1, NTC)" style="flex:1" aria-label="Lane ${idx + 1} label">
+            <select id="ag-lane-type-${idx}" class="ag-lane-type" data-lane-idx="${idx}" data-lane-k="type" style="flex:1.4" aria-label="Lane ${idx + 1} type">
+              <option value="DNA ladder"${l.type === 'DNA ladder' ? ' selected' : ''}>DNA ladder</option>
+              <option value="Sample"${l.type === 'Sample' ? ' selected' : ''}>Sample</option>
+              <option value="Positive control"${l.type === 'Positive control' ? ' selected' : ''}>Positive control</option>
+              <option value="Negative control"${l.type === 'Negative control' ? ' selected' : ''}>Negative control</option>
+              <option value="No-template control"${l.type === 'No-template control' ? ' selected' : ''}>No-template control</option>
+              <option value="Empty"${l.type === 'Empty' ? ' selected' : ''}>Empty</option>
+            </select>
+            <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2" aria-label="Lane ${idx + 1} expected size">
+            <button type="button" class="icon" data-cl="rm-ag-lane" data-lane-idx="${idx}" title="Remove lane" aria-label="Remove lane ${idx + 1}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:6px">
+        <button type="button" class="btn quiet" id="ag-add-lane" data-cl="add-ag-lane">+ Add lane</button>
+      </div>
+    </div>
   </div>`;
 }
 async function handleAgaroseGelUpload(file, s){
@@ -7680,7 +7929,7 @@ async function handleAgaroseGelUpload(file, s){
     const rf = rawFiles.find(r => r.name === file.name && r.size === file.size);
     const rawId = rf ? rf.id : '';
     if (!s.gel || !s.gel.origImage) {
-      s.gel = {
+      s.gel = Object.assign({}, s.gel, {
         name: file.name,
         image: dataUrl,
         origName: file.name,
@@ -7691,7 +7940,7 @@ async function handleAgaroseGelUpload(file, s){
         annotations: (s.gel && s.gel.annotations) || [],
         lanes: (s.gel && s.gel.lanes) || [],
         results: (s.gel && s.gel.results) || {}
-      };
+      });
     } else {
       s.gel.image = dataUrl;
       s.gel.name = file.name;
@@ -7757,7 +8006,7 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
 /* redrawn only when its content changed, and never under the cursor: typing in a field must not lose the focus */
 function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(curStep === 'transform' || curStep.startsWith('clone:'))) return; const h = clPanelHtml(), ae = document.activeElement, inside = el.contains(ae);
   if (h === clHtml && !force) return; if (!force && inside && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
-  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
+  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'laneK', 'laneIdx'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
   clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } }
 function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
@@ -7766,6 +8015,29 @@ function onCloneField(e){ const t = e.target, c = CL();
     if (t.files && t.files.length) {
       const s = c.stages.find(x => 'clone:' + x.id === curStep);
       if (s) handleAgaroseGelUpload(t.files[0], s);
+    }
+    return;
+  }
+  if (t.dataset.ag) {
+    const s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s) {
+      s.gel = s.gel || {};
+      s.gel[t.dataset.ag] = (t.type === 'checkbox') ? t.checked : t.value;
+      if (t.dataset.ag === 'pct' && s.at && s.at[0]) s.at[0].f.pct = t.value;
+      if (t.dataset.ag === 'ladderProduct' && s.at && s.at[0]) s.at[0].f.ladder = t.value;
+      clChanged(e.type === 'change');
+    }
+    return;
+  }
+  if (t.dataset.laneK) {
+    const s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s && s.gel && s.gel.lanes) {
+      const idx = +t.dataset.laneIdx;
+      if (s.gel.lanes[idx]) {
+        s.gel.lanes[idx][t.dataset.laneK] = t.value;
+        if (idx === 1 && t.dataset.laneK === 'expected' && s.at && s.at[0]) s.at[0].f.expSize = t.value;
+        clChanged(e.type === 'change');
+      }
     }
     return;
   }
@@ -7785,6 +8057,35 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   const arm = k => { if (clArm === k) { clArm = ''; return true; } clArm = k; renderClone(true); return false; };
   if (w !== 'rmat' && w !== 'rmst') clArm = '';
   if (w === 'type') { setCloning(v === 'cloning'); return; }
+  if (w === 'gen-ag-fig') {
+    if (s && s.kind === 'gel') {
+      s.gel = s.gel || {};
+      s.gel.figGenerated = true;
+      selectStep('clone:' + s.id);
+      render();
+      toast('Agarose gel figure generated');
+    }
+    return;
+  }
+  if (w === 'add-ag-lane') {
+    if (s && s.kind === 'gel') {
+      s.gel = s.gel || {};
+      s.gel.lanes = s.gel.lanes || [];
+      s.gel.lanes.push({label: 'Lane ' + (s.gel.lanes.length + 1), type: 'Sample', expected: ''});
+      clChanged(true);
+    }
+    return;
+  }
+  if (w === 'rm-ag-lane') {
+    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) {
+      const idx = +b.dataset.laneIdx;
+      if (s.gel.lanes.length > 1) {
+        s.gel.lanes.splice(idx, 1);
+        clChanged(true);
+      }
+    }
+    return;
+  }
   if (w === 'gel-pick') { const box = b.closest('.cl-gel-upload') || $('#clonePanel'), inp = box.querySelector('.cl-gel-file'); if (inp) inp.click(); return; }
   if (w === 'gel-restore') {
     if (s && s.gel && s.gel.origImage) {
@@ -8212,7 +8513,12 @@ function selectStep(k){
 }
 /* a step's own figure: its panel and gel, or the upstream band so far for the transformation */
 function buildStepFig(k){
-  if (k.startsWith('clone:') || k === 'clone') return buildCloneTrackerSVG(k);
+  if (k.startsWith('clone:') || k === 'clone') {
+    const id = k.startsWith('clone:') ? k.slice(6) : '';
+    const stg = CL().stages.find(x => x.id === id);
+    if (stg && stg.kind === 'gel' && stg.gel && stg.gel.figGenerated) return buildAgaroseGelSVG(stg);
+    return buildCloneTrackerSVG(k);
+  }
   const fs = fontSize(), W = Math.max(numOr(opt.w, 3.5), 3.4)*72, base = {layout: 'row', W, chromH: numOr(opt.wfH, 2.2)*72, titles: true, letters: false, showGels: true, connectors: opt.connectors, arrows: true, gelMaxH: numOr(opt.wfGelH, 1.8)*72, bandH: fs*5};
   if (k === 'transform') { const c = prepObjFor('construct'), list = [c]; c.note = 'Transform'; if (prepSteps().some(o => o.id === 'expr')) list.push(prepObjFor('expr')); return composeRuns(list, Object.assign(base, {W: W*list.length})); }
   if (isManId(k)) { const m = manSteps().find(x => x.id === k); return composeRuns([manObj(m)], base); }
