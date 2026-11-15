@@ -7341,9 +7341,33 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         rawId: str(s.gel.rawId),
         origRawId: str(s.gel.origRawId),
         replaced: !!s.gel.replaced,
+        date: str(s.gel.date),
+        operator: str(s.gel.operator),
+        experiment: str(s.gel.experiment || s.gel.runName),
+        pct: str(s.gel.pct != null ? s.gel.pct : ''),
+        buffer: str(s.gel.buffer),
+        stain: str(s.gel.stain),
+        ladderProduct: str(s.gel.ladderProduct || s.gel.ladder),
+        ladderCat: str(s.gel.ladderCat),
+        ladderSizes: str(s.gel.ladderSizes),
+        voltage: str(s.gel.voltage),
+        duration: str(s.gel.duration),
+        orientation: str(s.gel.orientation),
+        bottomToTop: !!s.gel.bottomToTop,
+        showMigration: !!s.gel.showMigration,
+        instrument: str(s.gel.instrument || s.gel.imager),
+        exposure: str(s.gel.exposure),
+        brightness: str(s.gel.brightness),
+        contrast: str(s.gel.contrast),
+        adjustments: obj(s.gel.adjustments),
+        adjBrightnessContrast: !!(s.gel.adjBrightnessContrast || (s.gel.adjustments && (s.gel.adjustments.brightness || s.gel.adjustments.contrast)) || (s.gel.brightness && s.gel.brightness !== '100')),
+        lanesCroppedRearranged: !!s.gel.lanesCroppedRearranged,
+        notes: str(s.gel.notes || s.gel.deviations),
+        deviations: str(s.gel.deviations || s.gel.notes),
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
         lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes : [],
-        results: obj(s.gel.results)
+        results: obj(s.gel.results),
+        figGenerated: !!s.gel.figGenerated
       };
     }
     return stg;
@@ -7648,8 +7672,26 @@ function clMethodsText(){
 const clTypeSel = () => `<div class="cl-type"><button type="button" class="tgl" role="switch" data-ctype="1" aria-checked="${prep.includeCloning ? 'true' : 'false'}"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button></div>`;
 function clAgaroseHtml(s){
   if (!s || s.kind !== 'gel') return '';
-  const g = s.gel || null, hasImg = !!(g && g.image);
-  const canRestore = !!(g && g.origImage && (g.image !== g.origImage || g.name !== g.origName || g.replaced));
+  const g = s.gel || {}, hasImg = !!g.image;
+  const canRestore = !!(g.origImage && (g.image !== g.origImage || g.name !== g.origName || g.replaced));
+  const a0 = s.at && s.at[0] ? s.at[0] : null, f0 = a0 ? a0.f : {};
+  const pct = g.pct != null && g.pct !== '' ? String(g.pct) : (f0.pct != null ? String(f0.pct) : '');
+  const buffer = g.buffer != null ? String(g.buffer) : '';
+  const stain = g.stain != null ? String(g.stain) : '';
+  const voltage = g.voltage != null ? String(g.voltage) : '';
+  const duration = g.duration != null ? String(g.duration) : '';
+  const ladderProd = g.ladderProduct != null && g.ladderProduct !== '' ? String(g.ladderProduct) : (g.ladder || f0.ladder || '');
+  const date = g.date != null && g.date !== '' ? String(g.date) : (f0._d || '');
+  const operator = g.operator != null && g.operator !== '' ? String(g.operator) : (f0._op || '');
+  const exp = g.experiment != null && g.experiment !== '' ? String(g.experiment) : (g.runName || '');
+  const orient = g.orientation || (g.bottomToTop ? 'bottom-to-top' : '');
+  const imager = g.instrument || g.imager || '';
+  const exposure = g.exposure != null ? String(g.exposure) : '';
+  const brightness = g.brightness || (g.adjustments && g.adjustments.brightness) || '';
+  const hasBrightnessAdj = g.adjBrightnessContrast != null ? !!g.adjBrightnessContrast : !!((g.adjustments && ((g.adjustments.brightness != null && g.adjustments.brightness !== '100' && g.adjustments.brightness !== '') || (g.adjustments.contrast != null && g.adjustments.contrast !== '100' && g.adjustments.contrast !== ''))) || (g.brightness && g.brightness !== '100'));
+  const lanesAdj = !!g.lanesCroppedRearranged;
+  const notes = g.notes != null && g.notes !== '' ? String(g.notes) : (g.deviations || f0._n || f0._dev || '');
+
   return `<div class="cl-wide cl-gel-box">
     <div class="cl-gel-upload${hasImg ? ' has-img' : ''}" data-cl-drop="gel" data-stg="${esc(s.id)}" tabindex="0" role="region" aria-label="Agarose gel image upload">
       <input type="file" class="cl-gel-file" data-cl-file="${esc(s.id)}" accept="image/png,image/jpeg,image/tiff,.png,.jpg,.jpeg,.tif,.tiff" hidden>
@@ -7668,6 +7710,33 @@ function clAgaroseHtml(s){
           <button type="button" class="btn" data-cl="gel-pick" data-stg="${esc(s.id)}">Choose gel image</button>
         </div>
       `}
+    </div>
+    <div class="cl-ag-meta" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+      <h4 style="margin:0 0 8px;font-size:13px;font-weight:600">Gel metadata &amp; run conditions</h4>
+      <div class="cl-grid">
+        <label class="f">Gel date<input type="date" id="ag-date" data-ag="date" value="${esc(date)}"></label>
+        <label class="f">Operator<input type="text" id="ag-operator" data-ag="operator" value="${esc(operator)}" placeholder="Operator name or initials"></label>
+        <label class="f cl-wide">Experiment or PCR run<input type="text" id="ag-experiment" data-ag="experiment" value="${esc(exp)}" placeholder="Experiment or PCR run name"></label>
+        <label class="f">Agarose %<input type="text" inputmode="decimal" id="ag-pct" data-ag="pct" value="${esc(pct)}" placeholder="e.g. 1.5"></label>
+        <label class="f">Running buffer &amp; conc.<input type="text" id="ag-buffer" data-ag="buffer" value="${esc(buffer)}" placeholder="e.g. TAE 1x"></label>
+        <label class="f">DNA stain<input type="text" id="ag-stain" data-ag="stain" value="${esc(stain)}" placeholder="e.g. SYBR Safe"></label>
+        <label class="f">Ladder product<input type="text" id="ag-ladder-product" data-ag="ladderProduct" value="${esc(ladderProd)}" placeholder="e.g. 1 kb Plus DNA Ladder"></label>
+        <label class="f">Voltage<input type="text" id="ag-voltage" data-ag="voltage" value="${esc(voltage)}" placeholder="e.g. 120 V"></label>
+        <label class="f">Run duration<input type="text" id="ag-duration" data-ag="duration" value="${esc(duration)}" placeholder="e.g. 45 min"></label>
+        <label class="f">Gel orientation<select id="ag-orientation" data-ag="orientation">
+          <option value="">Not specified</option>
+          <option value="top-to-bottom"${orient === 'top-to-bottom' ? ' selected' : ''}>Top-to-bottom (standard)</option>
+          <option value="bottom-to-top"${orient === 'bottom-to-top' ? ' selected' : ''}>Bottom-to-top</option>
+          <option value="horizontal-left"${orient === 'horizontal-left' ? ' selected' : ''}>Horizontal (left to right)</option>
+          <option value="horizontal-right"${orient === 'horizontal-right' ? ' selected' : ''}>Horizontal (right to left)</option>
+        </select></label>
+        <label class="f">Imaging instrument<input type="text" id="ag-instrument" data-ag="instrument" value="${esc(imager)}" placeholder="e.g. GelDoc, transilluminator"></label>
+        <label class="f">Exposure / acquisition<input type="text" id="ag-exposure" data-ag="exposure" value="${esc(exposure)}" placeholder="e.g. 500 ms, auto"></label>
+        <label class="f">Brightness adjustment<input type="number" id="ag-brightness" data-ag="brightness" data-ag-adj="brightness" value="${esc(brightness)}" placeholder="e.g. 100 or 120"></label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-adj-brightness" data-ag="adjBrightnessContrast"${hasBrightnessAdj ? ' checked' : ''}> Brightness or contrast adjusted</label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-lanes-adjusted" data-ag="lanesCroppedRearranged"${lanesAdj ? ' checked' : ''}> Lanes cropped or rearranged</label>
+        <label class="f cl-wide">Notes and deviations<textarea id="ag-notes" data-ag="notes" rows="2" placeholder="Notes, deviations or observations (e.g. slight smearing in lane 3)">${esc(notes)}</textarea></label>
+      </div>
     </div>
   </div>`;
 }
@@ -7757,7 +7826,7 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
 /* redrawn only when its content changed, and never under the cursor: typing in a field must not lose the focus */
 function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(curStep === 'transform' || curStep.startsWith('clone:'))) return; const h = clPanelHtml(), ae = document.activeElement, inside = el.contains(ae);
   if (h === clHtml && !force) return; if (!force && inside && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
-  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
+  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'agAdj'].filter(k => ae.dataset[k] != null).map(k => `[data-${k}="${ae.dataset[k]}"]`).join('') : '';
   clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } }
 function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
@@ -7766,6 +7835,41 @@ function onCloneField(e){ const t = e.target, c = CL();
     if (t.files && t.files.length) {
       const s = c.stages.find(x => 'clone:' + x.id === curStep);
       if (s) handleAgaroseGelUpload(t.files[0], s);
+    }
+    return;
+  }
+  if (t.dataset.ag || t.dataset.agAdj) {
+    const s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s) {
+      s.gel = s.gel || {};
+      const k = t.dataset.ag || t.dataset.agAdj;
+      if (t.type === 'checkbox') {
+        s.gel[k] = t.checked;
+      } else {
+        s.gel[k] = t.value;
+      }
+      if (k === 'brightness' || k === 'contrast') {
+        s.gel.adjustments = s.gel.adjustments || {};
+        s.gel.adjustments[k] = t.value;
+        if (t.value && t.value !== '100' && t.value !== '0') {
+          s.gel.adjBrightnessContrast = true;
+          const chk = document.querySelector('#ag-adj-brightness');
+          if (chk) chk.checked = true;
+        }
+      }
+      if (k === 'orientation') {
+        s.gel.bottomToTop = (t.value === 'bottom-to-top');
+      }
+      if (k === 'pct' && s.at && s.at[0]) s.at[0].f.pct = t.value;
+      if (k === 'ladderProduct' && s.at && s.at[0]) s.at[0].f.ladder = t.value;
+      if (k === 'notes') {
+        s.gel.deviations = t.value;
+        if (s.at && s.at[0] && !s.at[0].f._n) s.at[0].f._n = t.value;
+      }
+      if (k === 'date' && s.at && s.at[0] && !s.at[0].f._d) s.at[0].f._d = t.value;
+      if (k === 'operator' && s.at && s.at[0] && !s.at[0].f._op) s.at[0].f._op = t.value;
+      if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+      clChanged(t.tagName === 'SELECT' || t.type === 'checkbox' || e.type === 'change');
     }
     return;
   }
@@ -7779,6 +7883,7 @@ function onCloneField(e){ const t = e.target, c = CL();
   const r = t.dataset.at ? clAt(t.dataset.at) : null; if (!r) return; clOpen = r.a.id;
   if (t.dataset.cck) { if (t.checked) r.a.ck[t.dataset.cck] = 1; else delete r.a.ck[t.dataset.cck]; clChanged(false); return; }
   if (t.dataset.cf) { const k = t.dataset.cf; if (t.type === 'checkbox') { if (t.checked) r.a.f[k] = true; else delete r.a.f[k]; } else if (t.value === '') delete r.a.f[k]; else r.a.f[k] = t.value;
+    if (r.s && r.s.kind === 'gel' && r.s.gel) { if (k === 'pct') r.s.gel.pct = t.value; if (k === 'ladder') r.s.gel.ladderProduct = t.value; }
     clChanged(t.tagName === 'SELECT' || t.type === 'checkbox' || e.type === 'change'); } }
 function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) { setCloning(sw.getAttribute('aria-checked') !== 'true'); return; }
   const b = e.target.closest('[data-cl]'); if (!b) return; const c = CL(), w = b.dataset.cl, v = b.dataset.v || '', s = c.stages.find(x => 'clone:' + x.id === curStep), i = s ? c.stages.indexOf(s) : -1;
