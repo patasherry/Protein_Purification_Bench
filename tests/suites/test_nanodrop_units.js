@@ -1,4 +1,5 @@
 const {open, H, suite, path, DATA, fs} = require('../lib/harness');
+const {ndUnit} = require('../data/gen_import_sec');
 const T = suite('test_nanodrop_units');
 
 async function fresh(id, fn){
@@ -48,6 +49,23 @@ async function fresh(id, fn){
 
 
     });
+
+  await fresh('nanodrop_microgram_per_microlitre', async (p, h) => {
+    p.setDefaultTimeout(15000);
+    await h.newProject('Microgram per microlitre');
+    await h.step('final');
+    const units = ['ug/uL', 'µg/µL', 'µg/uL', 'uG / µL'];
+    // No A280: the displayed value must come from the instrument concentration.
+    for (let i = 0; i < units.length; i++) {
+      await p.setInputFiles('#ndFile', ndUnit(`nd_ug_ul_${i}.tsv`, units[i], [[`Sample ${i}`, '', 5]], true));
+      await p.waitForFunction(n => document.querySelectorAll('#ndList .ndr').length === n, i + 1, {timeout: 15000});
+      const row = p.locator('#ndList .ndr').filter({has: p.locator(`input[data-ndk="name"][value="Sample ${i}"]`)});
+      const value = await row.locator('.nd-v').innerText();
+      const warning = await row.locator('.nd-unit').allTextContents();
+      T.check(`nd/unit/ug_uL_${i}/value`, value === '5.00 mg/mL', `${units[i]}: expected 5.00 mg/mL, got ${value}`);
+      T.check(`nd/unit/ug_uL_${i}/recognised`, value === '5.00 mg/mL' && warning.length === 0, `${units[i]}: ${value}; warnings: ${warning.join(' | ')}`);
+    }
+  });
 
   T.done();
 })();
