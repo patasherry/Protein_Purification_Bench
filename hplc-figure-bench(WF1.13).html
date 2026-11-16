@@ -6843,12 +6843,13 @@ function projectData(){
   /* The name shown to the user is Protein Purification Bench. This schema field stays 'HPLC Figure Bench' for good:
      change it and every project file saved before the rename fails to import, and every file saved after it fails to
      open in an older copy. The same goes for the 'hplc-fig-opt' settings key and the 'hfb-projects' database. */
-  return {app: 'HPLC Figure Bench', version: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep, srcDiag: Object.assign({}, srcDiag)};
+  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep, srcDiag: Object.assign({}, srcDiag)};
 }
 let projUndo = null, failedGels = [];
 /* a project file can be partial or damaged: keep what can be used and count what was skipped */
 function cleanProject(d){
   const isO = o => o && typeof o === 'object' && !Array.isArray(o), hasXY = c => isO(c) && Array.isArray(c.xs) && Array.isArray(c.ys); let skipped = 0;
+  if (d.schemaVersion == null) d.schemaVersion = 1;
   const keep = (list, ok) => { const a = Array.isArray(list) ? list : []; const out = a.filter(ok); skipped += a.length - out.length; return out; };
   d.runs = keep(d.runs, r => isO(r) && r.id && Array.isArray(r.uvs) && r.uvs.length && r.uvs.every(hasXY));
   d.runs.forEach(r => {

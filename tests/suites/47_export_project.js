@@ -87,6 +87,30 @@ const {open, H, suite, src, fs, path, DATA} = require('../lib/harness');
       idbBlobsCount > 0 && exportedBundlesBlobs,
       `idbBlobsCount: ${idbBlobsCount}, exportedBundlesBlobs: ${exportedBundlesBlobs}`);
 
+    T.check('exported project JSON contains schemaVersion key',
+      exportedData.schemaVersion === 1,
+      `schemaVersion: ${exportedData.schemaVersion}`);
+
+    // Import a hand-crafted JSON without schemaVersion and assert the project still opens with its runs intact (#1511)
+    const legacyPath = path.join(path.dirname(savePath), 'legacy_no_schema_project.json');
+    const legacyData = JSON.parse(fs.readFileSync(savePath, 'utf8'));
+    delete legacyData.schemaVersion;
+    fs.writeFileSync(legacyPath, JSON.stringify(legacyData), 'utf8');
+
+    await p.click('#homeBtn').catch(() => {});
+    await h.wait(500);
+    await p.click('#homeQuick');
+    await h.wait(1500);
+
+    await p.setInputFiles('#projFile', legacyPath);
+    await h.wait(3000);
+
+    const legacyRuns = await p.$$eval('.trace.run[data-kind="run"] input[data-k="name"]', els => els.map(e => e.value));
+    const legacyTlRuns = (await h.timeline()).filter(x => /^run:/.test(x.k));
+    T.check('import project JSON without schemaVersion preserves runs',
+      legacyRuns.length > 0 && legacyTlRuns.length > 0 && legacyRuns[0] === legacyData.runs[0].name,
+      `runs: ${legacyRuns.join(', ')}, timeline runs: ${legacyTlRuns.length}`);
+
     T.check('no page errors', !errs.length, errs.join(' | '));
     await close();
   });
