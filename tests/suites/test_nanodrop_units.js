@@ -49,5 +49,25 @@ async function fresh(id, fn){
 
     });
 
+  // #1518: µg/µL equals mg/mL, so 5 µg/µL reads 5.00 mg/mL with no unit warning. A280 is 1.000 so a fallback to 1 Abs = 1 mg/mL cannot pass
+  await fresh('nanodrop_ug_per_uL', async (p, h) => {
+    await h.newProject('ug per uL test');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await p.waitForTimeout(500);
+    await h.step('final');
+    await p.waitForTimeout(200);
+    const rowsOf = () => p.$$eval('.ndr', rows => rows.map(r => ({name: r.querySelector('input[data-ndk="name"]')?.value?.trim(), val: r.querySelector('.nd-v')?.textContent || '', warn: !!r.querySelector('.nd-unit')})));
+    const units = `Sample Name\tSample Type\tConcentration\tUnits\tA280\tA260/A280\nSample units_ugul\tProtein A280\t5.0\tug/uL\t1.000\t0.57`;
+    await p.setInputFiles('#ndFile', {name: 'nd_unit_temp_ugul.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(units)});
+    await p.waitForFunction(() => document.querySelectorAll('.ndr').length > 0);
+    let r = (await rowsOf()).find(x => x.name === 'Sample units_ugul');
+    T.check('nd/unit/ug_uL_units_col', !!r && r.val.startsWith('5.00 mg/mL') && !r.warn, `Expected 5.00 mg/mL with no unit warning for Units ug/uL, got ${r ? r.val + (r.warn ? ' [unit warning]' : '') : 'no row'}`);
+    const head = `Sample Name\tSample Type\tProtein (µg/µL)\tA280\tA260/A280\nSample head_ugul\tProtein A280\t5.0\t1.000\t0.57`;
+    await p.setInputFiles('#ndFile', {name: 'nd_unit_temp_ugul_head.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(head)});
+    await p.waitForFunction(() => document.querySelectorAll('.ndr').length === 2);
+    r = (await rowsOf()).find(x => x.name === 'Sample head_ugul');
+    T.check('nd/unit/ug_uL_header', !!r && r.val.startsWith('5.00 mg/mL') && !r.warn, `Expected 5.00 mg/mL with no unit warning for a Protein (µg/µL) column, got ${r ? r.val + (r.warn ? ' [unit warning]' : '') : 'no row'}`);
+  });
+
   T.done();
 })();
