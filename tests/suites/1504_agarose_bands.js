@@ -16,6 +16,17 @@ const {open, H, suite} = require('../lib/harness');
       await go(h, 'Agarose-gel verification');
       await h.wait(400);
 
+      // Calibrate ladder and set sample lane migration
+      await p.locator('#ag-ladder-preset').selectOption('neb100');
+      await p.locator('[data-cl="ag-pick-band"][data-size="1000"]').click();
+      await p.locator('#ag-cal-y-0').fill('10');
+      await p.locator('#ag-cal-y-0').dispatchEvent('change');
+      await p.locator('[data-cl="ag-pick-band"][data-size="500"]').click();
+      await p.locator('#ag-cal-y-1').fill('20');
+      await p.locator('#ag-cal-y-1').dispatchEvent('change');
+      await p.locator('#ag-lane-migration-1').fill('15');
+      await p.locator('#ag-lane-migration-1').dispatchEvent('change');
+
       // In a sample lane, add two bands
       const addBandBtn = p.locator('#ag-add-band-1');
       T.check('add_band_button_present', await addBandBtn.count() === 1, 'Add band button in sample lane');
@@ -23,6 +34,8 @@ const {open, H, suite} = require('../lib/harness');
 
       await addBandBtn.click();
       await h.wait(200);
+      T.check('calibrated_band_size_estimated', (await p.locator('#ag-band-obs-0').inputValue()) === '707 bp', `obs0 after calibration: "${await p.locator('#ag-band-obs-0').inputValue()}"`);
+
       await addBandBtn.click();
       await h.wait(200);
 
@@ -39,8 +52,15 @@ const {open, H, suite} = require('../lib/harness');
       // Verify the app does not auto-assign different sizes to the two bands
       const obs0 = await p.locator('#ag-band-obs-0').inputValue();
       const obs1 = await p.locator('#ag-band-obs-1').inputValue();
-      const notDifferentSizes = (obs0 === obs1) || (!obs0 && !obs1);
+      const notDifferentSizes = !obs0 && !obs1;
       T.check('plasmid_bands_not_assigned_different_sizes', notDifferentSizes, `obs0: "${obs0}", obs1: "${obs1}"`);
+
+      // Split lane 0 and verify bands in lane 1 shift to lane 2, then merge back
+      await p.locator('[data-cl="split-ag-lane"][data-lane-idx="0"]').click();
+      await h.wait(150);
+      T.check('lane_split_reindexes_bands', (await p.locator('#ag-band-lane-0').inputValue()) === '2', `band 0 lane after split: ${await p.locator('#ag-band-lane-0').inputValue()}`);
+      await p.locator('[data-cl="merge-ag-lane"][data-lane-idx="0"]').click();
+      await h.wait(150);
 
       // Set one band's expected size to 5000 bp and observed to 4800 bp and verify the difference shows as -200 bp
       const exp0 = p.locator('#ag-band-exp-0');
