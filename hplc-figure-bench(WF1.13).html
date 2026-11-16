@@ -96,6 +96,15 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
 .clone .cl-ag-section{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
 .clone .cl-ag-lanes .row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.clone .ag-lane-editor{position:relative;max-width:720px;margin:10px auto 2px;line-height:1}
+.clone .ag-lane-editor img{display:block;width:100%;max-height:280px;object-fit:contain;background:#111}
+.clone .ag-lane-overlay{position:absolute;inset:0;cursor:default}
+.clone .ag-lane-shade,.clone .ag-lane-zone,.clone .ag-lane-editor .ag-lane-label{position:absolute;top:0;height:100%}
+.clone .ag-lane-shade:nth-child(odd){background:rgba(0,114,178,.11)} .clone .ag-lane-shade:nth-child(even){background:rgba(255,255,255,.07)}
+.clone .ag-lane-zone{box-sizing:border-box;border-left:1px solid rgba(0,114,178,.8);border-right:1px solid rgba(0,114,178,.8);cursor:grab}
+.clone .ag-lane-zone:active{cursor:grabbing}.clone .ag-lane-editor .ag-lane-label{top:4px;height:auto;transform:translateY(-100%);text-align:center;color:var(--ink);font-size:12px;font-weight:600;line-height:1.2;pointer-events:none;text-shadow:0 1px 2px #fff,0 0 3px #fff}
+.clone .ag-lane-editor.pub .ag-lane-shade,.clone .ag-lane-editor.pub .ag-lane-zone{display:none}
+.clone .ag-lane-help{margin:6px 0 0;font-size:12px;color:var(--muted);line-height:1.4}
 .projname{font:inherit;font-size:16px;font-weight:600;border:1px solid transparent;background:transparent;color:var(--ink);padding:3px 6px;border-radius:var(--r-s);min-width:0;flex:0 1 26ch}
 .projname:hover{border-color:var(--line)} .projname:focus{outline:none;border-color:var(--accent);background:var(--field)}
 .savestate{color:var(--muted);font-size:12.5px;white-space:nowrap}
@@ -7398,7 +7407,8 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         notes: str(s.gel.notes || s.gel.deviations),
         deviations: str(s.gel.deviations || s.gel.notes),
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
-        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? {label: str(l.label), type: str(l.type), expected: str(l.expected)} : l) : [],
+        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? Object.assign({}, l, {label: str(l.label), type: str(l.type), expected: str(l.expected)}) : l) : [],
+        publicationView: !!s.gel.publicationView,
         results: obj(s.gel.results)
       };
     }
@@ -7536,8 +7546,8 @@ function buildAgaroseGelSVG(stg){
   }
   ladderSizes.sort((a, b) => b - a);
 
-  const laneDetails = lanes.map((l, idx) => `Lane ${idx + 1}: ${l.label || ('Lane ' + (idx + 1))} (${l.type || 'Sample'}${l.expected ? `, expected: ${l.expected}` : ''})`).join('; ');
-  const ladderDesc = `${ladderProd}${ladderCat ? ` (Cat. #${ladderCat})` : ''}`;
+  const laneDetails = lanes.map((l, idx) => `Lane ${idx + 1}: ${l.label || (l.type === 'DNA ladder' ? 'M' : 'Unassigned')} (${l.type || 'Unassigned'}${l.expected ? `, expected: ${l.expected}` : ''})`).join('; ');
+  const ladderDesc = `${ladderProd}${ladderCat ? ` (Cat. #${ladderCat})` : ''}; fragments: ${ladderSizes.join(', ')} bp`;
   const condDesc = `${pct.replace(/%$/, '')}% agarose, ${buffer}, ${stain}, ${voltage}, ${duration}`;
   const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + condDesc.length);
 
@@ -7591,7 +7601,7 @@ function buildAgaroseGelSVG(stg){
 
   lanes.forEach((l, i) => {
     const cx = gelX + (i + 0.5) * laneW;
-    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(l.label || ('Lane ' + (i + 1)))}</text>`);
+    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(l.label || (l.type === 'DNA ladder' ? 'M' : 'Lane ' + (i + 1)))}</text>`);
   });
 
   const lLaneX = gelX + ladderLaneIdx * laneW;
@@ -7900,6 +7910,23 @@ function clMethodsText(){
   return sents.join(' ');
 }
 const clTypeSel = () => `<div class="cl-type"><button type="button" class="tgl" role="switch" data-ctype="1" aria-checked="${prep.includeCloning ? 'true' : 'false'}"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button></div>`;
+function agEvenLanes(L){ const n = Math.max(1, L.length), gap = Math.min(.02, .45 / n); L.forEach((l, i) => { l.x = i / n + gap / 2; l.w = 1 / n - gap; }); }
+function agNormalizeLanes(g){ const L = g.lanes || (g.lanes = []); if (!L.length) return L;
+  if (!L.every(l => isFinite(+l.x) && isFinite(+l.w) && +l.w > 0)) { agEvenLanes(L); return L; }
+  L.forEach(l => { l.x = Math.max(0, Math.min(.98, +l.x)); l.w = Math.max(.025, Math.min(1 - l.x, +l.w)); });
+  L.sort((a, b) => a.x - b.x); return L;
+}
+function agLaneStyle(l){ return `left:${r2(100 * l.x)}%;width:${r2(100 * l.w)}%`; }
+function agPaintLanes(g){ agNormalizeLanes(g); document.querySelectorAll('#ag-lane-editor [data-ag-lane]').forEach(el => { const l = g.lanes[+el.dataset.agLane]; if (l) el.style.cssText = agLaneStyle(l); }); }
+async function agAutoDetectLanes(s){ const g = s.gel = s.gel || {}, old = (g.lanes || []).length || 3; let n = old;
+  if (g.image) try { const im = await new Promise((res, rej) => { const x = new Image(); x.onload = () => res(x); x.onerror = rej; x.src = g.image; });
+    const c = document.createElement('canvas'), W = Math.min(900, im.naturalWidth), H = Math.max(1, Math.round(im.naturalHeight * W / im.naturalWidth)); c.width = W; c.height = H; const x = c.getContext('2d'); x.drawImage(im, 0, 0, W, H); const d = x.getImageData(0, 0, W, H).data, a = [];
+    for (let ix = 0; ix < W; ix++) { let v = 0; for (let iy = Math.floor(H*.08); iy < Math.ceil(H*.94); iy += Math.max(1, Math.floor(H/160))) { const j = 4 * (iy * W + ix); v += Math.abs((d[j] + d[j+1] + d[j+2]) / 3 - 128); } a.push(v); }
+    const lo = Math.min(...a), hi = Math.max(...a), cut = lo + (hi - lo) * .35; let groups = 0, inRun = false;
+    a.forEach(v => { if (v > cut && !inRun) { groups++; inRun = true; } else if (v <= cut) inRun = false; }); if (groups) n = groups;
+  } catch(e) {}
+  n = Math.max(3, Math.min(12, n)); g.lanes = Array.from({length:n}, () => ({label:'', type:'', expected:''})); agEvenLanes(g.lanes); return g.lanes;
+}
 function clAgaroseHtml(s){
   if (!s || s.kind !== 'gel') return '';
   const g = s.gel = s.gel || {};
@@ -8004,6 +8031,16 @@ function clAgaroseHtml(s){
         <label class="f cl-wide">Notes and deviations<textarea id="ag-notes" data-ag="notes" rows="2" placeholder="Notes, deviations or observations (e.g. slight smearing in lane 3)">${esc(notes)}</textarea></label>
       </div>
 
+      ${(agNormalizeLanes(g), hasImg ? `<div class="ag-lane-editor${g.publicationView ? ' pub' : ''}" id="ag-lane-editor" aria-label="Agarose gel lane editor">
+        <img src="${esc(g.image)}" alt="${esc(g.name || 'Agarose gel')} lane editor image">
+        <div class="ag-lane-overlay">
+          ${g.lanes.map((l, idx) => `<div class="ag-lane-shade" data-ag-lane="${idx}" style="${agLaneStyle(l)}"></div>`).join('')}
+          ${g.lanes.map((l, idx) => `<div class="ag-lane-zone" data-ag-lane="${idx}" style="${agLaneStyle(l)}" aria-label="Lane ${idx + 1}; drag to move or drag an edge to resize"></div>`).join('')}
+          ${g.lanes.map((l, idx) => `<div class="ag-lane-label" data-ag-lane="${idx}" style="${agLaneStyle(l)}">${esc(l.label || (l.type === 'DNA ladder' ? 'M' : 'Lane ' + (idx + 1)))}</div>`).join('')}
+        </div>
+      </div>
+      <div class="cl-gel-acts"><button type="button" class="btn" id="ag-auto-lanes" data-cl="ag-auto-lanes">Auto-detect lanes</button><button type="button" class="btn quiet" id="ag-publication-view" data-cl="ag-publication" aria-pressed="${g.publicationView ? 'true' : 'false'}">${g.publicationView ? 'Edit lane overlays' : 'Publication view'}</button></div>
+      <p class="ag-lane-help">Drag inside a lane to move it; drag either edge to resize. Alternating shade and boundaries are editing aids only and are hidden in publication view.</p>` : '')}
       <h4 style="margin:12px 0 6px;font-size:13px;font-weight:600">Lanes Setup</h4>
       <div class="cl-ag-lanes" id="ag-lane-list" style="display:grid;gap:6px">
         ${g.lanes.map((l, idx) => `
@@ -8011,6 +8048,7 @@ function clAgaroseHtml(s){
             <span style="font-size:12px;font-weight:600;min-width:24px">#${idx + 1}</span>
             <input type="text" id="ag-lane-label-${idx}" class="ag-lane-label" data-lane-idx="${idx}" data-lane-k="label" value="${esc(l.label)}" placeholder="Label (e.g. M, PCR-1, NTC)" style="flex:1" aria-label="Lane ${idx + 1} label">
             <select id="ag-lane-type-${idx}" class="ag-lane-type" data-lane-idx="${idx}" data-lane-k="type" style="flex:1.4" aria-label="Lane ${idx + 1} type">
+              <option value=""${!l.type ? ' selected' : ''}>Unassigned</option>
               <option value="DNA ladder"${l.type === 'DNA ladder' ? ' selected' : ''}>DNA ladder</option>
               <option value="Sample"${l.type === 'Sample' ? ' selected' : ''}>Sample</option>
               <option value="Positive control"${l.type === 'Positive control' ? ' selected' : ''}>Positive control</option>
@@ -8019,6 +8057,8 @@ function clAgaroseHtml(s){
               <option value="Empty"${l.type === 'Empty' ? ' selected' : ''}>Empty</option>
             </select>
             <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2" aria-label="Lane ${idx + 1} expected size">
+            <button type="button" class="mini" data-cl="split-ag-lane" data-lane-idx="${idx}" title="Split lane ${idx + 1}">Split</button>
+            ${idx < g.lanes.length - 1 ? `<button type="button" class="mini" data-cl="merge-ag-lane" data-lane-idx="${idx}" title="Merge lane ${idx + 1} with lane ${idx + 2}">Merge</button>` : ''}
             <button type="button" class="icon" data-cl="rm-ag-lane" data-lane-idx="${idx}" title="Remove lane" aria-label="Remove lane ${idx + 1}">✕</button>
           </div>
         `).join('')}
@@ -8259,11 +8299,19 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
     }
     return;
   }
+  if (w === 'ag-auto-lanes') {
+    if (s && s.kind === 'gel') agAutoDetectLanes(s).then(() => { clChanged(true); toast(`${s.gel.lanes.length} lanes detected`); });
+    return;
+  }
+  if (w === 'ag-publication') {
+    if (s && s.kind === 'gel') { s.gel = s.gel || {}; s.gel.publicationView = !s.gel.publicationView; clChanged(true); }
+    return;
+  }
   if (w === 'add-ag-lane') {
     if (s && s.kind === 'gel') {
       s.gel = s.gel || {};
       s.gel.lanes = s.gel.lanes || [];
-      s.gel.lanes.push({label: 'Lane ' + (s.gel.lanes.length + 1), type: 'Sample', expected: ''});
+      s.gel.lanes.push({label: '', type: '', expected: ''}); agEvenLanes(s.gel.lanes);
       clChanged(true);
     }
     return;
@@ -8272,10 +8320,18 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
     if (s && s.kind === 'gel' && s.gel && s.gel.lanes) {
       const idx = +b.dataset.laneIdx;
       if (s.gel.lanes.length > 1) {
-        s.gel.lanes.splice(idx, 1);
+        s.gel.lanes.splice(idx, 1); agEvenLanes(s.gel.lanes);
         clChanged(true);
       }
     }
+    return;
+  }
+  if (w === 'split-ag-lane') {
+    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) { const idx = +b.dataset.laneIdx, l = s.gel.lanes[idx]; if (l) { agNormalizeLanes(s.gel); const half = l.w / 2; l.w = half; s.gel.lanes.splice(idx + 1, 0, {label:'', type:'', expected:'', x:l.x + half, w:half}); clChanged(true); } }
+    return;
+  }
+  if (w === 'merge-ag-lane') {
+    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) { const idx = +b.dataset.laneIdx; agNormalizeLanes(s.gel); const l = s.gel.lanes[idx], n = s.gel.lanes[idx + 1]; if (l && n) { l.w = n.x + n.w - l.x; s.gel.lanes.splice(idx + 1, 1); clChanged(true); } }
     return;
   }
   if (w === 'gel-pick') { const box = b.closest('.cl-gel-upload') || $('#clonePanel'), inp = box.querySelector('.cl-gel-file'); if (inp) inp.click(); return; }
@@ -8358,6 +8414,13 @@ $('#clonePanel').addEventListener('drop', async e => {
   }
 });
 $('#projType').addEventListener('click', () => setCloning(!prep.includeCloning));
+let agLaneDrag = null;
+$('#clonePanel').addEventListener('pointerdown', e => { const z = e.target.closest('#ag-lane-editor .ag-lane-zone'); if (!z || !curStep.startsWith('clone:')) return; const s = CL().stages.find(x => 'clone:' + x.id === curStep); if (!s || !s.gel) return;
+  const r = z.parentNode.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, i = +z.dataset.agLane, l = agNormalizeLanes(s.gel)[i], edge = Math.min(.035, 9 / r.width);
+  agLaneDrag = {s, i, x, l:l.x, w:l.w, mode:x - l.x < edge ? 'left' : l.x + l.w - x < edge ? 'right' : 'move'}; e.preventDefault(); });
+window.addEventListener('pointermove', e => { if (!agLaneDrag) return; const d = agLaneDrag, g = d.s.gel, L = agNormalizeLanes(g), l = L[d.i], ed = document.querySelector('#ag-lane-editor .ag-lane-overlay'); if (!l || !ed) return; const r = ed.getBoundingClientRect(), x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), dx = x - d.x, left = d.i ? L[d.i - 1].x + L[d.i - 1].w + .005 : 0, right = d.i < L.length - 1 ? L[d.i + 1].x - .005 : 1;
+  if (d.mode === 'move') l.x = Math.max(left, Math.min(right - d.w, d.l + dx)); else if (d.mode === 'left') { const nx = Math.max(left, Math.min(d.l + d.w - .025, d.l + dx)); l.w = d.w + d.l - nx; l.x = nx; } else l.w = Math.max(.025, Math.min(right - d.l, d.w + dx)); agPaintLanes(g); });
+window.addEventListener('pointerup', () => { if (!agLaneDrag) return; const d = agLaneDrag; agLaneDrag = null; agNormalizeLanes(d.s.gel); clChanged(true); });
 /* ---------- the step timeline ---------- */
 function prepObjFor(k){
   if (k === 'cleave') { if (!prep.cleave) prep.cleave = true; return cleaveStep(); }
