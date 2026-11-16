@@ -92,6 +92,15 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-ag-tools .btn.on{border-color:var(--accent);background:var(--accent-soft)}
 .clone .cl-gel-canvas{max-width:100%;max-height:220px;display:block;border-radius:var(--r-s);touch-action:none}
 .clone .cl-gel-canvas.cropping{cursor:crosshair}
+.clone .ag-lane-stack{position:relative;display:inline-block;max-width:100%;line-height:0}
+.clone .ag-lane-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:var(--r-s)}
+.clone .ag-lane-region{position:absolute;top:0;bottom:0;pointer-events:auto;border-left:1px solid rgba(255,255,255,.82);border-right:1px solid rgba(255,255,255,.82);background:rgba(43,60,155,.07);cursor:grab}
+.clone .ag-lane-region:nth-child(even){background:rgba(43,60,155,.15)}
+.clone .ag-lane-region:active{cursor:grabbing}
+.clone .ag-lane-name{position:absolute;top:3px;left:2px;right:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff;text-shadow:0 1px 2px #000;font-size:11px;line-height:1.2;font-weight:600;text-align:center;pointer-events:none}
+.clone .ag-lane-handle{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:1}
+.clone .ag-lane-handle.left{left:-5px}.clone .ag-lane-handle.right{right:-5px}
+.clone .ag-publication .ag-lane-overlay{display:none}
 .clone .cl-gel-info{font-size:12px;color:var(--muted);margin:4px 0 2px}
 .clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
 .clone .cl-ag-section{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
@@ -7370,6 +7379,7 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         origRawId: str(s.gel.origRawId),
         replaced: !!s.gel.replaced,
         figGenerated: !!s.gel.figGenerated,
+        publicationView: !!s.gel.publicationView,
         date: str(s.gel.date),
         operator: str(s.gel.operator),
         experiment: str(s.gel.experiment || s.gel.runName),
@@ -7398,7 +7408,7 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         notes: str(s.gel.notes || s.gel.deviations),
         deviations: str(s.gel.deviations || s.gel.notes),
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
-        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? {label: str(l.label), type: str(l.type), expected: str(l.expected)} : l) : [],
+        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? {label: str(l.label), type: str(l.type), expected: str(l.expected), migration: str(l.migration), x: isFinite(+l.x) ? +l.x : null, w: isFinite(+l.w) ? +l.w : null} : l) : [],
         results: obj(s.gel.results)
       };
     }
@@ -7496,6 +7506,12 @@ function agCalibration(g){ const p = (g && Array.isArray(g.calPoints) ? g.calPoi
 }
 function agEstimate(fit, y){ const bp = Math.pow(10, ((+y) - fit.intercept)/fit.slope); return isFinite(bp) && bp > 0 ? bp : null; }
 function agBpText(bp){ return `${Math.round(bp)} bp`; }
+function agLaneGeom(lanes){ const n = Math.max(1, lanes.length), min = Math.min(.12, .8/n), raw = lanes.map((l, i) => ({x: isFinite(+l.x) ? +l.x : i/n, w: isFinite(+l.w) && +l.w > 0 ? +l.w : 1/n}));
+  raw.forEach(q => { q.w = Math.max(min, Math.min(1, q.w)); q.x = Math.max(0, Math.min(1 - q.w, q.x)); }); return raw; }
+function agLaneName(l, i){ const label = String(l && l.label || '').trim(); if (label) return label; const type = String(l && l.type || '').trim(); return type === 'Sample' ? `Sample ${i + 1}` : type || `Unassigned lane ${i + 1}`; }
+function agNormalizeLanes(g){ if (!g || !Array.isArray(g.lanes)) return; const geo = agLaneGeom(g.lanes); g.lanes.forEach((l, i) => { l.x = geo[i].x; l.w = geo[i].w; }); }
+function agLaneOverlayHtml(g){ if (!g || !Array.isArray(g.lanes)) return ''; const geo = agLaneGeom(g.lanes); return `<div class="ag-lane-overlay" aria-label="Editable gel lanes">${g.lanes.map((l, i) => `<div class="ag-lane-region" data-ag-lane-drag="move" data-lane-idx="${i}" style="left:${geo[i].x * 100}%;width:${geo[i].w * 100}%" aria-label="${esc(agLaneName(l, i))}, drag to move"><span class="ag-lane-name">${esc(agLaneName(l, i))}</span><span class="ag-lane-handle left" data-ag-lane-drag="left" data-lane-idx="${i}" aria-label="Resize left edge of lane ${i + 1}"></span><span class="ag-lane-handle right" data-ag-lane-drag="right" data-lane-idx="${i}" aria-label="Resize right edge of lane ${i + 1}"></span></div>`).join('')}</div>`; }
+function agDrawLaneOverlay(g){ const geo = agLaneGeom(g && g.lanes || []); document.querySelectorAll('.ag-lane-region[data-lane-idx]').forEach(el => { const q = geo[+el.dataset.laneIdx]; if (q) { el.style.left = (q.x * 100) + '%'; el.style.width = (q.w * 100) + '%'; } }); }
 function agCalibrationHtml(s){ const g = s.gel || {}, lanes = g.lanes || [], ladder = lanes.find(l => l.type === 'DNA ladder'); if (!ladder) return '';
   const sizes = agSizes(g.ladderSizes), points = Array.isArray(g.calPoints) ? g.calPoints : [], known = agLadderKnown(g), fit = known ? agCalibration(g) : null;
   const status = !known ? 'Band sizes cannot be estimated: identify the ladder and enter its fragment sizes.' : !fit ? 'Band sizes cannot be estimated: match at least two ladder bands.' : `Migration = ${fmt(fit.slope, 3)} × log10(bp) + ${fmt(fit.intercept, 3)} (${fit.n} matched bands).`;
@@ -7505,7 +7521,7 @@ function agCalibrationHtml(s){ const g = s.gel || {}, lanes = g.lanes || [], lad
     <div id="ag-cal-points">${points.map((q, i) => `<div class="row" style="display:flex;gap:6px;align-items:center;margin-top:5px"><label class="f" style="flex:1">Migration distance<input type="number" id="ag-cal-y-${i}" data-ag-cal="y" data-cal-idx="${i}" value="${esc(q.y == null ? '' : q.y)}" min="0" step="any"></label><label class="f" style="flex:1">Known size<select id="ag-cal-size-${i}" data-ag-cal="bp" data-cal-idx="${i}">${sizes.map(bp => `<option value="${bp}"${+q.bp === bp ? ' selected' : ''}>${esc(agBpText(bp))}</option>`).join('')}</select></label><button type="button" class="icon" data-cl="ag-remove-cal" data-cal-idx="${i}" aria-label="Remove matched ladder band">✕</button></div>`).join('')}</div>
     <button type="button" class="btn quiet" id="ag-add-cal-point" data-cl="ag-add-cal">+ Match ladder band</button>
     <p class="hint" id="ag-cal-status">${esc(status)}</p>
-    <div id="ag-sample-migrations" style="display:grid;gap:6px;margin-top:6px">${lanes.map((l, idx) => l.type === 'DNA ladder' ? '' : `<div class="row" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:600;min-width:64px">${esc(l.label || ('Lane ' + (idx + 1)))}</span><label class="f" style="flex:1">Migration<input type="number" id="ag-lane-migration-${idx}" data-lane-idx="${idx}" data-lane-k="migration" value="${esc(l.migration || '')}" min="0" step="any" aria-label="Lane ${idx + 1} observed band migration"></label><span class="hint" id="ag-estimate-${idx}" style="min-width:92px">${fit && hasTxt(l.migration) && agEstimate(fit, +l.migration) ? `Estimated: ${esc(agBpText(agEstimate(fit, +l.migration)))}` : ''}</span></div>`).join('')}</div>
+    <div id="ag-sample-migrations" style="display:grid;gap:6px;margin-top:6px">${lanes.map((l, idx) => l.type === 'DNA ladder' ? '' : `<div class="row" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:600;min-width:64px">${esc(agLaneName(l, idx))}</span><label class="f" style="flex:1">Migration<input type="number" id="ag-lane-migration-${idx}" data-lane-idx="${idx}" data-lane-k="migration" value="${esc(l.migration || '')}" min="0" step="any" aria-label="Lane ${idx + 1} observed band migration"></label><span class="hint" id="ag-estimate-${idx}" style="min-width:92px">${fit && hasTxt(l.migration) && agEstimate(fit, +l.migration) ? `Estimated: ${esc(agBpText(agEstimate(fit, +l.migration)))}` : ''}</span></div>`).join('')}</div>
   </div>`;
 }
 function buildAgaroseGelSVG(stg){
@@ -7521,6 +7537,7 @@ function buildAgaroseGelSVG(stg){
     {label: 'NTC', type: 'No-template control', expected: ''}
   ];
   const nLanes = Math.max(1, lanes.length);
+  const laneGeom = agLaneGeom(lanes);
 
   const pct = hasTxt(g.pct) ? String(g.pct) : (hasTxt(f0.pct) ? String(f0.pct) : '1');
   const buffer = hasTxt(g.buffer) ? String(g.buffer) : 'TAE 1x';
@@ -7536,10 +7553,11 @@ function buildAgaroseGelSVG(stg){
   }
   ladderSizes.sort((a, b) => b - a);
 
-  const laneDetails = lanes.map((l, idx) => `Lane ${idx + 1}: ${l.label || ('Lane ' + (idx + 1))} (${l.type || 'Sample'}${l.expected ? `, expected: ${l.expected}` : ''})`).join('; ');
+  const laneDetails = lanes.map((l, idx) => `Lane ${idx + 1}: ${agLaneName(l, idx)} (${l.type || 'Unassigned'}${l.expected ? `, expected: ${l.expected}` : ''})`).join('; ');
   const ladderDesc = `${ladderProd}${ladderCat ? ` (Cat. #${ladderCat})` : ''}`;
+  const ladderFragments = ladderSizes.map(agBpText).join(', ');
   const condDesc = `${pct.replace(/%$/, '')}% agarose, ${buffer}, ${stain}, ${voltage}, ${duration}`;
-  const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + condDesc.length);
+  const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + ladderFragments.length + condDesc.length);
 
   const ladderW = 48;
   const gelX = pad + ladderW;
@@ -7583,18 +7601,18 @@ function buildAgaroseGelSVG(stg){
   }
 
   lanes.forEach((_, i) => {
-    const lx = gelX + i * laneW;
-    const wx = lx + laneW * 0.2;
-    const ww = laneW * 0.6;
+    const lx = gelX + laneGeom[i].x * gelW, lw = laneGeom[i].w * gelW;
+    const wx = lx + lw * 0.2;
+    const ww = lw * 0.6;
     s.push(`<rect x="${r2(wx)}" y="${r2(gelTop + 2)}" width="${r2(ww)}" height="${r2(wellH)}" fill="#0c0d11" stroke="#333745" stroke-width="0.6" rx="1"/>`);
   });
 
   lanes.forEach((l, i) => {
-    const cx = gelX + (i + 0.5) * laneW;
-    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(l.label || ('Lane ' + (i + 1)))}</text>`);
+    const cx = gelX + (laneGeom[i].x + laneGeom[i].w / 2) * gelW;
+    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(agLaneName(l, i))}</text>`);
   });
 
-  const lLaneX = gelX + ladderLaneIdx * laneW;
+  const lLaneX = gelX + laneGeom[ladderLaneIdx].x * gelW, lLaneW = laneGeom[ladderLaneIdx].w * gelW;
   const minDy = fs * 1.15;
   let prevLy = -Infinity;
   s.push(`<text x="${r2(gelX - 10)}" y="${r2(gelTop + 4)}" text-anchor="end" font-size="${r2(fs * 0.75)}" font-weight="bold" fill="#555555">bp</text>`);
@@ -7604,8 +7622,8 @@ function buildAgaroseGelSVG(stg){
     const ly = Math.max(y, prevLy + minDy);
     prevLy = ly;
     if (!g.image) {
-      const bx = lLaneX + laneW * 0.15;
-      const bw = laneW * 0.7;
+      const bx = lLaneX + lLaneW * 0.15;
+      const bw = lLaneW * 0.7;
       const intens = (sz === 1000 || sz === 500) ? 0.95 : 0.65;
       s.push(`<rect x="${r2(bx)}" y="${r2(y - 1.2)}" width="${r2(bw)}" height="2.4" fill="#e4ebf5" opacity="${intens}" rx="1"/>`);
     }
@@ -7626,11 +7644,11 @@ function buildAgaroseGelSVG(stg){
     if (!(bpVal > 0)) return;
 
     const y = bandY(bpVal);
-    const lx = gelX + i * laneW;
+    const lx = gelX + laneGeom[i].x * gelW, lw = laneGeom[i].w * gelW;
 
     if (!g.image) {
-      const bx = lx + laneW * 0.15;
-      const bw = laneW * 0.7;
+      const bx = lx + lw * 0.15;
+      const bw = lw * 0.7;
       s.push(`<rect x="${r2(bx)}" y="${r2(y - 1.5)}" width="${r2(bw)}" height="3" fill="#ffffff" rx="1"/>`);
     }
 
@@ -7641,7 +7659,7 @@ function buildAgaroseGelSVG(stg){
     }
     const fullArrowLabel = agFit && hasTxt(l.migration) ? `Estimated size: ${szLabel}` : `Expected product: ${szLabel}`;
 
-    const arrowTipX = lx + laneW * 0.85;
+    const arrowTipX = lx + lw * 0.85;
     const arrowTailX = gelX + gelW + 8;
     s.push(`<line x1="${r2(arrowTailX)}" y1="${r2(y)}" x2="${r2(arrowTipX)}" y2="${r2(y)}" stroke="${okabe[0]}" stroke-width="1.2" marker-end="url(#ag-arr)"/>`);
     s.push(`<text x="${r2(arrowTailX + 4)}" y="${r2(y + 3)}" font-size="${r2(fs * 0.9)}" font-weight="bold" fill="${okabe[0]}">${esc(fullArrowLabel)}</text>`);
@@ -7672,7 +7690,7 @@ function buildAgaroseGelSVG(stg){
   s.push(`<text x="${r2(legX)}" y="${r2(legLanesY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Lane contents: </tspan>${esc(laneDetails)}</text>`);
 
   const legCondY = legLanesY + fs * 1.4;
-  s.push(`<text x="${r2(legX)}" y="${r2(legCondY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Ladder: </tspan>${esc(ladderDesc)} · <tspan font-weight="bold">Conditions: </tspan>${esc(condDesc)}</text>`);
+  s.push(`<text x="${r2(legX)}" y="${r2(legCondY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Ladder: </tspan>${esc(ladderDesc)} · <tspan font-weight="bold">Fragments: </tspan>${esc(ladderFragments)} · <tspan font-weight="bold">Conditions: </tspan>${esc(condDesc)}</text>`);
 
   const H = legCondY + pad + 8;
   s[0] = svgHead(W, H).replace('<svg ', '<svg data-dpi="600" ');
@@ -7949,8 +7967,8 @@ function clAgaroseHtml(s){
           <label>Contrast<input type="range" id="ag-contrast" data-ag-tool="contrast" min="0" max="200" step="1" value="${adj.contrast}"><span id="ag-contrast-v">${adj.contrast}%</span></label>
           <button type="button" class="btn quiet" id="ag-reset" data-cl="ag-reset">Reset adjustments</button>
         </div>
-        <div class="cl-gel-preview">
-          <canvas class="cl-gel-canvas${agCropMode ? ' cropping' : ''}" id="ag-canvas" role="img" aria-label="${esc(g.name || 'Agarose gel')}, adjusted view"></canvas>
+        <div class="cl-gel-preview${g.publicationView ? ' ag-publication' : ''}">
+          <div class="ag-lane-stack"><canvas class="cl-gel-canvas${agCropMode ? ' cropping' : ''}" id="ag-canvas" role="img" aria-label="${esc(g.name || 'Agarose gel')}, adjusted view"></canvas>${agLaneOverlayHtml(g)}</div>
           <img class="cl-gel-img" src="${esc(g.image)}" alt="${esc(g.name || 'Agarose gel')}" hidden>
           <div class="cl-gel-info"><span class="cl-gel-name">${esc(g.name || 'Gel image')}</span></div>
         </div>`)(agAdj(g))) + `
@@ -7969,7 +7987,8 @@ function clAgaroseHtml(s){
     <div class="cl-ag-section cl-ag-meta">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <h4 style="margin:0;font-size:13px;font-weight:600">Gel Metadata &amp; Publication Figure</h4>
-        <button type="button" class="btn primary" id="cl-gen-ag-fig" data-cl="gen-ag-fig">Generate figure</button>
+        <button type="button" class="btn primary" id="cl-gen-ag-fig" data-cl="gen-ag-fig">${g.publicationView ? 'Refresh publication figure' : 'View publication figure'}</button>
+        ${g.publicationView ? '<button type="button" class="btn quiet" id="ag-edit-lanes" data-cl="ag-edit-lanes">Edit lanes</button>' : ''}
       </div>
 
       <div class="cl-grid">
@@ -8005,12 +8024,14 @@ function clAgaroseHtml(s){
       </div>
 
       <h4 style="margin:12px 0 6px;font-size:13px;font-weight:600">Lanes Setup</h4>
+      <p class="hint">Drag a shaded lane to move it; drag either edge to resize. Labels and shading are editing-only and never appear in the publication figure.</p>
       <div class="cl-ag-lanes" id="ag-lane-list" style="display:grid;gap:6px">
         ${g.lanes.map((l, idx) => `
           <div class="row" style="display:flex;gap:6px;align-items:center" data-lane-row="${idx}">
             <span style="font-size:12px;font-weight:600;min-width:24px">#${idx + 1}</span>
             <input type="text" id="ag-lane-label-${idx}" class="ag-lane-label" data-lane-idx="${idx}" data-lane-k="label" value="${esc(l.label)}" placeholder="Label (e.g. M, PCR-1, NTC)" style="flex:1" aria-label="Lane ${idx + 1} label">
             <select id="ag-lane-type-${idx}" class="ag-lane-type" data-lane-idx="${idx}" data-lane-k="type" style="flex:1.4" aria-label="Lane ${idx + 1} type">
+              <option value=""${!l.type ? ' selected' : ''}>Unassigned</option>
               <option value="DNA ladder"${l.type === 'DNA ladder' ? ' selected' : ''}>DNA ladder</option>
               <option value="Sample"${l.type === 'Sample' ? ' selected' : ''}>Sample</option>
               <option value="Positive control"${l.type === 'Positive control' ? ' selected' : ''}>Positive control</option>
@@ -8018,12 +8039,16 @@ function clAgaroseHtml(s){
               <option value="No-template control"${l.type === 'No-template control' ? ' selected' : ''}>No-template control</option>
               <option value="Empty"${l.type === 'Empty' ? ' selected' : ''}>Empty</option>
             </select>
+            ${l.type === 'DNA ladder' ? `<span class="hint" title="${esc(ladderProd)}: ${esc(ladderSizes)}">${esc(ladderProd)} · ${esc(ladderSizes)}</span>` : ''}
             <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2" aria-label="Lane ${idx + 1} expected size">
+            <button type="button" class="icon" data-cl="split-ag-lane" data-lane-idx="${idx}" title="Split lane" aria-label="Split lane ${idx + 1}">÷</button>
+            ${idx < g.lanes.length - 1 ? `<button type="button" class="icon" data-cl="merge-ag-lane" data-lane-idx="${idx}" title="Merge with next lane" aria-label="Merge lane ${idx + 1} with next lane">⇄</button>` : ''}
             <button type="button" class="icon" data-cl="rm-ag-lane" data-lane-idx="${idx}" title="Remove lane" aria-label="Remove lane ${idx + 1}">✕</button>
           </div>
         `).join('')}
       </div>
       <div style="margin-top:6px">
+        <button type="button" class="btn quiet" id="ag-auto-lanes" data-cl="auto-ag-lanes">Auto-detect lanes</button>
         <button type="button" class="btn quiet" id="ag-add-lane" data-cl="add-ag-lane">+ Add lane</button>
       </div>
     </div>
@@ -8032,7 +8057,7 @@ function clAgaroseHtml(s){
 /* agarose gel image adjustments (#1482): crop, rotation, brightness and contrast are kept as parameters in gel.adj and
    applied only when the view is drawn, so the stored image is never changed and Reset brings back the original pixels.
    Order: rotate the whole image, crop a rectangle of the rotated image (fractions), then brightness and contrast (CSS filter math). */
-let agCropMode = false, agDrag = null, agImgC = null;
+let agCropMode = false, agDrag = null, agLaneDrag = null, agImgC = null;
 function agAdj(g){ const a = g && g.adj && typeof g.adj === 'object' ? g.adj : {}, n = (v, d, lo, hi) => { v = Number(v); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
   const c = a.crop && typeof a.crop === 'object' ? a.crop : null, x = c ? n(c.x, 0, 0, 1) : 0, y = c ? n(c.y, 0, 0, 1) : 0, w = c ? Math.min(n(c.w, 1, 0, 1), 1 - x) : 0, h = c ? Math.min(n(c.h, 1, 0, 1), 1 - y) : 0;
   return {rot: n(a.rot, 0, -180, 180), bright: n(a.bright, 100, 0, 200), contrast: n(a.contrast, 100, 0, 200), crop: c && w > 0.01 && h > 0.01 ? {x, y, w, h} : null}; }
@@ -8054,6 +8079,18 @@ function agPaint(){ const cv = $('#ag-canvas'); if (!cv) return; const s = agSta
     x.strokeStyle = '#fff'; x.lineWidth = lw; x.setLineDash([4 * lw, 3 * lw]); x.strokeRect(rx, ry, rw, rh); } } }
 function agSetAdj(s, k, v){ const a = agAdj(s.gel); if (k === 'crop') a.crop = v; else a[k] = Number(v); s.gel.adj = agAdj({adj: a}); if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1; }
 const agFrac = (cv, e) => { const r = cv.getBoundingClientRect(); return {x: Math.min(1, Math.max(0, (e.clientX - r.left) / (r.width || 1))), y: Math.min(1, Math.max(0, (e.clientY - r.top) / (r.height || 1)))}; };
+function agAutoLanes(g){ const cv = $('#ag-canvas'); if (!g || !cv || cv.width < 12 || cv.height < 8) return 0;
+  const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, W = cv.width, H = cv.height, p = Array(W).fill(0), lum = Array(W).fill(0);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = .2126*d[(y*W+x)*4] + .7152*d[(y*W+x)*4+1] + .0722*d[(y*W+x)*4+2]; lum[x] += v; }
+  const mean = lum.reduce((a, v) => a + v, 0) / (W * H); for (let x = 0; x < W; x++) p[x] = Math.abs(lum[x] / H - mean);
+  const base = p.slice().sort((a, b) => a - b)[Math.floor(W * .5)] || 0, max = Math.max(...p), cut = base + (max - base) * .18;
+  const ranges = []; let a = -1; for (let x = 0; x <= W; x++) { const on = x < W && p[x] >= cut; if (on && a < 0) a = x; if (!on && a >= 0) { if (x - a >= Math.max(3, Math.round(W * .018))) ranges.push([a, x]); a = -1; } }
+  const gap = Math.max(2, Math.round(W * .025)); for (let i = 0; i < ranges.length - 1;) { if (ranges[i + 1][0] - ranges[i][1] <= gap) { ranges[i][1] = ranges[i + 1][1]; ranges.splice(i + 1, 1); } else i++; }
+  const usable = ranges.length >= 2 ? ranges : Array.from({length: 3}, (_, i) => [i * W / 3, (i + 1) * W / 3]);
+  g.lanes = usable.slice(0, 16).map(r => ({label:'', type:'', expected:'', x:Math.max(0, r[0] / W), w:Math.min(1, (r[1] - r[0]) / W)})); agNormalizeLanes(g); return g.lanes.length;
+}
+function agInsertLane(g, idx){ const geo = agLaneGeom(g.lanes), q = geo[idx]; if (!q) return; const w = q.w / 2; Object.assign(g.lanes[idx], {x:q.x, w}); g.lanes.splice(idx + 1, 0, {label:'', type:'', expected:'', x:q.x + w, w}); }
+function agMergeLane(g, idx){ const geo = agLaneGeom(g.lanes), a = geo[idx], b = geo[idx + 1]; if (!a || !b) return; Object.assign(g.lanes[idx], {x:Math.min(a.x, b.x), w:Math.max(a.x + a.w, b.x + b.w) - Math.min(a.x, b.x)}); g.lanes.splice(idx + 1, 1); }
 async function handleAgaroseGelUpload(file, s){
   if (!file || !s) return;
   try {
@@ -8252,7 +8289,7 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   if (w === 'gen-ag-fig') {
     if (s && s.kind === 'gel') {
       s.gel = s.gel || {};
-      s.gel.figGenerated = true;
+      s.gel.figGenerated = true; s.gel.publicationView = true;
       selectStep('clone:' + s.id);
       render();
       toast('Agarose gel figure generated');
@@ -8263,9 +8300,25 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
     if (s && s.kind === 'gel') {
       s.gel = s.gel || {};
       s.gel.lanes = s.gel.lanes || [];
-      s.gel.lanes.push({label: 'Lane ' + (s.gel.lanes.length + 1), type: 'Sample', expected: ''});
+      const n = s.gel.lanes.length; s.gel.lanes.push({label: '', type: '', expected: '', x:n ? .9 : 0, w:n ? .1 : 1}); agNormalizeLanes(s.gel);
       clChanged(true);
     }
+    return;
+  }
+  if (w === 'auto-ag-lanes') {
+    if (s && s.kind === 'gel' && s.gel) { const n = agAutoLanes(s.gel); if (n) { s.gel.publicationView = false; clChanged(true); toast(`Found ${n} lane${n === 1 ? '' : 's'}.`); } else toast('Upload a gel image before detecting lanes.'); }
+    return;
+  }
+  if (w === 'split-ag-lane') {
+    if (s && s.kind === 'gel' && s.gel && Array.isArray(s.gel.lanes)) { agInsertLane(s.gel, +b.dataset.laneIdx); s.gel.lanesCroppedRearranged = true; clChanged(true); }
+    return;
+  }
+  if (w === 'merge-ag-lane') {
+    if (s && s.kind === 'gel' && s.gel && Array.isArray(s.gel.lanes)) { agMergeLane(s.gel, +b.dataset.laneIdx); s.gel.lanesCroppedRearranged = true; clChanged(true); }
+    return;
+  }
+  if (w === 'ag-edit-lanes') {
+    if (s && s.kind === 'gel' && s.gel) { s.gel.publicationView = false; clChanged(true); }
     return;
   }
   if (w === 'rm-ag-lane') {
@@ -8334,11 +8387,19 @@ function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('ar
 $('#clonePanel').addEventListener('input', onCloneField);
 $('#clonePanel').addEventListener('change', onCloneField);
 $('#clonePanel').addEventListener('click', onCloneClick);
+$('#clonePanel').addEventListener('pointerdown', e => { const hit = e.target.closest('[data-ag-lane-drag]'), cv = $('#ag-canvas'), s = agStage(); if (!hit || !cv || !s || !s.gel || s.gel.publicationView || agCropMode) return;
+  e.preventDefault(); const i = +hit.dataset.laneIdx, geo = agLaneGeom(s.gel.lanes), q = geo[i]; if (!q) return; agLaneDrag = {i, kind:hit.dataset.agLaneDrag, x:agFrac(cv, e).x, geo}; try { hit.setPointerCapture(e.pointerId); } catch (_) {} });
 $('#clonePanel').addEventListener('pointerdown', e => { const hit = e.target.closest('#ag-canvas, .cl-gel-preview'), cv = $('#ag-canvas'); if (!hit || !cv || !agCropMode) return; e.preventDefault(); const f = agFrac(cv, e); agDrag = {x0: f.x, y0: f.y, x: f.x, y: f.y, w: 0, h: 0}; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
 window.addEventListener('pointermove', e => { const cv = $('#ag-canvas'); if (!cv || !agCropMode || !agDrag) return; const f = agFrac(cv, e);
   agDrag.x = Math.min(agDrag.x0, f.x); agDrag.y = Math.min(agDrag.y0, f.y); agDrag.w = Math.abs(f.x - agDrag.x0); agDrag.h = Math.abs(f.y - agDrag.y0); agPaint(); });
 window.addEventListener('pointerup', e => { const cv = $('#ag-canvas'), d = agDrag; if (!cv || !agCropMode || !d) return; agDrag = null; const s = agStage(); if (!s || !s.gel) return;
   if (d.w > 0.01 && d.h > 0.01) { agSetAdj(s, 'crop', {x: d.x, y: d.y, w: d.w, h: d.h}); agCropMode = false; clChanged(true); } else agPaint(); });
+window.addEventListener('pointermove', e => { const cv = $('#ag-canvas'), d = agLaneDrag, s = agStage(); if (!cv || !d || !s || !s.gel || !s.gel.lanes[d.i]) return; const dx = agFrac(cv, e).x - d.x, q = d.geo[d.i], min = .025, lane = s.gel.lanes[d.i];
+  if (d.kind === 'move') { lane.x = Math.max(0, Math.min(1 - q.w, q.x + dx)); lane.w = q.w; }
+  else if (d.kind === 'left') { const r = q.x + q.w; lane.x = Math.max(0, Math.min(r - min, q.x + dx)); lane.w = r - lane.x; }
+  else { lane.x = q.x; lane.w = Math.max(min, Math.min(1 - q.x, q.w + dx)); }
+  agDrawLaneOverlay(s.gel); });
+window.addEventListener('pointerup', () => { const d = agLaneDrag, s = agStage(); if (!d) return; agLaneDrag = null; if (s && s.gel) { agNormalizeLanes(s.gel); s.gel.lanesCroppedRearranged = true; clChanged(true); } });
 $('#clonePanel').addEventListener('dragover', e => {
   const dropZone = e.target.closest('[data-cl-drop="gel"]');
   if (dropZone) { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('over'); }
