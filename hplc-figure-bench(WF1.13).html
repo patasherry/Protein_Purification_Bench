@@ -7362,6 +7362,41 @@ const CL_TPL = {
   custom: {t: 'Custom cloning workflow', s: []}
 };
 const CL_CC = ['cc_starter', 'cc_sob', 'cc_growth', 'cc_buffers', 'cc_aliquot', 'cc_batch'], clHas = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const AG_BAND_CATEGORIES = ['Expected product', 'Nonspecific product', 'Primer dimer', 'Uncut plasmid', 'Linear plasmid', 'Open-circular plasmid', 'Supercoiled plasmid', 'Unknown'];
+const AG_PLASMID_CATEGORIES = ['Uncut plasmid', 'Linear plasmid', 'Open-circular plasmid', 'Supercoiled plasmid'];
+function agParseBp(v){
+  if (v == null || v === '') return null;
+  const m = String(v).trim().match(/^([-+]?\d+(?:\.\d+)?)\s*(kb|bp)?$/i);
+  if (!m) return null;
+  const n = parseFloat(m[1]), u = (m[2] || 'bp').toLowerCase();
+  return isFinite(n) ? (u === 'kb' ? Math.round(n * 1000) : Math.round(n)) : null;
+}
+function agDiffBp(obs, exp){
+  const o = agParseBp(obs), e = agParseBp(exp);
+  if (o == null || e == null) return '';
+  const d = o - e;
+  return `${d > 0 ? '+' : ''}${d} bp`;
+}
+function canonAgBand(b){
+  if (!b || typeof b !== 'object') return null;
+  const lane = b.lane != null ? +b.lane : (b.laneIdx != null ? +b.laneIdx : 0);
+  const obs = (b.observed != null && b.observed !== '') ? String(b.observed) : ((b.obsSize != null && b.obsSize !== '') ? String(b.obsSize) : (b.size != null ? String(b.size) : ''));
+  const exp = (b.expected != null && b.expected !== '') ? String(b.expected) : (b.expSize != null ? String(b.expSize) : '');
+  return {
+    lane: isFinite(lane) ? lane : 0,
+    laneIdx: isFinite(lane) ? lane : 0,
+    sampleId: b.sampleId != null ? String(b.sampleId) : (b.sample != null ? String(b.sample) : ''),
+    observed: obs,
+    expected: exp,
+    diff: (b.diff != null && b.diff !== '') ? String(b.diff) : agDiffBp(obs, exp),
+    category: (b.category != null && b.category !== '') ? String(b.category) : 'Expected product',
+    intensity: b.intensity != null ? String(b.intensity) : '',
+    selected: !!(b.selected || b.selectedForExtraction || b.extract),
+    notes: b.notes != null ? String(b.notes) : '',
+    confidence: (b.confidence != null && b.confidence !== '') ? String(b.confidence) : (b.status != null ? String(b.status) : 'Confirmed'),
+    _userSetObs: !!(b._userSetObs || obs)
+  };
+}
 function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object' && !Array.isArray(pr.cloning) ? pr.cloning : {}, str = v => v == null ? '' : String(v), obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {}, ids = new Set(), uq = v => { const s = str(v); return s && !ids.has(s) && ids.add(s) ? s : ''; };
   c.type = c.type === 'cloning' || c.type === 'expression' ? c.type : ''; c.tpl = clHas(CL_TPL, c.tpl) ? c.tpl : '';
   c.stages = (Array.isArray(c.stages) ? c.stages : []).filter(s => s && typeof s === 'object' && clHas(CL_KIND, s.kind)).map(s => {
@@ -7407,7 +7442,8 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         notes: str(s.gel.notes || s.gel.deviations),
         deviations: str(s.gel.deviations || s.gel.notes),
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
-        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? Object.assign({}, l, {label: str(l.label), type: str(l.type), expected: str(l.expected)}) : l) : [],
+        lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? Object.assign({}, l, {label: str(l.label), type: str(l.type), expected: str(l.expected), bands: Array.isArray(l.bands) ? l.bands.map(canonAgBand).filter(Boolean) : []}) : l) : [],
+        bands: Array.isArray(s.gel.bands) ? s.gel.bands.map(canonAgBand).filter(Boolean) : [],
         publicationView: !!s.gel.publicationView,
         results: obj(s.gel.results)
       };
@@ -7516,6 +7552,105 @@ function agCalibrationHtml(s){ const g = s.gel || {}, lanes = g.lanes || [], lad
     <button type="button" class="btn quiet" id="ag-add-cal-point" data-cl="ag-add-cal">+ Match ladder band</button>
     <p class="hint" id="ag-cal-status">${esc(status)}</p>
     <div id="ag-sample-migrations" style="display:grid;gap:6px;margin-top:6px">${lanes.map((l, idx) => l.type === 'DNA ladder' ? '' : `<div class="row" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:600;min-width:64px">${esc(l.label || ('Lane ' + (idx + 1)))}</span><label class="f" style="flex:1">Migration<input type="number" id="ag-lane-migration-${idx}" data-lane-idx="${idx}" data-lane-k="migration" value="${esc(l.migration || '')}" min="0" step="any" aria-label="Lane ${idx + 1} observed band migration"></label><span class="hint" id="ag-estimate-${idx}" style="min-width:92px">${fit && hasTxt(l.migration) && agEstimate(fit, +l.migration) ? `Estimated: ${esc(agBpText(agEstimate(fit, +l.migration)))}` : ''}</span></div>`).join('')}</div>
+  </div>`;
+}
+function agSyncLaneBands(g){
+  if (!g) return;
+  g.bands = Array.isArray(g.bands) ? g.bands : [];
+  if (Array.isArray(g.lanes)) {
+    g.lanes.forEach((l, idx) => {
+      l.bands = g.bands.filter(b => (+b.lane === idx || +b.laneIdx === idx));
+    });
+  }
+}
+function agSyncBandSizes(g){
+  if (!g || !Array.isArray(g.bands)) return;
+  const known = agLadderKnown(g), fit = known ? agCalibration(g) : null;
+  const byLane = {};
+  g.bands.forEach(b => {
+    const l = b.lane != null ? +b.lane : (b.laneIdx != null ? +b.laneIdx : 0);
+    (byLane[l] = byLane[l] || []).push(b);
+  });
+  Object.values(byLane).forEach(laneBands => {
+    const plasmidBands = laneBands.filter(b => AG_PLASMID_CATEGORIES.includes(b.category));
+    const multiplePlasmid = plasmidBands.length > 1;
+    laneBands.forEach(b => {
+      const isPlasmid = AG_PLASMID_CATEGORIES.includes(b.category);
+      if (multiplePlasmid && isPlasmid) {
+        if (!b._userSetObs) b.observed = '';
+      } else if (fit && hasTxt(b.migration) && !b._userSetObs) {
+        const est = agEstimate(fit, +b.migration);
+        if (est != null) b.observed = agBpText(est);
+      }
+      b.diff = agDiffBp(b.observed, b.expected);
+    });
+  });
+}
+function agBandsHtml(s){
+  const g = s.gel = s.gel || {};
+  agSyncLaneBands(g);
+  agSyncBandSizes(g);
+  const bands = Array.isArray(g.bands) ? g.bands : [];
+  const lanes = Array.isArray(g.lanes) ? g.lanes : [];
+  return `<div class="cl-wide cl-ag-section" id="ag-bands-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <h4 style="margin:0;font-size:13px;font-weight:600">Band Records &amp; Results</h4>
+      <button type="button" class="btn quiet" id="ag-add-band" data-cl="add-ag-band" data-lane-idx="1">+ Add band</button>
+    </div>
+    <p class="hint">Record observed and expected band sizes, plasmid topology, extraction targets, and review status.</p>
+    <div id="ag-band-list" style="display:grid;gap:8px">
+      ${bands.map((b, i) => `
+        <div class="ag-band-row" data-band-idx="${i}" style="border:1px solid var(--line);border-radius:var(--r-s);padding:8px;background:var(--field-bg, rgba(0,0,0,.02))">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:600;min-width:54px">Band #${i + 1}</span>
+            <label class="f" style="flex:1;min-width:110px">Lane
+              <select id="ag-band-lane-${i}" class="ag-band-lane" data-band-idx="${i}" data-band-k="lane" aria-label="Band ${i + 1} lane">
+                ${lanes.map((l, lIdx) => `<option value="${lIdx}"${(+b.lane === lIdx || +b.laneIdx === lIdx) ? ' selected' : ''}>#${lIdx + 1}: ${esc(l.label || l.type || ('Lane ' + (lIdx + 1)))}</option>`).join('')}
+              </select>
+            </label>
+            <label class="f" style="flex:1.2;min-width:120px">Sample / Reaction ID
+              <input type="text" id="ag-band-sample-${i}" class="ag-band-sample" data-band-idx="${i}" data-band-k="sampleId" value="${esc(b.sampleId || '')}" placeholder="e.g. PCR-1" aria-label="Band ${i + 1} sample ID">
+            </label>
+            <label class="f" style="flex:1.5;min-width:150px">Category
+              <select id="ag-band-cat-${i}" class="ag-band-cat" data-band-idx="${i}" data-band-k="category" aria-label="Band ${i + 1} category">
+                ${AG_BAND_CATEGORIES.map(cat => `<option value="${cat}"${b.category === cat ? ' selected' : ''}>${esc(cat)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="f" style="flex:1;min-width:100px">Expected size
+              <input type="text" id="ag-band-exp-${i}" class="ag-band-exp" data-band-idx="${i}" data-band-k="expected" value="${esc(b.expected || '')}" placeholder="e.g. 5000 bp" aria-label="Band ${i + 1} expected size">
+            </label>
+            <label class="f" style="flex:1;min-width:100px">Observed size
+              <input type="text" id="ag-band-obs-${i}" class="ag-band-obs" data-band-idx="${i}" data-band-k="observed" value="${esc(b.observed || '')}" placeholder="e.g. 4800 bp" aria-label="Band ${i + 1} observed size">
+            </label>
+            <div class="f" style="min-width:85px;display:flex;flex-direction:column;justify-content:center">
+              <span style="font-size:11px;color:var(--muted);margin-bottom:2px">Difference</span>
+              <span id="ag-band-diff-${i}" class="ag-band-diff" style="font-size:12.5px;font-weight:600;min-height:20px;display:inline-block">${esc(b.diff || agDiffBp(b.observed, b.expected) || '—')}</span>
+            </div>
+            <button type="button" class="icon" data-cl="rm-ag-band" data-band-idx="${i}" aria-label="Remove band ${i + 1}" title="Remove band">✕</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+            <label class="f" style="flex:1;min-width:90px">Intensity
+              <input type="text" id="ag-band-intensity-${i}" class="ag-band-intensity" data-band-idx="${i}" data-band-k="intensity" value="${esc(b.intensity || '')}" placeholder="e.g. 1500" aria-label="Band ${i + 1} intensity">
+            </label>
+            <label class="f" style="flex:1.2;min-width:120px">Confidence / status
+              <select id="ag-band-status-${i}" class="ag-band-status" data-band-idx="${i}" data-band-k="confidence" aria-label="Band ${i + 1} confidence or status">
+                <option value="Confirmed"${b.confidence === 'Confirmed' ? ' selected' : ''}>Confirmed</option>
+                <option value="Tentative"${b.confidence === 'Tentative' ? ' selected' : ''}>Tentative</option>
+                <option value="Needs review"${b.confidence === 'Needs review' ? ' selected' : ''}>Needs review</option>
+                <option value="Uncertain"${b.confidence === 'Uncertain' ? ' selected' : ''}>Uncertain</option>
+              </select>
+            </label>
+            <label class="f" style="flex:2;min-width:180px">Notes
+              <input type="text" id="ag-band-notes-${i}" class="ag-band-notes" data-band-idx="${i}" data-band-k="notes" value="${esc(b.notes || '')}" placeholder="User notes..." aria-label="Band ${i + 1} notes">
+            </label>
+            <label class="check" style="margin-left:4px;margin-top:14px;white-space:nowrap">
+              <input type="checkbox" id="ag-band-extract-${i}" class="ag-band-extract" data-band-idx="${i}" data-band-k="selected"${b.selected ? ' checked' : ''} aria-label="Band ${i + 1} selected for extraction"> Selected for extraction
+            </label>
+          </div>
+        </div>
+      `).join('')}
+      ${(!bands.length) ? '<p class="hint" id="ag-no-bands">No bands recorded yet. Click "+ Add band" to record a band.</p>' : ''}
+    </div>
   </div>`;
 }
 function buildAgaroseGelSVG(stg){
@@ -8057,6 +8192,7 @@ function clAgaroseHtml(s){
               <option value="Empty"${l.type === 'Empty' ? ' selected' : ''}>Empty</option>
             </select>
             <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2" aria-label="Lane ${idx + 1} expected size">
+            <button type="button" class="mini" id="ag-add-band-${idx}" data-cl="add-ag-band" data-lane-idx="${idx}" title="Add band to lane ${idx + 1}">+ Band</button>
             <button type="button" class="mini" data-cl="split-ag-lane" data-lane-idx="${idx}" title="Split lane ${idx + 1}">Split</button>
             ${idx < g.lanes.length - 1 ? `<button type="button" class="mini" data-cl="merge-ag-lane" data-lane-idx="${idx}" title="Merge lane ${idx + 1} with lane ${idx + 2}">Merge</button>` : ''}
             <button type="button" class="icon" data-cl="rm-ag-lane" data-lane-idx="${idx}" title="Remove lane" aria-label="Remove lane ${idx + 1}">✕</button>
@@ -8066,6 +8202,7 @@ function clAgaroseHtml(s){
       <div style="margin-top:6px">
         <button type="button" class="btn quiet" id="ag-add-lane" data-cl="add-ag-lane">+ Add lane</button>
       </div>
+      ${agBandsHtml(s)}
     </div>
   </div>`;
 }
@@ -8113,6 +8250,7 @@ async function handleAgaroseGelUpload(file, s){
         replaced: false,
         annotations: (s.gel && s.gel.annotations) || [],
         lanes: (s.gel && s.gel.lanes) || [],
+        bands: (s.gel && s.gel.bands) || [],
         results: (s.gel && s.gel.results) || {}
       });
     } else {
@@ -8181,7 +8319,7 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
 /* redrawn only when its content changed, and never under the cursor: typing in a field must not lose the focus */
 function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(curStep === 'transform' || curStep.startsWith('clone:'))) return; const h = clPanelHtml(), ae = document.activeElement, inside = el.contains(ae);
   if (h === clHtml && !force) return; if (!force && inside && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
-  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'agAdj', 'agTool', 'laneK', 'laneIdx'].filter(k => ae.dataset[k] != null).map(k => `[data-${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${ae.dataset[k]}"]`).join('') : '';
+  const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'agAdj', 'agTool', 'laneK', 'laneIdx', 'bandK', 'bandIdx'].filter(k => ae.dataset[k] != null).map(k => `[data-${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${ae.dataset[k]}"]`).join('') : '';
   clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } agPaint(); }
 function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
@@ -8261,6 +8399,41 @@ function onCloneField(e){ const t = e.target, c = CL();
     }
     return;
   }
+  if (t.dataset.bandK) {
+    const s = c.stages.find(x => 'clone:' + x.id === curStep);
+    if (s && s.gel && Array.isArray(s.gel.bands)) {
+      const idx = +t.dataset.bandIdx;
+      const b = s.gel.bands[idx];
+      if (b) {
+        const k = t.dataset.bandK;
+        if (t.type === 'checkbox') {
+          b[k] = t.checked;
+        } else {
+          b[k] = t.value;
+          if (k === 'observed') b._userSetObs = hasTxt(t.value);
+        }
+        if (k === 'lane') {
+          b.lane = +t.value;
+          b.laneIdx = +t.value;
+          const l = s.gel.lanes && s.gel.lanes[b.lane];
+          if (l && !hasTxt(b.sampleId)) b.sampleId = l.label || '';
+        }
+        if (k === 'expected' || k === 'observed') {
+          b.diff = agDiffBp(b.observed, b.expected);
+          const diffEl = document.querySelector(`#ag-band-diff-${idx}`);
+          if (diffEl) diffEl.textContent = b.diff || '—';
+        }
+        if (k === 'category') {
+          agSyncBandSizes(s.gel);
+        }
+        agSyncLaneBands(s.gel);
+        if (s.gel.results) s.gel.results.bands = s.gel.bands;
+        if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+        clChanged(e.type === 'change' || t.tagName === 'SELECT' || t.type === 'checkbox');
+      }
+    }
+    return;
+  }
   if (t.dataset.cname) { const s = c.stages.find(x => 'clone:' + x.id === curStep); if (s) { s.name = t.value; const h2 = $('#ssTitle'); if (h2) h2.textContent = clTitle(s); clHtml = clPanelHtml(); clChanged(false); } return; }
   if (t.dataset.cext) { c.ext[t.dataset.cext] = t.value; clChanged(t.tagName === 'SELECT' || e.type === 'change'); return; }
   if (t.dataset.cadd) { const v = t.value, cur = c.stages.find(x => 'clone:' + x.id === curStep); if (!v) return; let s = null;
@@ -8288,6 +8461,47 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   }
   if (w === 'ag-remove-cal' && s && s.kind === 'gel' && s.gel && Array.isArray(s.gel.calPoints)) {
     s.gel.calPoints.splice(+b.dataset.calIdx, 1); clChanged(true); return;
+  }
+  if (w === 'add-ag-band') {
+    if (s && s.kind === 'gel') {
+      s.gel = s.gel || {};
+      s.gel.bands = Array.isArray(s.gel.bands) ? s.gel.bands : [];
+      const laneIdx = b.dataset.laneIdx != null ? +b.dataset.laneIdx : 1;
+      const lane = (s.gel.lanes && s.gel.lanes[laneIdx]) || {};
+      const newBand = {
+        lane: laneIdx,
+        laneIdx: laneIdx,
+        sampleId: lane.label || (lane.type === 'DNA ladder' ? 'Ladder' : ('Sample ' + (laneIdx + 1))),
+        observed: '',
+        expected: lane.expected || '',
+        diff: '',
+        category: 'Expected product',
+        intensity: '',
+        selected: false,
+        notes: '',
+        confidence: 'Confirmed',
+        _userSetObs: false
+      };
+      s.gel.bands.push(newBand);
+      agSyncLaneBands(s.gel);
+      agSyncBandSizes(s.gel);
+      if (s.gel.results) s.gel.results.bands = s.gel.bands;
+      if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+      clChanged(true);
+    }
+    return;
+  }
+  if (w === 'rm-ag-band') {
+    if (s && s.kind === 'gel' && s.gel && Array.isArray(s.gel.bands)) {
+      const idx = +b.dataset.bandIdx;
+      s.gel.bands.splice(idx, 1);
+      agSyncLaneBands(s.gel);
+      agSyncBandSizes(s.gel);
+      if (s.gel.results) s.gel.results.bands = s.gel.bands;
+      if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+      clChanged(true);
+    }
+    return;
   }
   if (w === 'gen-ag-fig') {
     if (s && s.kind === 'gel') {
