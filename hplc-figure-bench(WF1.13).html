@@ -100,7 +100,10 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .tl li{position:relative}
 .tl li:not(:last-child)::before{content:"";position:absolute;left:13px;top:26px;bottom:-4px;width:1.5px;background:var(--line)}
 .tl li.done:not(:last-child)::before{background:var(--accent);opacity:.45}
-.tl .tl-h{margin:10px 0 4px;color:var(--muted);font-size:11.5px;letter-spacing:.04em;padding-left:36px}
+.tl .tl-h{margin:10px 0 4px;color:var(--muted);font-size:11.5px;letter-spacing:.04em;padding-left:36px;display:flex;align-items:center;justify-content:space-between;padding-right:8px}
+.tl-stage-add{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:1px solid var(--line2);border-radius:4px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1;cursor:pointer}
+.tl-stage-add:hover{color:var(--ink);border-color:var(--line);background:var(--hover)}
+.tl-stage-add:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tl li.tl-head::before{display:none}
 .tl button.tl-i{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:2px 8px;align-items:start;width:100%;padding:5px 6px 7px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;border-radius:var(--r-s)}
 .tl button.tl-i:hover{background:var(--hover)}
@@ -8313,8 +8316,8 @@ const ADD_OPTS = () => [['run', 'Column run with a chromatogram', 'Load an ÄKTA
   ['man:batch', 'Batch binding', 'Resin mixed with the sample, then washed and eluted'], prep.cleave ? null : ['cleave', 'Dialysis and protease cleavage', 'Ulp1, TEV, 3C and others'],
   ['conc', 'Concentrate and NanoDrop', 'Spin concentrator, then the NanoDrop reading'], ['man:precip', 'Precipitation', 'For example an ammonium sulfate cut'],
   ['man:dialysis', 'Dialysis or buffer exchange', 'Without a protease'], ['man:other', 'Other step', 'Anything else, described in words']].filter(Boolean);
-function addRowHtml(){
-  const btn = `<div class="tl-add"><button type="button" class="btn${addOpen ? ' quiet' : wfList().length ? '' : ' primary'}" data-addmenu="1" aria-expanded="${addOpen}">${addOpen ? 'Cancel' : 'Add a step'}</button></div>`;
+function addRowHtml(){ /* ADD_OPTS() starts with ['run', 'Column run with a chromatogram'] plus bench purification steps */
+  const btn = `<div class="tl-add"><button type="button" class="btn${addOpen ? ' quiet' : wfList().length ? '' : ' primary'}" data-addmenu="1" aria-expanded="${addOpen}">${addOpen ? 'Cancel' : 'Add run'}</button></div>`;
   return btn + (addOpen ? `<div class="tl-menu" role="group" aria-label="Kind of step">${ADD_OPTS().map(([k, t, d]) => `<button type="button" data-addstep="${k}"><b>${esc(t)}</b><span>${esc(d)}</span></button>`).join('')}</div>` : ''); }
 /* a new step without a chromatogram goes after the last step */
 function addMan(kind){ const L = wfList(), last = L[L.length - 1], n = Math.max(0, ...(prep.manual || []).map(m => { const v = /^m(\d+)$/.exec(m && m.id); return v ? +v[1] : 0; })) + 1;
@@ -8323,7 +8326,7 @@ function renderSteps(){
   if (!PROJ) return; const L = stepList(), key = curStep, fp = clFoldPlan(L, key);
   const fold = s => !fp ? '' : s.k === 'clone:setup' && !clAll && fp.done ? `<li class="tl-fold"><button type="button" data-cldone="1" aria-expanded="${clDoneOpen}">${clDoneOpen ? 'Hide' : 'Show'} ${fp.done} done</button></li>`
     : s.k === fp.last ? `<li class="tl-fold"><button type="button" data-clall="${clAll ? 0 : 1}">${clAll ? 'Fold stages' : `Show all stages (${fp.all})`}</button></li>` : '';
-  const h = L.map(s => fp && fp.hide.has(s.k) ? fold(s) : (s.g ? `<li class="tl-head"><p class="tl-h">${esc(s.g)}</p></li>` : '') + (s.add ? `<li class="tl-addrow">${addRowHtml()}</li>` : `<li class="${s.done ? 'done' : ''}${s.warn ? ' warn' : ''}${s.sub ? ' sub' : ''}${s.k === key ? ' cur' : ''}"><button type="button" class="tl-i" data-step="${esc(s.k)}"${s.k === key ? ' aria-current="step"' : ''}${s.gt ? ` title="${esc(s.gt)}"` : ''}>
+  const h = L.map(s => fp && fp.hide.has(s.k) ? fold(s) : (s.g ? `<li class="tl-head"><p class="tl-h"><span>${esc(s.g)}</span>${s.g === 'Upstream' || s.g === 'Cloning' ? `<button type="button" class="tl-stage-add" data-addstage="1" title="Add a biological stage" aria-label="Add a biological stage">+</button>` : ''}</p></li>` : '') + (s.add ? `<li class="tl-addrow">${addRowHtml()}</li>` : `<li class="${s.done ? 'done' : ''}${s.warn ? ' warn' : ''}${s.sub ? ' sub' : ''}${s.k === key ? ' cur' : ''}"><button type="button" class="tl-i" data-step="${esc(s.k)}"${s.k === key ? ' aria-current="step"' : ''}${s.gt ? ` title="${esc(s.gt)}"` : ''}>
     <span class="mk" aria-hidden="true">${s.warn ? '!' : s.done ? '✓' : ''}</span><span class="tt">${esc(s.t)}</span><span class="td">${esc(stepMeta(s.k).date ? fmtWhen(new Date(stepMeta(s.k).date + 'T12:00').getTime()) : '')}</span><span class="ts">${esc(s.s || '')}</span>${s.gn ? `<span class="tg">${esc(s.gn)}</span>` : ''}</button></li>`) + fold(s)).join('');
   if (h !== tlHtml) { tlHtml = h; $('#tl').innerHTML = h; }
   renderStepSheet(L);
@@ -8525,6 +8528,9 @@ $('#ssGels').addEventListener('click', e => { const b = e.target.closest('button
   if (b.dataset.gelfor) { gelTarget = b.dataset.gelfor; $('#gelFile').click(); } });
 $('#tl').addEventListener('click', e => { const fo = e.target.closest('[data-cldone], [data-clall]');
   if (fo) { if (fo.dataset.cldone) clDoneOpen = !clDoneOpen; else { clAll = fo.dataset.clall === '1'; clDoneOpen = false; } tlHtml = ''; renderSteps(); return; }
+  const stg = e.target.closest('[data-addstage]');
+  if (stg) { if (!prep.includeCloning) setCloning(true); else selectStep('clone:setup');
+    const sel = document.querySelector('[data-cadd]'); if (sel) { sel.scrollIntoView({behavior: smooth(), block: 'center'}); setTimeout(() => sel.focus(), 50); } return; }
   const ad = e.target.closest('[data-addstep]');
   if (e.target.closest('[data-addmenu]')) { addOpen = !addOpen; tlHtml = ''; renderSteps(); if (addOpen) { const f = document.querySelector('.tl-menu button'); if (f) f.focus(); } return; }
   if (ad) { const w = ad.dataset.addstep; addOpen = false; tlHtml = '';
