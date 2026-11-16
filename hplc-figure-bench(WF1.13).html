@@ -7386,6 +7386,7 @@ function canonAgBand(b){
     lane: isFinite(lane) ? lane : 0,
     laneIdx: isFinite(lane) ? lane : 0,
     sampleId: b.sampleId != null ? String(b.sampleId) : (b.sample != null ? String(b.sample) : ''),
+    migration: b.migration != null ? String(b.migration) : '',
     observed: obs,
     expected: exp,
     diff: (b.diff != null && b.diff !== '') ? String(b.diff) : agDiffBp(obs, exp),
@@ -7443,7 +7444,7 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         deviations: str(s.gel.deviations || s.gel.notes),
         annotations: Array.isArray(s.gel.annotations) ? s.gel.annotations : [],
         lanes: Array.isArray(s.gel.lanes) ? s.gel.lanes.map(l => (l && typeof l === 'object') ? Object.assign({}, l, {label: str(l.label), type: str(l.type), expected: str(l.expected), bands: Array.isArray(l.bands) ? l.bands.map(canonAgBand).filter(Boolean) : []}) : l) : [],
-        bands: Array.isArray(s.gel.bands) ? s.gel.bands.map(canonAgBand).filter(Boolean) : [],
+        bands: Array.isArray(s.gel.bands) && s.gel.bands.length ? s.gel.bands.map(canonAgBand).filter(Boolean) : (Array.isArray(s.gel.lanes) ? s.gel.lanes.flatMap((l, idx) => (l && Array.isArray(l.bands) ? l.bands : []).map(b => canonAgBand(Object.assign({}, b, {lane: idx, laneIdx: idx}))).filter(Boolean)) : []),
         publicationView: !!s.gel.publicationView,
         results: obj(s.gel.results)
       };
@@ -7557,6 +7558,9 @@ function agCalibrationHtml(s){ const g = s.gel || {}, lanes = g.lanes || [], lad
 function agSyncLaneBands(g){
   if (!g) return;
   g.bands = Array.isArray(g.bands) ? g.bands : [];
+  if (!g.bands.length && Array.isArray(g.lanes) && g.lanes.some(l => l && Array.isArray(l.bands) && l.bands.length)) {
+    g.bands = g.lanes.flatMap((l, idx) => (l && Array.isArray(l.bands) ? l.bands : []).map(b => canonAgBand(Object.assign({}, b, {lane: idx, laneIdx: idx}))).filter(Boolean));
+  }
   if (Array.isArray(g.lanes)) {
     g.lanes.forEach((l, idx) => {
       l.bands = g.bands.filter(b => (+b.lane === idx || +b.laneIdx === idx));
@@ -7571,15 +7575,17 @@ function agSyncBandSizes(g){
     const l = b.lane != null ? +b.lane : (b.laneIdx != null ? +b.laneIdx : 0);
     (byLane[l] = byLane[l] || []).push(b);
   });
-  Object.values(byLane).forEach(laneBands => {
+  Object.entries(byLane).forEach(([lKey, laneBands]) => {
+    const lane = Array.isArray(g.lanes) ? g.lanes[+lKey] : null;
     const plasmidBands = laneBands.filter(b => AG_PLASMID_CATEGORIES.includes(b.category));
     const multiplePlasmid = plasmidBands.length > 1;
     laneBands.forEach(b => {
       const isPlasmid = AG_PLASMID_CATEGORIES.includes(b.category);
+      const mig = hasTxt(b.migration) ? b.migration : (lane && hasTxt(lane.migration) ? lane.migration : '');
       if (multiplePlasmid && isPlasmid) {
         if (!b._userSetObs) b.observed = '';
-      } else if (fit && hasTxt(b.migration) && !b._userSetObs) {
-        const est = agEstimate(fit, +b.migration);
+      } else if (fit && hasTxt(mig) && !b._userSetObs) {
+        const est = agEstimate(fit, +mig);
         if (est != null) b.observed = agBpText(est);
       }
       b.diff = agDiffBp(b.observed, b.expected);
@@ -7592,10 +7598,11 @@ function agBandsHtml(s){
   agSyncBandSizes(g);
   const bands = Array.isArray(g.bands) ? g.bands : [];
   const lanes = Array.isArray(g.lanes) ? g.lanes : [];
+  const defLane = Math.max(0, lanes.findIndex(l => l && l.type !== 'DNA ladder'));
   return `<div class="cl-wide cl-ag-section" id="ag-bands-section">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <h4 style="margin:0;font-size:13px;font-weight:600">Band Records &amp; Results</h4>
-      <button type="button" class="btn quiet" id="ag-add-band" data-cl="add-ag-band" data-lane-idx="1">+ Add band</button>
+      <button type="button" class="btn quiet" id="ag-add-band" data-cl="add-ag-band" data-lane-idx="${defLane}">+ Add band</button>
     </div>
     <p class="hint">Record observed and expected band sizes, plasmid topology, extraction targets, and review status.</p>
     <div id="ag-band-list" style="display:grid;gap:8px">
@@ -8386,6 +8393,8 @@ function onCloneField(e){ const t = e.target, c = CL();
       if (s.gel.lanes[idx]) {
         s.gel.lanes[idx][t.dataset.laneK] = t.value;
         if (idx === 1 && t.dataset.laneK === 'expected' && s.at && s.at[0]) s.at[0].f.expSize = t.value;
+        agSyncBandSizes(s.gel);
+        agSyncLaneBands(s.gel);
         clChanged(e.type === 'change');
       }
     }
@@ -8395,6 +8404,7 @@ function onCloneField(e){ const t = e.target, c = CL();
     const s = c.stages.find(x => 'clone:' + x.id === curStep), i = +t.dataset.calIdx;
     if (s && s.gel && Array.isArray(s.gel.calPoints) && s.gel.calPoints[i]) {
       s.gel.calPoints[i][t.dataset.agCal] = t.value;
+      agSyncBandSizes(s.gel);
       clChanged(e.type === 'change');
     }
     return;
@@ -8466,12 +8476,14 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
     if (s && s.kind === 'gel') {
       s.gel = s.gel || {};
       s.gel.bands = Array.isArray(s.gel.bands) ? s.gel.bands : [];
-      const laneIdx = b.dataset.laneIdx != null ? +b.dataset.laneIdx : 1;
+      const rawIdx = b.dataset.laneIdx != null ? +b.dataset.laneIdx : 1;
+      const laneIdx = s.gel.lanes && s.gel.lanes.length ? Math.max(0, Math.min(rawIdx, s.gel.lanes.length - 1)) : 0;
       const lane = (s.gel.lanes && s.gel.lanes[laneIdx]) || {};
       const newBand = {
         lane: laneIdx,
         laneIdx: laneIdx,
         sampleId: lane.label || (lane.type === 'DNA ladder' ? 'Ladder' : ('Sample ' + (laneIdx + 1))),
+        migration: lane.migration != null ? String(lane.migration) : '',
         observed: '',
         expected: lane.expected || '',
         diff: '',
@@ -8535,17 +8547,42 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
       const idx = +b.dataset.laneIdx;
       if (s.gel.lanes.length > 1) {
         s.gel.lanes.splice(idx, 1); agEvenLanes(s.gel.lanes);
+        if (Array.isArray(s.gel.bands)) {
+          s.gel.bands.forEach(bd => { const bl = bd.lane != null ? +bd.lane : +bd.laneIdx; if (bl > idx) bd.lane = bd.laneIdx = bl - 1; else if (bl === idx) bd.lane = bd.laneIdx = Math.min(idx, s.gel.lanes.length - 1); });
+          agSyncLaneBands(s.gel); agSyncBandSizes(s.gel);
+        }
         clChanged(true);
       }
     }
     return;
   }
   if (w === 'split-ag-lane') {
-    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) { const idx = +b.dataset.laneIdx, l = s.gel.lanes[idx]; if (l) { agNormalizeLanes(s.gel); const half = l.w / 2; l.w = half; s.gel.lanes.splice(idx + 1, 0, {label:'', type:'', expected:'', x:l.x + half, w:half}); clChanged(true); } }
+    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) {
+      const idx = +b.dataset.laneIdx, l = s.gel.lanes[idx];
+      if (l) {
+        agNormalizeLanes(s.gel); const half = l.w / 2; l.w = half;
+        s.gel.lanes.splice(idx + 1, 0, {label:'', type:'', expected:'', x:l.x + half, w:half});
+        if (Array.isArray(s.gel.bands)) {
+          s.gel.bands.forEach(bd => { const bl = bd.lane != null ? +bd.lane : +bd.laneIdx; if (bl > idx) bd.lane = bd.laneIdx = bl + 1; });
+          agSyncLaneBands(s.gel); agSyncBandSizes(s.gel);
+        }
+        clChanged(true);
+      }
+    }
     return;
   }
   if (w === 'merge-ag-lane') {
-    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) { const idx = +b.dataset.laneIdx; agNormalizeLanes(s.gel); const l = s.gel.lanes[idx], n = s.gel.lanes[idx + 1]; if (l && n) { l.w = n.x + n.w - l.x; s.gel.lanes.splice(idx + 1, 1); clChanged(true); } }
+    if (s && s.kind === 'gel' && s.gel && s.gel.lanes) {
+      const idx = +b.dataset.laneIdx; agNormalizeLanes(s.gel); const l = s.gel.lanes[idx], n = s.gel.lanes[idx + 1];
+      if (l && n) {
+        l.w = n.x + n.w - l.x; s.gel.lanes.splice(idx + 1, 1);
+        if (Array.isArray(s.gel.bands)) {
+          s.gel.bands.forEach(bd => { const bl = bd.lane != null ? +bd.lane : +bd.laneIdx; if (bl > idx) bd.lane = bd.laneIdx = bl - 1; });
+          agSyncLaneBands(s.gel); agSyncBandSizes(s.gel);
+        }
+        clChanged(true);
+      }
+    }
     return;
   }
   if (w === 'gel-pick') { const box = b.closest('.cl-gel-upload') || $('#clonePanel'), inp = box.querySelector('.cl-gel-file'); if (inp) inp.click(); return; }
