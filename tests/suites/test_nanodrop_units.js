@@ -20,6 +20,7 @@ async function fresh(id, fn){
     const data_ng = `Date,Sample Name,Protein (ng/µL),A280,A260/A280,Sample Type,MW,E / 1000,Extinction coefficient,Baseline Correction (nm),Baseline Absorbance\n10/24/2026 10:00:00 AM,Sample ng_uL,1000.0,1.000,0.57,1 Abs = 1 mg / mL,,,,340,0.012`;
     const data_ug = `Date,Sample Name,Protein (µg/mL),A280,A260/A280,Sample Type,MW,E / 1000,Extinction coefficient,Baseline Correction (nm),Baseline Absorbance\n10/24/2026 10:00:00 AM,Sample ug_mL,1500.0,1.500,0.57,1 Abs = 1 mg / mL,,,,340,0.012`;
     const data_mg = `Date,Sample Name,Protein (mg/mL),A280,A260/A280,Sample Type,MW,E / 1000,Extinction coefficient,Baseline Correction (nm),Baseline Absorbance\n10/24/2026 10:00:00 AM,Sample mg_mL,2.0,2.000,0.57,1 Abs = 1 mg / mL,,,,340,0.012`;
+    const data_ug_ul = `Date\tSample Name\tProtein (ug/uL)\tUnits\tA280\tA260/A280\tSample Type\tMW\tE / 1000\tExtinction coefficient\tBaseline Correction (nm)\tBaseline Absorbance\n10/24/2026 10:00:00 AM\tSample ug_uL\t5.0\tug/uL\t1.000\t0.57\t1 Abs = 1 mg / mL\t\t\t\t340\t0.012`;
     await p.setInputFiles('#ndFile', {name: 'nd_unit_temp_ng.csv', mimeType: 'text/csv', buffer: Buffer.from(data_ng)});
     await p.waitForFunction(() => document.querySelectorAll('.ndr').length > 0);
     let tableRows = await p.$$eval('.ndr', rows => rows.map(r => ({
@@ -45,6 +46,16 @@ async function fresh(id, fn){
         val: r.querySelector('.nd-v')?.textContent || ''
     })));
     T.check('nd/unit/mg_mL', tableRows.some(r => r.name === 'Sample mg_mL' && r.val.startsWith('2.00 mg/mL')), `Expected 2.00 mg/mL for 2 mg/mL, got ${tableRows.find(r => r.name === 'Sample mg_mL')?.val}`);
+
+    await p.setInputFiles('#ndFile', {name: 'nd_unit_temp_ug_ul.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(data_ug_ul)});
+    // wait for 4 rows to appear
+    await p.waitForFunction(() => document.querySelectorAll('.ndr').length === 4);
+    tableRows = await p.$$eval('.ndr', rows => rows.map(r => ({
+        name: r.querySelector('input[data-ndk="name"]')?.value?.trim(),
+        val: r.querySelector('.nd-v')?.textContent || '',
+        flag: r.querySelector('.nd-unit')?.textContent || ''
+    })));
+    T.check('nd/unit/ug_uL', tableRows.some(r => r.name === 'Sample ug_uL' && r.val.startsWith('5.00 mg/mL') && !r.flag), `Expected 5.00 mg/mL for 5 ug/uL without warning flag, got ${tableRows.find(r => r.name === 'Sample ug_uL')?.val} (${tableRows.find(r => r.name === 'Sample ug_uL')?.flag})`);
 
 
     });
