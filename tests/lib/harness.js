@@ -66,7 +66,7 @@ const H = p => ({
   step: async k => { if (!(await p.$(`#tl [data-step="${k}"]`))) { const b = await p.$('#tl [data-clall="1"]'); if (b) { await b.click(); await p.waitForTimeout(250); } }
     await p.click(`#tl [data-step="${k}"]`); await p.waitForTimeout(450); },
   timeline: () => p.$$eval('#tl .tl-i', els => els.map(e => ({k: e.dataset.step, t: (e.querySelector('.tt') || {}).textContent, s: (e.querySelector('.ts') || {}).textContent, warn: !!e.closest('li.warn'), done: !!e.closest('li.done')}))),
-  addRun: async files => { await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep=run]'); await p.setInputFiles('#file', [].concat(files)); await p.waitForTimeout(2200); },
+  addRun: async files => { await p.click('#tl [data-addrun]'); await p.setInputFiles('#file', [].concat(files)); await p.waitForTimeout(2200); },
   /* files go in through the picker; a very long or non-ASCII name goes in as a drag and drop, which the picker in the test browser cannot pass */
   dropFiles: async files => { const L = [].concat(files); if (L.some(f => path.basename(f).length > 120)) { for (const f of L) { const b64 = fs.readFileSync(f).toString('base64');
       await p.evaluate(([n, b]) => { const u = Uint8Array.from(atob(b), c => c.charCodeAt(0)), dt = new DataTransfer(); dt.items.add(new File([u], n)); document.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true})); }, [path.basename(f), b64]); } }
