@@ -395,5 +395,39 @@ async function fresh(id, fn){
     T.check(id + '/run-stats-after-select', JSON.stringify(statsAfter) === JSON.stringify(['2.00 mg/mL', '3.00 mg/mL']), JSON.stringify(statsAfter));
   });
 
+  // #1519: Warn when A340 exceeds a turbidity threshold in the NanoDrop panel
+  await fresh('turbidity-a340-warning', async (p, h) => {
+    const id = 'nd/turbidity-warning';
+    await h.newProject('A340 turbidity warning');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.step('final');
+
+    const tsv = 'Sample Name\tA280\tA340\nTurbid Sample\t1.00\t0.50\nClean Sample\t1.00\t0.05';
+    await p.setInputFiles(SEL.nd, {name: 'turbidity.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(tsv)});
+    await p.locator(SEL.row).nth(1).waitFor();
+
+    const rowOf = name => p.locator(SEL.row).filter({has: p.locator(`input[data-ndk="name"][value="${name}"]`)});
+    const turbidRow = rowOf('Turbid Sample');
+    const cleanRow = rowOf('Clean Sample');
+
+    const turbidWarn = turbidRow.locator('.nd-turbid, .nd-flags span').filter({hasText: /turbid|a340/i});
+    const cleanWarn = cleanRow.locator('.nd-turbid, .nd-flags span').filter({hasText: /turbid|a340/i});
+
+    T.check(id + '/turbid-warns', await turbidWarn.count() > 0 && await turbidWarn.first().isVisible(), 'Turbid sample with A340 = 0.50 should show a visible turbidity warning');
+    T.check(id + '/clean-quiet', await cleanWarn.count() === 0, 'Clean sample with A340 = 0.05 should not show a turbidity warning');
+
+    // Threshold setting in settings UI can be adjusted
+    const warnInput = p.locator('#o-ndA340Warn');
+    T.check(id + '/setting-default', await warnInput.count() > 0 && await warnInput.inputValue() === '0.1', 'Setting #o-ndA340Warn should default to 0.1');
+
+    await warnInput.fill('0.6');
+    await warnInput.dispatchEvent('input');
+    T.check(id + '/higher-thresh-clears', await turbidWarn.count() === 0, 'Raising threshold to 0.6 should clear turbidity warning for A340 = 0.50');
+
+    await warnInput.fill('0.1');
+    await warnInput.dispatchEvent('input');
+    T.check(id + '/restore-thresh-warns', await turbidWarn.count() > 0 && await turbidWarn.first().isVisible(), 'Restoring threshold to 0.1 should re-display turbidity warning');
+  });
+
   T.done();
 })();

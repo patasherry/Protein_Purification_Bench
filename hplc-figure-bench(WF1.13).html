@@ -908,6 +908,9 @@ button,input,select,textarea{font-family:inherit}
         <label class="f">Spectra<select id="o-ndNorm" data-opt="ndNorm"><option value="raw">As measured</option><option value="a280">Scaled to A280 = 1</option></select></label>
         <label class="f">From (nm)<select id="o-ndFrom" data-opt="ndFrom" data-type="num"><option value="220">220</option><option value="230">230</option><option value="240">240</option><option value="250">250</option></select></label>
       </div>
+      <div class="row">
+        <label class="f" title="Warn when A340 (turbidity or particulate scatter) exceeds this absorbance (default 0.1 AU, Thermo Scientific NanoDrop User Guide)">A340 turbidity warning<input type="number" step="0.05" min="0" id="o-ndA340Warn" data-opt="ndA340Warn" placeholder="0.1"></label>
+      </div>
       <p class="hint noproj">Protein A280, A205 and Proteins &amp; Labels exports from the NanoDrop One, 2000 or 8000 (.csv or .tsv) work, as do files dropped on the page. Nucleic acid readings stay in ng/µL and are left out of protein totals.</p>
       <p class="hint noproj">Readings named after a pool (T3-T6) or a step (HisTrap, Q, SEC) go with that step. Replicates of a stage are averaged (mean ± SD). Mark readings taken after concentration or dialysis as Final and give the final volume, and the step's protein then comes from those.</p>
       <p class="hint noproj">Concentration is A280 divided by the A280 of 1 mg/mL for the form in that step (tagged or untagged, from the Protein section), else the single A280 value set under Peak integration, else the instrument's value. Lysate, load and flowthrough readings keep their A280 only. 260/280 above 0.6 is marked, and above 0.8 points to nucleic acid, although NAD(P) binding proteins can reach 0.9 from bound nucleotide alone.</p>
@@ -1468,7 +1471,8 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   xlabel:'Retention time (min)', ylabel:'Absorbance (mAU)', showY:true, frame:false, ticksOut:true,
   scalebar:false, sbValue:'', sbUnit:'mAU', legend:'inside',
   runPad:15, sec:'grad', fracFmt:'full', fracEvery:0, phases:false, runTitle:false, bandSens:5, gelAutoCrop:true, bandLabels:'none', purBase:'lane', tagTol:2, tagShow:true, purRow:false, known: null, knownTol:6, knownMin:5, cleaveDetect:false, tagPreset:'', tagKda:'', protKda:'', knownShow:'arrows', knownOn:false, knownCount:false,
-  secStds:false, targetName:'', taggedName:'', targetArrow:false, tagCounts:true, gelPos:'below', gelAlign:'center', gelScale:100, laneMark:'fill', gelView:'focus', ndNorm:'raw', ndFrom:240, ndCorr:true, ndFig:'conc', gelSpan:2.5, gelFocusKda:'', gelGap:0, gelSide:60, runGel:true, connectors:true, linkFrom:'axis', laneColors:true, laneAlpha:0.55,
+  /* ndA340Warn: 0.1 AU turbidity threshold (Thermo Scientific NanoDrop User Guide / Technical Bulletin T042; A340 > 0.1 indicates scattering from aggregates/particles) */
+  secStds:false, targetName:'', taggedName:'', targetArrow:false, tagCounts:true, gelPos:'below', gelAlign:'center', gelScale:100, laneMark:'fill', gelView:'focus', ndNorm:'raw', ndFrom:240, ndCorr:true, ndFig:'conc', ndA340Warn:0.1, gelSpan:2.5, gelFocusKda:'', gelGap:0, gelSide:60, runGel:true, connectors:true, linkFrom:'axis', laneColors:true, laneAlpha:0.55,
   rxlabel:'Volume (mL)', rylabel:'Absorbance (mAU)', y2grad:'Buffer B (%)', y2cond:'Conductivity (mS/cm)',
   secCals: null, secMono:'', secLabel:'mw', secMarks:'void', ovPeakText:'x', ovSecCal:'',
   intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', path:2,
@@ -6461,7 +6465,7 @@ function parseNanoDrop(text){
   const hn = H.map(h => h.toLowerCase().replace(/\s+/g, ' ')), col = f => hn.findIndex(f);
   const cName = col(h => ND_NAME.test(h)), cR280 = col(h => /a?\s?260\s*\/\s*a?\s?280/.test(h)), cR230 = col(h => /a?\s?260\s*\/\s*a?\s?230/.test(h));
   const absCol = w => col(h => new RegExp(`\\ba ?${w}\\b|^${w}$`).test(h) && !/\//.test(h) && !/conc|mg|µg|ug|ng|raw/.test(h));
-  const cA280 = absCol(280), cA260 = absCol(260), cA230 = absCol(230), cA205 = absCol(205), cA340 = col(h => /\b340\b/.test(h) && !/baseline/.test(h));
+  const cA280 = absCol(280), cA260 = absCol(260), cA230 = absCol(230), cA205 = absCol(205), cA340 = absCol(340) >= 0 ? absCol(340) : col(h => /\b340\b/.test(h) && !/baseline/.test(h));
   const cConc = col(h => /conc|mg\s*\/\s*ml|ng\s*\/\s*[µu]l|[µu]g\s*\/\s*ml/.test(h) && !/\/\s*a/.test(h) && !/dye|corrected/.test(h)), cUnit = col(h => /^units?$/.test(h));
   const cCorr = col(h => /corrected/.test(h) && /mg|conc/.test(h)), cImp = col(h => /^impurity 1$/.test(h)), cImpA = col(h => /^impurity 1 a ?280/.test(h)), cBaseA = col(h => /baseline abs/.test(h));
   const cType = col(h => /sample type|application|^type$/.test(h)), cDate = col(h => /date/.test(h)), cTime = col(h => /^time$/.test(h)), cBase = col(h => /baseline/.test(h));
@@ -6478,7 +6482,7 @@ function parseNanoDrop(text){
     let conc = cConc >= 0 ? ndNum(r[cConc], d) : null;
     const g = c => c >= 0 ? ndNum(r[c], d) : null, a280 = g(cA280), a260 = g(cA260); let corr = g(cCorr);
     if (kind !== 'nucleic' && /[µu]g\s*\/\s*ml|ng\s*\/\s*[µu]l/i.test(unitTxt)) { if (conc != null) conc /= 1000; if (corr != null) corr /= 1000; }
-    const s = ndNew({name: r[cName], row: i, when: [cDate >= 0 ? r[cDate] : '', cTime >= 0 ? r[cTime] : ''].filter(Boolean).join(' '), type: typ, kind, a280, a260, a230: g(cA230), a340: g(cA340), r280: g(cR280), r230: g(cR230),
+    const s = ndNew({name: r[cName], row: i, when: [cDate >= 0 ? r[cDate] : '', cTime >= 0 ? r[cTime] : ''].filter(Boolean).join(' '), type: typ, kind, a280, a260, a230: g(cA230), a340: g(cA340) ?? ((cBaseA >= 0 && (r[cBase] === '340' || /340/.test(String(r[cBase])))) ? g(cBaseA) : null), r280: g(cR280), r230: g(cR230),
       conc, unit: kind === 'nucleic' ? 'ng/µL' : 'mg/mL', base: cBase >= 0 ? r[cBase] : '', baseA: g(cBaseA), corr, imp: cImp >= 0 && r[cImp] ? {name: r[cImp], a280: g(cImpA)} : null, hide: CRUDE_RE.test(r[cName])});
     if (s.r280 == null && a260 != null && a280 > 0) s.r280 = a260/a280; if (s.r230 == null && a260 != null && s.a230 > 0) s.r230 = a260/s.a230;
     const uIn = unitIn(r); if (conc != null && uIn && !ND_UNITS.test(uIn)) s.unitWarn = uIn;
@@ -6578,10 +6582,12 @@ function renderND(){
     const val = c.v == null ? '' : crude ? `A₂₈₀ ${fmt(s.a280, 2)}` : `${fmt(c.v, c.unit === 'ng/µL' ? 1 : 2)} ${c.unit}`;
     const r = s.r280 == null ? '' : `<span class="nd-r ${f}" title="A260/A280. About 0.57 for pure protein. NAD(P)-binding proteins can read 0.6 to 0.9 from bound nucleotide alone. Above 0.8 points to nucleic acid">${f ? '▲ ' : ''}260/280 ${fmt(s.r280, 2)}</span>`;
     const pw = ndPureOff(s) ? `<span class="nd-r hi nd-pure" title="A280/A260 ${fmt(1/s.r280, 2)}, outside 1.5 to 2.5. The concentration may be unreliable">▲ ratio outside expected range for pure protein</span>` : '';
+    const a340 = s.a340 ?? ((s.base === '340' || /340/.test(String(s.base))) ? s.baseA : null);
+    const tb = (s.kind == null || s.kind !== 'nucleic') && a340 != null && a340 > numOr(opt.ndA340Warn, 0.1) ? `<span class="nd-r hi nd-turbid" title="A340 is ${fmt(a340, 2)} (threshold ${fmt(numOr(opt.ndA340Warn, 0.1), 2)}), indicating turbidity or light scattering from aggregates or particles. Direct A280 protein concentration may be unreliable">▲ turbid (A340 ${fmt(a340, 2)})</span>` : '';
     const cb = c.raw != null ? `<span class="nd-r" title="Corrected for nucleic acid by the NanoDrop. Uncorrected: ${fmt(c.raw, 2)} mg/mL${s.imp && s.imp.a280 != null ? `. ${esc(s.imp.name)} adds A280 ${fmt(s.imp.a280, 3)}` : ''}">corrected</span>` : '';
     const uw = s.unitWarn && c.v != null && /instrument/.test(c.src) ? `<span class="nd-r hi nd-unit" title="The file gives this concentration in ${esc(s.unitWarn)}, a unit this app does not convert. The number is kept as read and shown as ${c.unit}: check it before use">▲ Review required: ${esc(s.unitWarn)}</span>` : '';
     const tw = s.tied && !s.runId ? `<span class="nd-r hi nd-tied" title="Multiple workflow steps have equal matching scores. Review required: select a step to assign this reading and include it in totals">▲ Review required: select step</span>` : '';
-    return {val, src: crude ? 'crude sample, not converted' : c.src, r: tw + uw + r + pw + cb, r230: s.kind !== 'nucleic' ? ((sc => sc != null && sc > 0.05 ? `<span class="nd-r mid" title="A340 is ${fmt(100*sc, 0)}% of A280, so light scattering from aggregates or particles adds to A280">scatter ${fmt(sc, 2)}</span>` : '')(s.a280 > 0 && (s.baseA ?? s.a340) != null ? (s.baseA ?? s.a340)/s.a280 : null)) : s.r230 != null && s.r230 < 1.8 ? `<span class="nd-r mid" title="A260/A230. Low values point to imidazole, DTT, Tris or a mismatched blank">260/230 ${fmt(s.r230, 2)}</span>` : ''}; };
+    return {val, src: crude ? 'crude sample, not converted' : c.src, r: tw + uw + tb + r + pw + cb, r230: s.kind !== 'nucleic' ? ((sc => sc != null && sc > 0.05 ? `<span class="nd-r mid" title="A340 is ${fmt(100*sc, 0)}% of A280, so light scattering from aggregates or particles adds to A280">scatter ${fmt(sc, 2)}</span>` : '')(s.a280 > 0 && (s.baseA ?? s.a340) != null ? (s.baseA ?? s.a340)/s.a280 : null)) : s.r230 != null && s.r230 < 1.8 ? `<span class="nd-r mid" title="A260/A230. Low values point to imidazole, DTT, Tris or a mismatched blank">260/230 ${fmt(s.r230, 2)}</span>` : ''}; };
   const live = el.contains(document.activeElement) && el._n === NDS.length;
   const groups = steps.map(r => ({r, ss: NDS.filter(s => s.runId === r.id)})).filter(g => g.ss.length).concat([{r: null, ss: NDS.filter(s => !steps.some(r => r.id === s.runId))}]).filter(g => g.ss.length);
   const stat = x => x ? `${fmt(x.m, 2)}${x.sd != null ? ` ± ${fmt(x.sd, 2)}` : ''} mg/mL${x.n > 1 ? `, n ${x.n}` : ''}` : '';
