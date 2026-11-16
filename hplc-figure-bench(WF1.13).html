@@ -8314,7 +8314,7 @@ const ADD_OPTS = () => [['run', 'Column run with a chromatogram', 'Load an ÄKTA
   ['conc', 'Concentrate and NanoDrop', 'Spin concentrator, then the NanoDrop reading'], ['man:precip', 'Precipitation', 'For example an ammonium sulfate cut'],
   ['man:dialysis', 'Dialysis or buffer exchange', 'Without a protease'], ['man:other', 'Other step', 'Anything else, described in words']].filter(Boolean);
 function addRowHtml(){
-  const btn = `<div class="tl-add"><button type="button" class="btn${addOpen ? ' quiet' : wfList().length ? '' : ' primary'}" data-addmenu="1" aria-expanded="${addOpen}">${addOpen ? 'Cancel' : 'Add a step'}</button></div>`;
+  const btn = `<div class="tl-add"><button type="button" class="btn${addOpen ? ' quiet' : wfList().length ? '' : ' primary'}" data-addmenu="1" aria-expanded="${addOpen}">${addOpen ? 'Cancel' : 'Add run'}</button></div>`;
   return btn + (addOpen ? `<div class="tl-menu" role="group" aria-label="Kind of step">${ADD_OPTS().map(([k, t, d]) => `<button type="button" data-addstep="${k}"><b>${esc(t)}</b><span>${esc(d)}</span></button>`).join('')}</div>` : ''); }
 /* a new step without a chromatogram goes after the last step */
 function addMan(kind){ const L = wfList(), last = L[L.length - 1], n = Math.max(0, ...(prep.manual || []).map(m => { const v = /^m(\d+)$/.exec(m && m.id); return v ? +v[1] : 0; })) + 1;
