@@ -6421,7 +6421,7 @@ let ndSamples = [], ndUid = 1;
 const splitRow = (line, d) => { const out = []; let cur = '', q = false; for (let i = 0; i < line.length; i++) { const c = line[i];
   if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; } else if (c === '"') q = true; else if (c === d) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out.map(v => v.trim()); };
 const ND_HEAD = /(a?\s?260\s*\/\s*a?\s?280|\ba\s?280\b|\ba\s?205\b|mg\s*\/\s*ml|ng\s*\/\s*[µu]l|conc)/i, ND_NAME = /sample\s*(name|id)|^"?sample"?\s*$/i;
-const ND_UNITS = /^(mg|[µu]g)\s*\/\s*ml$|^ng\s*\/\s*[µu]l$/i; /* the concentration units parseNanoDrop reads or converts to mg/mL (or keeps as ng/µL for nucleic acid) */
+const ND_UNITS = /^(mg|[µu]g)\s*\/\s*ml$|^[µu]g\s*\/\s*[µu]l$|^ng\s*\/\s*[µu]l$/i; /* the concentration units parseNanoDrop reads or converts to mg/mL (or keeps as ng/µL for nucleic acid) */
 const isWl = h =>/^\d{3}(\.\d+)?\s*(nm)?$/i.test(String(h).trim());
 function ndHeader(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) { const l = lines[i]; const d = (l.match(/\t/g) || []).length >= 2 ? '\t' : (l.match(/;/g) || []).length > (l.match(/,/g) || []).length ? ';' : ','; const H = splitRow(l, d);
     if (/^\s*vendor|:\s*$/i.test(H[0] || '')) continue; /* metadata rows ("Vendor: Agilent", "Sample Name:") are not the table header */
