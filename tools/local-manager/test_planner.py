@@ -46,4 +46,7 @@ check('the first card has the job-card headings and the parent', all(h in c1 for
 check('a later card says what it waits on, and waits_on reads it', pl.waits_on(c2) == 1500 and pl.waits_on(c1) is None)
 check('a science card asks for sources and the OK', "Patrick's OK" in pl.card(jobs[2], 3, 3, 1465))
 check('the leader would not hold the card for lacking a check', __import__('re').search(r'(\*\*|#+\s*)check\b', c1, __import__('re').I) is not None)
+lane = dict(good[1], change='Lanes can be marked DNA ladder, sample or control, and ladder sizes are printed beside the gel in the figure, with the ladder product name.')
+check('a lane marked DNA ladder or ladder sizes on a figure is not science', pl.validate([good[0], lane], parent, secs, suites)[0][1]['science'] is False)
+check('the model saying science still counts', pl.validate([good[0], dict(lane, science=True)], parent, secs, suites)[0][1]['science'] is True)
 sys.exit(1 if bad else 0)

@@ -611,9 +611,12 @@ def owner_replies(s):
             continue
         names = {l['name'] for l in i.get('labels', [])}
         if YES.match(reply['body']):
-            add = ['owner-approved'] + ([] if (names & (ALL_RUNNING | ALL_DONE | ALL_QUEUES)) or 'pull_request' in i or has_pr(i['number']) else [QUEUE])
+            # a part of a split request that still waits for the part before it is approved but not queued: the plan duty queues
+            # it when that part closes (on 2026-11-15 Patrick's OKs queued four agarose parts at once and part 7 was built first)
+            waiting = 'needs-previous' in names
+            add = ['owner-approved'] + ([] if waiting or (names & (ALL_RUNNING | ALL_DONE | ALL_QUEUES)) or 'pull_request' in i or has_pr(i['number']) else [QUEUE])
             label(i['number'], add=add, remove=['needs-owner'])
-            post(i['number'], 'Approved by Patrick. ' + ('Queued for work. ' if QUEUE in add else '') + 'The lead will merge the fix once its tests pass.' + SIGN.format(rv.MODEL))
+            post(i['number'], 'Approved by Patrick. ' + ('Queued for work. ' if QUEUE in add else 'It starts when the part before it closes. ' if waiting else '') + 'The lead will merge the fix once its tests pass.' + SIGN.format(rv.MODEL))
             log(f'#{i["number"]} approved by Patrick')
         else:
             label(i['number'], add=['owner-declined'], remove=['needs-owner', QUEUE, QUEUE_OLD])

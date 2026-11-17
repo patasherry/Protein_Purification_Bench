@@ -21,8 +21,9 @@ For each job give:
 - "check": a browser test that fails today and passes when the job is done, naming a suite file in tests/suites/ (an existing one
   from the list, or a new one named NNNN_short_name.js).
 - "where": the app sections the job touches, chosen from the list of section names exactly as written.
-- "science": true if the job sets or changes a scientific constant (ladder fragment sizes, masses, extinction coefficients,
-  calibration math) or a number the app reports, else false.
+- "science": true ONLY if the job adds or changes the values of a scientific constant (a saved ladder's fragment sizes, amino-acid
+  masses, extinction coefficients) or the formula behind a number the app reports. Showing, labelling, storing or letting the
+  user type values is false: a lane marked "DNA ladder" or ladder sizes printed on a figure are not science.
 App sections: {sections}
 Existing test suites: {suites}
 Return ONE JSON object: {{"jobs": [{{"title": "...", "quote": "...", "change": "...", "check": "...", "where": ["..."], "science": false}}]}}.
@@ -32,7 +33,9 @@ Title: {title}
 
 {body}"""
 
-CONSTANTS = re.compile(r'ladder (product|list|sizes?)|fragment sizes?|saved ladders?|extinction|molecular weight|\bkda\b|calibration (math|curve|fit)|reported number', re.I)
+# wording that means a job sets constants itself. Mentions of a ladder lane, ladder sizes on a figure or a ladder product name
+# are not enough: on 2026-11-15 the agarose lanes, metadata and figure parts were flagged that way and needed needless OKs.
+CONSTANTS = re.compile(r'\b(saved|preset|built-in|stored)\s+(list of\s+)?(dna\s+|protein\s+)?ladders?\b|\blist of (saved\s+)?(dna\s+|protein\s+)?ladders?\b|extinction coefficient|molecular weight (calculation|formula)|calibration (math|formula)', re.I)
 WAITS = re.compile(r'^Waits on #(\d+)\b', re.M)
 
 
