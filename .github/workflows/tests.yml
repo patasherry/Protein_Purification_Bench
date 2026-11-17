@@ -99,7 +99,7 @@ jobs:
           # belonging to 41_workflow_condition_placeholder. The row now names every suite it actually covers.
           names = {}
           for f in sorted(os.listdir('tests/suites')):
-              m = re.match(r'(\d+_)(.*)\.js$', f)
+              m = re.match(r'(\d+_|test_)(.*)\.js$', f)  # test_*.js too: they ran in their own job but had no row, so the gate never saw a check they fixed (#1525)
               if m: names.setdefault(m.group(1), []).append(m.group(2).replace('_', ' '))
           names = {k: ' + '.join(v) for k, v in names.items()}
           rows, regs, fixes, total_reg, missing, newfail = [], [], [], 0, [], []
