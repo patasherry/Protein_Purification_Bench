@@ -29,7 +29,7 @@ jobs:
         with:
           sparse-checkout: tests/suites
       - id: ls
-        run: echo "suites=$(ls tests/suites | sed -n 's/^\([0-9]\{1,\}_\).*\.js$/\1/p;s/^\(test_\).*\.js$/\1/p' | sort -u | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))')" >> "$GITHUB_OUTPUT"
+        run: echo "suites=$(ls tests/suites | sed -n 's/^\([0-9]\{1,\}_.*\)\.js$/\1/p;s/^\(test_.*\)\.js$/\1/p' | sort -u | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))')" >> "$GITHUB_OUTPUT"
 
   suite:
     needs: list
@@ -55,7 +55,7 @@ jobs:
         working-directory: tests
         env:
           BASE: origin/${{ github.event.pull_request.base.ref || 'main' }}
-        run: node compare.js ${{ matrix.suite }}
+        run: node compare.js ${{ matrix.suite }}.js
       - name: Keep the results
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,15 +93,11 @@ jobs:
         run: |
           python3 - <<'EOF'
           import json, glob, os, re
-          # one row per suite file: '30_robust.js' becomes key '30_' and label 'robust'
-          # The matrix runs one job per numeric prefix, so suites that share a number share a results directory and a
-          # row. Naming the row after the first of them hid the others: a failure in 41_workflow_drag_hint read as
-          # belonging to 41_workflow_condition_placeholder. The row now names every suite it actually covers.
+          # one matrix job and one report row per suite file ('30_robust.js' -> key '30_robust', label '30 robust')
           names = {}
           for f in sorted(os.listdir('tests/suites')):
-              m = re.match(r'(\d+_|test_)(.*)\.js$', f)  # test_*.js too: they ran in their own job but had no row, so the gate never saw a check they fixed (#1525)
-              if m: names.setdefault(m.group(1), []).append(m.group(2).replace('_', ' '))
-          names = {k: ' + '.join(v) for k, v in names.items()}
+              m = re.match(r'((?:\d+|test)_.*)\.js$', f)
+              if m: names[m.group(1)] = m.group(1).replace('_', ' ')
           rows, regs, fixes, total_reg, missing, newfail = [], [], [], 0, [], []
           touched = {os.path.basename(f)[:-3] for f in (open('changed.txt').read().split() if os.path.exists('changed.txt') else []) if f.startswith('tests/suites/') and f.endswith('.js')}
           for key, label in names.items():
