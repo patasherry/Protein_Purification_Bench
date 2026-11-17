@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - 'hplc-figure-bench(WF1.13).html'
+      - 'tests/tools/codemap.js'
   workflow_dispatch:
 
 permissions:
@@ -25,8 +26,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Rewrite the line ranges
+          node-version: 22
+      - name: Rewrite the line ranges and symbol lines
         run: node tests/tools/codemap.js --write
       - name: Commit if they changed
         run: |
