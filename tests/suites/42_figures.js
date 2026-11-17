@@ -508,6 +508,47 @@ const {open, H, suite, src, fs, path} = require('../lib/harness');
     } finally { await q.close(); }
   });
 
+  await T.t('publication_figure_background_and_text_fill', async () => {
+    const q = await open(), hq = H(q.p), pg = q.p;
+    try {
+      await pg.click('#homeQuick'); await hq.wait(600);
+      await pg.evaluate(() => document.body.classList.add('dark'));
+      await hq.wait(200);
+
+      const res = await pg.evaluate(() => {
+        const svg = document.querySelector('#paper svg');
+        if (!svg) return { found: false };
+
+        const vb = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        const vbW = vb.length >= 4 ? vb[2] : (svg.clientWidth || 0);
+
+        const rects = Array.from(svg.querySelectorAll('rect'));
+        const bgRect = rects.find(r => {
+          const w = parseFloat(r.getAttribute('width'));
+          return isFinite(w) && w > 0.8 * vbW;
+        });
+
+        const texts = Array.from(svg.querySelectorAll('text'));
+        const missingFill = texts.filter(t => {
+          const f = t.getAttribute('fill');
+          return !f || f === 'inherit' || f.trim() === '';
+        }).map(t => t.textContent.trim());
+
+        return {
+          found: true,
+          bgFound: !!bgRect,
+          bgFill: bgRect ? bgRect.getAttribute('fill') : null,
+          totalTexts: texts.length,
+          missingFill
+        };
+      });
+
+      T.check('hplc_svg_found', res.found, 'HPLC figure SVG found');
+      T.check('hplc_bg_rect_white', res.bgFound && res.bgFill === '#fff', `first rect >80% width fill is '${res.bgFill}', expected '#fff'`);
+      T.check('hplc_text_explicit_fill', res.totalTexts > 0 && res.missingFill.length === 0, `all ${res.totalTexts} text elements have explicit fill (missing: ${res.missingFill.join(', ') || 'none'})`);
+    } finally { await q.close(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
