@@ -46,5 +46,28 @@ check('only the changed tokens of a long line are kept', '${r2(ix)}' not in fr('
 check('a changed operator keeps the words it joins', 'a + b' in fr('x = a+b;', 'x = a-b;') and 'a - b' in fr('x = a+b;', 'x = a-b;'))
 check('an added line is kept whole', gk.changed_fragments(adiff([], ['const k = 1000;']), APP) == ['const k = 1000;'])
 
+import re
+ALLOW = re.compile(r'^(hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests/(suites|data|lib|ux)/|tests/README\.md|docs/|\.gitignore$|tests/\.gitignore$)')
+keep, stray = gk.rebuild_paths([
+    {'filename': '.gitignore'},
+    {'filename': 'docs/archive/perf-audit.md', 'previous_filename': 'docs/perf-audit.md'},
+    {'filename': '.github/workflows/tests.yml'},
+    {'filename': 'tests/tests_log.txt'},
+], ALLOW)
+check('rebuild_paths keeps both sides of an allowed rename so git mv deletes the source (#1558)',
+      keep == ['.gitignore', 'docs/perf-audit.md', 'docs/archive/perf-audit.md'], str(keep))
+check('rebuild_paths reports non-allowed files as stray',
+      stray == ['.github/workflows/tests.yml', 'tests/tests_log.txt'], str(stray))
+keep2, stray2 = gk.rebuild_paths([{'filename': 'docs/x.md', 'previous_filename': 'tools/x.md'}], ALLOW)
+check('rebuild_paths rejects a rename from a disallowed path', keep2 == [] and stray2 == ['docs/x.md'])
+
+hand, p1 = gk.hand_bypass_problems(["It adds or changes files outside the app and tests/: tests/quick.js."], [], ['hand-running', 'owner-approved'])
+check('hand-running issue clears worker allowlist complaint', hand and p1 == [])
+hand2, p2 = gk.hand_bypass_problems(["It adds or changes files outside the app and tests/: tests/quick.js.", "The Test suite reports regressions."], ['hand-running'], [])
+check('hand-running keeps real test regressions while marking PR hand-started', hand2 and p2 == ["The Test suite reports regressions."])
+hand3, p3 = gk.hand_bypass_problems(["It adds or changes files outside the app and tests/: scratch.js."], [], ['for-antigravity'])
+check('worker PR keeps allowlist complaint', not hand3 and len(p3) == 1)
+
 print(f'\n{len(bad)} failed' if bad else '\nall passed')
 sys.exit(1 if bad else 0)
+

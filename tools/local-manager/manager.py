@@ -1107,9 +1107,10 @@ CLEAN_MARK = '<!-- clean-rebuild -->'
 JUNK_ONLY = ('It adds or changes files outside', 'It conflicts with main', 'GitHub waits for a person to approve')
 
 
-def clean_rebuild(pr, files, issue):
+def clean_rebuild(pr, fobjs, issue):
     """Re-apply only the PR's own app and test changes on the current main, as a new PR. Returns its number, or None."""
-    n, keep = pr['number'], [f for f in files if ALLOWED.match(f)]
+    n = pr['number']
+    keep, stray = gk.rebuild_paths(fobjs, ALLOWED)
     if not keep or DRY:
         return None
     wt, patch = WORK / f'clean-{n}', WORK / f'clean-{n}.diff'
@@ -1127,7 +1128,6 @@ def clean_rebuild(pr, files, issue):
         git('-c', 'user.name=HFB local manager', '-c', 'user.email=hfb-manager@users.noreply.github.com', 'commit', '-q', '-m', f'{pr["title"]} (#{issue})\n\nThe changes from #{n}, rebuilt on main by the local manager without stray files.', cwd=wt)
         auth = __import__('base64').b64encode(f'x-access-token:{rv.TOKEN}'.encode()).decode()
         git('-c', f'http.https://github.com/.extraheader=AUTHORIZATION: basic {auth}', 'push', '-q', '-f', 'origin', f'HEAD:refs/heads/{branch}', cwd=wt, timeout=600)
-        stray = [f for f in files if not ALLOWED.match(f)]
         new = gh(f'repos/{REPO}/pulls', 'POST', {'title': pr['title'], 'head': branch, 'base': 'main',
                  'body': f'{CLEAN_MARK}\nCloses #{issue}. The changes from #{n}, rebuilt on the current main by the local manager' +
                          (f', without {len(stray)} stray file(s): {", ".join(stray[:8])}' if stray else '') + f'.\n\n---\nThe original description:\n\n{(pr.get("body") or "")[:6000]}'})
@@ -1164,15 +1164,17 @@ def gate(s):
     merged_now = False  # one merge per pass, so each lands on a fresh main
     for pr in gh(f'repos/{REPO}/pulls?state=open&per_page=50'):
         n, sha = pr['number'], pr['head']['sha']
+        pr_labels = {l['name'] for l in pr.get('labels', [])}
         # Copilot's cloud agent leaves a finished PR as a draft and asks the owner to review it, and GitHub holds its tests for a person to approve
         cop_done = 'copilot' in pr['user']['login'].lower() and not pr['title'].startswith('[WIP]') and bool(pr.get('requested_reviewers'))
-        if (pr.get('draft') and not cop_done) or s['gated'].get(str(n)) == sha:
+        if (pr.get('draft') and not cop_done) or 'for-coordinator' in pr_labels or s['gated'].get(str(n)) == sha:
             continue
         # Judge emptiness before waiting for tests. An empty PR touches neither the app nor tests/, so the Test suite
         # never runs on it and `t` stays None for ever, and it does not conflict either, so the wait below skipped it on
         # every pass and it never reached this check. #1016, #1058, #1076, #1080 and #1081 sat open that way, each with a
         # commit message claiming a fix and nothing in the commit. Zero files is decidable with no test run at all.
-        files = [f['filename'] for f in gh(f'repos/{REPO}/pulls/{n}/files?per_page=100')]
+        fobjs = gh(f'repos/{REPO}/pulls/{n}/files?per_page=100')
+        files = [f['filename'] for f in fobjs]
         if not files:
             m0 = re.search(r'(?:closes|fixes|resolves)\s+#(\d+)', pr.get('body') or '', re.I)
             iss = int(m0.group(1)) if m0 else linked_issue(n)
@@ -1220,19 +1222,26 @@ def gate(s):
                 probs.append(f'The local first-pass review found a problem: {blk} Fix it, or explain in the PR why it is right.')
         m = re.search(r'(?:closes|fixes|resolves)\s+#(\d+)', pr.get('body') or '', re.I)
         issue = int(m.group(1)) if m else linked_issue(n)
+        iss_obj = gh(f'repos/{REPO}/issues/{issue}') if issue else {}
+        ilabels_p = {l['name'] for l in iss_obj.get('labels', [])}
+        hand, probs = gk.hand_bypass_problems(probs, pr_labels, ilabels_p)
+        if hand and APP_ not in files and not probs:
+            log(f'PR #{n}: hand-started tooling/workflow PR passed tests, left open for Patrick')
+            s['gated'][str(n)] = sha
+            continue
         # Antigravity (API route and CLI) is the first worker since Jules went, so a PR of its that fails the gate goes back to the
         # queue with the notes, up to MAX_SENDBACKS, as the first worker's always did. Counting it as a retry worker sent every
         # failed Antigravity PR straight to for-claude-code, which Codex's heavy model and then Claude Code serve.
         cop = 'copilot' in pr['user']['login'].lower() or COPILOT_CLI_MARK in (pr.get('body') or '') or OC_MARK in (pr.get('body') or '') or BG['codex']['mark'] in (pr.get('body') or '')
-        mine = bool(re.search(r'Generated (?:with|by) \[Claude Code\]|claude\.ai/code/session_', pr.get('body') or '')) or CC_MARK in (pr.get('body') or '')  # the lead's rebuilds and Claude Code jobs are not sent back to the queue
-        if probs and issue and all(p.startswith(JUNK_ONLY) for p in probs) and CLEAN_MARK not in (pr.get('body') or ''):
-            new = clean_rebuild(full, files, issue)  # only stray files or a conflict: fix it here instead of a worker retry
+        mine = hand or bool(re.search(r'Generated (?:with|by) \[Claude Code\]|claude\.ai/code/session_', pr.get('body') or '')) or CC_MARK in (pr.get('body') or '')  # hand-started PRs, the lead's rebuilds and Claude Code jobs are not sent back to the queue
+        if probs and issue and not hand and all(p.startswith(JUNK_ONLY) for p in probs) and CLEAN_MARK not in (pr.get('body') or ''):
+            new = clean_rebuild(full, fobjs, issue)  # only stray files or a conflict: fix it here instead of a worker retry
             if new:
                 log(f'PR #{n} rebuilt clean as #{new}')
                 s['gated'][str(n)] = sha
                 continue
         first_try = mine and 'as a first try for an audit finding' in (pr.get('body') or '')  # Claude went first on an audit finding: a failure goes on to the queue, not to the lead
-        ibody = (gh(f'repos/{REPO}/issues/{issue}').get('body') or '') if probs and issue else ''
+        ibody = (iss_obj.get('body') or '') if probs and issue else ''
         sb_prev = max(s['sentback'].get(str(issue), 0), len(re.findall(r'^### Automatic review of PR #\d+', ibody, re.M))) if issue else 0
         if probs and issue and rt.changes_existing_check(probs) and not mine:
             notes = '\n'.join(f'- {x}' for x in probs)
@@ -1268,7 +1277,7 @@ def gate(s):
             post(n, '**For the lead:** the automatic review found problems' + (' after two send-backs' if issue and not mine else '') + ':\n\n' + '\n'.join(f'- {x}' for x in probs) + SIGN.format(rv.MODEL))
             log(f'PR #{n} flagged for the lead')
         else:
-            ilabels = {l['name'] for l in gh(f'repos/{REPO}/issues/{issue}').get('labels', [])} if issue else set()
+            ilabels = ilabels_p
             needs = 'needs-owner' in ilabels
             numeric = numeric_change(diff)
             science = bool(ilabels & {'needs-owner', 'owner-approved', 'board-approved', 'from-board'})  # it may change a number the app reports: the AI lead review checks it (board ideas then wait for Patrick's OK)
