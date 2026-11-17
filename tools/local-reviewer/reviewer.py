@@ -183,7 +183,10 @@ Write at most 12 short bullet points, plain language, no em dashes, no semicolon
 4. Backward compatibility: saved projects or settings from older versions that would now load differently.
 5. Tests: does each new check test what its name says, would it fail before the fix, is any check weakened or always true.
 6. Anything you are unsure about, labelled "Unsure:".
-If nothing looks wrong, say so in one bullet. Do not praise, do not repeat the diff."""
+If nothing looks wrong, say so in one bullet. Do not praise, do not repeat the diff.
+End with one last line, exactly "Blocking: no" or "Blocking: yes, <one sentence>". Say yes only for a concrete problem you can point to in the diff:
+a visible change the issue did not ask for, a calculation that is wrong, a new check that would pass without the fix or only tests how something is spelled,
+or a change that does not do what the issue needs. Doubts and "Unsure:" points are not blocking. The manager sends a blocking PR back to its worker."""
 
 
 def review(pr):
