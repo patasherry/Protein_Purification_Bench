@@ -39,6 +39,8 @@ qo = [iss(30, 'Fix a', 'needs-owner'), iss(31, 'Fix b', 'from-patrick'), iss(32,
 assert [i['number'] for i in rt.pick(qo, {}, 5)] == [32, 31]
 assert rt.is_held(iss(33, 'Fix d', 'queued', 'needs-plan'))
 assert rt.is_held(iss(34, 'Fix e', 'queued', 'parked'))
+assert rt.is_held(iss(36, 'Fix g', 'queued', 'needs-previous'))
+assert rt.is_held(iss(37, 'Fix h', 'queued', 'owner-declined'))
 assert rt.is_held(iss(30, 'Fix a', 'needs-owner'))
 assert not rt.is_held(iss(32, 'Fix c', 'needs-owner', 'owner-approved'))
 
@@ -59,10 +61,22 @@ When switched ON:
 Reveal the cloning-template selector.
 Enable cloning stages and validation."""
 assert rt.is_request_spec(cloning_spec)
+archive_spec_with_dialog_q = """Allow users to remove the cloning stage from an existing project without deleting its data.
+Remove the cloning stage from the active workflow.
+Hide all cloning sections from the main project page.
+Save and archive all cloning procedures and notes.
+If cloning data exist, display a confirmation dialog:
+Remove cloning from this workflow?
+Provide these actions:
+Remove and Save Data
+Add automated tests for:
+Removing an empty cloning stage."""
+assert rt.is_request_spec(archive_spec_with_dialog_q)
 assert rt.is_request_spec("Remove the old export button.\nAdd a SVG download button.\nKeep existing keyboard shortcuts.\nAdd tests for the button.")
 assert not rt.is_request_spec("What should we do next about SEC calibration curves?")
 assert not rt.is_request_spec("How should we handle multi-wavelength UV traces in UNICORN 7 archives? What are the trade-offs?")
 assert not rt.is_request_spec("Should we split the workflow panel or keep it in one toolbar?")
+assert not rt.is_request_spec("SEC traces sometimes drift across long runs.\nWhat should we do about baseline subtraction?")
 
 # the per-pass limit holds, and a zero limit hands out nothing
 qm = [iss(n, 'Fix item %d' % n) for n in range(40, 46)]

@@ -29,11 +29,11 @@ def names(issue):
     return {l['name'] if isinstance(l, dict) else l for l in issue.get('labels', [])}
 
 
-HOLD_LABELS = {'needs-plan', 'parked'}
+HOLD_LABELS = {'needs-plan', 'parked', 'needs-previous', 'owner-declined'}
 
 
 def is_held(issue):
-    """True when an issue carries needs-plan, parked, or unapproved needs-owner."""
+    """True when an issue carries needs-plan, parked, needs-previous, owner-declined, or unapproved needs-owner."""
     lab = names(issue)
     if lab & HOLD_LABELS:
         return True
@@ -57,7 +57,8 @@ def changes_existing_check(err_or_probs):
 REQ_START_RE = re.compile(
     r'^\s*(?:[-*•]|\d+[.)])?\s*(?:please\s+)?'
     r'(?:update|remove|add|replace|change|make|implement|create|keep|save|restore|preserve|default|when\s+switched|'
-    r'when\s+on|when\s+off|hide|show|reveal|enable|disable|require|do\s+not|don\'t|rename|move|fix|support|allow|ensure|set|use|drop|clear)\b',
+    r'when\s+on|when\s+off|hide|show|reveal|enable|disable|require|do\s+not|don\'t|rename|move|fix|support|allow|ensure|'
+    r'set|use|drop|clear|prevent|provide|avoid|reconnect)\b',
     re.I
 )
 DISCUSS_Q_RE = re.compile(
@@ -67,7 +68,8 @@ DISCUSS_Q_RE = re.compile(
 
 
 def is_request_spec(text):
-    """True when a 'Discuss: ...' text is written as instructions/spec ('do this') rather than an open question for the board ('what should we do')."""
+    """True when a 'Discuss: ...' text is written as instructions/spec ('do this') rather than an open question for the board ('what should we do').
+    A quoted UI confirmation prompt inside a multi-line specification (for example 'Remove cloning from this workflow?') does not turn a spec into a question."""
     lines = [l.strip() for l in (text or '').strip().splitlines() if l.strip()]
     if not lines:
         return False
@@ -75,11 +77,14 @@ def is_request_spec(text):
     if '?' in first or DISCUSS_Q_RE.search(first):
         return False
     imp = sum(1 for l in lines if REQ_START_RE.match(l))
+    q_lines = sum(1 for l in lines if l.endswith('?'))
     if re.search(r'\bas\s+follows\s*:\s*$', first, re.I) and len(lines) >= 2:
         return True
-    if imp >= 3 and '?' not in (text or ''):
+    if DISCUSS_Q_RE.search(text or '') and imp < 6:
+        return False
+    if imp >= 3 and imp > q_lines * 2:
         return True
-    if len(lines) >= 4 and imp / len(lines) >= 0.5 and '?' not in (text or ''):
+    if len(lines) >= 4 and imp / len(lines) >= 0.5 and q_lines == 0:
         return True
     return False
 

@@ -47,6 +47,9 @@ for i in issues:
         inbox.append({'number': i['number'], 'title': i['title'], 'why': 'Needs your OK (changes a number the app reports)', 'url': i['html_url'], 'since': i['updated_at']})
     if 'for-antigravity' in l:
         inbox.append({'number': i['number'], 'title': i['title'], 'why': 'Issues labelled for-antigravity are picked up automatically, and anything not started within antigravity_stall_minutes (config key, default 45) returns to the queue', 'url': i['html_url'], 'since': i['updated_at']})
+for p in prs:
+    if 'awaiting-owner' in names(p):
+        inbox.append({'number': p['number'], 'title': p['title'], 'why': 'Board pull request passed tests and review: reply OK or No on the PR', 'url': p['html_url'], 'since': p['updated_at']})
 if checkin:
     for line in checkin['body'].splitlines():
         m = re.match(r'\s*[-*]\s*\**Patrick:?\**:?\s*(.+)', line)

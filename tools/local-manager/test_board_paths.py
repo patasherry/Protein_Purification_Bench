@@ -3,7 +3,20 @@ single-file app, and a downstream agent then rejected Patrick's whole cloning re
 import os, sys
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from boardpaths import ROOT, repo_files, invented_paths, unknown_idents
+from boardpaths import ROOT, repo_files, invented_paths, unknown_idents, verified_pointers
+
+
+def pointers(repo):
+    app = (repo / 'hplc-figure-bench(WF1.13).html').read_text(encoding='utf-8', errors='replace')
+    vp = verified_pointers('Update `zoomCompose` and check `#saveSvg` vs `#brandNewControlId` ignoring `#fff` and `#abcdef` with `exportSvg()`.', app=app)
+    assert '`zoomCompose` (line ' in vp, vp
+    assert '`#saveSvg` (line ' in vp, vp
+    assert '`#brandNewControlId`' in vp and 'not in app yet' in vp, vp
+    assert '#fff' not in vp and '#abcdef' not in vp, vp
+    assert '`exportSvg` (`tests/lib/harness.js`' in vp, vp
+    assert verified_pointers('plain words with no symbols', app=app) == ''
+    assert verified_pointers('`zoomCompose`', app='') == ''
+    print('ok pointers (7 checks)')
 
 
 def idents(repo):
@@ -59,6 +72,7 @@ def main(repo):
     ok += 1
     print(f'ok ({ok} checks)')
     idents(repo)
+    pointers(repo)
 
 if __name__ == '__main__':
     main(Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT)
