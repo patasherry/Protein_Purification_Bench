@@ -183,6 +183,21 @@ module.exports = async ({github, context, core}) => {
         i.labels = ls.concat([L.parked]); say(`#${i.number}: had no state, parked`); }
     }
 
+    /* A closed issue keeps its history (from-*, *-done, owner-approved) but not its in-progress state. Labels such as queued,
+       ag-returned or needs-previous stayed on closed issues (26 of 76 closed in a week still said ag-returned), so searches
+       and the status page read finished work as waiting. Each run cleans the issues closed in the last three days. */
+    try {
+      const TRANSIENT = new Set([L.queue, 'for-antigravity', 'for-codex', 'for-claude-code', 'for-copilot', 'for-coordinator', 'needs-coordinator', 'needs-triage',
+        L.plan, L.parked, KEEP, 'needs-previous', 'awaiting-parts', 'needs-owner', 'ag-returned', HAND]);
+      const since = new Date(Date.now() - 3 * 864e5).toISOString();
+      const shut = await github.paginate(github.rest.issues.listForRepo, {owner, repo, state: 'closed', since, per_page: 100});
+      for (const i of shut) {
+        if (i.pull_request) continue;
+        const drop = labels(i).filter(l => TRANSIENT.has(l) || /-running$/.test(l));
+        if (drop.length) { await setLabels(i.number, [], drop); say(`#${i.number}: closed, removed ${drop.join(', ')}`); }
+      }
+    } catch (e) { say(`closed-issue label cleanup skipped: ${e.message}`); }
+
     /* parked issues trickle back to the workers */
     const statusPage = open.find(i => labels(i).includes(L.status)), today = new Date().toISOString().slice(0, 10);
     let out = {day: today, n: 0}; try { const m = ((statusPage && statusPage.body) || '').match(/<!-- park-out (\{.*?\}) -->/); if (m && JSON.parse(m[1]).day === today) out = JSON.parse(m[1]); } catch (e) { /* a bad marker counts as none */ }
