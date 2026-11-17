@@ -10,22 +10,22 @@ const git = (...a) => { const r = spawnSync('git', ['-C', repo, ...a], {encoding
 /* section name (as in the app's `---------- name ----------` markers) -> suites. First match wins per rule, all matching rules add up.
    Coarse on purpose: a wrong guess costs a few minutes here, and the full run on the PR catches what this misses. */
 const MAP = [
-  [/^markup and styles$/, ['40_visual', '431_ios_look', '44_panel_more', '950_panel_padding', '1060_sidebar_trace_wrap']],
+  [/^markup and styles$/, ['01_name', '40_visual', '431_ios_look', '44_panel_more', '950_panel_padding', '1060_sidebar_trace_wrap']],
   [/^(parsing|UNICORN|traces and runs|loading)/, ['10_data_truth', '11_unicorn_zip', '1197_quoted_csv', '17_cross_format', '18_hplc_load', '1415_hplc_in_project']],
   [/^(runs: windows|peak integration)/, ['14_peaks', '770_pool_area', '20_science', '45_yield_semantic']],
   [/^(size exclusion|SEC panel)/, ['15_import_sec', '26_sec_calibration', '27_sec_mass_calculation', '28_sec_figure', 'test_sec_calibration_units']],
   [/^figure: zoom inset/, ['43_zoom_inset']],
   [/^(figure:|figures$)/, ['42_figures', '1187_svg_group', '1285_axis_reorder', '46_run_status_overlap', '50_export']],
-  [/^(gels$|auto crop|gel densitometry|band tags)/, ['25_gels', '1330_gel_blob', '99_band_overlap']],
+  [/^(gels$|auto crop|gel densitometry|band tags)/, ['25_gels', '1324_export_gel', '1330_gel_blob', '99_band_overlap']],
   [/^(composite|editing the workflow figure)/, ['24_workflow_branches', '31_wf_full', '41_workflow_drag_hint', '411_workflow_condition_placeholder', '769_workflow_refit', '45_yield_semantic']],
   [/^(upstream steps|construct and expression|protein:)/, ['12_genbank', '22_protein', '796_tag_mass', '1007_untagged_default', '1090_construct_sequence_link', '1305_selected_clone', '1306_construct_method_specific']],
-  [/^(run conditions|quick fill)/, ['21_methods', '1089_actionable_methods_gaps', '23_provenance']],
-  [/^NanoDrop/, ['16_nanodrop', 'test_nanodrop_units']],
-  [/^(UI$|More options|what to do next|home$)/, ['05_quick', '44_panel_more', '48_empty_start', '950_panel_padding', '1060_sidebar_trace_wrap', '1267_toast_dismiss']],
-  [/^projects/, ['47_export_project', '669_persistence_roundtrip', '30_robust', '915_raw_files', '1022_downstream_allocation', '1023_carryover_semantics']],
-  [/^cloning workflow/, ['1402_cloning_engine', '1305_selected_clone']],
-  [/^the step timeline/, ['31_wf_full', '44_panel_more', '1089_actionable_methods_gaps', '1402_cloning_engine', '1415_hplc_in_project']],
-  [/^export$/, ['50_export', '47_export_project']],
+  [/^(run conditions|quick fill)/, ['21_methods', '1089_actionable_methods_gaps', '1468_methods_between_step_volume_unit', '23_provenance']],
+  [/^NanoDrop/, ['16_nanodrop', '1457_nd_ratio_warn', 'test_nanodrop_units']],
+  [/^(UI$|collapsible panel|More options|what to do next|home$)/, ['05_quick', '44_panel_more', '48_empty_start', '936_add_run_button', '950_panel_padding', '1060_sidebar_trace_wrap', '1267_toast_dismiss']],
+  [/^projects/, ['01_name', '47_export_project', '669_persistence_roundtrip', '30_robust', '915_raw_files', '1022_downstream_allocation', '1023_carryover_semantics', '1324_export_gel']],
+  [/^(cloning workflow|agarose)/, ['1402_cloning_engine', '1305_selected_clone', '1433_include_cloning', '1436_clone_fold', '1439_clone_join', '1500_agarose_upload', '1501_agarose_adjust', '1502_agarose_lanes', '1503_agarose_calibration', '1504_agarose_bands', '1505_agarose_metadata', '1506_agarose_figure']],
+  [/^the step timeline/, ['31_wf_full', '44_panel_more', '936_add_run_button', '1089_actionable_methods_gaps', '1402_cloning_engine', '1415_hplc_in_project', '1433_include_cloning', '1436_clone_fold', '1439_clone_join', '1468_methods_between_step_volume_unit']],
+  [/^export$/, ['01_name', '50_export', '47_export_project']],
   [/^(helpers|example data)/, ['20_science', '05_quick']]
 ];
 const all = fs.readdirSync(path.join(__dirname, 'suites')).filter(f => f.endsWith('.js')).map(f => f.replace(/\.js$/, ''));
