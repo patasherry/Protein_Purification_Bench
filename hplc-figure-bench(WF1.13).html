@@ -3489,7 +3489,7 @@ function laneCtx(g, i){
   const c0 = cutAfterIndex(), cut = c0 >= 0 ? c0 + 1 : !prep.on && iImac >= 0 ? iImac + 1 : -1;
   return {has: !!r || imacLab || postLab, proteome,
     ecoli: !proteome && (imacL || (r && typ(r) === 'IMAC') || (k >= 0 && iImac >= 0 && k <= iImac) || (k === 0 && iImac < 0)),
-    post: !proteome && (postLab || (k >= 0 && cut >= 0 && k >= cut))};
+    post: !proteome && (postLab || (k >= 0 && (c0 >= 0 ? isCleavedStep(r) : cut >= 0 && k >= cut)))};
 }
 const knownCtx = k => k.ctx || (/ulp|tev|protease|3c|prescission|sumo tag/i.test(k.name || '') ? 'post' : /e\.?\s?coli|lysis/i.test(k.src || '') ? 'ecoli' : 'any');
 /* how believable a size match is: tolerance from the ladder's local accuracy (4% to the cap), inside the marked ladder only,
@@ -5788,7 +5788,7 @@ function renderSumTable(){
   const notes = [];
   { const y = null; if (y && y.perL != null) notes.push(`Final pool (step ${y.k + 1}, ${stepTitle(y.fin.r) !== y.fin.r.name ? stepTitle(y.fin.r) : shortRunName(y.fin.r)}): ${sig2(y.poolMg)} mg from ${fmtAuto(y.cL)} L of culture, ${sig2(y.poolPerL)} mg per L${y.perG != null ? ` and ${y.perGTxt}` : ''}${['mg', 'mgmol', 'area'].includes(rows.basis) ? ', from the A280 area' : ''}${y.odd ? '. Unverified: a step yield above 100% means a basis or volume is off' : ''}.`);
     if (false) notes.push(`Masses and A280 coefficients come from the ORF in ${prep.gb.name} (tagged form for steps before the protease, cleaved form after).`);
-    { const wf = runs.filter(r => r.inWf), c = cutAfterIndex(); if (c >= 0 && !prep.cleave && !wf.some(r => PROT_NOTE.test(String(r.note || '')) && !PROT_NOT.test(String(r.note || '')))) notes.push(`The tag is assumed to be cut before step ${c + 2} (${stepTitle(wf[c + 1])}), so steps up to ${c + 1} use the tagged form. Add a cleavage step to set where it happens.`); wf.forEach((r, i) => { if ((String(r.stepName || '').trim() || guessStep(r)) === 'Reverse IMAC' && c >= 0 && i <= c) notes.push(`Step ${rows.findIndex(x => x.r === r) + 1} (Reverse IMAC) comes before the tag is cut, so the tagged protein would bind. Move the cleavage step before it.`); }); }
+    { const wf = runs.filter(r => r.inWf), c = cutAfterIndex(), pNote = s => PROT_NOTE.test(s) && !PROT_NOT.test(s); if (c >= 0 && !prep.cleave && !wf.some(r => pNote(String(r.note || '')) || pNote(wfFromNoteOf(r)))) notes.push(!wf.some(x => wfFromOf(x)) ? `The tag is assumed to be cut before step ${c + 2} (${stepTitle(wf[c + 1])}), so steps up to ${c + 1} use the tagged form. Add a cleavage step to set where it happens.` : 'The tag is assumed to be cut at Reverse IMAC, so only Reverse IMAC and steps downstream of it use the cleaved form. Add a cleavage step to set where it happens.'); wf.forEach(r => { if ((String(r.stepName || '').trim() || guessStep(r)) === 'Reverse IMAC' && c >= 0 && !isCleavedStep(r)) notes.push(`Step ${rows.findIndex(x => x.r === r) + 1} (Reverse IMAC) comes before the tag is cut, so the tagged protein would bind. Move the cleavage step before it.`); }); }
     const q = prep.on ? exprQuant() : {}; if (q.level || q.sol) notes.push(`Expression gel: ${q.level ? `the tagged protein is ≈${fmt(q.level.pct, 0)}% of the stain in lane ${q.level.lane}` : ''}${q.level && q.sol ? ', and ' : ''}${q.sol ? `≈${fmt(q.sol.pct, 0)}% of it is soluble (${q.sol.s} against ${q.sol.p}, assuming both were loaded from equal culture volumes)` : ''}. Bands within 8% of the tagged size are counted, so a co-migrating host protein adds to it.`); }
   rows.forEach((x, k) => { const nm = `Step ${k + 1} (${stepTitle(x.r) !== x.r.name ? stepTitle(x.r) : shortRunName(x.r)})`;
     if (!x.p.none && !x.p.measured && massWhy(x.r)) notes.push(`${nm}: no protein mg or area yield from the UV area, because ${massWhy(x.r)}. A NanoDrop concentration with a measured volume can still give mg.`);
@@ -6542,7 +6542,14 @@ const PROT_NOTE = /\bulp1?\b|sumo protease|\btev\b|thrombin|prescission|\b3c\b|e
 function cutAfterIndex(){ const wf = runs.filter(r => r.inWf); if (prep.cleave) { const i = wf.findIndex(r => r.id === cleaveRunId()); if (i >= 0) return i; }
   const n = wf.findIndex(r => PROT_NOTE.test(String(r.note || '')) && !PROT_NOT.test(String(r.note || ''))); if (n >= 0) return n;
   const rv = wf.findIndex(r => (String(r.stepName || '').trim() || guessStep(r)) === 'Reverse IMAC'); return rv > 0 ? rv - 1 : -1; }
-const ndForm = r => { if (!r) return 'untagged'; if (r.ndForm) return r.ndForm; const wf = runs.filter(x => x.inWf), i = wf.indexOf(r), c = cutAfterIndex(); if (i < 0) return 'untagged'; return c < 0 || i <= c ? 'tagged' : 'untagged'; };
+function isCleavedStep(r){ const L = prep.on ? wfList() : runs.filter(x => x.inWf), idx = L.indexOf(r); if (idx < 0) return false;
+  const par = wfParents(L), pNote = s => PROT_NOTE.test(s) && !PROT_NOT.test(s), typ = x => x.prep ? '' : (String(x.stepName || '').trim() || guessStep(x));
+  const hasCleave = prep.on && prep.cleave && L.some(x => x.prep === 'cleave'), hasProt = !hasCleave && L.some((x, i) => i > 0 && par[i] >= 0 && pNote(wfFromNoteOf(x) || String(L[par[i]].note || '')));
+  let cur = idx; const seen = new Set();
+  while (cur >= 0 && !seen.has(cur)) { seen.add(cur); const p = par[cur];
+    if (hasCleave ? L[cur].prep === 'cleave' : hasProt ? (p >= 0 && pNote(wfFromNoteOf(L[cur]) || String(L[p].note || ''))) : (p >= 0 && typ(L[cur]) === 'Reverse IMAC')) return true;
+    cur = p; } return false; }
+const ndForm = r => { if (!r) return 'untagged'; if (r.ndForm) return r.ndForm; if (!r.inWf || !runs.includes(r)) return 'untagged'; return isCleavedStep(r) ? 'untagged' : 'tagged'; };
 function ndEpsFor(runId){
   if (numOr(opt.eps, 0) > 0) return {e: +opt.eps, kda: numOr(opt.protKda, 0) || null, src: 'set'};
   const r = runId ? runs.find(x => x.id === runId) : null, F = protForms();
