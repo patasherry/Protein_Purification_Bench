@@ -26,7 +26,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Python files compile
         run: python -m py_compile tools/local-manager/*.py tools/local-reviewer/*.py tools/dashboard/*.py
       - name: No undefined names
@@ -41,5 +41,26 @@ jobs:
       - name: Scripts parse
         run: |
           for f in .github/scripts/*.js tests/quick.js tests/tools/*.js; do node --check "$f"; done
+      - name: Quick suite map covers app sections and valid suites
+        run: |
+          node tests/quick.js --list > /dev/null
+          node -e '
+            const fs = require("fs");
+            const all = new Set(fs.readdirSync("tests/suites").filter(f => f.endsWith(".js")).map(f => f.replace(/\.js$/, "")));
+            const q = fs.readFileSync("tests/quick.js", "utf8");
+            const mapBlock = q.split("const MAP = [")[1].split("];")[0];
+            const rules = eval("[" + mapBlock + "]");
+            const mapped = new Set(rules.flatMap(([, ns]) => ns));
+            const missingOnDisk = [...mapped].filter(n => !all.has(n));
+            if (missingOnDisk.length) { console.error("MAP names nonexistent suites:", missingOnDisk); process.exit(1); }
+            const app = fs.readFileSync(require("./tests/lib/app"), "utf8");
+            const sections = ["markup and styles", ...[...app.matchAll(/\/\*\s*----------\s*(.*?)\s*----------\s*\*\//g)].map(m => m[1].trim())];
+            const unmappedSec = sections.filter(s => !rules.some(([re]) => re.test(s)));
+            if (unmappedSec.length) { console.error("Unmapped app sections in quick.js:", unmappedSec); process.exit(1); }
+            const unmappedCore = [...all].filter(n => /^\d\d_/.test(n) && !/^00_|^60_perf$/.test(n) && !mapped.has(n));
+            if (unmappedCore.length) { console.error("Unmapped core suites in quick.js:", unmappedCore); process.exit(1); }
+            const unmappedOther = [...all].filter(n => !/^00_|^60_perf$/.test(n) && !mapped.has(n));
+            if (unmappedOther.length) console.log("Note — suites not yet in quick.js MAP:", unmappedOther.join(", "));
+          '
       - name: The code map tool runs
         run: node tests/tools/codemap.js --plain > /dev/null
