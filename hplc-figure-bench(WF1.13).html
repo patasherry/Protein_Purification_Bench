@@ -6884,7 +6884,8 @@ function projectData(){
   /* The name shown to the user is Protein Purification Bench. This schema field stays 'HPLC Figure Bench' for good:
      change it and every project file saved before the rename fails to import, and every file saved after it fails to
      open in an older copy. The same goes for the 'hplc-fig-opt' settings key and the 'hfb-projects' database. */
-  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep, srcDiag: Object.assign({}, srcDiag)};
+  const pExp = JSON.parse(JSON.stringify(prep)); if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; } });
+  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep: pExp, srcDiag: Object.assign({}, srcDiag)};
 }
 let projUndo = null, failedGels = [];
 /* a project file can be partial or damaged: keep what can be used and count what was skipped */
@@ -6996,6 +6997,9 @@ async function upRaw(f){
   if (STORE.mode === 'local') { const id = 'raw-' + newBlobId(); await putLocalBlob(id, f); return id; }
   return (await STORE.assets.upload(f, {type: f.type || 'application/octet-stream'})).id;
 }
+const blobToDataUrl = img => typeof img === 'string' ? Promise.resolve(img) : new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsDataURL(img); });
+function dataUrlToBlob(u){ const i = u.indexOf(','), h = i >= 0 ? u.slice(0, i) : '', b = i >= 0 ? u.slice(i + 1) : '', m = (h.match(/^data:([^;,]+)/) || [])[1] || 'image/png', s = /;base64/i.test(h) ? atob(b) : decodeURIComponent(b), a = new Uint8Array(s.length); for (let k = 0; k < s.length; k++) a[k] = s.charCodeAt(k); return new Blob([a], {type: m}); }
+async function upDataUrl(u){ const b = dataUrlToBlob(u); if (STORE.mode === 'local') { const id = 'ag-' + newBlobId(); await putLocalBlob(id, b); return id; } return (await STORE.assets.upload(b, {type: b.type || 'image/png'})).id; }
 async function upPNG(canvas){
   if (STORE.mode === 'local') {
     const id = 'img-' + newBlobId();
@@ -7026,6 +7030,22 @@ async function packCloud(S, P){
   for (const {obj: n, o} of S.nd) { if (n.spec) { if (!n.specId) n.specId = await upJSON(n.spec); o.specId = n.specId; delete o.spec; refs.push(n.specId); } st.nanodrop.push(o); }
   /* the files exactly as uploaded (ÄKTA, HPLC, NanoDrop exports) go to the same store as the curves: the project keeps only name, size, time and a reference */
   for (const {obj: r, o} of S.raw || []) { if (!r.blobId && r._f) { r.blobId = await upRaw(r._f); delete r._f; } if (r.blobId) { st.rawFiles.push(Object.assign({}, o, {blobId: r.blobId})); refs.push(r.blobId); } }
+  /* agarose gel images in cloning stages are offloaded to blobs just like SDS-PAGE gels */
+  for (const sg of (st.prep && st.prep.cloning && st.prep.cloning.stages) || []) {
+    const g = sg && sg.gel; if (!g) continue;
+    const lv = PROJ === P && prep && prep.cloning && (prep.cloning.stages || []).find(x => x.id === sg.id);
+    if (typeof g.image === 'string' && g.image.startsWith('data:')) {
+      if (!g.imageId) { g.imageId = await upDataUrl(g.image); if (lv && lv.gel && lv.gel.image === g.image) lv.gel.imageId = g.imageId; }
+      if (g.origImage === g.image && !g.origImageId) { g.origImageId = g.imageId; if (lv && lv.gel && lv.gel.origImage === g.image) lv.gel.origImageId = g.imageId; }
+      g.image = '';
+    }
+    if (g.imageId) refs.push(g.imageId);
+    if (typeof g.origImage === 'string' && g.origImage.startsWith('data:')) {
+      if (!g.origImageId) { g.origImageId = await upDataUrl(g.origImage); if (lv && lv.gel && lv.gel.origImage === g.origImage) lv.gel.origImageId = g.origImageId; }
+      g.origImage = '';
+    }
+    if (g.origImageId) refs.push(g.origImageId);
+  }
   /* items that did not load this time are kept as they were, so a brief network error never deletes them */
   const L = P.lost; L.runs.forEach(o => { st.runs.push(o); refs.push(o.blobId); }); L.traces.forEach(o => { st.traces.push(o); refs.push(o.blobId); });
   L.gels.forEach(o => { st.gels.push(o); if (o.imageId) refs.push(o.imageId); }); L.nd.forEach(o => { st.nanodrop.push(o); refs.push(o.specId); });
@@ -7052,7 +7072,7 @@ async function unpackLocal(st){
     const img = await getLocalBlob(o.imageId);
     if (!img) throw new Error('missing gel image');
     /* older records hold a data URL string (some JPEG); newer ones hold the PNG Blob itself */
-    const url = typeof img === 'string' ? img : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsDataURL(img); });
+    const url = await blobToDataUrl(img);
     return Object.assign({}, o, {image: url, imageId: o.imageId});
   })))).filter(Boolean);
   const s2 = st.struct && st.struct.blobId ? await one(st.struct, 'struct', async () => {
@@ -7065,6 +7085,11 @@ async function unpackLocal(st){
     if (!b) throw new Error('missing nd blob');
     return Object.assign({}, o, {spec: b, specId: o.specId});
   }) : o))).filter(Boolean);
+  if (st.prep && st.prep.cloning && Array.isArray(st.prep.cloning.stages)) await Promise.all(st.prep.cloning.stages.map(async sg => {
+    const g = sg && sg.gel; if (!g) return;
+    if (!g.image && g.imageId) { try { const b = await getLocalBlob(g.imageId); if (!b) throw new Error('missing'); g.image = await blobToDataUrl(b); } catch (e) { names.push(g.name || 'agarose gel'); } }
+    if (!g.origImage && g.origImageId) { if (g.origImageId === g.imageId && g.image) g.origImage = g.image; else { try { const b = await getLocalBlob(g.origImageId); if (!b) throw new Error('missing'); g.origImage = await blobToDataUrl(b); } catch (e) { names.push(g.origName || 'agarose gel'); } } }
+  }));
   if (names.length) toast(`Could not load ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and more' : ''}. They are kept and will load next time.`);
   return {app: 'HPLC Figure Bench', version: 2, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
 }
@@ -7076,6 +7101,12 @@ async function unpackCloud(st){
   const gels2 = (st.gels || []).map(o => Object.assign({}, o, {image: '/_blob/' + o.imageId}));
   const s2 = st.struct && st.struct.blobId ? await one(st.struct, 'struct', async () => Object.assign(await get(st.struct.blobId), {ent: st.struct.ent, blobId: st.struct.blobId})) : null;
   const nd2 = (await Promise.all((st.nanodrop || []).map(async o => o.specId ? await one(o, 'nd', async () => Object.assign({}, o, {spec: await get(o.specId)})) : o))).filter(Boolean);
+  if (st.prep && st.prep.cloning && Array.isArray(st.prep.cloning.stages)) await Promise.all(st.prep.cloning.stages.map(async sg => {
+    const g = sg && sg.gel; if (!g) return;
+    const loadImg = id => fetch('/_blob/' + id).then(r => { if (!r.ok) throw new Error('missing'); return r.blob(); }).then(blobToDataUrl);
+    if (!g.image && g.imageId) { try { g.image = await loadImg(g.imageId); } catch (e) { names.push(g.name || 'agarose gel'); } }
+    if (!g.origImage && g.origImageId) { if (g.origImageId === g.imageId && g.image) g.origImage = g.image; else { try { g.origImage = await loadImg(g.origImageId); } catch (e) { names.push(g.origName || 'agarose gel'); } } }
+  }));
   if (names.length) toast(`Could not load ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and more' : ''}. They are kept and will load next time.`);
   return {app: 'HPLC Figure Bench', version: 2, opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
 }
@@ -7087,10 +7118,20 @@ function setSaveState(t, err){ const el = $('#saveState'); if (!el) return; el.t
 const PEND = id => 'hfb-pending-' + id, isDirty = P => !!P && (P.editSeq || 0) > (P.savedSeq || 0);
 function savedTo(P, seq){ P.savedSeq = Math.max(P.savedSeq || 0, seq || 0); if (!isDirty(P)) { try { localStorage.removeItem(PEND(P.id)); } catch (e) {} } }
 function writePending(){ if (!PROJ || !isDirty(PROJ) || PROJ.blocked) return; const light = r => { const o = plain(r); RUN_HEAVY.forEach(k => delete o[k]); delete o.rows; return o; };
-  try { localStorage.setItem(PEND(PROJ.id), JSON.stringify({t: Date.now(), rev: PROJ.rev, name: PROJ.name, prep, o: Object.fromEntries(QKEYS.concat(['tagPreset', 'tagPos']).map(k => [k, opt[k]])), runIds: runs.map(r => r.id), gelIds: gels.map(g => g.id), runNames: runs.map(r => r.name), runs: runs.map(light), gels: gels.map(g => { const o = plain(g); ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist', 'image'].forEach(k => delete o[k]); return o; })})); } catch (e) {} }
+  const pLight = JSON.parse(JSON.stringify(prep)); if (pLight && pLight.cloning && Array.isArray(pLight.cloning.stages)) pLight.cloning.stages.forEach(s => { if (s && s.gel) { s.gel.image = ''; s.gel.origImage = ''; } });
+  try { localStorage.setItem(PEND(PROJ.id), JSON.stringify({t: Date.now(), rev: PROJ.rev, name: PROJ.name, prep: pLight, o: Object.fromEntries(QKEYS.concat(['tagPreset', 'tagPos']).map(k => [k, opt[k]])), runIds: runs.map(r => r.id), gelIds: gels.map(g => g.id), runNames: runs.map(r => r.name), runs: runs.map(light), gels: gels.map(g => { const o = plain(g); ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist', 'image'].forEach(k => delete o[k]); return o; })})); } catch (e) {} }
 function applyPending(P, meta){ let pd = null; try { pd = JSON.parse(localStorage.getItem(PEND(P.id)) || 'null'); } catch (e) {} if (!pd) return false;
   if ((pd.rev || 0) < (P.rev || 0) || pd.t < (meta.updated || 0)) { try { localStorage.removeItem(PEND(P.id)); } catch (e) {} return false; }
-  P.name = pd.name || P.name; if (pd.prep && typeof pd.prep === 'object') { prep = Object.assign(prep, pd.prep); canonClones(prep); canonCloning(prep); }
+  P.name = pd.name || P.name; if (pd.prep && typeof pd.prep === 'object') {
+    const oldAg = new Map(((prep && prep.cloning && prep.cloning.stages) || []).filter(s => s && s.gel).map(s => [s.id, s.gel]));
+    prep = Object.assign(prep, pd.prep); canonClones(prep); canonCloning(prep);
+    if (prep.cloning && Array.isArray(prep.cloning.stages)) prep.cloning.stages.forEach(s => {
+      const og = s && s.gel && oldAg.get(s.id); if (!og) return;
+      if (!s.gel.image && og.image && (!s.gel.imageId || s.gel.imageId === og.imageId) && (!s.gel.name || s.gel.name === og.name)) { s.gel.image = og.image; s.gel.imageId = s.gel.imageId || og.imageId; }
+      else if (!s.gel.image && og.origImage && s.gel.name && s.gel.name === og.origName) { s.gel.image = og.origImage; s.gel.imageId = s.gel.imageId || og.origImageId; }
+      if (!s.gel.origImage && og.origImage && (!s.gel.origImageId || s.gel.origImageId === og.origImageId) && (!s.gel.origName || s.gel.origName === og.origName)) { s.gel.origImage = og.origImage; s.gel.origImageId = s.gel.origImageId || og.origImageId; }
+    });
+  }
   if (pd.o && typeof pd.o === 'object') Object.keys(pd.o).forEach(k => { if (QKEYS.includes(k) || k === 'tagPreset' || k === 'tagPos') opt[k] = pd.o[k]; });
   /* runs and gels removed just before closing stay removed; runs loaded in those seconds were never uploaded and are named so they can be loaded again */
   if (Array.isArray(pd.runIds)) { runs = runs.filter(r => pd.runIds.includes(r.id)); const miss = pd.runIds.map((id, i) => runs.some(r => r.id === id) ? '' : (pd.runNames || [])[i] || id).filter(Boolean); if (miss.length) setTimeout(() => toast(`Load ${miss.join(', ')} again: ${miss.length === 1 ? 'it was' : 'they were'} added just before the page closed`), 400); }
@@ -7165,7 +7206,7 @@ async function storeDelete(id){
   }
 }
 /* upload ids belong to the project they were uploaded for: a file or quick work uploads again */
-function stripBlobIds(){ runs.forEach(r => delete r.blobId); traces.forEach(t => delete t.blobId); gels.forEach(g => delete g.imageId); if (struct) delete struct.blobId; ndSamples.forEach(n => delete n.specId); }
+function stripBlobIds(){ runs.forEach(r => delete r.blobId); traces.forEach(t => delete t.blobId); gels.forEach(g => delete g.imageId); if (struct) delete struct.blobId; ndSamples.forEach(n => delete n.specId); if (prep && prep.cloning && Array.isArray(prep.cloning.stages)) prep.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; } }); }
 
 /* the raw files uploaded into this project: kept in the browser database (or the page's asset store), listed here, and downloadable as they were */
 function keepRaw(fs){
@@ -8277,8 +8318,10 @@ async function handleAgaroseGelUpload(file, s){
       s.gel = Object.assign({}, s.gel, {
         name: file.name,
         image: dataUrl,
+        imageId: '',
         origName: file.name,
         origImage: dataUrl,
+        origImageId: '',
         rawId,
         origRawId: rawId,
         replaced: false,
@@ -8289,6 +8332,7 @@ async function handleAgaroseGelUpload(file, s){
       });
     } else {
       s.gel.image = dataUrl;
+      s.gel.imageId = '';
       s.gel.name = file.name;
       s.gel.rawId = rawId;
       s.gel.replaced = true;
@@ -8615,7 +8659,7 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   if (w === 'gel-pick') { const box = b.closest('.cl-gel-upload') || $('#clonePanel'), inp = box.querySelector('.cl-gel-file'); if (inp) inp.click(); return; }
   if (w === 'gel-restore') {
     if (s && s.gel && s.gel.origImage) {
-      s.gel.image = s.gel.origImage; s.gel.name = s.gel.origName;
+      s.gel.image = s.gel.origImage; s.gel.imageId = s.gel.origImageId || ''; s.gel.name = s.gel.origName;
       if (s.gel.origRawId) s.gel.rawId = s.gel.origRawId;
       s.gel.replaced = false;
       if (s.at && s.at.length) s.at.forEach(a => { if (a.f && a.f.gel) a.f.gel = s.gel.name; });
