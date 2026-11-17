@@ -10,3 +10,5 @@ The manager keeps a second list on the PC by itself (`.hfb-lessons.txt` in the u
 - A test helper that drags something and drags it back does not return it to the exact pixel. Use the app's own Reset control before the next check (#1421).
 - A new header control can squeeze the project name at narrow widths. Check the phone layout whenever the header gains anything (#1403).
 - A new CSS class can collide with one already in the stylesheet (`.sw` was the colour swatch). Search the file for the class name before adding it (#1435).
+- A check can fail on main only because of spelling (`#ffffff` vs `#fff`). Ask whether main actually looks or behaves wrong, and end the notes with a Blocking line (#1531).
+- Moving text from an inherited colour to a named constant changes how it looks when the constant is not the inherited colour (#1531: ÄKTA fraction labels, black to `RUN_COLORS.frac` #444444).
