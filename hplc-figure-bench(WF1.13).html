@@ -5768,14 +5768,16 @@ function sumRows(){
   return out;
 }
 function sumDisplay(rows){
-  const wf = wfList(), list = [], runRow = r => rows.find(x => x.r === r); let last = null;
-  wf.forEach(o => {
-    if (o.prep === 'manual') { const mg = manMg(o.man), next = rows.find(x => wf.indexOf(x.r) > wf.indexOf(o)) || rows[rows.length - 1], v = rows.toAmt ? rows.toAmt(mg, next) : null;
-      list.push({man: o, mg, vol: numOr(o.man.vol, 0) || null, conc: numOr(o.man.conc, 0) || null, yld: v > 0 && rows.base > 0 ? 100*v/rows.base : null, stepY: v > 0 && last > 0 ? 100*v/last : null}); if (v > 0) last = v; return; }
+  const wf = wfList(), par = wfParents(wf), amtAt = new Array(wf.length).fill(null), list = [], runRow = r => rows.find(x => x.r === r);
+  const prevAmt = i => { let c = par[i]; const seen = new Set(); while (c >= 0 && !seen.has(c) && !(amtAt[c] > 0)) { seen.add(c); c = par[c]; } return c >= 0 ? amtAt[c] : null; };
+  const refRun = i => rows.find(x => { let c = wf.indexOf(x.r); const seen = new Set(); while (c > i && !seen.has(c)) { seen.add(c); c = par[c]; } return c === i; }) || (() => { let c = par[i]; const seen = new Set(); while (c >= 0 && !seen.has(c) && wf[c].prep) { seen.add(c); c = par[c]; } return c >= 0 ? runRow(wf[c]) : null; })() || rows[rows.length - 1];
+  wf.forEach((o, i) => {
+    if (o.prep === 'manual') { const mg = manMg(o.man), v = rows.toAmt ? rows.toAmt(mg, refRun(i)) : null, last = prevAmt(i);
+      list.push({man: o, mg, vol: numOr(o.man.vol, 0) || null, conc: numOr(o.man.conc, 0) || null, yld: v > 0 && rows.base > 0 ? 100*v/rows.base : null, stepY: v > 0 && last > 0 ? 100*v/last : null}); if (v > 0) amtAt[i] = v; return; }
     if (o.prep) return; const x = runRow(o); if (!x) return; list.push({run: x, k: rows.indexOf(x)});
     const a = rows.amtOf ? rows.amtOf(x) : null, bw = prep.on ? btwMg(x.r) : null, kp = bw && rows.toAmt ? rows.toAmt(bw.mg, x) : null;
     if (prep.on && btwOf(x.r)) { const b = prep.btw[x.r.id] || {}, ms = poolMeas(x.r); list.push({conc: x, name: ncObj(x.r).name, mg: bw ? bw.mg : null, vol: numOr(b.vOut, 0) || null, mgml: ms.c || null, sd: ms.nd ? ms.nd.sd : null, yld: kp > 0 && rows.base > 0 ? 100*kp/rows.base : null, stepY: kp > 0 && a > 0 ? 100*kp/a : null}); }
-    if (kp > 0) last = kp; else if (a > 0) last = a; });
+    if (kp > 0) amtAt[i] = kp; else if (a > 0) amtAt[i] = a; });
   return list; }
 function renderSumTable(){
   const rows = sumRows(), molB = ['mgmol', 'ndmol'].includes(rows.basis), mg = rows.some(x => x.p.mg != null), nd = rows.some(x => x.nd), cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0, perL = cL > 0 && rows.some(x => rows.mgOf(x) > 0), perG = cG > 0 && rows.some(x => rows.mgOf(x) > 0);
