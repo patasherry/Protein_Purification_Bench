@@ -96,3 +96,29 @@ def changed_fragments(diff, app):
                         out.append(' '.join(tr[max(0, i1 - 1):i2 + 1]) + ' ; ' + ' '.join(ta[max(0, j1 - 1):j2 + 1]))
             out += [a for k, a in enumerate(add) if k not in used]
     return out
+
+
+def rebuild_paths(fobjs, allowed):
+    """Paths for clean_rebuild's `git diff -- <paths>` and the rejected stray filenames. Including `previous_filename` on an
+    allowed rename (`git mv docs/x.md docs/archive/x.md`) carries the source deletion too instead of duplicating the file (#1558)."""
+    keep, stray, seen = [], [], set()
+    for item in (fobjs or []):
+        fn = item['filename'] if isinstance(item, dict) else str(item)
+        prev = item.get('previous_filename') if isinstance(item, dict) else None
+        if allowed.match(fn) and (not prev or allowed.match(prev)):
+            for p in (prev, fn):
+                if p and p not in seen:
+                    seen.add(p); keep.append(p)
+        elif fn not in seen:
+            stray.append(fn)
+    return keep, stray
+
+
+def hand_bypass_problems(probs, pr_labels, issue_labels):
+    """For a hand-started session (`hand-running`, AGENTS.md), touching tooling/workflow files outside the worker allowlist is
+    intentional: drop that worker-only complaint, and never let the manager strip or close the PR."""
+    hand = 'hand-running' in (set(pr_labels or ()) | set(issue_labels or ()))
+    if not hand:
+        return False, list(probs or [])
+    return True, [p for p in (probs or []) if not p.startswith('It adds or changes files outside')]
+
