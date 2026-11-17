@@ -37,12 +37,14 @@ yourself, starting that part with "From memory, unverified:". The sources are da
 
 
 def parse_map(text):
-    """Domains from docs/BOARD_MAP.md: [{'name', 'body', 'code': [section names]}], in file order."""
+    """Domains from docs/BOARD_MAP.md: [{'name', 'body', 'code': [section names], 'tests': [suite stems]}], in file order."""
     out = []
     for part in re.split(r'^## ', text or '', flags=re.M)[1:]:
         name, _, body = part.partition('\n')
         code = next((l for l in body.splitlines() if l.strip().lstrip('-').strip().lower().startswith('code:')), '')
-        out.append({'name': name.strip(), 'body': body.strip(), 'code': re.findall(r'`([^`]+)`', code)})
+        tline = next((l for l in body.splitlines() if l.strip().lstrip('-').strip().lower().startswith('tests:')), '')
+        tests = [re.sub(r'[`\s]', '', t) for t in tline.split(':', 1)[1].split(',') if t.strip()] if ':' in tline else []
+        out.append({'name': name.strip(), 'body': body.strip(), 'code': re.findall(r'`([^`]+)`', code), 'tests': [t for t in tests if t]})
     return [d for d in out if d['name']]
 
 
@@ -58,16 +60,60 @@ def codemap_rows(codemap):
     return {n: (int(a), int(b)) for a, b, n in re.findall(r'^\|\s*(\d+)\D+(\d+)\s*\|\s*`([^`]+)`\s*\|', codemap or '', re.M)}
 
 
-def domain_code(domain, app_text, rows, cap=7000):
-    """The code of a domain's app sections, shared out so each section gets a fair slice of the cap."""
+def domain_code(domain, app_text, rows, cap=7000, offsets=None):
+    """The code of a domain's app sections, shared out so each section gets a fair slice of the cap.
+    When `offsets` ({section: char_offset}) is passed, each meeting advances through long sections instead of reading only the top."""
     secs = [(n, rows[n]) for n in domain.get('code', []) if n in rows]
     if not secs:
         return ''
     lines, each, out = (app_text or '').split('\n'), max(800, cap // len(secs)), []
     for n, (a, z) in secs:
         code = '\n'.join(lines[a - 1:z])
-        out.append(f'// ===== section `{n}` (lines {a} to {z}) =====\n' + code[:each] + ('\n// ... (section continues)' if len(code) > each else ''))
+        if offsets is None or len(code) <= each:
+            if isinstance(offsets, dict):
+                offsets[n] = 0
+            out.append(f'// ===== section `{n}` (lines {a} to {z}) =====\n' + code[:each] + ('\n// ... (section continues)' if len(code) > each else ''))
+            continue
+        off = int(offsets.get(n, 0) or 0)
+        if off < 0 or off >= len(code):
+            off = 0
+        if off > 0:
+            nl = code.find('\n', max(0, off - 60), min(len(code), off + 120))
+            if nl != -1 and nl + 1 < len(code):
+                off = nl + 1
+        chunk = code[off:off + each]
+        nxt = off + len(chunk)
+        offsets[n] = 0 if nxt >= len(code) else nxt
+        start_ln = a + code[:off].count('\n')
+        hdr = f'// ===== section `{n}` (lines {a} to {z}, window from line {start_ln}) =====\n' if off else f'// ===== section `{n}` (lines {a} to {z}) =====\n'
+        tail = '\n// ... (section continues)' if nxt < len(code) else '\n// ... (end of section; wraps next meeting)'
+        out.append(hdr + chunk + tail)
     return '\n'.join(out)[:cap + 400]
+
+
+def domain_checks(domain, suites_dir, cap=2200):
+    """Existing check IDs and titles in a domain's test suites, so advisers know what is already covered and how suites are structured."""
+    stems = list(domain.get('tests') or [])
+    if not stems and domain.get('body'):
+        tline = next((l for l in domain['body'].splitlines() if l.strip().lstrip('-').strip().lower().startswith('tests:')), '')
+        stems = [re.sub(r'[`\s]', '', t) for t in tline.split(':', 1)[1].split(',') if t.strip()] if ':' in tline else []
+    if not stems or not suites_dir:
+        return ''
+    per = max(350, cap // max(1, len(stems)))
+    out = []
+    for st in stems:
+        fp = suites_dir / (st if st.endswith('.js') else f'{st}.js')
+        if not fp.exists():
+            continue
+        try:
+            txt = fp.read_text(encoding='utf-8', errors='replace')
+        except Exception:
+            continue
+        cks = re.findall(r"""(?:T\.check|await\s+T\.t)\(\s*['"`]([^'"`]{2,90})['"`]""", txt)
+        if cks:
+            shown = ', '.join(dict.fromkeys(cks))[:per]
+            out.append(f'- tests/suites/{fp.name}: {shown}')
+    return '\n'.join(out)[:cap]
 
 
 def aim_text(next_domain):

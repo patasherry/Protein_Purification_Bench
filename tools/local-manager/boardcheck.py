@@ -118,3 +118,96 @@ def coherence(adopted, verdict, live_ids):
         else:
             adopt.remove(a); held.append((a, b, str(d.get('why', ''))[:200]))
     return adopt, held
+
+
+def merge_revision(orig_text, new_text, cap=1500, min_ratio=0.65):
+    """Preserve a proposal's full specification when a revision or synthesis supplies only a short delta (#1532, #1533)."""
+    o, n = (orig_text or '').strip(), (new_text or '').strip()
+    if not n or n == o:
+        return o[:cap]
+    if not o:
+        return n[:cap]
+    if len(n) < min_ratio * len(o) and o[:40].lower() not in n.lower():
+        return f'{o}\n\nRefinement: {n}'[:cap]
+    return n[:cap]
+
+
+def peer_decision(audits, author, n_advisers=2, go_score=4):
+    """Judge a proposal strictly from non-author peer audits (zero self-votes).
+    Returns (route, avg_score, votes, required_fixes, no_gos), where route is 'adopt', 'relay', 'probe', or 'reject'."""
+    peers = [a for a in (audits or []) if isinstance(a, dict) and a.get('by') and a.get('by') != author]
+    need = max(1, (n_advisers or 2) - 1)
+    if not peers:
+        return 'reject', 0.0, [], [], []
+    votes, fixes, no_gos = [], [], []
+    for a in peers:
+        v = str(a.get('verdict') or '').strip().lower()
+        try:
+            sc = max(1.0, min(5.0, float(a.get('score', 0) or 0)))
+        except (TypeError, ValueError):
+            sc = 0.0
+        why = str(a.get('why') or '').strip()[:240]
+        votes.append((str(a['by']), sc, v or 'vote', why))
+        for f in (a.get('required_fixes') or []) if isinstance(a.get('required_fixes'), list) else []:
+            if str(f).strip() and str(f).strip()[:300] not in fixes:
+                fixes.append(str(f).strip()[:300])
+        for ng in (a.get('no_gos') or []) if isinstance(a.get('no_gos'), list) else []:
+            if str(ng).strip() and str(ng).strip()[:240] not in no_gos:
+                no_gos.append(str(ng).strip()[:240])
+    scores = [x[1] for x in votes]
+    verdicts = {x[2] for x in votes}
+    avg = sum(scores) / len(scores)
+    if len(peers) < need or 'reject' in verdicts or min(scores) < 3:
+        return 'reject', avg, votes, fixes, no_gos
+    if 'probe_only' in verdicts:
+        return 'probe', avg, votes, fixes, no_gos
+    if avg >= 3.5 and min(scores) >= go_score:
+        return 'adopt', avg, votes, fixes, no_gos
+    if avg >= 3.5 and min(scores) >= 3:
+        return 'relay', avg, votes, fixes, no_gos
+    if avg >= 3.0 and min(scores) >= 3:
+        return 'probe', avg, votes, fixes, no_gos
+    return 'reject', avg, votes, fixes, no_gos
+
+
+def probe_card(p):
+    """Turn an uncertain proposal into a safe test probe so a worker verifies whether main actually fails before changing the app."""
+    clean = re.sub(r'^(?:test\s+probe:\s*|tests?:\s*)', '', str(p.get('title') or '').strip(), flags=re.I)
+    out = dict(p)
+    out['orig'] = p.get('orig') or {'title': p.get('title', ''), 'change': p.get('change', ''), 'check': p.get('check', '')}
+    out['title'] = f'Test probe: {clean}'[:120]
+    out['probe'] = True
+    out['change'] = (
+        'Peer review marked this hypothesis for verification before full adoption. '
+        'First write and run the synthetic UI-level check below against `main` in `tests/suites/`.\n'
+        '- **If `main` already passes:** do NOT edit `hplc-figure-bench(WF1.13).html`; open a `tests/`-only PR adding the passing regression guard.\n'
+        '- **If `main` fails (confirming the bug):** do NOT open a PR whose own check fails. If fixing it would change a reported number, comment the exact reproduction on the issue and stop; otherwise apply the minimal scoped fix in the named section so the check fails on `main` and passes on your branch.\n\n'
+        f'Scoped target if `main` fails: {p.get("change", "")}'
+    )[:1500]
+    return out
+
+
+def chain_adopted(adopted_props, verdict=None):
+    """Map pid -> prerequisite_pid when an adopted proposal depends on an earlier one or touches the same CODEMAP section."""
+    order = [p['id'] for p in (adopted_props or []) if isinstance(p, dict) and p.get('id')]
+    idx = {pid: k for k, pid in enumerate(order)}
+    waits = {}
+    for d in (verdict or {}).get('needs') or []:
+        if isinstance(d, dict):
+            a, b = str(d.get('id', '')), str(d.get('needs', ''))
+            if a in idx and b in idx and a != b and idx[b] < idx[a]:
+                waits[a] = b
+    last_sec = {}
+    for p in adopted_props or []:
+        pid = p.get('id')
+        if pid not in idx:
+            continue
+        secs = [str(s).strip().lower() for s in (p.get('where') or []) if str(s).strip()]
+        prereqs = [last_sec[s] for s in secs if s in last_sec and last_sec[s] != pid]
+        if prereqs:
+            latest = max(prereqs, key=lambda x: idx[x])
+            if pid not in waits or idx[latest] > idx[waits[pid]]:
+                waits[pid] = latest
+        for s in secs:
+            last_sec[s] = pid
+    return waits

@@ -92,7 +92,7 @@ module.exports = async ({github, context, core}) => {
     say(`#${i.number}: no check named, held for a plan`); }
   /* an issue a worker handed back (ag-returned), one held in needs-plan/parked/needs-owner, or one already routed, is not the leader's to act on */
   const routable = i => { const ls = labels(i);
-    return !ls.some(l => l === 'ag-returned' || l === 'for-antigravity' || l === L.plan || l === L.parked) && !(ls.includes('needs-owner') && !ls.includes('owner-approved')); };
+    return !ls.some(l => l === 'ag-returned' || l === 'for-antigravity' || l === L.plan || l === L.parked || l === 'needs-previous' || l === 'owner-declined') && !(ls.includes('needs-owner') && !ls.includes('owner-approved')); };
   if (agAvailable) {
     for (const i of await queued()) {
       if (!routable(i)) continue;
@@ -161,6 +161,12 @@ module.exports = async ({github, context, core}) => {
       const b = /issue-(\d+)/.exec(p.head.ref); if (b) prOf.set(+b[1], p.number); }
     for (const i of open) { const ls = labels(i); if (TRACKERS.has(i.number) || ls.includes(L.status)) continue;
       const others = ls.filter(l => isState(l) && l !== L.parked && l !== L.triage);
+      if (ls.includes('owner-declined')) {
+        const drop = ls.filter(l => l === L.parked || l === L.queue || l === QUEUE_OLD);
+        if (drop.length) await setLabels(i.number, [], drop);
+        await github.rest.issues.update({owner, repo, issue_number: i.number, state: 'closed', state_reason: 'not_planned'});
+        i.state = 'closed'; say(`#${i.number}: owner-declined, closed as not_planned`); continue;
+      }
       if (ls.includes(L.parked) && others.length) { await setLabels(i.number, [], [L.parked]); i.labels = ls.filter(l => l !== L.parked); say(`#${i.number}: no longer parked`); continue; }
       const orphan = !ls.some(isState) && !prOf.has(i.number), untriaged = ls.includes(L.triage) && !others.length && !ls.includes(L.parked);
       /* a finished job whose PR was merged but whose issue was never closed: close it, do not park or requeue it */
@@ -203,7 +209,7 @@ module.exports = async ({github, context, core}) => {
     let out = {day: today, n: 0}; try { const m = ((statusPage && statusPage.body) || '').match(/<!-- park-out (\{.*?\}) -->/); if (m && JSON.parse(m[1]).day === today) out = JSON.parse(m[1]); } catch (e) { /* a bad marker counts as none */ }
     const live = i => i.state !== 'closed' && !TRACKERS.has(i.number) && !labels(i).includes(L.status);
     const queuedN = open.filter(i => live(i) && labels(i).includes(L.queue)).length;
-    const ready = open.filter(i => live(i) && labels(i).includes(L.parked) && !labels(i).includes(KEEP) && (Date.now() - Date.parse(i.updated_at)) / 864e5 >= PARK_WAIT_DAYS)
+    const ready = open.filter(i => live(i) && labels(i).includes(L.parked) && !labels(i).includes(KEEP) && !labels(i).includes('owner-declined') && (Date.now() - Date.parse(i.updated_at)) / 864e5 >= PARK_WAIT_DAYS)
       .sort((a, b) => (/^Bug found by /.test(b.title) ? 1 : 0) - (/^Bug found by /.test(a.title) ? 1 : 0) || a.number - b.number);
     if (queuedN < PARK_LOW && out.n < PARK_PER_DAY && ready.length) { const i = ready[0], ls = labels(i);
       /* the job-card hold (section 5) stops a queued issue that names no check, so give it the standing one here */
@@ -231,7 +237,8 @@ module.exports = async ({github, context, core}) => {
       return ['work', ls.filter(isState).join(', ') || 'No state']; };
     const openNow = open.filter(i => i.state !== 'closed');
     const mine = openNow.filter(i => labels(i).includes(L.mine) && !labels(i).includes(L.status));
-    const askYou = openNow.filter(i => !labels(i).includes(L.status) && stateOf(i)[0] === 'you');
+    const awaitingPrs = livePrs.filter(p => labels(p).includes('awaiting-owner'));
+    const askYou = openNow.filter(i => !labels(i).includes(L.status) && stateOf(i)[0] === 'you').concat(awaitingPrs);
     const askClaude = openNow.filter(i => stateOf(i)[0] === 'claude' && !TRACKERS.has(i.number) && !labels(i).includes(L.status));
     const working = mine.filter(i => stateOf(i)[0] === 'work'), stuck = working.filter(i => days(i.updated_at) >= STUCK_DAYS);
     const hours = t => (Date.now() - Date.parse(t)) / 36e5;
@@ -255,7 +262,7 @@ module.exports = async ({github, context, core}) => {
     const score = Object.keys(tally).length ? '| Worker | Merged | Closed without merging | Open | Merged share |\n|---|---|---|---|---|\n' + Object.entries(tally).sort((a, b) => b[1].merged - a[1].merged).map(([k, t]) => `| ${k} | ${t.merged} | ${t.closed} | ${t.open} | ${t.merged + t.closed ? Math.round(100 * t.merged / (t.merged + t.closed)) + '%' : 'n/a'} |`).join('\n') : '_No pull requests in this period._';
     const body = ['<!-- status-page -->', '# Where your requests stand', '',
       `Rebuilt by the queue leader whenever something changes. To ask for something, open a [new request](https://github.com/${owner}/${repo}/issues/new?template=request.yml) or tell Claude in a chat. A request is filed in your own words and stays on this page until it is done.`, '',
-      `## Waiting on you (${askYou.length})`, list(askYou, i => `- ${link(i)}`), '',
+      `## Waiting on you (${askYou.length})`, list(askYou, i => `- ${link(i)}${labels(i).includes('awaiting-owner') ? ' (board PR ready: reply OK or No on the PR)' : ''}`), '',
       `## Waiting on Claude (${askClaude.length})`, askClaude.length ? 'Open a chat with Claude and say "work through my status page".\n' + list(askClaude, i => `- ${link(i)}: ${stateOf(i)[1].toLowerCase()}`) : '_Nothing._', '',
       ...(handStale.length ? [`## Started by hand, no pull request (${handStale.length})`, `Started in Antigravity ${HAND_HOURS} or more hours ago with no pull request. Open that session in Antigravity: it probably stopped before pushing. Remove \`${HAND}\` and add \`queued\` to let the PC do it instead.\n` + list(handStale, i => `- ${link(i)}: ${Math.round(hours(i.updated_at))} hours`), ''] : []),
       `## Stuck (${stuck.length})`, stuck.length ? `No movement for ${STUCK_DAYS} days or more.\n` + list(stuck, i => `- ${link(i)}: ${stateOf(i)[1].toLowerCase()}, ${days(i.updated_at)} days`) : '_Nothing._', '',
@@ -269,8 +276,8 @@ module.exports = async ({github, context, core}) => {
     const full = `${body}\n\n<!-- status-told ${JSON.stringify(now)} -->\n<!-- park-out ${JSON.stringify(out)} -->`;
     if (!page) { page = (await github.rest.issues.create({owner, repo, title: 'Status page: where your requests stand', labels: [L.status], body: full})).data; say(`status page created as #${page.number}`); }
     else if ((page.body || '') !== full) { await github.rest.issues.update({owner, repo, issue_number: page.number, body: full}); say('status page updated'); }
-    if (fresh.length) { const by = n => open.find(i => i.number === +n);
-      await github.rest.issues.createComment({owner, repo, issue_number: page.number, body: `@${owner} ` + fresh.map(n => now[n] === 'you' ? `${link(by(n))} needs your answer.` : now[n] === 'hand' ? `${link(by(n))} was started by hand ${HAND_HOURS}+ hours ago and has no pull request: check the Antigravity session.` : `${link(by(n))} has not moved for ${STUCK_DAYS} days.`).join(' ')});
+    if (fresh.length) { const by = n => open.find(i => i.number === +n) || livePrs.find(p => p.number === +n);
+      await github.rest.issues.createComment({owner, repo, issue_number: page.number, body: `@${owner} ` + fresh.map(n => { const item = by(n); return !item ? `#${n} needs attention.` : now[n] === 'you' ? `${link(item)} needs your answer.` : now[n] === 'hand' ? `${link(item)} was started by hand ${HAND_HOURS}+ hours ago and has no pull request: check the Antigravity session.` : `${link(item)} has not moved for ${STUCK_DAYS} days.`; }).join(' ')});
       say(`status page: told Patrick about ${fresh.map(n => '#' + n).join(', ')}`); }
   } catch (e) { say(`requests and status page: ${e.message}`); }
 

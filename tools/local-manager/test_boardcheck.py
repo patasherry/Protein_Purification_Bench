@@ -51,5 +51,41 @@ check('a revised proposal keeps its original', bc.original_note(p).startswith('*
 check('an unrevised proposal adds nothing', bc.original_note({'title': 'a', 'change': 'b', 'orig': {'title': 'a', 'change': 'b'}}) == '' and bc.original_note({'title': 'a'}) == '')
 check('the coherence prompt formats', '{' not in bc.COHERE.format(topic='', adopted='-', other='-', topic_q='q').split('Return ONE JSON')[0])
 
+# 8. merge_revision preserves full spec when delta is short (#1532, #1533)
+full_spec = 'In section `composite workflow figure`, update `drawWorkflow` so lane purity badges render inside the card bounds when zoom is active and long sample labels wrap cleanly.'
+short_delta = 'Also clamp badge x to card right edge.'
+merged = bc.merge_revision(full_spec, short_delta)
+check('short revision delta is appended rather than overwriting the full spec', full_spec in merged and 'Refinement: Also clamp badge x' in merged, merged)
+full_rewrite = 'In section `composite workflow figure`, update `drawWorkflow` so lane purity badges clamp their x coordinate to card bounds and long sample labels wrap across two lines.'
+check('full-length revision replaces cleanly without duplicating', bc.merge_revision(full_spec, full_rewrite) == full_rewrite)
+
+# 9. peer_decision strips self-votes and routes adopt / relay / probe / reject
+r_self, avg_self, _, _, _ = bc.peer_decision([{'by': 'Gemini', 'verdict': 'go', 'score': 5, 'why': 'mine'}], author='Gemini', n_advisers=2)
+check('self-vote alone cannot adopt a proposal', r_self == 'reject' and avg_self == 0.0, (r_self, avg_self))
+r_go, avg_go, _, fixes, nogos = bc.peer_decision([
+    {'by': 'Gemini', 'verdict': 'go', 'score': 5, 'why': 'self'},
+    {'by': 'the local AI', 'verdict': 'go_with_fixes', 'score': 4, 'why': 'solid bug', 'required_fixes': ['keep existing checks'], 'no_gos': ['do not change LADDERS']}
+], author='Gemini', n_advisers=2, go_score=4)
+check('peer score 4 adopts while ignoring author score 5', r_go == 'adopt' and avg_go == 4.0 and fixes == ['keep existing checks'] and nogos == ['do not change LADDERS'], (r_go, avg_go))
+r_probe, _, _, _, _ = bc.peer_decision([{'by': 'the local AI', 'verdict': 'probe_only', 'score': 4, 'why': 'verify on main first'}], author='Gemini', n_advisers=2)
+check('probe_only verdict routes to probe', r_probe == 'probe', r_probe)
+r_luke, _, _, _, _ = bc.peer_decision([{'by': 'the local AI', 'verdict': 'go_with_fixes', 'score': 3, 'why': 'unsure if main fails'}], author='Gemini', n_advisers=2)
+check('lukewarm 3/5 peer score in 2-seat board routes to probe rather than app change', r_luke == 'probe', r_luke)
+r_split, avg_split, _, _, _ = bc.peer_decision([
+    {'by': 'the local AI', 'verdict': 'go', 'score': 4, 'why': 'good'},
+    {'by': 'ChatGPT', 'verdict': 'go_with_fixes', 'score': 3, 'why': 'borderline'}
+], author='Gemini', n_advisers=3, go_score=4)
+check('3-seat split 4 and 3 routes to relay', r_split == 'relay' and avg_split == 3.5, (r_split, avg_split))
+pc = bc.probe_card({'title': 'Clamp negative absorbance in NanoDrop table', 'change': 'Update renderNanoDrop.', 'check': 'tests/suites/test_nanodrop_units.js'})
+check('probe_card prefixes Test probe and keeps original', pc['title'].startswith('Test probe: ') and pc['probe'] is True and pc['orig']['title'] == 'Clamp negative absorbance in NanoDrop table', pc)
+
+# 10. chain_adopted serializes dependent and same-section proposals (#1532/#1533)
+waits = bc.chain_adopted([
+    {'id': 'P1', 'where': ['gels']},
+    {'id': 'P2', 'where': ['gels', 'ui']},
+    {'id': 'P3', 'where': ['export']},
+], {'needs': [{'id': 'P3', 'needs': 'P2'}]})
+check('same-section and explicit dependencies chain in order', waits == {'P2': 'P1', 'P3': 'P2'}, waits)
+
 print(f'\n{len(bad)} failed' if bad else '\nall passed')
 sys.exit(1 if bad else 0)

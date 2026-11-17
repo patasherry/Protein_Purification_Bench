@@ -61,4 +61,22 @@ check('an answer about saturated bands finds the saturated-band issue only', bm.
 code = 'function bandEnergy(g, lane){ const satRatio = DET.satRatio; return laneTrack(g, lane); }'
 check('a proposal naming a function in the code cites it', bm.cites_code('Use DET.satRatio in bandEnergy to flag clipping', code))
 check('a proposal that only restates the map does not', not bm.cites_code('Background subtraction methods and stain linearity for densitometry', code))
+check('parse_map extracts domain test suites', all(isinstance(d.get('tests'), list) and d['tests'] for d in doms), [d['name'] for d in doms if not d.get('tests')])
+offs = {}
+w1 = bm.domain_code(doms[0], app, rows, offsets=offs)
+moved = [k for k, v in offs.items() if v > 0]
+w2 = bm.domain_code(doms[0], app, rows, offsets=offs)
+check('sliding domain_code advances offset on long sections and stays within cap', bool(moved) and w1 != w2 and len(w2) <= 7400, (offs, len(w2)))
+synth_rows = {'sec_a': (1, 60)}
+synth_app = '\n'.join(f'function fn_{i}(){{ return {i}; }}' for i in range(60))
+soffs = {}
+_ = bm.domain_code({'code': ['sec_a']}, synth_app, synth_rows, cap=800, offsets=soffs)
+check('sliding window records positive offset before end of section', soffs.get('sec_a', 0) > 0, soffs)
+for _ in range(5):
+    bm.domain_code({'code': ['sec_a']}, synth_app, synth_rows, cap=800, offsets=soffs)
+    if soffs.get('sec_a') == 0:
+        break
+check('sliding window wraps back to 0 at section end', soffs.get('sec_a') == 0, soffs)
+dcks = bm.domain_checks(doms[0], ROOT / 'tests' / 'suites')
+check('domain_checks lists existing checks from domain suites', 'tests/suites/' in dcks and len(dcks) <= 2200, dcks[:120])
 sys.exit(1 if bad else 0)
