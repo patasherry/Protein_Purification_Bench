@@ -4940,17 +4940,19 @@ function curGel(){ const f = curFig(); return f && f.kind === 'gel' ? f.gel : nu
 function rangeObj(){ return curRun() || opt; }
 /* on-screen helpers (like the empty-gel slot) are drawn only when FIG_SCREEN is set, never in exports */
 let FIG_SCREEN = false;
-function buildFig(f, screen){ FIG_SCREEN = !!screen;
-  if (!f) return {svg:null, geo:null};
-  if (f.kind === 'run') return buildRunFig(f.run);
-  if (f.kind === 'workflow') return buildWorkflow();
-  if (f.kind === 'gel') return buildGelSVG(f.gel);
-  if (f.kind === 'cal') return buildCalSVG(f.cal);
-  if (f.kind === 'struct') return buildStructSVG(struct);
-  if (f.kind === 'step') return buildStepFig(f.step);
-  if (f.kind === 'nd') return buildNDSVG();
-  if (f.kind === 'conc') return buildConcFig(f.run);
-  return buildSVG();
+function buildFig(f, screen){ const was = FIG_SCREEN; FIG_SCREEN = !!screen;
+  try {
+    if (!f) return {svg:null, geo:null};
+    if (f.kind === 'run') return buildRunFig(f.run);
+    if (f.kind === 'workflow') return buildWorkflow();
+    if (f.kind === 'gel') return buildGelSVG(f.gel);
+    if (f.kind === 'cal') return buildCalSVG(f.cal);
+    if (f.kind === 'struct') return buildStructSVG(struct);
+    if (f.kind === 'step') return buildStepFig(f.step);
+    if (f.kind === 'nd') return buildNDSVG();
+    if (f.kind === 'conc') return buildConcFig(f.run);
+    return buildSVG();
+  } finally { FIG_SCREEN = was; }
 }
 
 /* ---------- UI ---------- */
