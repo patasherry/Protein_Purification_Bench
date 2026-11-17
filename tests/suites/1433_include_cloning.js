@@ -153,5 +153,70 @@ const {open, H, suite, fs} = require('../lib/harness');
     } finally { await close(); }
   });
 
+  await T.t('confirmation-dialog', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const modal = p.locator('#cloneArchiveModal');
+
+      // 1. Data-exist branch: seed a project with cloning stages
+      await h.newProject('Confirm synthetic', 'cloning');
+      await p.locator('#clonePanel [data-cl=tpl][data-v=ath]').click();
+      await h.wait(500);
+      const n = (await cloneRows(h)).length;
+      T.check('dialog/stages-present', n > 5, String(n));
+
+      // Toggle Include Cloning OFF: dialog should appear
+      await head(p).click();
+      await h.wait(300);
+      T.check('dialog/visible-when-data-exists', await modal.isVisible(), 'confirmation dialog not visible');
+      T.check('dialog/title-text', await p.locator('text=Remove cloning from this workflow?').isVisible(), 'title missing');
+      T.check('dialog/body-text', await p.locator('text=The cloning stage will be hidden, but all cloning data will be saved. You can restore the stage at any time from Project Settings.').isVisible(), 'body missing');
+      T.check('dialog/remove-button', await p.locator('#cloneArchiveConfirm').isVisible(), 'Remove and Save Data button missing');
+      T.check('dialog/cancel-button', await p.locator('#cloneArchiveCancel').isVisible(), 'Cancel button missing');
+
+      // Cancel path: clicking Cancel closes dialog and keeps cloning ON
+      await p.locator('#cloneArchiveCancel').click();
+      await h.wait(300);
+      T.check('dialog/cancel-closes-dialog', !(await modal.isVisible()), 'dialog still visible after cancel');
+      T.check('dialog/cancel-restores-on', await on(head(p)), 'cancel did not restore toggle to ON');
+      T.check('dialog/cancel-keeps-stages', (await cloneRows(h)).length === n, `expected ${n} rows after cancel, got ${(await cloneRows(h)).length}`);
+
+      // Toggle OFF again and confirm
+      await head(p).click();
+      await h.wait(300);
+      T.check('dialog/reappears-on-second-toggle', await modal.isVisible(), 'dialog did not reappear on second toggle');
+      await p.locator('#cloneArchiveConfirm').click();
+      await h.wait(300);
+      T.check('dialog/confirm-closes-dialog', !(await modal.isVisible()), 'dialog still visible after confirm');
+      T.check('dialog/confirm-toggle-off', !(await on(head(p))), 'toggle not off after confirm');
+      T.check('dialog/confirm-hides-stages', (await cloneRows(h)).length === 0, `expected 0 rows after confirm, got ${(await cloneRows(h)).length}`);
+
+      // 2. Empty-cloning branch: seed a project with zero cloning stages
+      await p.click('#homeBtn'); await h.wait(600);
+      await h.newProject('Empty cloning synthetic', 'cloning');
+      T.check('empty/starts-on', await on(head(p)), 'new cloning project toggle should be on');
+      const rowsBefore = await cloneRows(h);
+      T.check('empty/zero-stages', rowsBefore.length === 1 && rowsBefore[0].k === 'clone:setup', JSON.stringify(rowsBefore));
+
+      const tlBefore = await h.timeline();
+      const activeBefore = tlBefore.filter(x => !/^clone:/.test(x.k));
+
+      // Toggle Include Cloning OFF: no dialog should appear
+      await head(p).click();
+      await h.wait(300);
+      T.check('empty/no-dialog-shown', !(await modal.isVisible()), 'dialog should not appear when zero cloning stages');
+      T.check('empty/no-title-visible', !(await p.locator('text=Remove cloning from this workflow?').isVisible()), 'title should not be visible');
+      T.check('empty/toggle-is-off', !(await on(head(p))), 'toggle should read OFF');
+
+      const tlAfter = await h.timeline();
+      const activeAfter = tlAfter.filter(x => !/^clone:/.test(x.k));
+      T.check('empty/active-workflow-same-length', activeBefore.length === activeAfter.length, `before: ${activeBefore.length}, after: ${activeAfter.length}`);
+      T.check('empty/active-workflow-same-ids', activeBefore.every((x, i) => x.k === activeAfter[i].k), 'stage ids should match');
+
+      T.check('confirmation-dialog/no page errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
   T.done();
 })();

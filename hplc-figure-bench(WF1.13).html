@@ -518,6 +518,14 @@ body.stepfig .paper > svg{max-width:min(100%,680px);margin-inline:auto}
 .figmodal-head strong{flex:1;font-size:15px}
 .figmodal-body{height:calc(100% - 57px);overflow:auto;padding:18px;background:var(--well)}
 .figmodal-body > svg{display:block;width:100%;height:auto;min-width:640px;background:#ffffff}
+dialog.cl-archive-dlg{position:fixed;top:60px;left:50%;transform:translateX(-50%);margin:0;padding:16px 20px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:var(--shadow);z-index:100;max-width:min(440px,calc(100vw - 32px))}
+dialog.cl-archive-dlg:not([open]){display:none}
+dialog.cl-archive-dlg[open]{display:block}
+dialog.cl-archive-dlg::backdrop{display:none}
+.cl-archive-box{display:grid;gap:10px}
+.cl-archive-box strong{font-size:14.5px;font-weight:600;color:var(--ink)}
+.cl-archive-box p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
+.cl-archive-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 .spec{display:grid;gap:1px;font-size:12px;color:var(--muted);min-width:0}
 .spec #spec{color:var(--ink)}
 .spec span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(60ch,100%)}
@@ -1419,6 +1427,7 @@ button,input,select,textarea{font-family:inherit}
       <div class="paperwrap" id="paperwrap"><div class="paper" id="paper" role="tabpanel" aria-label="Figure preview"></div><div class="dragbox" id="dragBox" hidden></div><div class="wfsel" id="wfSelBox" hidden></div><div class="wftool" id="wfTool" hidden role="dialog" aria-label="Edit panel"></div><div class="readout" id="readout" aria-live="off"></div></div>
     </div>
     <dialog class="figmodal" id="wfFullModal" aria-labelledby="wfFullModalTitle"><div class="figmodal-head"><strong id="wfFullModalTitle">Full chromatograms</strong><button class="btn quiet" id="wfFullModalClose" type="button">Close</button></div><div class="figmodal-body" id="wfFullModalFig"></div></dialog>
+    <dialog class="cl-archive-dlg" id="cloneArchiveModal" aria-labelledby="cloneArchiveTitle"><div class="cl-archive-box"><strong id="cloneArchiveTitle">Remove cloning from this workflow?</strong><p id="cloneArchiveMsg">The cloning stage will be hidden, but all cloning data will be saved. You can restore the stage at any time from Project Settings.</p><div class="cl-archive-acts"><button type="button" class="btn primary" id="cloneArchiveConfirm">Remove and Save Data</button><button type="button" class="btn" id="cloneArchiveCancel">Cancel</button></div></div></dialog>
     <div class="canvas-foot">
       <div class="spec"><span id="spec"></span><span id="spec2"></span></div>
       <div class="btns export">
@@ -7194,6 +7203,7 @@ $('#projList').addEventListener('keydown', e => { const c = e.target.closest('[d
 const QKEYS = ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'targetName', 'taggedName', 'protKda', 'tagKda', 'eps', 'secMono'];
 let QUICK = null;
 function leaveWorkspace(){
+  const clm = $('#cloneArchiveModal'); if (clm && clm.open) clm.close();
   if (MODE === 'quick' && (runs.length || gels.length || struct || traces.some(t => !t.ex))) { QUICK = {runs, traces, gels, struct, ndSamples, prep, cur, o: {}}; QKEYS.forEach(k => { QUICK.o[k] = opt[k]; }); }
   const p = PROJ ? flushSave() : saveChain; PROJ = null; MODE = 'home'; return p;
 }
@@ -8641,8 +8651,11 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
    lines in the Methods are only hidden until it is switched on again. */
 function setCloning(on){ on = !!on; if (on === !!prep.includeCloning) { syncCloneType(); return; }
   const kept = CL().stages.length; prep.includeCloning = on; CL(); syncCloneType(); tlHtml = ''; clHtml = ''; clPickTpl = false; if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
-  if (on) selectStep('clone:setup'); else { if (curStep.startsWith('clone:')) selectStep('construct'); else { renderSteps(); renderClone(true); }
-    if (kept) toast(`Cloning is off. Its ${kept} stage${kept === 1 ? ' is' : 's are'} kept and come${kept === 1 ? 's' : ''} back when you switch it on.`); }
+  const modal = $('#cloneArchiveModal');
+  if (on) { if (modal && modal.open) modal.close(); selectStep('clone:setup'); }
+  else { if (curStep.startsWith('clone:')) selectStep('construct'); else { renderSteps(); renderClone(true); }
+    if (kept) { if (modal && typeof modal.show === 'function' && !modal.open) modal.show(); toast(`Cloning is off. Its ${kept} stage${kept === 1 ? ' is' : 's are'} kept and come${kept === 1 ? 's' : ''} back when you switch it on.`); }
+    else if (modal && modal.open) modal.close(); }
   queueSave(); }
 function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('aria-checked', prep.includeCloning ? 'true' : 'false'); }
 $('#clonePanel').addEventListener('input', onCloneField);
@@ -8672,6 +8685,9 @@ $('#clonePanel').addEventListener('drop', async e => {
   }
 });
 $('#projType').addEventListener('click', () => setCloning(!prep.includeCloning));
+$('#cloneArchiveCancel').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
+$('#cloneArchiveConfirm').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); });
+$('#cloneArchiveModal').addEventListener('cancel', e => { e.preventDefault(); const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
 let agLaneDrag = null;
 $('#clonePanel').addEventListener('pointerdown', e => { const z = e.target.closest('#ag-lane-editor .ag-lane-zone'); if (!z || !curStep.startsWith('clone:')) return; const s = CL().stages.find(x => 'clone:' + x.id === curStep); if (!s || !s.gel) return;
   const r = z.parentNode.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, i = +z.dataset.agLane, l = agNormalizeLanes(s.gel)[i], edge = Math.min(.035, 9 / r.width);
