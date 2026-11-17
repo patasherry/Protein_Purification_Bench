@@ -283,4 +283,32 @@ const {open, H, suite, src, DATA, path} = require('../lib/harness');
     T.check('branch yield: no note for steps on the shared path', !notes.some(t => /^Step [12] /.test(t) && /branch yield/.test(t)), notes.join(' | '));
     T.check('no page errors', !errs.length, errs.join(' | ')); await close(); });
 
+  await T.t('branch-cleavage-ancestor-form', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    await h.newProject('Branch cleavage form'); await h.gb(src('gb'));
+    await h.addRun(src('his')); await h.pool('T1-T6');
+    await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep=cleave]'); await h.wait(400);
+    await h.addRun(src('ortho')); await h.suggest();
+    await h.addRun(path.join(DATA, 'science/sec_inject2.csv')); await h.suggest();
+    const tl = (await h.timeline()).filter(x => x.k.startsWith('run:')), ids = tl.map(x => x.k.slice(4));
+    await setFrom(p, h, tl[2].k, ids[0]); // step 3 (SEC) branches directly from step 1 (IMAC), bypassing cleavage
+    await openWf(p);
+    await p.evaluate(() => {
+      const el = document.getElementById('o-wfYield');
+      if (el && !el.checked) { el.checked = true; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }
+    });
+    await h.wait(500);
+    const tb = await h.sumTable(), hd = tb[0] || [], fc = hd.indexOf('Form'), mc = hd.indexOf('Protein (mg)');
+    const body = tb.slice(1).filter(r => /^\d+\./.test(r[0] || ''));
+    T.check('branch cleavage: Form column present with 3 run rows', fc >= 0 && body.length === 3, JSON.stringify(tb));
+    T.check('branch cleavage: IMAC is tagged, Reverse IMAC is cleaved, uncleaved SEC branch stays tagged',
+      body.length === 3 && body[0][fc] === 'tagged' && body[1][fc] === 'cleaved' && body[2][fc] === 'tagged', JSON.stringify(body));
+    const nc = hd.indexOf('Protein (nmol)');
+    T.check('branch cleavage: uncleaved SEC branch uses tagged extinction coefficient and MW (0.19 mg, 2.95 nmol; not cleaved 0.25 mg, 5.04 nmol)',
+      mc >= 0 && nc >= 0 && body.length === 3 && Math.abs(parseFloat(String(body[2][mc]).replace(/[^0-9.]/g, '')) - 0.19) <= 0.01 && Math.abs(parseFloat(body[2][nc]) - 2.95) <= 0.05, JSON.stringify(body));
+    const finals = (await h.svgTexts()).filter(t => /Final (pool|sample)/.test(t.t)).map(x => x.t);
+    T.check('branch cleavage: figure yield line names His6-SUMO-standin on uncleaved SEC branch',
+      finals.some(t => /Size exclusion/.test(t) && /His6-SUMO-standin/.test(t)), finals.join(' | '));
+    T.check('no page errors', !errs.length, errs.join(' | ')); await close(); });
+
   T.done(); })();
