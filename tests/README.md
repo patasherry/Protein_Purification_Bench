@@ -50,7 +50,7 @@ After running tests, read the output of `node failures.js`, not the full logs.
 | `27_sec_mass_calculation.js` | SEC Mass | Peak molecular weight calculations against SEC calibration curves, verifying mass estimations within expected tolerance. |
 | `28_sec_figure.js` | SEC Figure | SEC run chart and secondary MW axis: elution volume ticks, peak MW annotations matching calibration, and calibration standard curves. |
 | `30_robust.js` | Robustness | Malformed inputs, 150-action fuzz test with invariants, browser/cloud save and reload round trips, JSON export/import, and performance budgets. |
-| `31_wf_full.js` | Full Chromatogram | Full chromatogram display in workflow figures (`wfFull`): rendering whole chromatogram runs instead of cropped retention windows across steps. |
+| `31_wf_full.js` | Full Chromatogram & Gel | Full chromatogram (`wfFull`) and full uncropped gel (`wfGelFull`) display in workflow figures: rendering whole chromatogram runs and full top-to-bottom gel lanes across steps. |
 | `40_visual.js` | Visual | Visual layout and DOM checks across desktop, tablet, and phone viewports: dark mode, panel lettering, toolbar overlap, and text contrast. |
 | `41_workflow_drag_hint.js` | Workflow Drag | Drag-and-drop panel positioning in the workflow figure: checks that selected panels show positional drag indicators and reset buttons. |
 | `42_figures.js` | Figures | Figure styling options reaching exported SVG and PNG (dimensions, font, palette, axes, legend, DPI) and crowded peak label collision handling. |
