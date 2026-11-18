@@ -148,6 +148,23 @@ const F = {gb: src('gb'), imac: src('his'), q: src('q'), sec: path.join(DATA, 's
     await closeNarrow();
   });
 
+  await T.t('measured_buffer_ph', async () => {
+    await p.click('text=All projects').catch(() => {}); await h.wait(600);
+    await h.newProject('Methods Measured pH');
+    await h.addRun(F.imac);
+    await h.pool('T1-T6');
+    await setRun('mCol', 'HisTrap FF 1 mL');
+    await setRun('mFlow', '1.0');
+    await setRun('mBufA', '50 mM Tris, 300 mM NaCl, 20 mM imidazole');
+    const phInput = p.locator('.trace.run.sel [data-k=mPh]').first();
+    if (await phInput.count() > 0) {
+      await setRun('mPh', '7.45');
+    }
+    const m = await methods();
+    T.check('methods_ph_exact_unit', /\bpH 7\.45\b/.test(m), 'Methods paragraph should contain the exact entered pH value with the unit pH: ' + m);
+    T.check('methods_ph_no_junk', !JUNK.some(re => re.test(m)), 'Junk found in methods with pH: ' + m);
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
