@@ -38,9 +38,9 @@ const MOCK = `(() => { let n = 0; const docs = {};
   const user = {id: async () => 'u_test', me: async () => ({id: 'u_test'}), isOwner: async () => true, canEdit: async () => true, can: async () => true};
   window.claude = {use: async name => name === 'db' ? db : name === 'assets' ? assets : name === 'user' ? user : null}; })();`;
 let serverPort = 0; const ready = new Promise(r => server.listen(0, () => { serverPort = server.address().port; r(); }));
-/* open the app. opts: {cloud: bool, width, height} */
+/* open the app. opts: {cloud: bool, width, height, isMobile} */
 async function open(opts = {}){ await ready; const cloud = !!opts.cloud;
-  const b = await chromium.launch(); const ctx = await b.newContext({viewport: {width: opts.width || 1500, height: opts.height || 1000}, deviceScaleFactor: 1, acceptDownloads: true});
+  const b = await chromium.launch(); const ctx = await b.newContext({viewport: {width: opts.width || 1500, height: opts.height || 1000}, deviceScaleFactor: 1, acceptDownloads: true, ...(opts.isMobile ? {isMobile: true} : {})});
   await ctx.route('https://fonts.googleapis.com/**', r => r.fulfill({contentType: 'text/css', body: ''}));
   if (cloud) { await ctx.exposeFunction('__putBlob', (id, b64, type) => { blobs.set(id, {buf: Buffer.from(b64, 'base64'), type}); }); await ctx.exposeFunction('__delBlob', id => { blobs.delete(id); });
     await ctx.exposeFunction('__setDoc', (p, js) => { docs.set(p, JSON.parse(js)); }); await ctx.exposeFunction('__getDoc', p => docs.get(p) || null); await ctx.exposeFunction('__delDoc', p => { docs.delete(p); });
