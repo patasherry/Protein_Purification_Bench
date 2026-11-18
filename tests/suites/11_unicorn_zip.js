@@ -6,6 +6,14 @@ const field = async (p, k) => { const el = card(p).locator(`[data-k=${k}]`).firs
 const num = s => { const m = String(s == null ? '' : s).replace(/,/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : NaN; };
 const setRun = async (p, k, v) => { const l = p.locator(`.trace.run.sel [data-k=${k}]`).first(); await l.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } }); await l.fill(String(v)); await l.dispatchEvent('change'); await p.waitForTimeout(400); };
 const detect = async p => { await p.evaluate(() => { const b = document.getElementById('intAuto'); if (b) b.click(); }); await p.waitForTimeout(900); };
+/* Stored ZIPs keep this fixture self-contained; the app sees only a File selected through its picker. */
+const storedZip = entries => Buffer.concat(entries.flatMap(({name, data}) => { const nm = Buffer.from(name), body = Buffer.from(data), h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt32LE(body.length, 18); h.writeUInt32LE(body.length, 22); h.writeUInt16LE(nm.length, 26); return [h, nm, body]; }));
+const singles = vals => { const b = Buffer.alloc(vals.length * 4); vals.forEach((v, i) => b.writeFloatLE(v, 4*i)); return b; };
+function nestedRawUnicorn(){ const xs = Array.from({length: 241}, (_, i) => i/10), ys = xs.map(x => 2 + 80*Math.exp(-0.5*((x - 12)/0.45)**2));
+  const points = storedZip([{name: 'CoordinateData.VolumesDataType', data: 'System.Single[]\r\n'}, {name: 'CoordinateData.Volumes', data: singles(xs)}, {name: 'CoordinateData.AmplitudesDataType', data: 'System.Single[]\r\n'}, {name: 'CoordinateData.Amplitudes', data: singles(ys)}]);
+  const xml = '<Chromatogram><Curves><Curve><Name>UV 1_280</Name><VolumeUnit>ml</VolumeUnit><AmplitudeUnit>mAU</AmplitudeUnit><CurvePoints><CurvePoint><IsFullResolution>true</IsFullResolution><BinaryCurvePointsFileName>Chrom.1_1_True</BinaryCurvePointsFileName></CurvePoint></CurvePoints></Curve></Curves><EventCurves /></Chromatogram>';
+  return {name: 'nested_raw_unicorn.zip', mimeType: 'application/zip', buffer: storedZip([{name: 'Folder/Copy of Chrom.1.Xml', data: xml}, {name: 'Folder/Chrom.1_1_True', data: points}])}; }
+const legacyRes = () => ({name: 'legacy_unicorn.res', mimeType: 'application/octet-stream', buffer: Buffer.concat([Buffer.from([0x11, 0x47, 0x11, 0x47]), Buffer.from('UNICORN legacy result\0'), Buffer.alloc(6)])});
 
 async function peaks(p, h){ const t = await h.peakTable(); if (!t.length) return {head: [], rows: []}; const head = t[0];
   const iv = head.findIndex(c => /^(Ve|Center|Apex|Elution time)\b/.test(c)), ia = head.findIndex(c => /^Area/.test(c)), im = head.findIndex(c => /^Protein/.test(c)), ip = head.findIndex(c => /% of regions/.test(c));
@@ -99,6 +107,27 @@ async function peaks(p, h){ const t = await h.peakTable(); if (!t.length) return
     const toasts = await h.toasts();
     T.check('invalid format message', badFiles.some(t => /not a UNICORN result archive/i.test(t)) || toasts.some(t => /not a UNICORN result archive/i.test(t)), `badFiles: ${badFiles}, toasts: ${toasts}`);
     T.check('no page errors for not unicorn', !errs.length, errs.join(' | '));
+  });
+
+  await T.t('nested raw Float32 archive', async () => {
+    await p.reload();
+    await h.wait(900);
+    await h.newProject('Nested raw UNICORN');
+    await h.addRun(nestedRawUnicorn());
+    const tl = await h.timeline();
+    T.check('nested raw Float32 loads as AKTA run', tl.some(x => /nested raw unicorn/i.test(x.t)) && (await card(p).count()) === 1, JSON.stringify(tl));
+    await detect(p);
+    const P = await peaks(p, h), pk = P.rows.find(r => !/Pool/i.test(r.name));
+    T.check('nested raw Float32 UV peak', !!pk && Math.abs(pk.ve - 12) < 0.2, `expected ~12.0, got ${pk ? pk.ve : 'none'}`);
+  });
+
+  await T.t('legacy res guidance', async () => {
+    await p.reload();
+    await h.wait(900);
+    await h.newProject('Legacy UNICORN result');
+    await h.addRun(legacyRes());
+    const toasts = await h.toasts();
+    T.check('legacy res explains UNICORN Evaluation export', toasts.some(t => /legacy UNICORN 3-5 binary result/i.test(t) && /export.*\.asc.*\.csv from UNICORN Evaluation/i.test(t)), toasts.join(' | '));
   });
 
   T.check('no page errors overall', !errs.length, errs.join(' | '));
