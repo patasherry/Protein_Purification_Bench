@@ -214,6 +214,130 @@ const files = {
     T.check('partial5.forward_5p_partial_keeps_codon', F.length === 99 && F[0] === 'V', `<1..300, first codon GTG: expected V, got ${F[0]} (${F.length} residues)`);
   });
 
+  /* 13. Empty pET vector with KanR + lac repressor, split-feature T7 ORF, promoter trimming, and opt.protSrc adoption (#1577) */
+  await T.t('repressor_and_split_t7_orf', async () => {
+    const fmtOrigin = s => {
+      const out = [];
+      for (let i = 0; i < s.length; i += 60) out.push(String(i + 1).padStart(9) + ' ' + s.slice(i, i + 60).toLowerCase().match(/.{1,10}/g).join(' '));
+      return out.join('\n');
+    };
+    const filler = n => 'ACGT'.repeat(Math.ceil(n / 4)).slice(0, n);
+    const kanNt = 'ATG' + 'GCTGAA'.repeat(135) + 'TAA'; /* 271 aa, 816 bp */
+    const lacNt = rc('ATG' + 'GCTGAA'.repeat(159) + 'TAA'); /* 319 aa, 960 bp on complement */
+
+    /* (1) Empty vector: T7_promoter (50..68), KanR (500..1315), lac repressor (complement 1500..2459) */
+    const empSeq = filler(49) + 'TAATACGACTCACTATAGG' + filler(500 - 1 - 68) + kanNt + filler(1500 - 1 - 1315) + lacNt + filler(2800 - 2459);
+    const empGb = [
+      `LOCUS       pET_EMPTY               ${empSeq.length} bp    DNA     circular SYN 01-JAN-2000`,
+      'DEFINITION  Empty vector with KanR and lac repressor.',
+      'FEATURES             Location/Qualifiers',
+      '     promoter        50..68',
+      '                     /label="T7_promoter"',
+      '     CDS             500..1315',
+      '                     /label="KanR"',
+      '     CDS             complement(1500..2459)',
+      '                     /product="lac repressor"',
+      'ORIGIN',
+      fmtOrigin(empSeq),
+      '//'
+    ].join('\n');
+
+    const P1 = await open(), h1 = H(P1.p);
+    P1.p.on('dialog', d => d.accept());
+    try {
+      await h1.newProject('GenBank Empty pET');
+      await P1.p.click('#tl [data-step=construct]'); await h1.wait(300);
+      await P1.p.setInputFiles('#gbFile', {name: 'pET_empty.gb', mimeType: 'text/plain', buffer: Buffer.from(empGb)});
+      await h1.wait(1000);
+      const stEmp = await P1.p.$eval('#gbStatus', e => e.textContent.replace(/\u00a0/g, ' ').trim());
+      T.check('empty_vec.no_target_orf', /^No ORF found/i.test(stEmp) && !stEmp.includes('319'), `status: ${stEmp}`);
+
+      /* (2) Split-feature T7_promoter construct: 260 aa ATG...TAA annotated as short 6xHis CDS + thrombin CDS + GFP misc_feature */
+      const splitOrfNt = 'ATG' + 'CAT'.repeat(6) + 'GGTTCTGGTCTGGTTCCGCGTGGTTCT' + 'GCTGAA'.repeat(122) + 'TAA'; /* 1+6+9+244 = 260 aa + stop = 783 bp (131..913) */
+      const splitSeq = filler(49) + 'TAATACGACTCACTATAGG' + filler(110 - 1 - 68) + 'AAGGAGATATACATAA' + filler(131 - 1 - 125) + splitOrfNt + filler(1200 - 1 - 913) + kanNt + filler(2400 - 2015);
+      const splitGb = [
+        `LOCUS       pET28_GFP               ${splitSeq.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'DEFINITION  pET split feature GFP construct.',
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7_promoter"',
+        '     RBS             110..125',
+        '                     /label="RBS"',
+        '     CDS             134..151',
+        '                     /label="6xHis"',
+        '     CDS             161..178',
+        '                     /label="thrombin"',
+        '     misc_feature    179..910',
+        '                     /label="GFP"',
+        '     CDS             1200..2015',
+        '                     /label="KanR"',
+        'ORIGIN',
+        fmtOrigin(splitSeq),
+        '//'
+      ].join('\n');
+
+      await P1.p.setInputFiles('#gbFile', {name: 'pET28_GFP.gb', mimeType: 'text/plain', buffer: Buffer.from(splitGb)});
+      await h1.wait(1000);
+      const stSplit = await P1.p.$eval('#gbStatus', e => e.textContent.replace(/\u00a0/g, ' ').trim());
+      T.check('split_t7.orf_260_found', stSplit.includes('ORF 260 residues'), `status: ${stSplit}`);
+      T.check('split_t7.promoter_trimmed', stSplit.includes('T7 promoter') && !/T7[_\\-]/.test(stSplit), `status: ${stSplit}`);
+
+      /* (3) Loading another plasmid when opt.protSrc is from an earlier file adopts the new ORF and strips trailing \ on promoter */
+      const untagNt = 'ATGGGT' + 'GGTTCT' + 'GCTGAA'.repeat(122) + 'TAA'; /* 248 aa untagged containing prior 246 aa cleaved GFP */
+      const untagSeq = filler(49) + 'TAATACGACTCACTATAGG' + filler(131 - 1 - 68) + untagNt + filler(1500 - (130 + untagNt.length));
+      const untagGb = [
+        `LOCUS       pET_UNTAG               ${untagSeq.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7\\"',
+        `     CDS             131..${130 + untagNt.length}`,
+        '                     /label="GFP_untagged"',
+        'ORIGIN',
+        fmtOrigin(untagSeq),
+        '//'
+      ].join('\n');
+      await P1.p.setInputFiles('#gbFile', {name: 'pET_untag.gb', mimeType: 'text/plain', buffer: Buffer.from(untagGb)});
+      await h1.wait(1000);
+      const stUntag = await P1.p.$eval('#gbStatus', e => e.textContent.replace(/\u00a0/g, ' ').trim());
+      const adoptedSeq = await P1.p.$eval('#protSeq', e => e.value.replace(/\s/g, ''));
+      T.check('protsrc.adopts_new_plasmid_orf', adoptedSeq.length === 248 && stUntag.includes('T7 promoter') && !stUntag.includes('T7\\'), `len=${adoptedSeq.length}, status: ${stUntag}`);
+    } finally {
+      await P1.close();
+    }
+
+    /* (4) Manually typed #protSeq contained in a loaded plasmid is never overwritten */
+    const P2 = await open(), h2 = H(P2.p);
+    P2.p.on('dialog', d => d.accept());
+    try {
+      await h2.newProject('GenBank Manual Seq');
+      await P2.p.click('#tl [data-step=construct]'); await h2.wait(300);
+      const manualSeq = 'GS' + 'AE'.repeat(122); /* 246 aa manually typed */
+      await P2.p.fill('#protSeq', manualSeq);
+      await P2.p.dispatchEvent('#protSeq', 'input');
+      await P2.p.dispatchEvent('#protSeq', 'change');
+      await h2.wait(300);
+      const untagNt = 'ATGGGT' + 'GGTTCT' + 'GCTGAA'.repeat(122) + 'TAA';
+      const untagSeq = filler(49) + 'TAATACGACTCACTATAGG' + filler(131 - 1 - 68) + untagNt + filler(1500 - (130 + untagNt.length));
+      const untagGb = [
+        `LOCUS       pET_UNTAG               ${untagSeq.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7_promoter"',
+        `     CDS             131..${130 + untagNt.length}`,
+        '                     /label="GFP_untagged"',
+        'ORIGIN',
+        fmtOrigin(untagSeq),
+        '//'
+      ].join('\n');
+      await P2.p.setInputFiles('#gbFile', {name: 'pET_untag.gb', mimeType: 'text/plain', buffer: Buffer.from(untagGb)});
+      await h2.wait(1000);
+      const keptSeq = await P2.p.$eval('#protSeq', e => e.value.replace(/\s/g, ''));
+      T.check('manual_seq.preserved', keptSeq === manualSeq, `expected ${manualSeq.length} aa manual seq preserved, got ${keptSeq.length}`);
+    } finally {
+      await P2.close();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

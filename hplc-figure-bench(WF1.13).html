@@ -4485,29 +4485,75 @@ function parseGenBank(text){
     const lab = String(f.q.label || f.q.gene || f.q.product || f.q.note || f.type).replace(/\s+/g, ' ').trim();
     const wrap = /join/.test(f.loc) && nums[0] > nums[nums.length - 1];
     const rev = /complement/.test(f.loc), codonStart = parseInt(f.q.codon_start) || 1, translTable = parseInt(f.q.transl_table) || 1, partial5 = rev ? />/.test(f.loc) : /</.test(f.loc);
-    return {type: f.type, a: wrap ? nums[0] : Math.min(...nums), b: wrap ? nums[nums.length - 1] : Math.max(...nums), rev, label: lab, tx: (f.q.translation || '').replace(/[^A-Z*]/gi, '').toUpperCase(), wrap, loc: f.loc, codonStart, translTable, partial5}; }).filter(Boolean);
+    return {type: f.type, a: wrap ? nums[0] : Math.min(...nums), b: wrap ? nums[nums.length - 1] : Math.max(...nums), rev, label: lab, qtxt: [f.q.label, f.q.gene, f.q.product].filter(Boolean).join(' '), tx: (f.q.translation || '').replace(/[^A-Z*]/gi, '').toUpperCase(), wrap, loc: f.loc, codonStart, translTable, partial5}; }).filter(Boolean);
   return {name: lm ? lm[1] : 'plasmid', len, circ: /circular/i.test(loc), def, feats: out, seq, recs, lenBad: !!lm && seq.length >= 100 && seq.length !== +lm[2]};
 }
-const RES_RE = /\bkan|neo|aph\(|nptii|\bbla\b|amp|beta-lactamase|\bcat\b|chloramph|\bcmr?\b|\btet|spec|aad|strep|gent|zeo|\bble\b|hyg|\bbsd/i, REG_RE = /laci|\brop\b|arac|tetr|lacz|lac ?y|\bori\b/i;
+const RES_RE = /\bkan|neo|aph\(|nptii|\bbla\b|amp|beta-lactamase|\bcat\b|chloramph|\bcmr?\b|\btet|spec|aad|strep|gent|zeo|\bble\b|hyg|\bbsd/i, REG_RE = /laci|\blac\s*repressor\b|\brop\b|arac|\bara\s*repressor\b|tetr|\btet\s*repressor\b|lacz|lac ?y|\bori\b/i;
+const isBackbone = f => RES_RE.test(f.qtxt || f.label) || REG_RE.test(f.qtxt || f.label);
 const resName = t => /kan|neo|aph|nptii/i.test(t) ? 'kanamycin' : /bla|amp|lactamase/i.test(t) ? 'ampicillin' : /\bcat\b|chloramph|\bcm/i.test(t) ? 'chloramphenicol' : /tet/i.test(t) ? 'tetracycline' : /spec|aad/i.test(t) ? 'spectinomycin' : /strep/i.test(t) ? 'streptomycin' : /gent/i.test(t) ? 'gentamicin' : /zeo|ble/i.test(t) ? 'zeocin' : /hyg/i.test(t) ? 'hygromycin' : t;
 const RES_SHORT = {Kan: 'kanamycin', Amp: 'ampicillin', Cm: 'chloramphenicol', Spec: 'spectinomycin', Tet: 'tetracycline'};
 /* the expressed ORF in a GenBank file: the CDS that contains the protein sequence, else the longest CDS that is not a marker or regulator */
 function gbCassette(gb){
   const ps = cleanSeq(opt.protSeq), probe = ps.slice(0, Math.min(25, ps.length));
   const cds = gb.feats.filter(f => f.type === 'CDS').map(f => { let tx = f.tx; if (!tx && gb.seq) { const rm = (f.loc || '').match(/(\d+)\.\.(\d+)/g); const nt = rm ? rm.map(r => { const [s, e] = r.split('..').map(Number); return gb.seq.slice(s - 1, e); }).join('') : gb.seq.slice(f.a - 1, f.b); tx = translateNt(f.rev ? revComp(nt) : nt, f.codonStart, f.translTable, f.partial5); } return Object.assign({}, f, {tx: tx.replace(/\*+$/, '')}); }).filter(c => c.tx.length >= 30);
-  const main = (probe && cds.find(c => c.tx.includes(probe))) || cds.filter(c => !RES_RE.test(c.label) && !REG_RE.test(c.label)).sort((p, q) => q.tx.length - p.tx.length)[0];
+  let main = (probe && cds.find(c => !isBackbone(c) && c.tx.includes(probe))) || (probe && cds.find(c => c.tx.includes(probe))) || cds.filter(c => !isBackbone(c)).sort((p, q) => q.tx.length - p.tx.length)[0];
+  if (!main && gb.seq && gb.seq.length >= 93) {
+    const N = gb.seq.length, rc = revComp(gb.seq), ins = gb.feats.filter(f => (f.type === 'CDS' || f.type === 'misc_feature') && !isBackbone(f) && !/promoter|terminator|\boperator\b|\blac ?o\b|\brbs\b|ribosom|shine/i.test(f.label));
+    const bb = gb.feats.filter(f => (f.type === 'CDS' && isBackbone(f)) || f.type === 'rep_origin'), rbsFs = gb.feats.filter(f => f.type === 'RBS' || /\brbs\b|ribosom|shine/i.test(f.label));
+    const pfs = gb.feats.filter(f => !isBackbone(f) && (f.type === 'promoter' || f.type === 'RBS' || /promoter|\brbs\b|ribosom|shine/i.test(f.label))), seen = new Set(), cands = [];
+    if (ins.length && pfs.length) pfs.forEach(pf => {
+      const s = pf.rev ? rc : gb.seq, base0 = pf.rev ? N - pf.a : pf.b, lo0 = Math.max(0, base0 - 3), hi0 = gb.circ ? base0 + 250 : Math.min(N - 93, base0 + 250);
+      const fSpan = f => f.wrap ? (pf.rev ? [N - f.b, 2*N - f.a + 1] : [f.a - 1, N + f.b]) : (pf.rev ? [N - f.b, N - f.a + 1] : [f.a - 1, f.b]);
+      for (let st0 = lo0; st0 <= hi0; st0++) {
+        const p0 = st0 % N, cod0 = p0 + 3 <= N ? s.slice(p0, p0 + 3) : gb.circ ? (s + s).slice(p0, p0 + 3) : '';
+        if (cod0 !== 'ATG') continue;
+        const maxNt = gb.circ ? N - 3 : N - p0 - 3;
+        for (let ln = 3; ln <= maxNt; ln += 3) {
+          const q0 = (p0 + ln) % N, cd = q0 + 3 <= N ? s.slice(q0, q0 + 3) : (s + s).slice(q0, q0 + 3);
+          if (cd !== 'TAA' && cd !== 'TAG' && cd !== 'TGA') continue;
+          if (ln >= 90) {
+            const e0 = p0 + ln + 3, wrap = gb.circ && e0 > N, key = `${pf.rev ? 1 : 0}:${p0}:${ln}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              const ovBp = f => { const [fs, fe] = fSpan(f); return Math.max(0, Math.min(e0, fe) - Math.max(p0, fs)) + (gb.circ ? Math.max(0, Math.min(e0, fe + N) - Math.max(p0, fs + N)) + Math.max(0, Math.min(e0, fe - N) - Math.max(p0, fs - N)) : 0); };
+              const ov = ins.filter(f => ovBp(f) > 0);
+              if (ov.length && !bb.some(f => ovBp(f) >= 30)) {
+                const nt = p0 + ln <= N ? s.slice(p0, p0 + ln) : (s + s).slice(p0, p0 + ln), tx = translateNt(nt, 1, 11, false).replace(/\*+$/, '');
+                if (tx.length >= 30) {
+                  const a = pf.rev ? (wrap ? N - p0 : N - e0 + 1) : p0 + 1, b = pf.rev ? (wrap ? N - ((e0 - 1) % N) : N - p0) : (wrap ? ((e0 - 1) % N) + 1 : e0);
+                  const ovCds = ov.filter(f => f.type === 'CDS' && f.rev === pf.rev);
+                  const inFr = !ovCds.length || ovCds.every(f => { const [fs, fe] = fSpan(f), d = Math.min(e0, fe) > Math.max(p0, fs) ? fs - p0 : Math.min(e0, fe + N) > Math.max(p0, fs + N) ? fs + N - p0 : fs - N - p0; return (((d + (f.codonStart || 1) - 1) % 3) + 3) % 3 === 0; }) ? 1 : 0;
+                  const cov = ov.reduce((sum, f) => sum + ovBp(f), 0);
+                  const maxFe = Math.max(...ov.map(f => { const [fs, fe] = fSpan(f); return Math.min(e0, fe) > Math.max(p0, fs) ? fe : Math.min(e0, fe + N) > Math.max(p0, fs + N) ? fe + N : fe - N; }));
+                  const goodEnd = maxFe >= e0 - 30 ? 1 : 0;
+                  const hasRbs = rbsFs.some(r => { const [, re] = fSpan(r), d = p0 >= re ? p0 - re : gb.circ ? p0 + N - re : 999; return d >= 2 && d <= 20; }) ? 1 : 0;
+                  const best = ov.slice().sort((u, v) => ovBp(v) - ovBp(u))[0];
+                  cands.push({type: 'ORF', a, b, rev: pf.rev, wrap, label: best.label, tx, inFr, cov, goodEnd, hasRbs});
+                }
+              }
+            }
+          }
+          break;
+        }
+      }
+    });
+    if (cands.length) {
+      cands.sort((p, q) => (q.inFr - p.inFr) || (q.cov - p.cov) || (q.goodEnd - p.goodEnd) || (q.hasRbs - p.hasRbs) || (q.tx.length - p.tx.length));
+      main = (probe && cands.find(c => c.tx.includes(probe))) || cands[0];
+    }
+  }
   if (!main) return null;
   const mod = x => main.wrap ? ((x + gb.len/2) % gb.len + gb.len) % gb.len - gb.len/2 : x;
   const up = f => mod(main.rev ? f.a - main.b : main.a - f.b), down = f => mod(main.rev ? main.a - f.b : f.a - main.b);
   const near = (re, lo, hi, d) => gb.feats.filter(f => f !== main && re(f) && d(f) >= lo && d(f) <= hi).sort((p, q) => d(p) - d(q))[0] || null;
   const prom = near(f => f.type === 'promoter' || /promoter/i.test(f.label), -30, 500, up), lacO = near(f => /lac ?o|operator/i.test(f.label) || (f.type === 'protein_bind' && /lac/i.test(f.label)), -30, 300, up);
   const rbs = near(f => f.type === 'RBS' || /\brbs\b|ribosom|shine/i.test(f.label), -5, 80, up), term = near(f => f.type === 'terminator' || /terminator/i.test(f.label), -30, 600, down);
-  const res = gb.feats.filter(f => f.type === 'CDS' && RES_RE.test(f.label)).map(f => resName(f.label)), ori = gb.feats.filter(f => (f.type === 'rep_origin' || /\bori\b/i.test(f.label)) && !/f1|m13/i.test(f.label)).map(f => f.label.replace(/\s*(ori(gin)?( of replication)?)$/i, '').trim());
+  const res = gb.feats.filter(f => f.type === 'CDS' && RES_RE.test(f.qtxt || f.label)).map(f => resName(f.qtxt || f.label)), ori = gb.feats.filter(f => (f.type === 'rep_origin' || /\bori\b/i.test(f.label)) && !/f1|m13/i.test(f.label)).map(f => f.label.replace(/\s*(ori(gin)?( of replication)?)$/i, '').trim());
   const modP = x => main.wrap ? ((x % gb.len) + gb.len) % gb.len : x;
   const mLen = modP(main.b - main.a);
   const inRange = f => { if (!main.wrap) return f.a >= main.a - 3 && f.b <= main.b + 3; const s = modP(f.a - main.a), e = modP(f.b - main.a); return (s <= mLen + 3 || s >= gb.len - 3) && (e <= mLen + 3 || e >= gb.len - 3); };
   const inner = gb.feats.filter(f => f !== main && inRange(f) && modP(f.b - f.a) < 0.9*mLen).map(f => ({label: f.label, a: Math.floor((main.rev ? modP(main.b - f.b) : modP(f.a - main.a))/3) + 1, b: Math.ceil(((main.rev ? modP(main.b - f.a) : modP(f.b - main.a)) + 1)/3)}));
-  const promName = prom ? prom.label.replace(/\s*promoter$/i, '').trim() || 'promoter' : '';
+  const promName = prom ? prom.label.replace(/[\s_\\-]*promoter$/i, '').replace(/[\s_\\-]+$/, '').trim() || 'promoter' : '';
   return {main, tx: main.tx, prom: promName, lacO: !!lacO, rbs: !!rbs, term: !!term, res: [...new Set(res)], ori: [...new Set(ori)], inner};
 }
 /* where the tag ends and the protein begins: a protease site, else where the protein sequence starts */
@@ -6314,7 +6360,7 @@ function applyProt(quiet){ const F = protForms(); if (!F.length) return; const u
 $('#protUse').addEventListener('click', () => applyProt());
 
 /* ---------- construct and expression panel ---------- */
-function useOrf(m, quiet){ if (!m || !m.tagSeq) { if (m) { opt.protSeq = m.protSeq; opt.protSrc = prep.gb ? prep.gb.name : ''; applyProt(quiet); } return; }
+function useOrf(m, quiet){ if (!m || !m.tagSeq) { if (m) { opt.protSeq = m.protSeq; opt.tagSeq = ''; opt.tagPreset = ''; opt.protSrc = prep.gb ? prep.gb.name : ''; applyProt(quiet); } return; }
   const names = m.tagParts.join(' ');
   opt.protSeq = m.protSeq; opt.tagSeq = m.tagSeq; opt.tagPos = m.cterm ? 'C' : 'N'; opt.protSrc = prep.gb ? prep.gb.name : '';
   opt.tagPreset = m.cut && m.cut.k === 'sumo' ? 'sumo' : /GST/.test(names) ? (/His/.test(names) ? 'hisgst' : 'gst') : /MBP/.test(names) ? (/His/.test(names) ? 'hismbp' : 'mbp') : /Trx/.test(names) ? 'trx' : /GFP/.test(names) ? 'gfp' : /^His\d+$/.test(names) ? 'his' : 'custom';
@@ -6327,10 +6373,16 @@ async function loadGenBank(f){
 function loadGenBankText(text, fname){
   if (/^\s*>/.test(text)) { toast(`${fname} looks like FASTA, not GenBank. In Benchling choose Export, then GenBank (.gb), or paste the GenBank text.`); return; }
   try { const gb = parseGenBank(text); if (!gb.feats.length) throw new Error('no features');
+    const prev = cleanSeq(opt.protSeq) ? {protSeq: opt.protSeq, tagSeq: opt.tagSeq, tagPreset: opt.tagPreset, tagPos: opt.tagPos, protSrc: opt.protSrc} : null;
+    if (opt.protSrc && (!struct || opt.protSrc !== struct.code)) { opt.protSeq = ''; opt.tagSeq = ''; opt.tagPreset = ''; }
     prep.gb = gb; prep.on = true; prep.construct = true; const m = constructModel();
     /* the plasmid is what was expressed: its ORF becomes the Protein section's sequence, with a way back */
-    if (m && m.src === 'gb' && !cleanSeq(opt.protSeq)) useOrf(m, true);
-    else if (m && m.src === 'gb' && ((m.match && !m.match.ok) || (m.tagSeq && m.tagSeq !== (cleanSeq(opt.tagSeq) || TAG_SEQ[opt.tagPreset] || '')))) { prep.prevProt = {protSeq: opt.protSeq, tagSeq: opt.tagSeq, tagPreset: opt.tagPreset, tagPos: opt.tagPos, protSrc: opt.protSrc}; useOrf(m, true); }
+    if (!m || m.src !== 'gb') { if (prev && !cleanSeq(opt.protSeq)) Object.assign(opt, prev); prep.prevProt = null; }
+    else if (!prev) { prep.prevProt = null; useOrf(m, true); }
+    else if (prev.protSrc || (m.match && !m.match.ok) || (m.tagSeq && m.tagSeq !== (cleanSeq(prev.tagSeq) || TAG_SEQ[prev.tagPreset] || ''))) {
+      const diff = m.protSeq !== cleanSeq(prev.protSeq) || (m.tagSeq || '') !== (cleanSeq(prev.tagSeq) || TAG_SEQ[prev.tagPreset] || '');
+      prep.prevProt = diff ? prev : null; useOrf(m, true);
+    } else prep.prevProt = null;
     if (!cur || cur === 'overlay') { if (runs.filter(r => r.inWf).length >= 2) cur = 'workflow'; }
     const nCds = gb.feats.filter(f => f.type === 'CDS').length;
     render(); toast((m && m.src === 'gb' ? `Loaded ${gb.name}: ORF of ${m.tx.length} residues${nCds > 1 ? ` (first of ${nCds} CDS features)` : ''}${m.cut ? `, cut by ${m.cut.name}` : ''}.${prep.prevProt ? ' The Protein section now uses this ORF.' : ''}` : `Loaded ${gb.name}, but found no ORF to draw.`) + (gb.recs > 1 ? ` Only the first of ${gb.recs} records was read.` : '') + (gb.lenBad ? ` Warning: the sequence has ${gb.seq.length} bases but LOCUS says ${gb.len}.` : '')); }
