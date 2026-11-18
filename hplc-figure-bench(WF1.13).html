@@ -718,6 +718,7 @@ button,input,select,textarea{font-family:inherit}
       <div class="checks">
         <label class="check"><input type="checkbox" id="o-wfLetters" data-opt="wfLetters">Panel letters</label>
         <label class="check"><input type="checkbox" id="o-wfGels" data-opt="wfGels">Gels under each step</label>
+        <label class="check" title="Show each step's assigned gel lanes over their full top-to-bottom height under the chromatogram instead of focusing on the main band. Single-run figures keep their Gel view setting"><input type="checkbox" id="o-wfGelFull" data-opt="wfGelFull">Full uncropped gel in the workflow</label>
         <label class="check" title="Draw each chromatogram over its whole run instead of the cropped window. The crop of the run itself is kept for the single-run figure"><input type="checkbox" id="o-wfFull" data-opt="wfFull">Full chromatogram in the workflow</label>
         <button class="btn quiet" id="wfFullView" type="button" title="Open a scalable SVG view with every workflow chromatogram shown over its whole run">View full chromatograms</button>
         <label class="check"><input type="checkbox" id="o-wfArrows" data-opt="wfArrows">Arrows between steps</label>
@@ -1485,7 +1486,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   rxlabel:'Volume (mL)', rylabel:'Absorbance (mAU)', y2grad:'Buffer B (%)', y2cond:'Conductivity (mS/cm)',
   secCals: null, secMono:'', secLabel:'mw', secMarks:'void', ovPeakText:'x', ovSecCal:'',
   intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', path:2,
-  wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
+  wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
   preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600};
 const RANGE = ['xmin','xmax','ymin','ymax','zoomWinA','zoomWinB'];
@@ -4003,16 +4004,19 @@ function composeRuns(list, cfg){
   if (cfg.showGels) {
     const items = list.flatMap(r => gelsFor(r).map(g => ({r, g, idx: lanesFor(g, 'marker').concat(lanesFor(g, r.id)).sort((a, b) => a - b)})));
     /* the main band's mass, taken from the most reliable gel (a marked target, then the protein's size, then the strongest band) */
-    let mw = numOr(opt.gelFocusKda, NaN);
-    if (!(mw > 0) && opt.gelView === 'focus') { const rank = w => /marked|set/.test(w) ? 3 : /protein/.test(w) ? 2 : 1; let best = null;
-      items.forEach(it => { gelFocusWin(it.g, it.idx); const f = it.g._focus; if (f && f.mw && (!best || rank(f.why) > rank(best.why))) best = f; }); mw = best ? best.mw : NaN; if (best) items.forEach(it => { it.g._focus = best; }); }
+    const focus = opt.gelView === 'focus' && !cfg.fullGels;
+    let mw = numOr(opt.gelFocusKda, NaN), guess = false;
+    if (focus) {
+      if (!(mw > 0)) { const rank = w => /marked|set/.test(w) ? 3 : /protein/.test(w) ? 2 : 1; let best = null;
+        items.forEach(it => { gelFocusWin(it.g, it.idx); const f = it.g._focus; if (f && f.mw && (!best || rank(f.why) > rank(best.why))) best = f; }); mw = best ? best.mw : NaN; if (best) items.forEach(it => { it.g._focus = best; }); }
+      /* with no protein size, the strongest band is often lysate or tag, not the protein: show the whole gel instead of guessing */
+      guess = !(numOr(opt.gelFocusKda, NaN) > 0) && items.length && items.every(it => !it.g._focus || /strongest/.test(it.g._focus.why || ''));
+      if (guess) { mw = NaN; items.forEach(it => { if (it.g._focus) it.g._focus = {mw: null, why: 'none'}; }); }
+    }
     const sp = Math.max(1.2, numOr(opt.gelSpan, 2.5));
-    /* with no protein size, the strongest band is often lysate or tag, not the protein: show the whole gel instead of guessing */
-    const guess = !(numOr(opt.gelFocusKda, NaN) > 0) && items.length && items.every(it => !it.g._focus || /strongest/.test(it.g._focus.why || ''));
-    if (guess) { mw = NaN; items.forEach(it => { if (it.g._focus) it.g._focus = {mw: null, why: 'none'}; }); }
     /* keep the free tag in view too, so the gel shows that cleavage worked */
     const tagK = (() => { const t = protForms()[2]; const k = t ? t.mass/1000 : numOr(opt.tagKda, NaN); return k >= 6 ? k : NaN; })();
-    items.forEach(it => { it.win = opt.gelView === 'focus' && !guess ? (gelWinForMass(it.g, mw, sp, tagK) || gelFocusWin(it.g, it.idx)) : null; });
+    items.forEach(it => { it.win = focus && !guess ? (gelWinForMass(it.g, mw, sp, tagK) || gelFocusWin(it.g, it.idx)) : null; });
     /* natural sizes first, then the median height and the tallest label band for all */
     const sideOf = it => side && gelsFor(it.r).length, wOf = it => gelW(list.indexOf(it.r));
     /* fillH: the height at which a gel's lanes fill the plot width at true proportions; a gel with many lanes may also use the panel's margin */
@@ -4235,7 +4239,7 @@ function yieldLine(res){
 }
 function buildWorkflow(){
   const pre = prepSteps(), list = wfFigList(), PAGE = 9.5*72;
-  const cfg = {layout: opt.wfLayout, W: numOr(opt.wfW,7.2)*72, chromH: numOr(opt.wfH,2.2)*72, titles: true, letters: opt.wfLetters, showGels: opt.wfGels, connectors: opt.connectors, arrows: opt.wfArrows, gelMaxH: numOr(opt.wfGelH,1.8)*72};
+  const cfg = {layout: opt.wfLayout, W: numOr(opt.wfW,7.2)*72, chromH: numOr(opt.wfH,2.2)*72, titles: true, letters: opt.wfLetters, showGels: opt.wfGels, fullGels: opt.wfGelFull, connectors: opt.connectors, arrows: opt.wfArrows, gelMaxH: numOr(opt.wfGelH,1.8)*72};
   /* Fit to page: a grid or stacked figure taller than the page gets shorter traces and gels (never below 60%) until it fits */
   const fit = (L, c, maxH) => { let res = composeRuns(L, c);
     if (opt.wfFit !== false && opt.wfLayout !== 'row' && res.geo && (res.geo.H0 || res.geo.H) > maxH) { let k = 1;
@@ -5017,10 +5021,10 @@ function render(){
   { const mo = $('#moreOpts'), any = PROJ && [...document.querySelectorAll('#panel > .optsec')].some(x => !x.hidden); mo.hidden = !any; $('#moreBtn').textContent = document.body.classList.contains('moreopen') ? 'Fewer options' : 'More options'; $('#moreBtn').setAttribute('aria-expanded', document.body.classList.contains('moreopen')); $('#moreWhat').hidden = document.body.classList.contains('moreopen'); }
   renderSec(); renderProt(); renderPrep(); renderND(); grpStatus(); moreSync(); renderNext(); renderWfTool();
   { const gh = $('#wfGridHint'); if (gh) gh.hidden = opt.wfLayout !== 'grid'; }
-  { const lab = id => { const e = $(id); return e && e.closest('label'); }, side = opt.gelPos === 'right', full = opt.gelView === 'full';
+  { const lab = id => { const e = $(id); return e && e.closest('label'); }, side = opt.gelPos === 'right', full = opt.gelView === 'full' || (kind === 'workflow' && opt.wfGelFull);
     [['#o-gelAlign', side], ['#o-gelSide', !side], ['#o-gelFocusKda', full], ['#o-gelSpan', full]].forEach(([id, hide]) => { const l = lab(id); if (l) l.hidden = hide; }); }
-  { const fi = $('#gelFocusInfo'), r0 = kind === 'run' && f ? f.run : null, gl = r0 ? gelsFor(r0) : kind === 'workflow' ? gels : [], g0 = gl.find(x => x._focus);
-    fi.textContent = opt.gelView !== 'focus' || !g0 ? '' : g0._focus.mw ? `Centered on ${kdaRound(g0._focus.mw)} kDa, ${g0._focus.why}.` : g0._focus.why === 'none' ? 'Showing the whole gel. Set the protein size or Center on (kDa) to zoom on your band.' : ''; }
+  { const fi = $('#gelFocusInfo'), r0 = kind === 'run' && f ? f.run : null, gl = r0 ? gelsFor(r0) : kind === 'workflow' ? gels : [], g0 = gl.find(x => x._focus), fullHere = opt.gelView !== 'focus' || (kind === 'workflow' && opt.wfGelFull);
+    fi.textContent = fullHere || !g0 ? '' : g0._focus.mw ? `Centered on ${kdaRound(g0._focus.mw)} kDa, ${g0._focus.why}.` : g0._focus.why === 'none' ? 'Showing the whole gel. Set the protein size or Center on (kDa) to zoom on your band.' : ''; }
   document.querySelectorAll('details.tip').forEach(d => { d.hidden = ![...d.querySelectorAll('p')].some(p => !p.hidden); });
   const fs = numOr(opt.fs, 8), fontName = opt.font === 'Times' ? 'Times New Roman' : opt.font;
   $('#spec').textContent = geo ? `${fmt(geo.W/72, 2)} × ${fmt(geo.H/72, 2)} in, ${fs} pt ${fontName}, ${numOr(opt.lw,0.75)} pt lines` : '';
