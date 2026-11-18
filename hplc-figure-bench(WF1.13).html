@@ -64,7 +64,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projbar .pb-sep{color:var(--line2);font-size:18px} .projbar .pb-lab{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .proj-settings{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
 .proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted)}
-.proj-settings-body{display:inline-flex;align-items:center;gap:8px}
+.proj-settings-body{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%} .projname-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
 .np-type{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center} .np-type .hint{margin:0}
 /* Include Cloning switch (#1433): one on/off control, a real button so Space and Enter work */
 .tgl{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;color:var(--ink);background:transparent;border:0;padding:2px 0;cursor:pointer}
@@ -383,7 +383,7 @@ label.f.condmissing>input{border-color:var(--warn)}
 .grp > h2:hover::after{border-color:var(--ink)}
 .grp.collapsed{padding-bottom:14px}
 .grp.collapsed > :not(h2){display:none!important}
-.grp > h2 .st{font-weight:400;letter-spacing:0;font-size:12px;color:var(--muted);margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.grp > h2 .st,.grp > h2 .steps-prog{font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;color:var(--muted);margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .grp:not(.collapsed) > h2 .st{display:none}
 .prompt{font-size:13px;font-weight:500;color:var(--accent-ink);background:var(--accent);border-radius:var(--r);padding:7px 12px}
 /* figure tabs read as a tab strip, not pills */
@@ -585,9 +585,9 @@ button,input,select,textarea{font-family:inherit}
     <details class="proj-settings" id="projSettings">
       <summary id="projSettingsSum">Project settings</summary>
       <div class="proj-settings-body">
-        <label for="projName" class="pb-lab">Project name</label>
-        <input type="text" id="projName" name="projName" class="projname" aria-label="Project name" placeholder="Project name" spellcheck="false">
+        <span class="projname-pair"><label for="projName" class="pb-lab">Project name</label><input type="text" id="projName" name="projName" class="projname" aria-label="Project name" placeholder="Project name" spellcheck="false"></span>
         <button type="button" id="projType" class="tgl projtype clone-toggle" role="switch" aria-checked="false" title="Whether this project includes cloning. Switching it off hides the cloning steps and keeps every record."><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button>
+        <button type="button" class="btn quiet" id="projCloneRestore" hidden title="Restore the archived cloning stages to the active workflow">Restore Cloning Workflow</button>
       </div>
     </details>
     <span class="savestate" id="saveState" role="status" aria-live="polite"></span>
@@ -625,7 +625,7 @@ button,input,select,textarea{font-family:inherit}
   <aside class="panel" id="panel">
     <div class="psearch"><input type="search" id="panelSearch" placeholder="Search settings/data/files" aria-label="Search settings" autocomplete="off"></div>
     <section class="grp steps" id="stepsPanel" hidden>
-      <h2>Steps</h2>
+      <h2>Steps<span class="steps-prog" id="stepsProg"></span></h2>
       <ol class="tl" id="tl"></ol>
     </section>
     <section class="grp stepsheet" id="stepSheet" hidden>
@@ -7236,14 +7236,16 @@ $('#rawList').addEventListener('click', async e => {
 /* ---------- home ---------- */
 const fmtWhen = t => { if (!t) return ''; const d = new Date(t), now = new Date(), same = d.toDateString() === now.toDateString();
   return same ? `today, ${d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}` : d.toLocaleDateString([], {month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric'}); };
-let delArm = '', delAt = 0;
+let delArm = '', delAt = 0, homeSeq = 0;
 async function renderHome(){
-  const el = $('#projList'); el.innerHTML = '<p class="empty-p">Loading projects…</p>';
+  const my = ++homeSeq, el = $('#projList'); el.innerHTML = '<p class="empty-p">Loading projects…</p>';
   await storeInit();
+  if (my !== homeSeq) return;
   $('#homeWhere').textContent = STORE.mode === 'cloud' ? 'Projects are saved with this page, so they open wherever you are signed in. Run data and gel images are uploaded with them, and only people you share the page with can open it.'
     : STORE.mode === 'local' ? 'Projects are saved in this browser. Open a project, then choose Export project to move one to another computer or keep a copy.'
     : 'This view cannot keep projects. Open a project, then choose Export project to save your work.';
-  let list = []; try { list = await storeList(); } catch (e) { el.innerHTML = '<p class="empty-p">Could not load your projects. Reload the page to try again.</p>'; return; }
+  let list = []; try { list = await storeList(); } catch (e) { if (my === homeSeq) el.innerHTML = '<p class="empty-p">Could not load your projects. Reload the page to try again.</p>'; return; }
+  if (my !== homeSeq) return;
   if (!list.length) { el.innerHTML = '<p class="empty-p">No projects yet. Start one above when you transform your construct.</p>'; return; }
   el.innerHTML = list.map(p => `<div class="pcard has-del" role="button" tabindex="0" data-pid="${esc(p.id)}"><span class="pn">${esc(p.name || 'Untitled project')}</span>
     <span class="pm">${esc([p.protein, (d => `${d.filter(x => x === 1).length} of ${d.length} steps done${d.some(x => x === 2) ? `, ${d.filter(x => x === 2).length} need details` : ''}`)(p.dots || []), `updated ${fmtWhen(p.updated)}`].filter(Boolean).join(', '))}</span>
@@ -8405,7 +8407,7 @@ function renderClone(force){ const el = $('#clonePanel'); if (!el || !PROJ || !(
   if (h === clHtml && !force) return; if (!force && inside && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
   const key = inside ? ['cf', 'at', 'cst', 'cfrom', 'cext', 'cck', 'cadd', 'cname', 'cl', 'v', 'ag', 'agAdj', 'agTool', 'laneK', 'laneIdx', 'bandK', 'bandIdx'].filter(k => ae.dataset[k] != null).map(k => `[data-${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="${ae.dataset[k]}"]`).join('') : '';
   clHtml = h; el.innerHTML = h; if (key) { const n = el.querySelector(key); if (n) n.focus(); } agPaint(); }
-function clChanged(redraw){ if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
+function clChanged(redraw){ syncCloneType(); if (clAutoFill()) renderPrep(); renderSteps(); if (redraw) renderClone(true); if (PROJ && curStep.startsWith('clone:')) { const f = curFig(); if (f) { cur = f.id; const r = buildFig(f, true); G = r.geo; if (r.svg) paper.innerHTML = r.svg; } } queueSave(); }
 const clAt = id => { for (const s of CL().stages) { const a = s.at.find(x => x.id === id); if (a) return {s, a}; } return null; };
 function onCloneField(e){ const t = e.target, c = CL();
   if (t.classList.contains('cl-gel-file')) {
@@ -8712,12 +8714,12 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
 function setCloning(on){ on = !!on; if (on === !!prep.includeCloning) { syncCloneType(); return; }
   const kept = CL().stages.length; prep.includeCloning = on; CL(); syncCloneType(); tlHtml = ''; clHtml = ''; clPickTpl = false; if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
   const modal = $('#cloneArchiveModal');
-  if (on) { if (modal && modal.open) modal.close(); selectStep('clone:setup'); }
-  else { if (curStep.startsWith('clone:')) selectStep('construct'); else { renderSteps(); renderClone(true); }
+  if (on) { if (modal && modal.open) modal.close(); if (clAutoFill()) renderPrep(); selectStep('clone:setup'); }
+  else { if (curStep.startsWith('clone:')) selectStep('construct'); else { renderSteps(); renderClone(true); render(); }
     if (kept) { if (modal && typeof modal.show === 'function' && !modal.open) modal.show(); toast(`Cloning is off. Its ${kept} stage${kept === 1 ? ' is' : 's are'} kept and come${kept === 1 ? 's' : ''} back when you switch it on.`); }
     else if (modal && modal.open) modal.close(); }
   queueSave(); }
-function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('aria-checked', prep.includeCloning ? 'true' : 'false'); }
+function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('aria-checked', prep.includeCloning ? 'true' : 'false'); const rs = $('#projCloneRestore'); if (rs) rs.hidden = !!(prep.includeCloning || !CL().stages.length); }
 $('#clonePanel').addEventListener('input', onCloneField);
 $('#clonePanel').addEventListener('change', onCloneField);
 $('#clonePanel').addEventListener('click', onCloneClick);
@@ -8745,6 +8747,7 @@ $('#clonePanel').addEventListener('drop', async e => {
   }
 });
 $('#projType').addEventListener('click', () => setCloning(!prep.includeCloning));
+$('#projCloneRestore').addEventListener('click', () => setCloning(true));
 $('#cloneArchiveCancel').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
 $('#cloneArchiveConfirm').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); });
 $('#cloneArchiveModal').addEventListener('cancel', e => { e.preventDefault(); const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
@@ -8846,7 +8849,8 @@ function addRowHtml(){ /* ADD_OPTS() starts with ['run', 'Column run with a chro
 function addMan(kind){ const L = wfList(), last = L[L.length - 1], n = Math.max(0, ...(prep.manual || []).map(m => { const v = /^m(\d+)$/.exec(m && m.id); return v ? +v[1] : 0; })) + 1;
   prep.manual = (prep.manual || []).concat([{id: 'm' + n, kind, name: '', after: last ? last.id : ''}]); gels.forEach(g => { g._prepA = null; }); selectStep('man:m' + n); }
 function renderSteps(){
-  if (!PROJ) return; const L = stepList(), key = curStep, fp = clFoldPlan(L, key);
+  if (!PROJ) return; const L = stepList(), key = curStep, fp = clFoldPlan(L, key), act = L.filter(s => !s.add), sp = $('#stepsProg');
+  if (sp) sp.textContent = `${act.filter(s => s.done && !s.warn).length} of ${act.length} steps done`;
   const fold = s => !fp ? '' : s.k === 'clone:setup' && !clAll && fp.done ? `<li class="tl-fold"><button type="button" data-cldone="1" aria-expanded="${clDoneOpen}">${clDoneOpen ? 'Hide' : 'Show'} ${fp.done} done</button></li>`
     : s.k === fp.last ? `<li class="tl-fold"><button type="button" data-clall="${clAll ? 0 : 1}">${clAll ? 'Fold stages' : `Show all stages (${fp.all})`}</button></li>` : '';
   const h = L.map(s => fp && fp.hide.has(s.k) ? fold(s) : (s.g ? `<li class="tl-head"><p class="tl-h"><span>${esc(s.g)}</span>${s.g === 'Upstream' || s.g === 'Cloning' ? `<button type="button" class="tl-stage-add" data-addstage="1" title="Add a biological stage" aria-label="Add a biological stage">+</button>` : ''}</p></li>` : '') + (s.add ? `<li class="tl-addrow">${addRowHtml()}</li>` : `<li class="${s.done ? 'done' : ''}${s.warn ? ' warn' : ''}${s.sub ? ' sub' : ''}${s.k === key ? ' cur' : ''}"><button type="button" class="tl-i" data-step="${esc(s.k)}"${s.k === key ? ' aria-current="step"' : ''}${s.gt ? ` title="${esc(s.gt)}"` : ''}>

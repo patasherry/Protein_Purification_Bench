@@ -218,5 +218,168 @@ const {open, H, suite, fs} = require('../lib/harness');
     } finally { await close(); }
   });
 
+  await T.t('archival-progress-and-restore', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const openSettings = () => p.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
+      const restoreBtn = p.locator('details.proj-settings #projCloneRestore');
+      const progText = async () => (await p.locator('#stepsProg').count()) ? (await p.locator('#stepsProg').innerText()).trim() : '';
+      const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+
+      // Empty expression project: Restore Cloning Workflow is hidden
+      await h.newProject('No cloning data synthetic', 'expression');
+      await openSettings();
+      const hiddenWhenEmpty = !(await restoreBtn.isVisible());
+
+      // Seed a project with cloning stages (completed + parent-child link + gel attachment) and downstream purification steps
+      await p.click('#homeBtn'); await h.wait(600);
+      await h.newProject('Archive & Restore Synthetic', 'cloning');
+      await openSettings();
+      const hiddenWhenActive = !(await restoreBtn.isVisible());
+      T.check('archive/restore-btn-hidden-when-on-or-empty', hiddenWhenEmpty && hiddenWhenActive, `emptyHidden=${hiddenWhenEmpty}, activeHidden=${hiddenWhenActive}`);
+
+      await p.locator('#clonePanel [data-cl=tpl][data-v=pcr]').click();
+      await h.wait(500);
+      const cRowsBefore = await cloneRows(h);
+      const desRow = cRowsBefore[1]; // Construct design
+      const pcrRow = cRowsBefore.find(r => /PCR amplification/i.test(r.t));
+      const gelRow = cRowsBefore.find(r => /PCR product analysis/i.test(r.t));
+
+      // Complete stage 1 (Construct design) -> auto-fills downstream construct plasmid name
+      await h.step(desRow.k);
+      await p.locator('#clonePanel [data-cf="construct"]').fill('pSYN-GFP');
+      await p.locator('#clonePanel [data-cf="construct"]').dispatchEvent('change');
+      await p.locator('#clonePanel select[data-cst]').selectOption('done');
+      await h.wait(300);
+
+      // Complete stage 2 (PCR amplification) linked via Comes from to Construct design attempt
+      await h.step(pcrRow.k);
+      const fromVal = await p.locator('#clonePanel select[data-cfrom] option').nth(1).getAttribute('value');
+      await p.locator('#clonePanel select[data-cfrom]').selectOption(fromVal);
+      await p.locator('#clonePanel [data-cf="pol"]').fill('Q5 High-Fidelity 2X Master Mix');
+      await p.locator('#clonePanel [data-cf="pol"]').dispatchEvent('change');
+      await p.locator('#clonePanel select[data-cst]').selectOption('done');
+      await h.wait(300);
+
+      // Upload synthetic agarose gel attachment and complete PCR product analysis stage
+      await h.step(gelRow.k);
+      await p.setInputFiles('#clonePanel .cl-gel-file', {name: 'syn_agarose.png', mimeType: 'image/png', buffer: png1x1});
+      await h.wait(600);
+      await p.locator('#clonePanel select[data-cst]').selectOption('done');
+      await h.wait(300);
+
+      // Complete Transformation (with selected clone), Expression, and a Purification column step
+      await h.step('transform');
+      await setPrep(p, h, '#pr-strain2', 'BL21(DE3)');
+      await setPrep(p, h, '#pr-trSel', 'Kanamycin');
+      await p.click('#prCloneAdd'); await h.wait(250);
+      const cRow = p.locator('#prClones [data-clone]').first();
+      await cRow.locator('input[type=text]').first().fill('C3 synthetic');
+      await cRow.locator('input[type=text]').first().dispatchEvent('change'); await h.wait(200);
+      await cRow.locator('input[type=radio]').first().check(); await h.wait(300);
+
+      await h.step('expr');
+      await setPrep(p, h, '#pr-medium', 'TB');
+
+      await p.click('#tl [data-addmenu]');
+      await p.click('#tl [data-addstep="man:column"]');
+      await h.wait(350);
+      await setPrep(p, h, '#man-resin', '2 mL Ni-NTA agarose');
+      await setPrep(p, h, '#man-elution', '250 mM imidazole');
+      await setPrep(p, h, '#man-vol', '4');
+      await setPrep(p, h, '#man-conc', '2.5');
+
+      await h.allSteps();
+      const tlOn = await h.timeline();
+      const cloneCountOn = tlOn.filter(s => /^clone:/.test(s.k)).length;
+      const cloneDoneOn = tlOn.filter(s => /^clone:/.test(s.k) && s.done && !s.warn).length;
+      const totalOn = tlOn.length;
+      const doneOn = tlOn.filter(s => s.done && !s.warn).length;
+      const progBefore = await progText();
+      const beforeJson = await exportJson(p);
+      const beforeStages = beforeJson.prep.cloning.stages;
+      const beforeIds = beforeStages.map(s => s.id);
+      const beforeAtCounts = beforeStages.map(s => s.at.length);
+
+      // Toggle Include Cloning OFF and confirm archival
+      await head(p).click();
+      await h.wait(300);
+      if (await p.locator('#cloneArchiveConfirm').isVisible()) {
+        await p.locator('#cloneArchiveConfirm').click();
+        await h.wait(300);
+      }
+      await openSettings();
+      const restoreVis = await restoreBtn.isVisible();
+      const restoreLabel = restoreVis ? (await restoreBtn.innerText()).trim() : '';
+      T.check('archive/restore-btn-visible', restoreVis && restoreLabel === 'Restore Cloning Workflow', `visible=${restoreVis}, label=${restoreLabel}`);
+
+      const expectedArchivedProg = `${doneOn - cloneDoneOn} of ${totalOn - cloneCountOn} steps done`;
+      const progArchived = await progText();
+      T.check('archive/active-progress-excludes-archived',
+        progBefore === `${doneOn} of ${totalOn} steps done` && progArchived === expectedArchivedProg && cloneDoneOn === 3 && (doneOn - cloneDoneOn) >= 3,
+        `before="${progBefore}", archived="${progArchived}", expected="${expectedArchivedProg}"`);
+
+      await h.step('construct');
+      const conNameAfterArchive = await p.locator('#pr-name').inputValue();
+      await h.step('transform');
+      const selCloneChecked = await p.locator('#prClones [data-clone] input[type=radio]').first().isChecked();
+      const tlOff = await h.timeline();
+      const exprOff = tlOff.find(s => s.k === 'expr');
+      const manOff = tlOff.find(s => /^man:/.test(s.k));
+      T.check('archive/downstream-links-preserved',
+        conNameAfterArchive === 'pSYN-GFP' && selCloneChecked && exprOff && exprOff.done && !exprOff.warn && manOff && manOff.done && !manOff.warn,
+        JSON.stringify({conNameAfterArchive, selCloneChecked, exprOff, manOff}));
+
+      // Close project, verify Home card progress matches active-only steps, and reopen project
+      await h.wait(600);
+      await p.click('#homeBtn');
+      await h.wait(900);
+      const cardMeta = await p.locator('#projList [data-pid]', {hasText: 'Archive & Restore Synthetic'}).first().locator('.pm').innerText();
+      T.check('archive/home-card-excludes-archived', cardMeta.includes(expectedArchivedProg), cardMeta);
+
+      await p.locator('#projList [data-pid]', {hasText: 'Archive & Restore Synthetic'}).first().click();
+      await h.wait(2200);
+      await openSettings();
+      const reopenRestoreVis = await restoreBtn.isVisible();
+      const reopenProg = await progText();
+      T.check('archive/reopen-stays-archived',
+        !(await on(head(p))) && (await cloneRows(h)).length === 0 && reopenRestoreVis && reopenProg === expectedArchivedProg,
+        `on=${await on(head(p))}, rows=${(await cloneRows(h)).length}, restoreVis=${reopenRestoreVis}, prog="${reopenProg}"`);
+
+      // Restore cloning workflow via Project Settings Restore Cloning Workflow control
+      if (reopenRestoreVis) await restoreBtn.click();
+      else await head(p).click();
+      await h.wait(500);
+
+      await openSettings();
+      T.check('archive/restore-hides-btn-and-enables-toggle', await on(head(p)) && !(await restoreBtn.isVisible()), `on=${await on(head(p))}, restoreVis=${await restoreBtn.isVisible()}`);
+      const progRestored = await progText();
+      T.check('archive/restore-reverts-progress', progRestored === `${doneOn} of ${totalOn} steps done`, `restored="${progRestored}", expected="${doneOn} of ${totalOn} steps done"`);
+
+      const afterJson = await exportJson(p);
+      const afterStages = afterJson.prep.cloning.stages;
+      const afterIds = afterStages.map(s => s.id);
+      const afterAtCounts = afterStages.map(s => s.at.length);
+      const pcrAfter = afterStages.find(s => s.kind === 'pcr_setup');
+      const gelAfter = afterStages.find(s => s.kind === 'gel');
+      const doneKinds = afterStages.filter(s => s.at.some(a => a.st === 'done')).map(s => s.kind);
+      await h.step('construct');
+      const conNameRestored = await p.locator('#pr-name').inputValue();
+      T.check('archive/restore-preserves-stages-order-links-gel-no-dups',
+        afterStages.length === beforeStages.length &&
+        afterIds.join(',') === beforeIds.join(',') &&
+        afterAtCounts.join(',') === beforeAtCounts.join(',') &&
+        doneKinds.length === 3 &&
+        pcrAfter && pcrAfter.at[0].from === fromVal &&
+        gelAfter && gelAfter.gel && gelAfter.gel.name === 'syn_agarose.png' && /^data:image\/png/.test(gelAfter.gel.image || '') &&
+        conNameRestored === 'pSYN-GFP' &&
+        (await cloneRows(h)).length === cloneCountOn,
+        JSON.stringify({len: afterStages.length, beforeLen: beforeStages.length, doneKinds, from: pcrAfter && pcrAfter.at[0].from, fromVal, gelName: gelAfter && gelAfter.gel && gelAfter.gel.name, hasImg: !!(gelAfter && gelAfter.gel && gelAfter.gel.image), conNameRestored}));
+
+      T.check('archival-progress-and-restore/no page errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
   T.done();
 })();
