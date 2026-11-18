@@ -2418,7 +2418,7 @@ function yLabelText(){
 function style(ov){
   ov = ov || {};
   const o = opt, W = ov.wPt || numOr(o.w,3.5)*72, H = ov.hPt || numOr(o.h,2.6)*72, fs = fontSize(), lw = Math.max(0.1, numOr(o.lw,0.75));
-  const head = ov.nest ? `<svg x="0" y="0" width="${r2(W)}" height="${r2(H)}" viewBox="0 0 ${r2(W)} ${r2(H)}" overflow="visible">` : svgHead(W, H);
+  const head = ov.nest ? `<svg x="0" y="0" width="${r2(W)}" height="${r2(H)}" viewBox="0 0 ${r2(W)} ${r2(H)}" font-size="${r2(fs)}" overflow="visible">` : svgHead(W, H);
   return {W, H, fs, lw, aw: Math.max(0.5, Math.min(lw, 1.5*fs/8)), cw: fs*0.56, tl: fs*0.45, tOut: o.ticksOut ? fs*0.45 : 0, head};
 }
 
@@ -2620,9 +2620,9 @@ function buildOverlaySVG(ov){
   const lblLeft = [];
   if (anyPeaks) {
     const pf = fs*0.85, pcw = pf*0.56, boxes = [], items = [], axisBoxes = [];
-    /* peak labels can reach into the margin at the plot edge; keep this collision scope to tick text only */
-    xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v), y = xly; axisBoxes.push({x1:x - t.length*cw/2, x2:x + t.length*cw/2, y1:y - fs*0.8, y2:y + fs*0.2}); });
-    if (o.showY) yt.v.forEach((v, i) => { const y = py(v) + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; axisBoxes.push({x1:x - w, x2:x, y1:y - fs*0.8, y2:y + fs*0.2}); });
+    /* peak labels can reach into the margin at the plot edge; include tick text and inward tick marks */
+    xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v), y = xly; axisBoxes.push({x1:x - t.length*cw/2, x2:x + t.length*cw/2, y1:y - fs*0.8, y2:y + fs*0.2}); if (!o.ticksOut) axisBoxes.push({x1:x - aw, x2:x + aw, y1:B - tl, y2:B}); });
+    if (o.showY) yt.v.forEach((v, i) => { const y0t = py(v), y = y0t + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; axisBoxes.push({x1:x - w, x2:x, y1:y - fs*0.8, y2:y + fs*0.2}); if (!o.ticksOut) axisBoxes.push({x1:L, x2:L + tl, y1:y0t - aw, y2:y0t + aw}); });
     P.forEach(p => {
       const col = o.peakColor === 'trace' ? p.t.color : '#000000', sh = +p.t.xshift || 0;
       p.t.peaks.forEach(pk => {
@@ -2651,8 +2651,8 @@ function buildOverlaySVG(ov){
       const hit = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
       /* A fixed nudge stays stable as the axis ticks change with a zoom; the opposite direction is the fixed fallback near the top edge. */
       if (axisBoxes.some(b => hit(own(), b))) {
-        const other = boxes.slice(0, -1), off = fs*1.1;
-        const moved = [bot - off, bot + off].find(y => { const was = bot; bot = y; const q = own(); bot = was; return q.y1 >= 0 && q.y2 <= B - 1 && !axisBoxes.some(b => hit(q, b)) && !other.some(b => hit(q, b)); });
+        const other = boxes.slice(0, -1), off = fs*1.1, half = fs*0.55;
+        const moved = [bot - half, bot - off, bot + half, bot + off].find(y => { const was = bot; bot = y; const q = own(); bot = was; return q.y1 >= 0 && q.y2 <= B - 1 && !axisBoxes.some(b => hit(q, b)) && !other.some(b => hit(q, b)); });
         if (moved !== undefined) { bot = moved; Object.assign(boxes[boxes.length - 1], own()); }
       }
       if (it.Y - bot > fs*1.2) leaders.push({x: it.X, a: bot + 1.5, b: it.Y, own: boxes.length - 1});
@@ -2717,11 +2717,11 @@ function buildRunSVG(run, ov){
   const doZoom = ov.nest ? (run.wfZoom && insetVisible(run, true)) : insetVisible(run, opt.zoomInset);
   if (!doZoom || run.prep || ov.noZoom) return buildRunPlainSVG(run, ov);
   const S = style(ov), wa = run.xmin, wb = run.xmax, beside = zoomPos() === 'beside', put = (a, b) => { run.xmin = a; run.xmax = b; };
-  let m; try { put('', ''); m = buildRunPlainSVG(run, beside ? Object.assign({}, ov, {noZoom: true, wPt: S.W*(1 - zoomSize()), hPt: S.H}) : Object.assign({}, ov, {noZoom: true})); } finally { put(wa, wb); }
+  let m; try { put('', ''); m = buildRunPlainSVG(run, beside ? Object.assign({}, ov, {noZoom: true, nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H}) : Object.assign({}, ov, {noZoom: true})); } finally { put(wa, wb); }
   if (!m.svg) return m;
   const win = zoomWindow(m.geo.xlo, m.geo.xhi, run.zoomWinA !== undefined ? run.zoomWinA : opt.zoomWinA, run.zoomWinB !== undefined ? run.zoomWinB : opt.zoomWinB);
   const z = win && zoomCompose(S, m, win, (w, h) => { try { put(win.a, win.b);
-    return withOpt({rxlabel: '', rylabel: zoomYTitle(opt.rylabel, fontSize()*0.8, h), showY: true, runCond: 'none', ndFig: 'none', runTitle: false, ymin: m.geo.y0, ymax: m.geo.y1, fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, wPt: w, hPt: h, idp: 'zi-'}))); } finally { put(wa, wb); } }, ov.nest ? run : (curRun() || opt));
+    return withOpt({rxlabel: '', rylabel: zoomYTitle(opt.rylabel, fontSize()*0.8, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, ymin: m.geo.y0, ymax: m.geo.y1, fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, nest: true, wPt: w, hPt: h, idp: 'zi-'}))); } finally { put(wa, wb); } }, ov.nest ? run : (curRun() || opt));
   return z || buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true}));
 }
 function buildRunPlainSVG(run, ov){
@@ -2729,7 +2729,7 @@ function buildRunPlainSVG(run, ov){
   if (run.prep) return buildPrepSVG(run, ov);
   const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '';
   const uvC = uvOf(run), dEnd = uvC.xs[uvC.xs.length-1];
-  const auto = runAuto(run), wfF = opt.wfFull && ov.nest, xlo = wfF ? uvC.xs[0] : numOr(run.xmin, auto.lo); let xhi = wfF ? dEnd : numOr(run.xmax, auto.hi); if (!(xhi > xlo)) xhi = xlo + 1;
+  const auto = runAuto(run), wfF = opt.wfFull && ov.nest && idp !== 'zi-', xlo = wfF ? uvC.xs[0] : numOr(run.xmin, auto.lo); let xhi = wfF ? dEnd : numOr(run.xmax, auto.hi); if (!(xhi > xlo)) xhi = xlo + 1;
   const uv = windowXY(procFull(run), xlo, xhi);
   if (uv.xs.length < 2) return {svg: null, geo: null};
   const secC = o.sec === 'grad' ? run.grad : o.sec === 'cond' ? run.cond : null;
@@ -2772,13 +2772,13 @@ function buildRunPlainSVG(run, ov){
   const titleH = (o.runTitle && !ov.nest) ? fs*1.5 : 0, stdH = showStd ? fs*1.9 : 0;
   /* NanoDrop result for this step, printed just above the pooled fractions */
   const ndR = o.ndFig && o.ndFig !== 'none' && shadeSet(run).size && !(prep.on && prep.btw && prep.btw[run.id]) ? ndForRun(run) : null, ndTxt = ndR && ndR.mgml != null ? [`${fmt(ndR.mgml, ndR.mgml < 10 ? 2 : 1)} mg/mL`, (o.ndFig === 'mg' || o.ndFig === 'full') && ndR.mg != null ? `${fmt(ndR.mg, ndR.mg < 10 ? 1 : 0)} mg` : '', o.ndFig === 'full' && ndR.r280 != null ? `A₂₆₀/A₂₈₀ ${fmt(ndR.r280, 2)}` : ''].filter(Boolean).join(', ') : '', ndH = ndTxt ? fs*1.15 : 0;
-  const calNote = opt.secStds && secRun && !(sfit && sfit.mw) && ov && ov.nest;
+  const calNote = opt.secStds && secRun && !(sfit && sfit.mw) && ov && ov.nest && idp !== 'zi-';
   /* run conditions under the axis title, wrapped to the panel */
   /* full conditions sit left, from about the axis, with continued lines indented; short ones are centered; neither runs past the panel */
   const cf = fs*0.75, cFull = o.runCond === 'full', cRoom = Math.max(10, Math.floor((W - (cFull ? fs*5.2 : fs*1.2))/(cf*0.52)));
   const condL = runCondLines(run, o.runCond).flatMap(t => wrapWords(t, cRoom).map((x, j) => ({t: x, cont: j > 0}))).slice(0, ov.nest ? 16 : 8);
   /* in a workflow every panel reserves the same room, so the chromatograms keep one height */
-  const nCond = ov.nest && COND_N ? Math.max(condL.length, COND_N) : condL.length, condH = nCond ? nCond*cf*1.2 + fs*0.5 : 0;
+  const nCond = ov.nest && idp !== 'zi-' && COND_N ? Math.max(condL.length, COND_N) : condL.length, condH = nCond ? nCond*cf*1.2 + fs*0.5 : 0;
   const mB = tOut + 3 + fs + 4 + fs*1.25 + (calNote ? fs*0.95 : 0) + condH, mT = fs*0.7 + titleH + stdH + ndH, plotH0 = H - mB - mT;
   /* room above the tallest peak for its label, so the label never sits on the trace */
   const poolCap = poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
@@ -2919,6 +2919,10 @@ function buildRunPlainSVG(run, ov){
   }
   if (titleH) s.push(`<text x="${r2(L)}" y="${r2(fs*1.05)}" font-weight="bold">${esc(run.name)}</text>`);
   s.push('</g>');
+  const tickBoxes = [], hitBox = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+  xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v); tickBoxes.push({x1: x - t.length*cw/2, x2: x + t.length*cw/2, y1: xly - fs*0.8, y2: xly + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: x - aw, x2: x + aw, y1: B - tl, y2: B}); });
+  yt.v.forEach((v, i) => { const y = py(v), ty = y + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; tickBoxes.push({x1: x - w, x2: x, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: L, x2: L + tl, y1: y - aw, y2: y + aw}); });
+  if (hasSec) st.v.forEach((v, i) => { const y = py2(v), ty = y + fs*0.35, x = R + tOut + 3, w = stl[i].length*cw; tickBoxes.push({x1: x, x2: x + w, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: R - tl, x2: R, y1: y - aw, y2: y + aw}); });
   if (capSvg) s.push(capSvg);
   /* an uncalibrated SEC run says so, instead of leaving the reader to guess the size */
   if (calNote) s.push(`<text x="${r2((L + R)/2)}" y="${r2(H - 2 - condH)}" text-anchor="middle" font-size="${r2(fs*0.75)}" font-style="italic" fill="#777777">column not calibrated</text>`);
@@ -2936,13 +2940,14 @@ function buildRunPlainSVG(run, ov){
       /* a thin white halo keeps fraction names readable where they sit on a colored fill */
       s.push(`<g font-size="${r2(pf)}" fill="${RUN_COLORS.frac}" stroke="#ffffff" stroke-width="${r2(pf*0.28)}" stroke-linejoin="round" paint-order="stroke">`);
       /* thinning keeps the fractions that matter (linked to a gel lane, or a pool's first and last) and spaces the rest around them;
-         nothing is drawn on top of the y axis */
+         nothing is drawn on top of either y axis or an axis tick */
       const cOf = sg => (Math.max(sg.a, xlo) + Math.min(sg.b, xhi))/2, linkOf = sg => links.find(l => l.t.x !== undefined && Math.abs(l.t.a - sg.a) < 1e-9);
       const impOf = (sg, k) => !!linkOf(sg) || (shaded.has(sg.i) && o.poolStyle !== 'none' && (!nonW[k-1] || !shaded.has(nonW[k-1].i) || !nonW[k+1] || !shaded.has(nonW[k+1].i)));
+      const yb = B - fTick - 2, fBox = (sg, X) => rot ? {x1: X - pf*0.5, x2: X + pf*0.5, y1: yb - labOf(sg).length*pcw, y2: yb} : {x1: X - labOf(sg).length*pcw/2, x2: X + labOf(sg).length*pcw/2, y1: yb - pf*0.85, y2: yb + pf*0.15};
       const wOfL = sg => rot ? pf*1.15 : labOf(sg).length*pf*0.56 + pf*0.5, placedX = [], keep = new Set();
-      const tryPut = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25) return;
+      const tryPut = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c), fb = fBox(sg, X); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25 || fb.x2 > R - pf*0.25 || tickBoxes.some(b => hitBox(fb, b))) return;
         if (placedX.some(p => Math.abs(p.X - X) < (p.w + wOfL(sg))/2)) return; placedX.push({X, w: wOfL(sg)}); keep.add(k); };
-      const tryImp = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25) return;
+      const tryImp = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c), fb = fBox(sg, X); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25 || fb.x2 > R - pf*0.25 || tickBoxes.some(b => hitBox(fb, b))) return;
         if (placedX.some(p => Math.abs(p.X - X) < (rot ? pf*0.7 : (p.w + wOfL(sg))/2*0.85))) return; placedX.push({X, w: wOfL(sg)}); keep.add(k); };
       nonW.forEach((sg, k) => { if (linkOf(sg)) tryImp(sg, k); }); nonW.forEach((sg, k) => { if (!keep.has(k) && impOf(sg, k)) tryPut(sg, k); });
       nonW.forEach((sg, k) => { if (!keep.has(k) && (every <= 1 || k % every === 0)) tryPut(sg, k); });
@@ -2950,7 +2955,7 @@ function buildRunPlainSVG(run, ov){
         if (!keep.has(k)) return;
         const c = cOf(sg);
         const lc = linkOf(sg);
-        const X = px(c), yb = B - fTick - 2, txt = esc(labOf(sg)), pc = lc ? ` fill="${lerpHex(lc.color, '#000000', 0.45)}" font-weight="bold"` : shaded.has(sg.i) && o.poolStyle !== 'none' ? ` fill="${poolDark()}" font-weight="bold"` : '';
+        const X = px(c), txt = esc(labOf(sg)), pc = lc ? ` fill="${lerpHex(lc.color, '#000000', 0.45)}" font-weight="bold"` : shaded.has(sg.i) && o.poolStyle !== 'none' ? ` fill="${poolDark()}" font-weight="bold"` : '';
         if (rot) s.push(`<text transform="translate(${r2(X + pf*0.35)} ${r2(yb)}) rotate(-90)"${pc}>${txt}</text>`);
         else s.push(`<text x="${r2(X)}" y="${r2(yb)}" text-anchor="middle"${pc}>${txt}</text>`);
       });
@@ -2958,7 +2963,7 @@ function buildRunPlainSVG(run, ov){
     }
   }
   if (iRows.length && labMode !== 'none') {
-    s.push(`<g font-size="${r2(fs*0.8)}" fill="#000000" text-anchor="middle">`);
+    s.push(`<g class="zoom-inset-avoid" font-size="${r2(fs*0.8)}" fill="#000000" text-anchor="middle">`);
     const placed = [], aTop = Math.max(...iRows.map(q => q.area || 0));
     /* largest peaks are labelled first; a small peak or one whose label would collide with a bigger one's stays unlabelled */
     iRows.slice().sort((p, q) => (q.area || 0) - (p.area || 0)).forEach(rw => { if (rw.apex < xlo || rw.apex > xhi) return; if (aTop > 0 && !((rw.area || 0) >= 0.03*aTop)) return;
@@ -2977,7 +2982,11 @@ function buildRunPlainSVG(run, ov){
       /* a label pushed off its peak by the plot edge drops its note in brackets ("void (aggregate)" becomes "void") */
       if (clampX() > ww*0.2 && /\s\(.*\)$/.test(tt)) { tt = tt.replace(/\s*\(.*\)$/, ''); ww = tt.length*fs*0.45; pick.x = xOrig; clampX(); }
       const e2 = ext(), lift = Math.max(base, hiIn(xlo + (pick.x + e2[0] - L)*k, xlo + (pick.x + e2[1] - L)*k));
-      let Y = Math.max(T + fs*0.8, py(lift) - 3), guard = 0; const cx0 = pick.x + (e2[0] + e2[1])/2;
+      let Y = Math.max(T + fs*0.8, py(lift) - 3), guard = 0;
+      const pBox = y => { const e = ext(); return {x1: pick.x + e[0], x2: pick.x + e[1], y1: y - fs*0.75, y2: y + fs*0.15}; };
+      while (tickBoxes.some(b => hitBox(pBox(Y), b)) && guard++ < 6 && Y - fs*0.45 >= T + fs*0.7) Y -= fs*0.45;
+      if (tickBoxes.some(b => hitBox(pBox(Y), b))) { const pad = (!o.ticksOut ? tl : 0) + 1.5, e = ext(); if (pick.x + e[0] < L + pad) pick.x = L + pad - e[0]; else if (pick.x + e[1] > R - pad) pick.x = R - pad - e[1]; }
+      const e3 = ext(), cx0 = pick.x + (e3[0] + e3[1])/2;
       if (placed.some(q => Math.abs(q.x - cx0) < (q.w + ww)/2 + 1 && Math.abs(q.y - Y) < fs*0.85)) return;
       placed.push({x: cx0, y: Y, w: ww}); s.push(`<text x="${r2(pick.x)}" y="${r2(Y)}"${pick.an !== 'middle' ? ` text-anchor="${pick.an}"` : ''}>${esc(tt)}</text>`);
       /* a label lifted clear of its peak gets a short leader down to the apex */
