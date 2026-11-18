@@ -4711,7 +4711,7 @@ function constructSVG(W, H, fs, aw){
 }
 
 /* ---------- run conditions: column, buffers, flow, temperature, gradient, load, fractions ---------- */
-const COND_KEYS = ['mCol', 'mCV', 'mBufA', 'mBufB', 'mFlow', 'mTemp', 'mGrad', 'mWash', 'mLoad', 'mFrac', 'mInst', 'mOther'];
+const COND_KEYS = ['mCol', 'mCV', 'mBufA', 'mBufB', 'mPh', 'mFlow', 'mTemp', 'mGrad', 'mWash', 'mLoad', 'mFrac', 'mInst', 'mOther'];
 /* what was done to a pool before the next column: concentrated, diluted, exchanged, filtered or held */
 const BTW_T = {conc: 'Concentrated', dil: 'Diluted', exch: 'Buffer exchanged', filt: 'Filtered', hold: 'Held overnight'};
 const btwOf = r => { if (!r || !prep.btw || !prep.btw[r.id]) return null; const p = r.fracs ? poolRows(r) : null, u = xUnit(r) === 'min' ? 'mL' : xUnit(r); return Object.assign({how: 'conc', unit: u, _poolVol: p && (xUnit(r) === 'mL' || xUnit(r) === 'µL') && p.vol > 0 ? +fmt(p.vol, 1) : 0}, prep.btw[r.id]); };
@@ -4788,7 +4788,7 @@ function guessFrac(r){ const segs = fracSegments(r, uvOf(r).xs[uvOf(r).xs.length
   return `${fmtAuto(min)} to ${fmtAuto(max)} ${xUnit(r)}`; }
 /* each field: what the user typed, else what the file says */
 function runCond(r){
-  const v = k => String(r[k] == null ? '' : r[k]).trim(), au = {mCol: guessColumn(r), mCV: (c => c ? String(+(+c).toPrecision(3)) : '')(guessCV(r)), mFlow: r.flowAuto ? fmt(r.flowAuto, r.flowAuto < 1 ? 2 : 1) : '', mTemp: '', mGrad: guessGradient(r), mFrac: guessFrac(r)};
+  const v = k => String(r[k] == null ? (k === 'mPh' && r.mPH != null ? r.mPH : '') : r[k]).trim(), au = {mCol: guessColumn(r), mCV: (c => c ? String(+(+c).toPrecision(3)) : '')(guessCV(r)), mFlow: r.flowAuto ? fmt(r.flowAuto, r.flowAuto < 1 ? 2 : 1) : '', mTemp: '', mGrad: guessGradient(r), mFrac: guessFrac(r), mPh: ''};
   const o = {}; COND_KEYS.forEach(k => { o[k] = v(k) || au[k] || ''; o[k + 'Auto'] = !v(k) && !!au[k]; }); o.auto = au; return o; }
 /* IMAC needs these four values for a reproducible condition. Keep the warning beside the field that resolves it, rather than adding another summary surface. */
 function imacCondWarnings(r){ const c = runCond(r), w = {}; if (guessStep(r) !== 'IMAC') return w;
@@ -4820,7 +4820,11 @@ function runCondLines(r, mode){
   const head = [c.mCol, c.mFlow ? unitIf(c.mFlow, 'mL/min') : '', c.mTemp ? unitIf(c.mTemp, '°C') : ''].filter(Boolean).join(', ');
   if (head) out.push(head);
   if (mode === 'full') {
-    if (c.mBufA) out.push(isSec(r) ? `Buffer: ${c.mBufA}` : `Buffer A: ${c.mBufA}`); if (c.mBufB && !isSec(r)) out.push(`Buffer B: ${c.mBufB}`);
+    const phTxt = c.mPh ? (/^pH\b/i.test(c.mPh) ? c.mPh : `pH ${c.mPh}`) : '';
+    const bufWithPh = b => { b = String(b || '').trim().replace(/\.$/, ''); if (!phTxt) return b; return new RegExp('\\b' + phTxt.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i').test(b) ? b : `${b}, ${phTxt}`; };
+    if (c.mBufA) out.push(isSec(r) ? `Buffer: ${bufWithPh(c.mBufA)}` : `Buffer A: ${bufWithPh(c.mBufA)}`);
+    else if (phTxt) out.push(`Buffer: ${phTxt}`);
+    if (c.mBufB && !isSec(r)) out.push(`Buffer B: ${c.mBufB}`);
     const g = [c.mGrad, c.mLoad ? `load ${c.mLoad}` : ''].filter(Boolean).join(', '); if (g) out.push(g.replace(/^./, x => x.toUpperCase())); }
   return out.map(nbsp);
 }
@@ -4865,7 +4869,9 @@ function methodsText(){
     const colChk = '';
     const col = c.mCol ? `${art(c.mCol)} ${c.mCol}${c.mCV && !/\d\s*mL|\/\d+/.test(c.mCol) ? ` (${c.mCV} mL)` : ''}${/column$/i.test(c.mCol) ? '' : ' column'}${colChk}` : `the column ${need('column')}`;
     let t = `Step ${k}${Lt ? ` (${ttl}, panel ${Lt})` : ` (${ttl})`}${brTxt(r)}: ${/^\d/.test(src) ? src : lc(src)} was loaded at ${c.mFlow ? unitIf(c.mFlow, 'mL/min') : need('flow rate')}${condCheck(r, 'mFlow')} onto ${col}${c.mInst && !instAll ? ` (${c.mInst})` : ''}`;
-    t += c.mBufA ? (sec ? ` in ${c.mBufA}` : ` equilibrated in buffer A (${c.mBufA})`) : ` ${need('buffer')}`;
+    const phTxt = c.mPh ? (/^pH\b/i.test(c.mPh) ? c.mPh.trim() : `pH ${c.mPh.trim()}`) : '';
+    const bufWithPh = b => { b = String(b || '').trim().replace(/\.$/, ''); if (!phTxt) return b; return new RegExp('\\b' + phTxt.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i').test(b) ? b : `${b}, ${phTxt}`; };
+    t += c.mBufA ? (sec ? ` in ${bufWithPh(c.mBufA)}` : ` equilibrated in buffer A (${bufWithPh(c.mBufA)})`) : (phTxt ? (sec ? ` in buffer (${phTxt})` : ` equilibrated in buffer (${phTxt})`) : ` ${need('buffer')}`);
     if (hasTxt(r.mWash) && !sec) t += `, washed with ${lc(v(r.mWash))}`;
     let grad = c.mGrad ? (c.mGradAuto ? lc(c.mGrad).replace(/^linear /, 'a linear gradient from ').replace(/^step to /, 'a step to ') : lc(c.mGrad)) + condCheck(r, 'mGrad') : '';
     if (!sec) t += ft ? `. The protein was collected in the flow-through${grad ? `, and bound material was eluted with ${grad}` : c.mBufB ? ', and bound material was eluted with buffer B' : ''}` : grad ? ` and eluted with ${grad}` : c.mBufB ? ' and eluted with buffer B' : ` and eluted ${need('elution')}`;
@@ -5153,6 +5159,7 @@ function renderList(){
         ${f('mCol', 'Column', 'e.g. HisTrap FF 5 mL')}
         <div class="row">${f('mCV', 'Column volume (mL)', 'e.g. 5', {num: 1})}${f('mFrac', 'Fraction size (mL)', 'e.g. 1')}</div>
         ${isSec(r) ? f('mBufA', 'Running buffer', 'e.g. 20 mM HEPES pH 7.5, 150 mM NaCl, 1 mM TCEP') : f('mBufA', 'Buffer A', 'e.g. 50 mM Tris pH 8.0, 300 mM NaCl, 20 mM imidazole') + f('mBufB', 'Buffer B', 'e.g. buffer A with 500 mM imidazole')}
+        ${f('mPh', 'Measured buffer pH', 'e.g. 7.5')}
         <div class="row">${f('mFlow', 'Flow (mL/min)', isSec(r) ? 'e.g. 0.5' : 'e.g. 1')}${f('mTemp', 'Temperature (°C)', 'e.g. 4')}</div>
         ${f('mLoad', 'Sample loaded', steps0(r) ? 'e.g. 80 mL clarified lysate' : isSec(r) ? 'e.g. 0.5 mL at 10 mg/mL' : 'e.g. the dialyzed pool, 30 mL')}
         ${isSec(r) ? '' : f('mWash', 'Wash', 'e.g. 10 CV buffer A with 40 mM imidazole')}
@@ -8972,7 +8979,7 @@ function quickTarget(kind){
   if (kind === 'btw') { prep.btw = prep.btw || {}; return prep.btw[id] || (prep.btw[id] = {how: 'conc'}); }
   return ['construct', 'transform', 'expr', 'lysis', 'cleave', 'final'].includes(kind) ? prep : null; }
 const QUICK_KEYS = {construct: ['name', 'backbone', 'promoter', 'resist', 'cMethod', 'cEnz', 'cOverlap', 'cRecomb'], transform: ['strain', 'trMethod', 'trSel', 'trPlasmid', 'trStock'], expr: ['strain', 'medium', 'cultureL', 'indKind', 'inducer', 'od', 'temp', 'time', 'exStarter', 'exHarvest', 'exStore'], lysis: ['lysMethod', 'lysBuffer', 'lysAdd', 'lysSet', 'clarify'],
-  cleave: ['protease', 'ratio', 'dialBuffer', 'clvTemp', 'clvTime', 'mwco'], run: ['mCol', 'mCV', 'mFlow', 'mTemp', 'mBufA', 'mBufB', 'mWash', 'mGrad', 'mLoad', 'mFrac', 'mInst', 'mOther'],
+  cleave: ['protease', 'ratio', 'dialBuffer', 'clvTemp', 'clvTime', 'mwco'], run: ['mCol', 'mCV', 'mFlow', 'mTemp', 'mBufA', 'mBufB', 'mPh', 'mWash', 'mGrad', 'mLoad', 'mFrac', 'mInst', 'mOther'],
   man: ['kind', 'name', 'resin', 'buffer', 'wash', 'elution', 'note'], btw: ['how', 'device', 'mwco', 'note'], final: ['finBuffer', 'store', 'qcPurity']};
 /* your own quick fills, kept with the settings in this browser and in the project */
 const myQuick = kind => (Array.isArray(opt.myQuick) ? opt.myQuick : []).filter(q => q.k === kind);
