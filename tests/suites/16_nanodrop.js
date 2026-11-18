@@ -429,5 +429,39 @@ async function fresh(id, fn){
     T.check(id + '/restore-thresh-warns', await turbidWarn.count() > 0 && await turbidWarn.first().isVisible(), 'Restoring threshold to 0.1 should re-display turbidity warning');
   });
 
+  // #1574: NanoDrop One stacks full two-column exports; NanoDrop Eight uses comma-decimal wavelength headers and may include both UUID and human sample name columns.
+  async function quickNanoDrop(p, file){
+    await p.click(SEL.quick);
+    await p.locator('#home').waitFor({state: 'hidden'});
+    await p.waitForTimeout(500);
+    await p.setInputFiles(SEL.nd, file);
+  }
+  const ndBlock = (name, bump) => [name, '2026-11-18', 'Wavelength (nm)\t10mm Absorbance'].concat(Array.from({length: 14}, (_, i) => {
+    const w = 220 + i*10; return `${w}\t${(0.10 + bump + i*0.01).toFixed(3)}`;
+  })).join('\n');
+  await fresh('nanodrop-one-stacked-blocks', async (p) => {
+    const file = {name: 'stacked-nanodrop-one.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from([ndBlock('Pool A', 0), ndBlock('Pool B', 0.10), ndBlock('Pool C', 0.20)].join('\n\n'))};
+    await quickNanoDrop(p, file);
+    await p.locator(SEL.row).nth(2).waitFor({state: 'attached'});
+    const names = await p.locator(`${SEL.row} input[data-ndk="name"]`).evaluateAll(els => els.map(e => e.value));
+    T.check('nd/stacked-blocks/rows', JSON.stringify(names) === JSON.stringify(['Pool A', 'Pool B', 'Pool C']), JSON.stringify(names));
+    await p.locator('#figtabs [data-fig="nd"]').click();
+    T.check('nd/stacked-blocks/spectra', await p.locator('#paper svg g[clip-path] > path').count() === 3, `Expected 3 spectrum paths, got ${await p.locator('#paper svg g[clip-path] > path').count()}`);
+  });
+  await fresh('nanodrop-eight-comma-wavelengths', async (p) => {
+    const wl = Array.from({length: 11}, (_, i) => (250 + i*5).toFixed(1).replace('.', ','));
+    const rows = [
+      ['45e8d8e3-1d1e-4a7e-bd6e-000000000001', 'Human pool', ...wl.map((_, i) => (0.30 + i*0.02).toFixed(2).replace('.', ','))],
+      ['45e8d8e3-1d1e-4a7e-bd6e-000000000002', '', ...wl.map((_, i) => (0.50 + i*0.02).toFixed(2).replace('.', ','))]
+    ];
+    const file = {name: 'nanodrop-eight.txt', mimeType: 'text/plain', buffer: Buffer.from([['Sample Id', 'Sample Name'].concat(wl).join('\t')].concat(rows.map(r => r.join('\t'))).join('\n'))};
+    await quickNanoDrop(p, file);
+    await p.locator(SEL.row).nth(1).waitFor({state: 'attached'});
+    const names = await p.locator(`${SEL.row} input[data-ndk="name"]`).evaluateAll(els => els.map(e => e.value));
+    T.check('nd/eight-comma/names', JSON.stringify(names) === JSON.stringify(['Human pool', '45e8d8e3-1d1e-4a7e-bd6e-000000000002']), JSON.stringify(names));
+    await p.locator('#figtabs [data-fig="nd"]').click();
+    T.check('nd/eight-comma/spectra', await p.locator('#paper svg g[clip-path] > path').count() === 2, `Expected 2 spectrum paths, got ${await p.locator('#paper svg g[clip-path] > path').count()}`);
+  });
+
   T.done();
 })();

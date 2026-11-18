@@ -6456,10 +6456,10 @@ const splitRow = (line, d) => { const out = []; let cur = '', q = false; for (le
   if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; } else if (c === '"') q = true; else if (c === d) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out.map(v => v.trim()); };
 const ND_HEAD = /(a?\s?260\s*\/\s*a?\s?280|\ba\s?280\b|\ba\s?205\b|mg\s*\/\s*ml|[nµu]g\s*\/\s*[µu]l|conc)/i, ND_NAME = /sample\s*(name|id)|^"?sample"?\s*$/i;
 const ND_UNITS = /^(mg|[µu]g)\s*\/\s*ml$|^(ng|[µu]g)\s*\/\s*[µu]l$/i; /* the concentration units parseNanoDrop reads or converts to mg/mL (or keeps as ng/µL for nucleic acid). µg/µL equals mg/mL, read as is */
-const isWl = h =>/^\d{3}(\.\d+)?\s*(nm)?$/i.test(String(h).trim());
+const isWl = h =>/^\d{3}([\.,]\d+)?\s*(nm)?$/i.test(String(h).trim());
 function ndHeader(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) { const l = lines[i]; const d = (l.match(/\t/g) || []).length >= 2 ? '\t' : (l.match(/;/g) || []).length > (l.match(/,/g) || []).length ? ';' : ','; const H = splitRow(l, d);
     if (/^\s*vendor|:\s*$/i.test(H[0] || '')) continue; /* metadata rows ("Vendor: Agilent", "Sample Name:") are not the table header */
-    if (H.some(h => ND_NAME.test(h)) && H.some(h => ND_HEAD.test(h))) {
+    if (H.some(h => ND_NAME.test(h)) && H.some(h => ND_HEAD.test(h) || isWl(h))) {
         for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
             const row = splitRow(lines[j], d);
             if (row.some(v => ndNum(v, d) != null)) return {i, d, H, rows: 'samples'};
@@ -6473,7 +6473,7 @@ function ndHeader(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) {
     }
 } return null; }
 function looksNanoDrop(text){ const L = text.split(/\r?\n/).filter(l => l.trim()); return !!ndHeader(L) || (L.slice(0, 80).some(l => /^wavelength/i.test(l.trim()) && /absorbance/i.test(l)) && L.some(l => /^a?\s?260\s*\/\s*a?280\b/i.test(l.trim()))); }
-function isNanoDropHead(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) { const l = lines[i], d = (l.match(/\t/g) || []).length >= 2 ? '\t' : (l.match(/;/g) || []).length > (l.match(/,/g) || []).length ? ';' : ','; const H = splitRow(l, d); if (H.some(h => ND_NAME.test(h)) && H.some(h => ND_HEAD.test(h))) return true; if (/^(wavelength|wl|nm)/i.test(H[0] || '') && H.length > 1 && H.some(h => isWl(h) || /\b(abs|absorbance|a280)\b/i.test(h))) return true; } return false; }
+function isNanoDropHead(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) { const l = lines[i], d = (l.match(/\t/g) || []).length >= 2 ? '\t' : (l.match(/;/g) || []).length > (l.match(/,/g) || []).length ? ';' : ','; const H = splitRow(l, d); if (H.some(h => ND_NAME.test(h)) && H.some(h => ND_HEAD.test(h) || isWl(h))) return true; if (/^(wavelength|wl|nm)/i.test(H[0] || '') && H.length > 1 && H.some(h => isWl(h) || /\b(abs|absorbance|a280)\b/i.test(h))) return true; } return false; }
 const ndNum = (v, d) => { let s = String(v ?? '').replace(/\s/g, ''); if (d === ';') { const m = s.match(/^[+-]?(\d*)(?:\.(\d{3}))*,(\d+)(?:[eE][+-]?\d+)?$/); s = m ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '.'); } else { const m = s.match(/^[+-]?(\d*),(\d+)(?:[eE][+-]?\d+)?$/); s = m && !(m[2].length === 3 && /^[1-9]\d{0,2}$/.test(m[1])) ? s.replace(',', '.') : s.replace(/,/g, ''); } return measurementNumber(s); };
 const CRUDE_RE = /lys|load|flow|\bft\b|supernat|pellet|crude|input|clarif/i;
 function ndNew(o){ return Object.assign({id: 'nd' + (ndUid++), name: '', kind: 'protein', a280: null, a260: null, a230: null, a340: null, r280: null, r230: null, conc: null, unit: 'mg/mL', runId: '', stage: 'pool', dil: 1, hide: false}, o); }
@@ -6488,8 +6488,21 @@ function parseNDSingle(lines){
     if (s.r230 == null && s.a230 > 0 && s.a260 != null) s.r230 = s.a260/s.a230; if (s.r280 == null && s.a280 > 0 && s.a260 != null) s.r280 = s.a260/s.a280; }
   s.hide = CRUDE_RE.test(s.name); return s.a280 != null ? [s] : [];
 }
+/* NanoDrop One can stack complete two-column per-sample exports in one file. Keep the one-block parser above unchanged, but split every later block at its own spectrum heading. */
+function parseNDSingleBlocks(lines){
+  const heads = lines.map((l, i) => /^wavelength/i.test(l.trim()) && /absorbance/i.test(l) ? i : -1).filter(i => i >= 0); if (heads.length < 2) return null;
+  const isData = l => { const c = l.split(/\t|,/).map(x => x.trim()), w = ndNum(c[0]), v = ndNum(c[1]); return w != null && v != null && w >= 190 && w <= 850; };
+  return heads.flatMap((hi, i) => { let start = i ? heads[i - 1] + 1 : 0, blank = -1;
+    for (let j = hi - 1; j >= start; j--) if (!lines[j].trim()) { blank = j; break; }
+    if (blank >= 0) start = blank + 1;
+    else { let j = hi - 1; while (j >= start && isData(lines[j])) j--; start = j + 1; }
+    const name = (i === 0 ? lines[0] : lines.slice(start, hi).find(l => l.trim()) || '').trim(), parsed = parseNDSingle(lines.slice(start, i + 1 < heads.length ? heads[i + 1] : lines.length)) || [];
+    return parsed.map(s => { if (name) { s.name = name; s.hide = CRUDE_RE.test(name); } return s; });
+  });
+}
 function parseNanoDrop(text){
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim()), one = parseNDSingle(lines); if (one) return one;
+  const raw = text.replace(/^\uFEFF/, '').split(/\r?\n/), blocks = parseNDSingleBlocks(raw); if (blocks) return blocks;
+  const lines = raw.filter(l => l.trim()), one = parseNDSingle(lines); if (one) return one;
   const hd = ndHeader(lines); if (!hd) return [];
   const {H, d} = hd, data = lines.slice(hd.i + 1).map(l => splitRow(l, d));
   /* spectra laid out as rows: one column per sample, one row per wavelength */
@@ -6497,18 +6510,19 @@ function parseNanoDrop(text){
       const at = x => { const i = wl.findIndex(w => Math.abs(w - x) < 0.6); return i < 0 ? null : ab[i]; }, a280 = at(280), a260 = at(260);
       return ndNew({name: nm, row: k, a280, a260, a230: at(230), a340: at(340), r280: a280 > 0 && a260 != null ? a260/a280 : null, spec: {wl, ab}, hide: CRUDE_RE.test(nm)}); }).filter(s => s.a280 != null && !s.name.trim().endsWith(':') && !/^vendor/i.test(s.name.trim())); }
   const hn = H.map(h => h.toLowerCase().replace(/\s+/g, ' ')), col = f => hn.findIndex(f);
-  const cName = col(h => ND_NAME.test(h)), cR280 = col(h => /a?\s?260\s*\/\s*a?\s?280/.test(h)), cR230 = col(h => /a?\s?260\s*\/\s*a?\s?230/.test(h));
+  const cSampleName = col(h => /^sample\s*name$/.test(h)), cSampleId = col(h => /^sample\s*id$/.test(h)), cName = cSampleName >= 0 ? cSampleName : col(h => ND_NAME.test(h)), cR280 = col(h => /a?\s?260\s*\/\s*a?\s?280/.test(h)), cR230 = col(h => /a?\s?260\s*\/\s*a?\s?230/.test(h));
   const absCol = w => col(h => new RegExp(`\\ba ?${w}\\b|^${w}$`).test(h) && !/\//.test(h) && !/conc|mg|µg|ug|ng|raw/.test(h));
   const cA280 = absCol(280), cA260 = absCol(260), cA230 = absCol(230), cA205 = absCol(205), cA340 = absCol(340) >= 0 ? absCol(340) : col(h => /\b340\b/.test(h) && !/baseline/.test(h));
   const cConc = col(h => /conc|mg\s*\/\s*ml|[nµu]g\s*\/\s*[µu]l|[µu]g\s*\/\s*ml/.test(h) && !/\/\s*a/.test(h) && !/dye|corrected/.test(h)), cUnit = col(h => /^units?$/.test(h));
   const cCorr = col(h => /corrected/.test(h) && /mg|conc/.test(h)), cImp = col(h => /^impurity 1$/.test(h)), cImpA = col(h => /^impurity 1 a ?280/.test(h)), cBaseA = col(h => /baseline abs/.test(h));
   const cType = col(h => /sample type|application|^type$/.test(h)), cDate = col(h => /date/.test(h)), cTime = col(h => /^time$/.test(h)), cBase = col(h => /baseline/.test(h));
-  const wcols = H.map((h, i) => ({i, w: parseFloat(h)})).filter(x => isWl(H[x.i]) && x.w >= 190 && x.w <= 850);
+  const wcols = H.map((h, i) => ({i, w: ndNum(h, d)})).filter(x => isWl(H[x.i]) && x.w >= 190 && x.w <= 850);
   const headAll = hn.join(' '), dyeFile = /dye|degree of label/.test(headAll);
   /* the concentration unit the file states (Units cell, else the bracket in the header). One the parser does not convert is kept as read, flagged for review */
   const hU = cConc >= 0 ? ((H[cConc].match(/\(([^()]*)\)/) || [])[1] || '').trim() : '', unitIn = r => { const u = cUnit >= 0 ? String(r[cUnit] || '').trim() : ''; return u || (/\/|%/.test(hU) || /^[pnµμum]?M$/.test(hU) ? hU : ''); };
+  const sampleName = r => (r[cName] || '').trim() || (cSampleName >= 0 && cSampleId >= 0 ? (r[cSampleId] || '').trim() : '');
   return data.filter(r => {
-    const nm = (r[cName] || '').trim();
+    const nm = sampleName(r);
     return r.length > 2 && nm.length > 0 && !nm.endsWith(':') && !/^vendor/i.test(nm);
   }).map((r, i) => {
     const typ = cType >= 0 ? r[cType] : '', unitTxt = ((cUnit >= 0 ? r[cUnit] : '') + ' ' + (cConc >= 0 ? hn[cConc] : '')).toLowerCase();
@@ -6516,8 +6530,8 @@ function parseNanoDrop(text){
     let conc = cConc >= 0 ? ndNum(r[cConc], d) : null;
     const g = c => c >= 0 ? ndNum(r[c], d) : null, a280 = g(cA280), a260 = g(cA260); let corr = g(cCorr);
     if (kind !== 'nucleic' && /[µu]g\s*\/\s*ml|ng\s*\/\s*[µu]l/i.test(unitTxt)) { if (conc != null) conc /= 1000; if (corr != null) corr /= 1000; }
-    const s = ndNew({name: r[cName], row: i, when: [cDate >= 0 ? r[cDate] : '', cTime >= 0 ? r[cTime] : ''].filter(Boolean).join(' '), type: typ, kind, a280, a260, a230: g(cA230), a340: g(cA340) ?? ((cBaseA >= 0 && (r[cBase] === '340' || /340/.test(String(r[cBase])))) ? g(cBaseA) : null), r280: g(cR280), r230: g(cR230),
-      conc, unit: kind === 'nucleic' ? 'ng/µL' : 'mg/mL', base: cBase >= 0 ? r[cBase] : '', baseA: g(cBaseA), corr, imp: cImp >= 0 && r[cImp] ? {name: r[cImp], a280: g(cImpA)} : null, hide: CRUDE_RE.test(r[cName])});
+    const name = sampleName(r), s = ndNew({name, row: i, when: [cDate >= 0 ? r[cDate] : '', cTime >= 0 ? r[cTime] : ''].filter(Boolean).join(' '), type: typ, kind, a280, a260, a230: g(cA230), a340: g(cA340) ?? ((cBaseA >= 0 && (r[cBase] === '340' || /340/.test(String(r[cBase])))) ? g(cBaseA) : null), r280: g(cR280), r230: g(cR230),
+      conc, unit: kind === 'nucleic' ? 'ng/µL' : 'mg/mL', base: cBase >= 0 ? r[cBase] : '', baseA: g(cBaseA), corr, imp: cImp >= 0 && r[cImp] ? {name: r[cImp], a280: g(cImpA)} : null, hide: CRUDE_RE.test(name)});
     if (s.r280 == null && a260 != null && a280 > 0) s.r280 = a260/a280; if (s.r230 == null && a260 != null && s.a230 > 0) s.r230 = a260/s.a230;
     const uIn = unitIn(r); if (conc != null && uIn && (!ND_UNITS.test(uIn) || (kind === 'nucleic' && /^[µu]g\s*\/\s*[µu]l$/i.test(uIn)))) s.unitWarn = uIn;
     if (wcols.length > 10) { const wl = [], ab = []; wcols.forEach(x => { const v = ndNum(r[x.i], d); if (v != null) { wl.push(x.w); ab.push(v); } }); if (wl.length > 10) s.spec = {wl, ab};
