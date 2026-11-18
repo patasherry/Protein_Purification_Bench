@@ -38,6 +38,20 @@ const IMAC = require('../data/gen_imac_missing');
     }
   });
 
+  await T.t('ezstart_sampling_rate_asc', async () => {
+    await p.reload();
+    await h.wait(500);
+    await h.newProject('EZStart sampling rate');
+    const content = ['Sampling Rate: 2 Hz', 'Total Data Points: 4 Pts', '1', '2', '3', '4', '10', '20', '30', '40'].join('\n');
+    await p.setInputFiles('#file', {name: 'ezstart_2hz.asc', mimeType: 'text/plain', buffer: Buffer.from(content)});
+    await h.wait(700);
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#projSave')]);
+    const fPath = path.join(__dirname, '..', 'results', 'ezstart_2hz.json');
+    await dl.saveAs(fPath);
+    const d = JSON.parse(fs.readFileSync(fPath, 'utf8')), tr = (d.traces || []).find(x => x.name === 'ezstart_2hz');
+    T.check('ezstart_sampling_rate_minutes', !!tr && tr.cols[0] === 'Time (min)' && tr.rows.length === 4 && Math.abs(tr.rows[1][0] - 1/120) < 1e-12 && JSON.stringify(tr.rows[0].slice(1)) === JSON.stringify([1, 10]), JSON.stringify(tr && {cols: tr.cols, rows: tr.rows}));
+  });
+
 
   await T.t('leading_id_csv_axis_selection', async () => {
     await p.reload();

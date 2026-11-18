@@ -1631,8 +1631,19 @@ function splitFields(L, d){ return (d === ',' || d === ';') && L.includes('"') &
 /* Generic chromatogram and ÄKTA CSV values use this directly; NanoDrop first applies its delimiter-specific decimal normalization. Zero is a measurement, while blank and malformed fields are not. */
 function measurementNumber(v){ const s = clean(String(v ?? '')); return NUM.test(s) ? parseFloat(s) : null; }
 function toNum(f, dc){ f = clean(f); if (dc) f = f.replace(/^-?\d+,\d+(?:[eE][-+]?\d+)?$/, m => m.replace(',', '.')); const v = measurementNumber(f); return v == null ? NaN : v; }
+function parseEZStart(text){
+  const lines = text.split(/\r\n|\n|\r/), rate = lines.map(L => /^\s*Sampling Rate\s*:\s*([-+]?\d*\.?\d+)\s*Hz\b/i.exec(L)).find(Boolean), points = lines.map(L => /^\s*Total Data Points\s*:\s*(\d+)\s*Pts\b/i.exec(L)).find(Boolean);
+  if (!rate || !points || !(+rate[1] > 0) || !(+points[1] > 1)) return null;
+  const n = +points[1], vals = [];
+  for (const L of lines) { const v = measurementNumber(L); if (v != null) vals.push(v); }
+  const channels = Math.floor(vals.length / n); if (!channels) return null;
+  const rows = Array.from({length: n}, (_, i) => [i / (+rate[1] * 60)]);
+  for (let c=0;c<channels;c++) for (let i=0;i<n;i++) rows[i].push(vals[c*n+i]);
+  return {rows, cols: ['Time (min)', ...Array.from({length: channels}, (_, i) => `Channel ${i+1}`)], xc: 0, yc: 1};
+}
 function parseText(text){
   const lines = text.split(/\r\n|\n|\r/);
+  const ez = parseEZStart(text); if (ez) return ez;
   const sample = lines.length > 6000 ? lines.slice(0,3000).concat(lines.slice(-3000)) : lines;
   let best = null;
   for (const d of ['\t', ',', ';', 'ws']) for (const dc of (d === ',' ? [false] : [false, true])) {
@@ -1743,14 +1754,26 @@ function parseRunTime(s){
 }
 function parseAkta(text, fname){
   const lines = text.split(/\r\n|\n|\r/); let u = -1, d = ',';
+  for (let i=0;i<Math.min(50, lines.length);i++) for (const dd of [',', '\t', ';']) {
+    const h = csvSplit(lines[i], dd).map(clean), x = h.findIndex(s => /^(ml|min)$/i.test(s)), ch = h.findIndex(s => /^channel$/i.test(s)), val = h.findIndex(s => /^value$/i.test(s));
+    if (x < 0 || ch < 0 || val < 0) continue;
+    const byName = new Map();
+    for (let j=i+1;j<lines.length;j++) { const f = csvSplit(lines[j], dd), name = clean(f[ch] || ''), xval = toNum(f[x] || '', dd !== ','), yval = toNum(f[val] || '', dd !== ',');
+      if (!name || !isFinite(xval) || !isFinite(yval)) continue;
+      if (!byName.has(name)) { const kind = curveKind(name, 'mAU'); byName.set(name, {name, xu: h[x], yu: kind === 'uv' ? 'mAU' : kind === 'cond' ? 'mS/cm' : kind === 'grad' ? '% B' : '', kind, xs: [], ys: [], ev: []}); }
+      const cv = byName.get(name); cv.xs.push(xval); cv.ys.push(yval);
+    }
+    const curves = [...byName.values()]; curves.forEach(cv => { const pts = cv.xs.map((x, k) => [x, cv.ys[k]]).sort((a,b) => a[0]-b[0]); cv.xs = pts.map(p => p[0]); cv.ys = pts.map(p => p[1]); });
+    const tidy = aktaFromCurves(curves, fname, {delimiter: dd}); if (tidy) return tidy;
+  }
   for (let i=0;i<Math.min(50, lines.length) && u < 0;i++) for (const dd of [',', '	', ';']) {
-    const c = (dd === '	' ? lines[i].split('	') : csvSplit(lines[i], dd)).map(s => s.trim());
+    const c = csvSplit(lines[i], dd).map(s => s.trim());
     if (c.length >= 4 && /^(ml|min|µl|ul)$/i.test(c[0]) && c.filter((s,k) => k%2 === 0 && /^(ml|min|µl|ul)$/i.test(s)).length >= 2) { u = i; d = dd; break; }
     /* an export of the UV curve alone: its name row (UV 1_280) over a single ml,mAU pair */
-    if (i > 0 && c.filter(Boolean).length === 2 && /^(ml|min|µl|ul)$/i.test(c[0]) && /^m?AU$/i.test(c[1]) && curveKind(((dd === '	' ? lines[i-1].split('	') : csvSplit(lines[i-1], dd))[0] || '').trim(), c[1]) === 'uv') { u = i; d = dd; break; }
+    if (i > 0 && c.filter(Boolean).length === 2 && /^(ml|min|µl|ul)$/i.test(c[0]) && /^m?AU$/i.test(c[1]) && curveKind((csvSplit(lines[i-1], dd)[0] || '').trim(), c[1]) === 'uv') { u = i; d = dd; break; }
   }
   if (u < 1) return null;
-  const sp = L => d === '\t' ? L.split('\t') : csvSplit(L, d);
+  const sp = L => csvSplit(L, d);
   const names = sp(lines[u-1]).map(s => s.trim()), units = sp(lines[u]).map(s => s.trim());
   const curves = [];
   for (let c=0;c<units.length-1;c+=2){ const nm = names[c] || ''; if (!nm) continue;
@@ -1758,8 +1781,8 @@ function parseAkta(text, fname){
     curves.push({name: nm, xu: units[c], yu: units[c+1], col: c, kind: curveKind(nm, units[c+1]), xs: [], ys: [], ev: []}); }
   for (let i=u+1;i<lines.length;i++){ const L = lines[i]; if (!L) continue; const f = sp(L);
     for (const cv of curves){ const xs = f[cv.col]; if (xs === undefined || xs === '') continue; const x = toNum(xs, d !== ','); if (!isFinite(x)) continue;
-      const v = (f[cv.col+1] || '').trim().replace(/^"|"$/g, '');
-      if (cv.kind === 'frac' || cv.kind === 'log' || cv.kind === 'inj') cv.ev.push({x, label: v});
+      const v = (f[cv.col+1] || '').trim();
+      if (cv.kind === 'frac' || cv.kind === 'log' || cv.kind === 'inj') cv.ev.push({x, label: clean(v)});
       else { const y = toNum(v, d !== ','); if (isFinite(y)) { cv.xs.push(x); cv.ys.push(y); } } } }
   const ak = aktaFromCurves(curves, fname, {delimiter: d});
   if (!ak) {
