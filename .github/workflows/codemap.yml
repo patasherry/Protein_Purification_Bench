@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'hplc-figure-bench(WF1.13).html'
+      - 'protein-purification-bench.html'
       - 'tests/tools/codemap.js'
   workflow_dispatch:
 

@@ -35,6 +35,19 @@ const NAME = 'Protein Purification Bench', OLD = 'HPLC Figure Bench';
     T.check('not rejected as the wrong kind of file', !/is not a project/i.test(msg), msg);
   });
 
+  await T.t('a-file-with-the-new-app-name-also-imports', async () => {
+    const after = {app: NAME, version: 1, saved: '2026-11-19T00:00:00.000Z', cur: null, opt: {}, runs: [], traces: [], gels: [], projects: []};
+    const msg = await p.evaluate(async j => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([j], 'new_project.json', {type: 'application/json'}));
+      document.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true}));
+      await new Promise(r => setTimeout(r, 1200));
+      const t = document.getElementById('toast');
+      return t ? t.innerText : '';
+    }, JSON.stringify(after));
+    T.check('new app field accepted on import', !/is not a project/i.test(msg), msg);
+  });
+
   await T.t('standards-mode-and-mobile-viewport', async () => {
     const mode = await p.evaluate(() => document.compatMode);
     T.check('standards mode', mode === 'CSS1Compat', mode);

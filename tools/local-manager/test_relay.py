@@ -38,8 +38,8 @@ def resp(verdict='patch', rid='7-ab12', base='abc1234567', extra=None, drop=None
     return out + rl.RESP_END
 
 
-GOOD = '''--- a/hplc-figure-bench(WF1.13).html
-+++ b/hplc-figure-bench(WF1.13).html
+GOOD = '''--- a/protein-purification-bench.html
++++ b/protein-purification-bench.html
 @@ -1,6 +1,6 @@
  function alphaSum(a, b){
    const t = a + b;
@@ -325,8 +325,8 @@ changes-a-reported-number: no
 
 patch:
 ```diff
---- hplc-figure-bench(WF1.13).html
-+++ hplc-figure-bench(WF1.13).html
+--- protein-purification-bench.html
++++ protein-purification-bench.html
 @@ -1,2 +1,2 @@
 -a
 +b

@@ -35,7 +35,7 @@ const pick = new Set(['00_preflight', '00_smoke']), why = [];
 /* 2. the app sections the diff touches */
 const lines = fs.readFileSync(APPF, 'utf8').split('\n'), marks = []; lines.forEach((l, i) => { const m = /\/\*\s*----------\s*(.*?)\s*----------\s*\*\//.exec(l); if (m) marks.push({at: i + 1, name: m[1].trim()}); });
 const sectionAt = n => { let s = 'markup and styles'; for (const m of marks) { if (m.at <= n) s = m.name; else break; } return s; };
-const touched = new Set(); for (const m of git('diff', '-U0', base, '--', rel).matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) { const a = +m[1], c = m[2] === undefined ? 1 : +m[2]; for (let n = a; n < a + Math.max(c, 1); n++) touched.add(sectionAt(n)); }
+const touched = new Set(); for (const m of git('diff', '-M', '-U0', base, '--', rel, 'hplc-figure-bench(WF1.13).html').matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) { const a = +m[1], c = m[2] === undefined ? 1 : +m[2]; for (let n = a; n < a + Math.max(c, 1); n++) touched.add(sectionAt(n)); }
 let unmapped = false; for (const s of touched) { const hits = MAP.filter(([re]) => re.test(s)); if (!hits.length) unmapped = true; hits.forEach(([, names]) => names.forEach(n => { if (all.includes(n)) { if (!pick.has(n)) why.push(`${n}: section "${s}"`); pick.add(n); } })); }
 /* 3. anything named on the command line */
 const args = process.argv.slice(2), listOnly = args.includes('--list'); args.filter(a => a !== '--list').forEach(a => all.filter(n => n.includes(a.replace(/\.js$/, ''))).forEach(n => { if (!pick.has(n)) why.push(`${n}: asked for`); pick.add(n); }));

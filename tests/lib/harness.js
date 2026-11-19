@@ -6,9 +6,10 @@ const ROOT = path.resolve(__dirname, '..'), DATA = path.join(ROOT, 'data'), RES 
 /* default: the app in the repository root */
 const APP = require('./app');
 /* Inputs that were first real lab files. The real files are private (unpublished data) and never go in the repository.
-   With HFB_PRIVATE_DATA set to the folder that holds them, the suites use the real file; otherwise a synthetic stand-in
+   With PPB_PRIVATE_DATA (or legacy HFB_PRIVATE_DATA) set to the folder that holds them, the suites use the real file; otherwise a synthetic stand-in
    from data/standins (gen_standins.py), in the same format, with the same fraction labels. */
-const PRIV = process.env.HFB_PRIVATE_DATA ? path.resolve(process.env.HFB_PRIVATE_DATA) : null;
+const PRIV_ENV = process.env.PPB_PRIVATE_DATA || process.env.HFB_PRIVATE_DATA;
+const PRIV = PRIV_ENV ? path.resolve(PRIV_ENV) : null;
 const SOURCES = {
   his: ['260925_PS_Human_NADK_His_Trap_1mL_FF_Step_002_001.csv', 'standins/imac_histrap_1ml_step.csv'],
   ortho: ['260925_PS_Human_NADK_ORTHO_HisTrap_1mL_FF_step_Loop_Load_001_001.csv', 'standins/imac_histrap_1ml_ortho.csv'],

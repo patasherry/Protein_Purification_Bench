@@ -13,7 +13,7 @@ def check(name, ok, info=''):
 
 doms = bm.parse_map((ROOT / 'docs' / 'BOARD_MAP.md').read_text(encoding='utf-8'))
 rows = bm.codemap_rows((ROOT / 'docs' / 'CODEMAP.md').read_text(encoding='utf-8'))
-app = (ROOT / 'hplc-figure-bench(WF1.13).html').read_text(encoding='utf-8', errors='replace')
+app = (ROOT / 'protein-purification-bench.html').read_text(encoding='utf-8', errors='replace')
 check('the map has at least 8 domains', len(doms) >= 8, len(doms))
 missing = [(d['name'], c) for d in doms for c in d['code'] if c not in rows]
 check('every Code section in the map is a section of docs/CODEMAP.md', not missing, missing)
