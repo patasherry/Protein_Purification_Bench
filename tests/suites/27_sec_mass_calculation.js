@@ -148,5 +148,53 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     }
   });
 
+  /* #1566: a µL x axis and the µL volumes typed after a µL run are 1e-3 mL each in the volume, area and mg */
+  await T.t('microliter_runs_match_milliliter', async () => {
+    const {unitRun} = require('../data/gen_unit_runs');
+    const {p: p3, errs: errs3, close: close3} = await open(), h3 = H(p3);
+    p3.on('dialog', d => d.accept());
+    try {
+      p3.setDefaultTimeout(15000);
+      await h3.newProject('Microliter mass');
+      const openFolds = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+      const addRun = async (name, unit) => {
+        await p3.click('#tl [data-addmenu]'); await p3.click('#tl [data-addstep=run]');
+        await p3.setInputFiles('#file', {name, mimeType: 'text/csv', buffer: Buffer.from(unitRun(unit))}); await h3.wait(1500);
+        const st = (await h3.timeline()).filter(x => /^run:/.test(x.k)).pop(); await h3.step(st.k); await h3.wait(300); await h3.pool('F13-F16'); return st.k; };
+      await addRun('unit_ml_synth.csv', 'mL');
+      const uKey = await addRun('unit_ul_synth.csv', 'µL');
+      await h3.step('construct');
+      const epsInp = p3.locator('#o-eps'); await openFolds(epsInp);
+      await epsInp.fill('1.0'); await epsInp.dispatchEvent('input'); await epsInp.dispatchEvent('change'); await h3.wait(300);
+
+      await h3.step('figure'); await h3.wait(400);
+      let st = await h3.sumTable();
+      const col = re => st[0].findIndex(c => re.test(c)), vC = col(/^Volume \(mL\)/), aC = col(/area \(mAU.mL\)/), mC = col(/^Protein \(mg\)/);
+      const runRows = st.slice(1).filter(r => /F13/i.test(r[1] || '')), [rm, ru] = runRows;
+      const cells = r => r ? [r[vC], r[aC], r[mC]] : null;
+      T.check('ul_sumtable_two_runs', runRows.length === 2 && vC > 0 && aC > 0 && mC > 0, JSON.stringify(st));
+      T.check('ul_volume_matches_ml', rm && ru && num(rm[vC]) > 0 && num(ru[vC]) === num(rm[vC]), `mL run ${JSON.stringify(cells(rm))}, µL run ${JSON.stringify(cells(ru))}`);
+      T.check('ul_area_matches_ml', rm && ru && num(rm[aC]) > 0 && Math.abs(num(ru[aC]) - num(rm[aC])) <= 0.01*num(rm[aC]), `mL run ${JSON.stringify(cells(rm))}, µL run ${JSON.stringify(cells(ru))}`);
+      T.check('ul_mg_matches_ml', rm && ru && num(rm[mC]) > 0 && num(ru[mC]) === num(rm[mC]), `mL run ${JSON.stringify(cells(rm))}, µL run ${JSON.stringify(cells(ru))}`);
+
+      /* a Concentrated step after the µL run: 2.5 mg/mL in 50 µL is 0.125 mg, not 125 mg */
+      await h3.step(uKey); await h3.wait(300);
+      await p3.click('#tl [data-addmenu]'); await p3.click('#tl [data-addstep=conc]'); await h3.wait(400);
+      await openFolds(p3.locator('#btw-conc'));
+      for (const [s, v] of [['#btw-conc', '2.5'], ['#btw-vOut', '50']]) { await p3.locator(s).fill(v); await p3.locator(s).dispatchEvent('input'); await p3.locator(s).dispatchEvent('change'); }
+      await h3.wait(500);
+      const vLab = await p3.locator('#btw-vOut').evaluate(e => e.parentNode.firstChild.textContent);
+      T.check('ul_conc_volume_label', /\(µL\)/.test(vLab), vLab);
+      await h3.step('figure'); await h3.wait(400);
+      st = await h3.sumTable();
+      const cr = st.find(r => /NanoDrop/.test(r[1] || ''));
+      T.check('ul_conc_step_mg', cr && cr[mC] === '0.13', `Concentrated row ${JSON.stringify(cr)}, expected 0.13 mg (2.5 mg/mL × 50 µL)`);
+      T.check('ul_conc_step_volume_ml', cr && num(cr[vC]) === 0.05, `Concentrated row volume ${cr && cr[vC]}, expected 0.05 mL`);
+      T.check('ul_no_page_errors', !errs3.length, errs3.join(' | '));
+    } finally {
+      await close3();
+    }
+  });
+
   T.done();
 })();

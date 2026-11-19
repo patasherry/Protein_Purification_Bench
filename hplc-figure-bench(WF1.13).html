@@ -2288,7 +2288,9 @@ function secLabel(info, kind){
 const uvFlow = run => numOr(run && run.mFlow, numOr(run && run.flowAuto, 0));
 const massWhy = run => { if (!run || !run.uvs) return 'no UV trace'; const w = uvWl(uvOf(run)); return w && w !== '280' ? `the selected UV curve is ${w} nm, not 280 nm` : xUnit(run) === 'min' && !(uvFlow(run) > 0) ? 'the x axis is in minutes and the flow rate is not known (enter it under Flow)' : ''; };
 const pathAssumed = run => !!run && !(numOr(run.path, 0) > 0);
-const massOf = (area, run) => { if (run && massWhy(run)) return null; const E = run && typeof ndEpsFor === 'function' ? ndEpsFor(run.id) : null, e = E ? E.e : numOr(opt.eps, 0), p = numOr(run && run.path, numOr(opt.path, 2)), a = run && xUnit(run) === 'min' ? area*uvFlow(run) : area; return e > 0 && p > 0 ? (a/1000)/(e*p/10) : null; };
+/* mL per unit of a volume axis, and of the volumes typed on the step after the run (shown in the run's unit since #1468): 1e-3 mL/µL (#1566); minutes need the flow */
+const volF = run => xUnit(run) === 'µL' ? 1e-3 : 1;
+const massOf = (area, run) => { if (run && massWhy(run)) return null; const E = run && typeof ndEpsFor === 'function' ? ndEpsFor(run.id) : null, e = E ? E.e : numOr(opt.eps, 0), p = numOr(run && run.path, numOr(opt.path, 2)), a = run && xUnit(run) === 'min' ? area*uvFlow(run) : run ? area*volF(run) : area; return e > 0 && p > 0 ? (a/1000)/(e*p/10) : null; };
 /* least-squares fit of a sum of Gaussians (Levenberg-Marquardt). p = [H1, mu1, s1, H2, mu2, s2, ...] */
 function fitGaussians(xs, ys, p, lo, hi, smin){
   p = p.slice(); const n = p.length, m = xs.length, smax = Math.max(smin*2, hi - lo);
@@ -2372,7 +2374,7 @@ function integRows(run){
 }
 /* where a pool's measured concentration comes from: typed on the run card, the Concentrate step after the column, or NanoDrop readings marked Final */
 function poolMeas(run){ const pc = numOr(run.poolConc, null); if (pc !== null && pc >= 0) return {c: pc, v: numOr(run.poolFinalVol, null), src: 'card'};
-  const b = prep.btw && prep.btw[run.id], bv = b ? numOr(b.vOut, null) : null;
+  const b = prep.btw && prep.btw[run.id], bv = b && numOr(b.vOut, null) !== null ? numOr(b.vOut, null)*volF(run) : null;
   const F = ndFinalOf(run), st = F.length ? ndStats(F) : null, fv = numOr(run.ndFinalVol, null) != null ? numOr(run.ndFinalVol, null) : bv;
   if (st && st.m >= 0) return (fv !== null && fv >= 0) || b ? {c: st.m, v: fv, src: b ? 'btw' : 'nd', nd: st, how: b && (b.how || 'conc')} : {c: null, v: null, src: null, nd: st};
   const bc = b ? numOr(b.conc, null) : null; if (bc !== null && bc >= 0) return {c: bc, v: bv, src: 'btw', how: b.how || 'conc'};
@@ -2382,9 +2384,11 @@ const ndFinalOf = run => typeof ndSamples === 'undefined' ? [] : ndSamples.filte
 /* older projects stored a Concentrated step's readings as final: move them to the step */
 function ndMigrate(){ if (!prep.btw) return; ndSamples.forEach(x => { if (x.stage === 'final' && prep.btw[x.runId]) x.stage = 'conc'; }); }
 /* a reading typed on the run card: with a volume after concentrating it is the Concentrated step after the column, which shows in the timeline */
-function measToStep(r){ const b = prep.btw && prep.btw[r.id], c = numOr(r.poolConc, 0), v = numOr(r.poolFinalVol, 0), p = poolRows(Object.assign({}, r, {poolConc: '', poolFinalVol: ''})), pv = p && xUnit(r) === 'mL' ? p.vol : 0;
+function measToStep(r){ const b = prep.btw && prep.btw[r.id], c = numOr(r.poolConc, 0), v = numOr(r.poolFinalVol, 0), p = poolRows(Object.assign({}, r, {poolConc: '', poolFinalVol: ''})), pv = p && xUnit(r) !== 'min' ? p.vol*volF(r) : 0;
   const conc = v > 0 && !(pv > 0 && Math.abs(v - pv) < 0.05*pv); if (!b && !conc) return;
-  prep.btw = prep.btw || {}; prep.btw[r.id] = Object.assign({how: 'conc'}, b, {conc: 'poolConc' in r ? r.poolConc : (b && b.conc) ?? '', vOut: 'poolFinalVol' in r ? r.poolFinalVol : (b && b.vOut) ?? ''}); delete r.poolConc; delete r.poolFinalVol; if (typeof renderSteps === 'function') renderSteps(); }
+  /* the card's volume is in mL; the step's is in the run's unit */
+  const vu = x => volF(r) === 1 || numOr(x, null) === null ? x : String(+(numOr(x, 0)/volF(r)).toPrecision(12));
+  prep.btw = prep.btw || {}; prep.btw[r.id] = Object.assign({how: 'conc'}, b, {conc: 'poolConc' in r ? r.poolConc : (b && b.conc) ?? '', vOut: 'poolFinalVol' in r ? vu(r.poolFinalVol) : (b && b.vOut) ?? ''}); delete r.poolConc; delete r.poolFinalVol; if (typeof renderSteps === 'function') renderSteps(); }
 /* pooled UV uses the same baseline choice as the peak regions: a line across each pooled block, or 0 mAU */
 function poolRows(run){
   const uv = uvOf(run), xs = uv.xs, ys = uv.ys, B = poolBlocks(run); if (!B.length) return null;
@@ -2395,10 +2399,10 @@ function poolRows(run){
   const il = walk(ia, -1), ir = walk(ib, 1), base = opt.intBase === 'zero' ? () => 0 : x => ys[il] + (ys[ir] - ys[il])*(x - xs[il])/((xs[ir] - xs[il]) || 1);
   /* signed area: a stretch below the baseline takes area away, as in a region (#770); the baseline stays the outward walk */
   let area = 0; B.forEach(k => { const q = clipXY(xs, ys, k.a, k.b); area += trapArea(q.xs, q.ys, base); });
-  const vol = B.reduce((t, k) => t + k.b - k.a, 0), mgA = massOf(area, run), ms = poolMeas(run), pc = ms.c, fv = ms.v, mv = fv !== null && fv >= 0 ? fv : xUnit(run) === 'mL' ? vol : (xUnit(run) === 'min' && uvFlow(run) > 0) ? vol * uvFlow(run) : 0;
+  const vol = B.reduce((t, k) => t + k.b - k.a, 0), mgA = massOf(area, run), ms = poolMeas(run), pc = ms.c, fv = ms.v, mv = fv !== null && fv >= 0 ? fv : xUnit(run) !== 'min' ? vol*volF(run) : uvFlow(run) > 0 ? vol * uvFlow(run) : 0;
   /* a NanoDrop reading of the pool, often after it was concentrated, beats the estimate from the UV area; its volume is the one measured */
-  /* a reading on the Concentrated step needs the volume after concentrating, never the pool volume */
-  const meas = pc !== null && mv !== null && mv >= 0 && !(ms.src === 'btw' && !(fv >= 0)), mg = meas ? pc*mv : mgA;
+  /* a reading on the Concentrated step needs the volume after concentrating, never the pool volume, and an empty or 0 volume leaves the UV mg (#1566) */
+  const meas = pc !== null && mv !== null && mv >= 0 && !(ms.src === 'btw' && !(fv > 0)), mg = meas ? pc*mv : mgA;
   return {label: (s0 => isPlate(run) ? s0.toUpperCase() : s0)(String(run.shade || '').trim()).replace(/\s*-\s*/g, '–'), a, b, vol, area, mg, mgArea: mgA, measured: meas, conc: pc !== null && pc >= 0 ? pc : null, measVol: meas ? mv : null, concentrated: meas && fv >= 0, src: meas ? ms.src : null,
     k: meas && mgA > 0 ? mg/mgA : null};
 }
@@ -4330,7 +4334,7 @@ function finalYield(path){
   if (!meas && prep.on) { const wf = path || wfList(); for (let j = wf.indexOf(fin.r) + 1; j > 0 && j < wf.length; j++) if (wf[j].prep === 'manual' && manMg(wf[j].man) !== null) { const m = wf[j].man; fc = numOr(m.conc, null); fv = numOr(m.vol, null); meas = true; manLoad = mgOf(fin); } }
   const mg = meas ? fc*fv : pm;
   const cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0, perG = cG > 0 ? mg/cG : null;
-  const poolVol = fin.nd && fin.nd.mg !== null ? fin.nd.vol : fin.p && fin.p.measured ? fin.p.measVol : fin.p && fin.p.vol >= 0 ? fin.p.vol : null;
+  const poolVol = fin.nd && fin.nd.mg !== null ? fin.nd.vol : fin.p && fin.p.measured ? fin.p.measVol : fin.p && fin.p.vol >= 0 ? fin.p.vol*volF(fin.r) : null;
   const oddRow = rows.find(x => x.yld > 100 || x.stepY > 105);
   return {fin, k: allRows.indexOf(fin), mg, poolMg: pm, poolVol, poolPerL: cL > 0 ? pm/cL : null, meas, fc, fv, perL: cL > 0 ? mg/cL : null, perG, cL, basis: meas ? 'final' : allRows.basis, poolBasis: allRows.basis, pur: meas ? null : fin.pur, purEst: meas ? false : fin.purEst,
     perGTxt: perG == null ? '' : `${sig2(perG)} mg per g of wet cells`, odd: !!oddRow, oddRow,
@@ -4506,7 +4510,7 @@ function ncObj(r){ const id = 'nc:' + r.id, o = prepObj[id] || (prepObj[id] = {i
 /* what a Concentrated panel says: the NanoDrop mean, the volume and the mg */
 function ncLines(r){ const p = poolRows(r), ms = poolMeas(r), b = (prep.btw || {})[r.id] || {}, out = [], v = numOr(b.vOut, 0);
   if (ms.src === 'btw' || ms.nd) out.push(`${fmt(ms.c || (ms.nd && ms.nd.m), 2)}${ms.nd && ms.nd.sd != null ? ` ± ${fmt(ms.nd.sd, 2)}` : ''} mg/mL`);
-  if (v > 0) out.push(`${fmtAuto(v)} mL${p && p.measured && p.src === 'btw' ? `, ${sig2(p.mg)} mg` : ''}`);
+  if (v > 0) out.push(`${fmtAuto(v)} ${xUnit(r) === 'µL' ? 'µL' : 'mL'}${p && p.measured && p.src === 'btw' ? `, ${sig2(p.mg)} mg` : ''}`);
   const dv = [String(b.device || '').trim(), String(b.mwco || '').trim() ? `${String(b.mwco).trim()} kDa` : ''].filter(Boolean).join(', '); if (dv) out.push({t: dv, c: '#555555'});
   return out; }
 /* a purification step with no chromatogram: a gravity or batch column, a precipitation, a dialysis, a concentration, anything else */
@@ -4897,7 +4901,7 @@ const arrowNote = r => String(r.note || '').trim();
 function btwSplit(b){ const vo = numOr(b && b.vOut, null), vk = numOr(b && b.vKeep, null); let vl = numOr(b && b.vLoad, null);
   if (vl == null && vk == null) return {f: 1, set: false}; const bad = !(vo > 0) ? 'novol' : vl != null && vl < 0 || vk != null && vk < 0 ? 'neg' : vl === 0 ? 'zero' : (vl || 0) + (vk || 0) > vo*(1 + 1e-9) ? 'over' : '';
   if (bad) return {f: 1, set: false, bad, vo, vl, vk}; if (vl == null) vl = vo - vk; return {f: vl/vo, set: true, vo, vl, vk}; }
-function btwMg(r){ const b = btwOf(r); if (!b) return null; const ms = poolMeas(r), c = ms.src === 'btw' ? ms.c : null, vo = numOr(b.vOut, null); if (c == null || vo == null) return null; const p = poolRows(r), mg = c*vo; return {mg, pct: p && p.mgArea > 0 ? 100*mg/p.mgArea : null}; }
+function btwMg(r){ const b = btwOf(r); if (!b) return null; const ms = poolMeas(r), c = ms.src === 'btw' ? ms.c : null, vo = numOr(b.vOut, null); if (c == null || vo == null) return null; const p = poolRows(r), mg = c*vo*volF(r); return {mg, pct: p && p.mgArea > 0 ? 100*mg/p.mgArea : null}; }
 function btwSentence(b, r){
   const run = (r && (r.xu || r.xUnit)) ? r : (b && (b.xu || b.xUnit)) ? b : null, rec = (b && (b.how || b.vOut != null || b.vIn != null)) ? b : (run && (btwOf(run) || (prep.btw && prep.btw[run.id]))) || b || {}, u = (rec && rec.unit) || (run && xUnit(run) !== 'min' ? xUnit(run) : '') || (typeof r === 'string' ? r : '') || (b && typeof b === 'object' && xUnit(b) !== 'min' ? xUnit(b) : '') || 'mL';
   const dv = String(rec.device || '').trim(), mw = String(rec.mwco || '').trim(), nt = String(rec.note || '').trim().replace(/\.$/, ''), vi = numOr(rec.vIn, 0) || numOr(rec._poolVol, 0), vo = numOr(rec.vOut, 0);
@@ -5055,7 +5059,7 @@ function methodsText(){
     if (c.mFrac) { const f = unitIf(c.mFrac, 'mL'); t += `, collecting ${/ to /.test(f) ? `fractions of ${f}` : `${f} fractions`}`; } t += '.';
     if (c.mBufB && !sec) { const bm = bufMismatch(r, c); t += ` Buffer B was ${lc(c.mBufB)}${bm ? ` [differs from buffer A in ${bm}, check]` : ''}.`; }
     if (hasTxt(r.mOther)) t += ` ${v(r.mOther).replace(/^./, x => x.toUpperCase()).replace(/\.?$/, '.')}`;
-    const pool = poolLabel(r), pr = poolRows(r), vol = pr && xUnit(r) === 'mL' && pr.vol > 0 ? ` (${fmt(pr.vol, 1)} mL)` : '';
+    const pool = poolLabel(r), pr = poolRows(r), vol = pr && xUnit(r) !== 'min' && pr.vol > 0 ? ` (${fmt(pr.vol, 1)} ${xUnit(r)})` : '';
     const nt = String(r.note || '').trim().replace(/\.$/, ''), verb = /^[A-Za-z]+(ed|en)\b/.test(nt), tagNote = !prep.cleave && PROT_NOTE.test(nt) && !PROT_NOT.test(nt);
     if (pool) t += ` Fractions ${pool.replace(/^Pool\s*/, '')}${vol} were pooled${nt && !tagNote ? (verb ? ` and ${lc(nt)}` : ` (next: ${nt})`) : ''}.`;
     if (tagNote) t += ` The tag was then removed (${lc(nt)}).`;
@@ -5092,9 +5096,9 @@ function methodsText(){
   if (q.level || q.sol) R.push(`By SDS-PAGE, the tagged protein was about ${q.level ? `${fmt(q.level.pct, 0)}% of total cell protein` : ''}${q.level && q.sol ? ' and about ' : ''}${q.sol ? `${fmt(q.sol.pct, 0)}% soluble` : ''}.`);
   if (cq) R.push(`About ${fmt(cq.pct, 0)}% of the fusion was cleaved, by SDS-PAGE.`);
   if (ys.length) {
-    wf.forEach(r => { if (r.prep === 'manual') { const a = manMg(r.man); if (a !== null) R.push(`After the ${r.name} step, the sample held ${sig2(a)} mg (${fmtAuto(+r.man.conc)} mg/mL in ${fmtAuto(+r.man.vol)} mL).`); return; } const bw = btwOf(r), kp = btwMg(r); if (bw && kp) { const epStr = poolMeas(r).nd ? epPhrase(ndEpsUsed(r)) : ''; R.push(`After ${lc(stepTitle(r))}, ${bw.how === 'conc' ? 'concentration' : 'that step'} left ${sig2(kp.mg)} mg (${(ms => ms.nd ? `${fmt(ms.c, 2)} mg/mL in ${fmtAuto(+bw.vOut)} mL by NanoDrop${ndA205(ndFinalOf(r)) ? ' A205' : ''}${ms.nd.n > 1 ? `, mean of ${ms.nd.n} readings` : ''}${epStr}` : `${fmtAuto(+bw.conc)} mg/mL in ${fmtAuto(+bw.vOut)} mL`)(poolMeas(r))}).`); } });
+    wf.forEach(r => { if (r.prep === 'manual') { const a = manMg(r.man); if (a !== null) R.push(`After the ${r.name} step, the sample held ${sig2(a)} mg (${fmtAuto(+r.man.conc)} mg/mL in ${fmtAuto(+r.man.vol)} mL).`); return; } const bw = btwOf(r), kp = btwMg(r); if (bw && kp) { const epStr = poolMeas(r).nd ? epPhrase(ndEpsUsed(r)) : ''; R.push(`After ${lc(stepTitle(r))}, ${bw.how === 'conc' ? 'concentration' : 'that step'} left ${sig2(kp.mg)} mg (${(ms => ms.nd ? `${fmt(ms.c, 2)} mg/mL in ${fmtAuto(+bw.vOut)} ${bw.unit} by NanoDrop${ndA205(ndFinalOf(r)) ? ' A205' : ''}${ms.nd.n > 1 ? `, mean of ${ms.nd.n} readings` : ''}${epStr}` : `${fmtAuto(+bw.conc)} mg/mL in ${fmtAuto(+bw.vOut)} ${bw.unit}`)(poolMeas(r))}).`); } });
     ys.forEach(y => {
-      const E = ndEpsFor(y.fin.r.id), pr = poolRows(y.fin.r), vol = y.poolVol ?? (pr && pr.measured ? pr.measVol : y.fin.nd && y.fin.nd.fv ? y.fin.nd.fv : pr && pr.vol), path = numOr(y.fin.r.path, numOr(opt.path, 2));
+      const E = ndEpsFor(y.fin.r.id), pr = poolRows(y.fin.r), vol = y.poolVol ?? (pr && pr.measured ? pr.measVol : y.fin.nd && y.fin.nd.fv ? y.fin.nd.fv : pr && pr.vol*volF(y.fin.r)), path = numOr(y.fin.r.path, numOr(opt.path, 2));
       const ndSs = y.fin.p && y.fin.p.measured ? (y.fin.p.src === 'card' ? [] : ndFinalOf(y.fin.r)) : ndUsedOf(y.fin.r), ndHow = ndA205(ndSs) ? 'A205' : 'A280', ndEp = epPhrase(ndEpsUsed(y.fin.r, ndSs)).replace(/^, /, '');
       const poolTitle = ys.length > 1 ? `The ${stepTitle(y.fin.r)} pool` : `The ${y.meas ? 'last' : 'final'} pool`;
       if (!y.meas && !(y.fin.p && y.fin.p.viaConc && btwMg(y.fin.r))) R.push(`${poolTitle} held ${sig2(y.poolMg)} mg${vol > 0 ? ` in ${fmtAuto(vol)} mL (${sig2(y.poolMg/vol)} mg/mL)` : ''}${y.poolPerL != null ? `, ${sig2(y.poolPerL)} mg per L of culture` : ''}, by ${y.fin.p && y.fin.p.measured ? `NanoDrop ${ndHow} of the ${y.fin.p.concentrated ? 'concentrated ' : ''}pool${ndEp ? ` (${ndEp})` : ''}` : ['mg', 'mgmol', 'area'].includes(y.poolBasis) ? `the A280 area of the pool (${path} mm path${hasTxt(y.fin.r.path) ? '' : ' [assumed, check]'}${epPhrase(E)})` : `NanoDrop ${ndHow}${ndEp ? ` (${ndEp})` : ''}`}.${y.pur == null && !hasTxt(prep.qcPurity) ? ' Its purity was not measured by gel.' : !hasTxt(prep.qcPurity) && y.pur !== null && !(y.purEst && y.pur < 15) ? ` Purity was ${y.purEst ? 'about ' : ''}${fmt(y.pur, 0)}% by SDS-PAGE.` : ''}${y.odd ? (o => ` This amount is unverified, because ${o ? `the ${lc(stepTitle(o.r))} step yield is ${fmt(Math.max(o.yld > 100 ? o.yld : 0, o.stepY || 0), 0)}%` : 'one step yield is above 100%'}.`)(y.oddRow) : ''}`);
@@ -5980,7 +5984,7 @@ window.addEventListener('pointerup', () => {
 /* purification summary: one row per workflow step with its pool */
 function sumRows(){
   const out = [];
-  runs.filter(r => r.inWf).forEach(r => { let p = poolRows(r) || {label: '', area: null, mg: null, vol: null, none: true}; if (p.measured && p.src === 'btw') p = Object.assign({}, p, {mg: p.mgArea, measured: false, viaConc: true}); if (massWhy(r)) p = Object.assign({}, p, {area: null}); else if (xUnit(r) === 'min' && p.area != null) p = Object.assign({}, p, {area: p.area*uvFlow(r)}); const vol = xUnit(r) === 'mL' ? p.vol : null, pl = String(p.label || '').toUpperCase().replace(/–/g, '-');
+  runs.filter(r => r.inWf).forEach(r => { let p = poolRows(r) || {label: '', area: null, mg: null, vol: null, none: true}; if (p.measured && p.src === 'btw') p = Object.assign({}, p, {mg: p.mgArea, measured: false, viaConc: true}); if (massWhy(r)) p = Object.assign({}, p, {area: null}); else if (xUnit(r) === 'min' && p.area != null) p = Object.assign({}, p, {area: p.area*uvFlow(r)}); else if (p.area != null && volF(r) !== 1) p = Object.assign({}, p, {area: p.area*volF(r)}); const vol = xUnit(r) !== 'min' && p.vol != null ? p.vol*volF(r) : null, pl = String(p.label || '').toUpperCase().replace(/–/g, '-');
     let pur = null, purEst = false; const satL = []; gels.forEach(g => gelLabels(g).forEach((l, i) => { const L = String(l).trim().toUpperCase().replace(/–/g, '-'); if (pur != null || laneAssign(g, i) !== r.id || !(/POOL/.test(L) || (pl && L === pl))) return; if (gelSaturated(g).includes(laneShow(l))) { satL.push(laneShow(l)); return; } const ln = gelBands(g)[i], pu = ln && lanePurity(g, ln); if (pu && pu.purity != null) { pur = pu.purity; purEst = pu.est; } }));
     /* no lane named for the pool: use the lane whose fractions overlap the pool most (at least half of the lane inside it) */
     if (pur == null) { const sset = shadeSet(r); let best = null;
@@ -6051,7 +6055,7 @@ function sumDisplay(rows){
       list.push({man: o, mg, vol: numOr(o.man.vol, 0) || null, conc: numOr(o.man.conc, 0) || null, yld: v > 0 && rows.base > 0 ? 100*v/rows.base : null, stepY: v > 0 && last > 0 ? 100*v/last : null}); if (v > 0) amtAt[i] = v; return; }
     if (o.prep) return; const x = runRow(o); if (!x) return; list.push({run: x, k: rows.indexOf(x)});
     const a = rows.amtOf ? rows.amtOf(x) : null, bw = prep.on ? btwMg(x.r) : null, kp = bw && rows.toAmt ? rows.toAmt(bw.mg, x) : null;
-    if (prep.on && btwOf(x.r)) { const b = prep.btw[x.r.id] || {}, ms = poolMeas(x.r); list.push({conc: x, name: ncObj(x.r).name, mg: bw ? bw.mg : null, vol: numOr(b.vOut, 0) || null, mgml: ms.c || null, sd: ms.nd ? ms.nd.sd : null, n: ms.nd ? ms.nd.n : null, yld: kp > 0 && rows.base > 0 ? 100*kp/rows.base : null, stepY: kp > 0 && a > 0 ? 100*kp/a : null}); }
+    if (prep.on && btwOf(x.r)) { const b = prep.btw[x.r.id] || {}, ms = poolMeas(x.r); list.push({conc: x, name: ncObj(x.r).name, mg: bw ? bw.mg : null, vol: numOr(b.vOut, 0)*volF(x.r) || null, mgml: ms.c || null, sd: ms.nd ? ms.nd.sd : null, n: ms.nd ? ms.nd.n : null, yld: kp > 0 && rows.base > 0 ? 100*kp/rows.base : null, stepY: kp > 0 && a > 0 ? 100*kp/a : null}); }
     if (kp > 0) amtAt[i] = kp; else if (a > 0) amtAt[i] = a; });
   return list; }
 function renderSumTable(){
@@ -6080,7 +6084,7 @@ function renderSumTable(){
     if (prep.on && btwOf(x.r)) { const sp = btwSplit(prep.btw[x.r.id] || {}), sm = (btwMg(x.r) || {}).mg, ld = loadedAfter(x.r);
       const kvol = sp.set && sp.vk > 0 ? sp.vk : 0; /* only a volume said to be kept back; a load alone leaves the rest unaccounted, not kept */
       if (sp.set && sm > 0 && sp.f < 1 && kvol > 0 && ld > 0 && Math.abs(ld - sm*sp.f) <= 1e-9*sm) { const km = sm*kvol/sp.vo, kv = rows.toAmt(km, x), ka = String((prep.btw[x.r.id] || {}).keepAs || '').trim(), ref = rows.baseMan ? `the ${rows.baseMan.name} step` : 'step 1';
-        notes.push(`${ncObj(x.r).name} after ${nm}: ${fmt(sm, 2)} mg in all; ${fmt(ld, 2)} mg (${fmtAuto(sp.vl)} of ${fmtAuto(sp.vo)} mL) was loaded on the next step and ${fmt(km, 2)} mg (${fmtAuto(kvol)} mL${ka ? `, ${ka}` : ''}) kept back${kv > 0 && rows.base > 0 ? `, ${fmt(100*kv/rows.base, 0)}% of ${ref}` : ''}. Kept back is not lost: the next step's step yield counts from the ${fmt(ld, 2)} mg loaded, and Yield after this point counts only the loaded share.`); } }
+        const bu = xUnit(x.r) === 'µL' ? 'µL' : 'mL'; notes.push(`${ncObj(x.r).name} after ${nm}: ${fmt(sm, 2)} mg in all; ${fmt(ld, 2)} mg (${fmtAuto(sp.vl)} of ${fmtAuto(sp.vo)} ${bu}) was loaded on the next step and ${fmt(km, 2)} mg (${fmtAuto(kvol)} ${bu}${ka ? `, ${ka}` : ''}) kept back${kv > 0 && rows.base > 0 ? `, ${fmt(100*kv/rows.base, 0)}% of ${ref}` : ''}. Kept back is not lost: the next step's step yield counts from the ${fmt(ld, 2)} mg loaded, and Yield after this point counts only the loaded share.`); } }
     if (x.pur == null && x.satL.length) notes.push(`${nm}: purity n.d. * Lane ${x.satL.join(', ')} is saturated, so it can't be measured. Load less or use a shorter exposure.`); });
   { const nog = rows.filter(x => x.pur == null && !x.satL.length).map(x => stepTitle(x.r) !== x.r.name ? stepTitle(x.r) : shortRunName(x.r)); if (nog.length) notes.push(`No purity gel for ${nog.length > 1 ? nog.slice(0, -1).join(', ') + ' or ' + nog[nog.length - 1] : nog[0]}.`); }
   if (rows.some(x => x.purEst && x.pur != null)) notes.push('≈ Purity is estimated from bands within 8% of the expected size (the tagged form counts only before the tag is removed), weighted over the pool\'s lanes; "unclear" means too little signal at that size. Mark the target band on a gel to measure it.');
@@ -6917,7 +6921,7 @@ function ndConcRaw(s){ const dil = numOr(s.dil, 1) || 1;
   if (s.conc != null) return {v: s.conc*dil, unit: 'mg/mL', src: 'instrument'};
   return {v: s.a280*dil, unit: 'mg/mL', src: '1 Abs = 1 mg/mL'}; }
 /* minutes become mL with the flow, as in massOf and poolRows; no flow gives no volume */
-const ndPoolVol = r => { const p = r && poolRows(r); if (!p) return null; return xUnit(r) === 'mL' ? p.vol : xUnit(r) === 'min' && uvFlow(r) > 0 ? p.vol*uvFlow(r) : null; };
+const ndPoolVol = r => { const p = r && poolRows(r); if (!p) return null; return xUnit(r) !== 'min' ? p.vol*volF(r) : xUnit(r) === 'min' && uvFlow(r) > 0 ? p.vol*uvFlow(r) : null; };
 /* one step: replicate readings averaged within a stage (the pool, and the final sample after concentration or dialysis) */
 function ndStats(ss){ const v = ss.filter(s => !s.unitWarn).map(s => ndConc(s).v).filter(x => x != null); if (!v.length) return null; const m = v.reduce((a, b) => a + b, 0)/v.length;
   const sd = v.length > 1 ? Math.sqrt(v.reduce((t, x) => t + (x - m)**2, 0)/(v.length - 1)) : null; return {m, sd, n: v.length, cv: sd != null && m ? 100*sd/m : null}; }
@@ -6925,7 +6929,7 @@ function ndForRun(r){
   const ss = ndSamples.filter(s => s.runId === r.id && s.stage !== 'conc' && s.kind !== 'nucleic' && !CRUDE_RE.test(s.name)); if (!ss.length) return null;
   const P = ndStats(ss.filter(s => s.stage !== 'final')), F = ndStats(ss.filter(s => s.stage === 'final'));
   if (!P && !F) return null;
-  const pv = numOr(r.ndVol, 0) > 0 ? +r.ndVol : ndPoolVol(r), fv = numOr(r.ndFinalVol, 0) > 0 ? +r.ndFinalVol : numOr(((prep.btw || {})[r.id] || {}).vOut, 0) > 0 ? +prep.btw[r.id].vOut : null, E = ndEpsFor(r.id);
+  const pv = numOr(r.ndVol, 0) > 0 ? +r.ndVol : ndPoolVol(r), fv = numOr(r.ndFinalVol, 0) > 0 ? +r.ndFinalVol : numOr(((prep.btw || {})[r.id] || {}).vOut, 0) > 0 ? prep.btw[r.id].vOut*volF(r) : null, E = ndEpsFor(r.id);
   const pmg = P && pv ? P.m*pv : null, fmg = F && fv ? F.m*fv : null, mg = fmg != null ? fmg : pmg;
   const used = ss.filter(s => fmg != null ? s.stage === 'final' : s.stage !== 'final').filter(s => !s.unitWarn).map(s => s.r280).filter(v => v != null);
   return {P, F, pv, fv, vol: fmg != null ? fv : pv, pvAuto: !(numOr(r.ndVol, 0) > 0), pmg, fmg, mg, r280: used.length ? used.reduce((x, y) => x + y, 0)/used.length : null, mgml: (fmg != null ? F : P || F) ? (fmg != null ? F : P || F).m : null, kda: E && E.kda, umol: mg != null && E && E.kda ? mg/E.kda : null}; }
@@ -9202,7 +9206,7 @@ function stepList(){
     const warn = !pooled ? '' : [o ? `Step yield ${o}%, check the UV path` : '', nd.length ? `${o ? 'needs' : 'Needs'} ${nd.join(', ')}` : ''].filter(Boolean).join(', ');
     L.push({k: 'run:' + r.id, g: first ? 'Purification' : '', t: stepTitle(r), done: pooled, warn, s: warn || (pl ? [pl, mg].filter(Boolean).join(', ') : 'Set the pooled fractions'), run: r}); first = false;
     const b = btwOf(r); if (b) { const kp = btwMg(r); L.push({k: 'btw:' + r.id, t: ncObj(r).name, done: !!kp,
-      s: (ms => [ms.c != null && (ms.src === 'btw' || ms.nd) ? `Conc. ${fmt(ms.c, 2)} mg/mL` : '', numOr(b.vOut, null) != null ? `Vol. ${fmtAuto(+b.vOut)} mL` : '', kp ? `Total ${sig2(kp.mg)} mg` : ''].filter(Boolean).join(', '))(poolMeas(r)) || 'NanoDrop export and volume'}); } });
+      s: (ms => [ms.c != null && (ms.src === 'btw' || ms.nd) ? `Conc. ${fmt(ms.c, 2)} mg/mL` : '', numOr(b.vOut, null) != null ? `Vol. ${fmtAuto(+b.vOut)} ${b.unit}` : '', kp ? `Total ${sig2(kp.mg)} mg` : ''].filter(Boolean).join(', '))(poolMeas(r)) || 'NanoDrop export and volume'}); } });
   L.push({k: 'add', g: first ? 'Purification' : '', add: true, t: '', s: ''});
   const ys = finalYields(), y = ys[0] || finalYield(), fin = FIN_KEYS.some(v) || ndSamples.some(n => n.stage === 'final') || !!m('final').date;
   const fw = !fin || !y ? '' : y.meas && y.loaded && y.mg != null && y.mg > y.loaded.mg*1.05 ? `${sig2(y.mg)} mg is more than was loaded, check` : y.purTyped ? 'Purity typed, add a gel of the last pool' : '';
@@ -9471,7 +9475,9 @@ $('#tl').addEventListener('click', e => { const fo = e.target.closest('[data-cld
   const b = e.target.closest('[data-step]'); if (b) selectStep(b.dataset.step); });
 /* the between-columns fields edit the pool the current step follows */
 function syncBtw(){ const rid = curStep.startsWith('btw:') ? curStep.slice(4) : '', b = (prep.btw || {})[rid] || {};
-  { const r = runs.find(x => x.id === rid), p = r ? poolRows(r) : null; $('#btw-vIn').placeholder = p && xUnit(r) === 'mL' && p.vol > 0 ? `auto: ${fmt(p.vol, 1)}` : ''; }
+  { const r = runs.find(x => x.id === rid), p = r ? poolRows(r) : null, bu = r && xUnit(r) === 'µL' ? 'µL' : 'mL'; $('#btw-vIn').placeholder = p && xUnit(r) !== 'min' && p.vol > 0 ? `auto: ${fmt(p.vol, 1)}` : '';
+    /* the volumes here are in the run's unit, µL on a µL run (#1566) */
+    ['#btw-vOut', '#btw-vLoad', '#btw-vKeep', '#btw-vIn'].forEach(s => { const t = $(s).parentNode.firstChild; if (t && t.nodeType === 3) t.nodeValue = t.nodeValue.replace(/\((mL|µL)\)/, `(${bu})`); }); $('#btw-vOut').placeholder = bu === 'µL' ? 'e.g. 250' : 'e.g. 0.25'; }
   document.querySelectorAll('#prepPanel [data-btw]').forEach(el => { if (el === document.activeElement) return; const v = b[el.dataset.btw] ?? (el.dataset.btw === 'how' ? 'conc' : ''); if (el.value !== String(v)) el.value = v; }); btwCarry(); }
 /* what the reading does to the column run before it */
 function btwCarry(){ const el = $('#btwCarry'), rid = curStep.startsWith('btw:') ? curStep.slice(4) : '', r = runs.find(x => x.id === rid), p = r ? poolRows(r) : null; if (!el) return;
@@ -9487,10 +9493,10 @@ function btwCarry(){ const el = $('#btwCarry'), rid = curStep.startsWith('btw:')
     : p.measured && p.src === 'btw' ? `${sig2(p.mg)} mg (${fmt(p.conc, 2)} mg/mL × ${fmtAuto(p.measVol)} mL)${p.mgArea > 0 ? `. The UV area of ${stepTitle(r)} estimated ${sig2(p.mgArea)} mg` : ''}.`
     : ms.c > 0 ? `Enter the volume after concentrating to get the mg (the pool was ${fmt(p.vol, 1)} ${xUnit(r)}).` : `After ${stepTitle(r)}.`;
   /* the split between the next step and what was kept back */
-  const sp = btwSplit(b), se = $('#btwSplit'), sm = r ? (btwMg(r) || {}).mg : null;
-  se.textContent = sp.bad === 'over' ? `Loaded plus kept back is ${fmtAuto((sp.vl || 0) + (sp.vk || 0))} mL, more than the ${fmtAuto(sp.vo)} mL after concentrating. Until that is fixed, all of it counts as loaded on the next step.`
-    : sp.bad === 'novol' ? 'Enter the volume after concentrating too. Until then, all of it counts as loaded on the next step.' : sp.bad === 'zero' ? 'A load of 0 mL leaves no amount to count the next step’s yield from. Until that is fixed, all of it counts as loaded on the next step.' : sp.bad === 'neg' ? 'A volume can’t be below 0. Until that is fixed, all of it counts as loaded on the next step.'
-    : sp.set && sm > 0 ? `${sig2(sm*sp.f)} mg (${fmtAuto(sp.vl)} of ${fmtAuto(sp.vo)} mL) went on to the next step${sp.vk > 0 ? `, ${fmtAuto(sp.vk)} mL kept back` : ''}.` : '';
+  const sp = btwSplit(b), se = $('#btwSplit'), sm = r ? (btwMg(r) || {}).mg : null, bu = r && xUnit(r) === 'µL' ? 'µL' : 'mL';
+  se.textContent = sp.bad === 'over' ? `Loaded plus kept back is ${fmtAuto((sp.vl || 0) + (sp.vk || 0))} ${bu}, more than the ${fmtAuto(sp.vo)} ${bu} after concentrating. Until that is fixed, all of it counts as loaded on the next step.`
+    : sp.bad === 'novol' ? 'Enter the volume after concentrating too. Until then, all of it counts as loaded on the next step.' : sp.bad === 'zero' ? `A load of 0 ${bu} leaves no amount to count the next step’s yield from. Until that is fixed, all of it counts as loaded on the next step.` : sp.bad === 'neg' ? 'A volume can’t be below 0. Until that is fixed, all of it counts as loaded on the next step.'
+    : sp.set && sm > 0 ? `${sig2(sm*sp.f)} mg (${fmtAuto(sp.vl)} of ${fmtAuto(sp.vo)} ${bu}) went on to the next step${sp.vk > 0 ? `, ${fmtAuto(sp.vk)} ${bu} kept back` : ''}.` : '';
   if (numOr(b.vLoad, null) != null || numOr(b.vKeep, null) != null || String(b.keepAs || '').trim()) $('#btwSplitBox').open = true;
   se.hidden = !se.textContent; se.classList.toggle('warnc', !!sp.bad); }
 /* a NanoDrop export loaded on the Concentrated step: every protein reading in it is the concentrated sample of the column before */
@@ -9499,7 +9505,7 @@ $('#btwNdFile').addEventListener('change', async e => { const f = e.target.files
   if (/^image\/|\.pdf$/i.test(f.type || '') || /\.(png|jpe?g|gif|tiff?|bmp|heic|pdf)$/i.test(f.name)) { toast('That is a picture of the readings. On the NanoDrop, export the measurements as a .csv or .tsv file and load that'); return; }
   const list = parseNanoDrop(decode(await f.arrayBuffer())); if (!list.some(s => s.kind !== 'nucleic')) { toast(list.length ? `${f.name} has only nucleic acid readings` : `No readings found in ${f.name}`); return; }
   prep.btw = prep.btw || {}; prep.btw[rid] = Object.assign({how: 'conc'}, prep.btw[rid]); delete prep.btw[rid].conc;
-  if (r) { if (numOr(r.poolFinalVol, 0) > 0 && !(numOr(prep.btw[rid].vOut, 0) > 0)) prep.btw[rid].vOut = r.poolFinalVol; delete r.poolConc; delete r.poolFinalVol; }
+  if (r) { if (numOr(r.poolFinalVol, 0) > 0 && !(numOr(prep.btw[rid].vOut, 0) > 0)) prep.btw[rid].vOut = String(+(numOr(r.poolFinalVol, 0)/volF(r)).toPrecision(12)); delete r.poolConc; delete r.poolFinalVol; }
   addNanoDrop(list, f.name, rid); syncBtw(); renderList(); render(); if (!(numOr(prep.btw[rid].vOut, 0) > 0)) $('#btw-vOut').focus(); });
 $('#btwNdList').addEventListener('click', e => { const b = e.target.closest('[data-btwndx]'); if (!b) return; ndSamples = ndSamples.filter(x => x.id !== b.dataset.btwndx); $('#ndList')._n = -1; renderND(); btwCarry(); renderList(); render(); });
 const btwEdit = e => { const el = e.target.closest('[data-btw]'); if (!el || !curStep.startsWith('btw:')) return; const rid = curStep.slice(4); prep.btw = prep.btw || {};
