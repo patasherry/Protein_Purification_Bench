@@ -2885,25 +2885,27 @@ function buildRunPlainSVG(run, ov){
   const labMode = secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (run.isStd && o.secLabel === 'olig') ? 'mw' : (o.secLabel || 'mw')) : o.intLabel;
   const iRows = (o.intFill || labMode !== 'none') ? integRows(run) : [];
   if (iRows.length && o.intFill) {
+    /* integration keeps its recorded-trace area, but its guides must sit on the baseline-corrected display trace */
+    const intShift = ['min', 'linear'].includes(o.baseline) ? (() => { const raw = uvOf(run), shown = procFull(run), d = raw.ys.map((v, k) => shown.ys[k] - v); return x => { const k = lowerBound(raw.xs, x); if (k <= 0) return d[0]; if (k >= raw.xs.length) return d[d.length - 1]; if (raw.xs[k] === x) return d[k]; const f = (x - raw.xs[k-1])/((raw.xs[k] - raw.xs[k-1]) || 1); return d[k-1] + (d[k] - d[k-1])*f; }; })() : () => 0;
     s.push(`<g clip-path="url(#${idp}plot-area)">`);
     const doneCl = new Set();
     iRows.forEach(rw => { if (!rw.gauss) return;
       const {H, mu, s: sg} = rw.gauss, ga = Math.max(xlo, rw.cl.a, mu - 4*sg), gb = Math.min(xhi, rw.cl.b, mu + 4*sg); if (!(gb > ga)) return;
-      let top = '', bot = ''; for (let j=0;j<=120;j++){ const xx = ga + (gb - ga)*j/120, d = (xx - mu)/sg; top += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + H*Math.exp(-0.5*d*d))); }
-      for (let j=120;j>=0;j-=20){ const xx = ga + (gb - ga)*j/120; bot += 'L' + r2(px(xx)) + ' ' + r2(py(rw.base(xx))); }
+      let top = '', bot = ''; for (let j=0;j<=120;j++){ const xx = ga + (gb - ga)*j/120, d = (xx - mu)/sg; top += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + H*Math.exp(-0.5*d*d) + intShift(xx))); }
+      for (let j=120;j>=0;j-=20){ const xx = ga + (gb - ga)*j/120; bot += 'L' + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + intShift(xx))); }
       s.push(`<path d="${top}${bot}Z" fill="${run.color}" fill-opacity="0.18" stroke="${run.color}" stroke-width="0.5" stroke-dasharray="2 1.5"/>`);
       if (!doneCl.has(rw.cl.key)) { doneCl.add(rw.cl.key); const c = rw.cl; let d = '';
-        for (let j=0;j<=160;j++){ const xx = c.a + (c.b - c.a)*j/160; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(c.base(xx) + c.model(xx))); }
+        for (let j=0;j<=160;j++){ const xx = c.a + (c.b - c.a)*j/160; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(c.base(xx) + c.model(xx) + intShift(xx))); }
         s.push(`<path d="${d}" fill="none" stroke="#333333" stroke-width="0.6" stroke-dasharray="3 2"/>`);
-        s.push(`<line x1="${r2(px(c.a))}" y1="${r2(py(c.base(c.a)))}" x2="${r2(px(c.b))}" y2="${r2(py(c.base(c.b)))}" stroke="#555555" stroke-width="0.5"/>`); }
+        s.push(`<line x1="${r2(px(c.a))}" y1="${r2(py(c.base(c.a) + intShift(c.a)))}" x2="${r2(px(c.b))}" y2="${r2(py(c.base(c.b) + intShift(c.b)))}" stroke="#555555" stroke-width="0.5"/>`); }
     });
     iRows.forEach(rw => { if (rw.gauss) return;
       const st = Math.max(1, Math.ceil((rw.i1 - rw.i0)/500)); let d = '';
-      for (let i=rw.i0;i<=rw.i1;i+=st) d += (d ? 'L' : 'M') + r2(px(rw.xs[i])) + ' ' + r2(py(rw.ys[i]));
-      d += `L${r2(px(rw.b))} ${r2(py(rw.ys[rw.i1]))}L${r2(px(rw.b))} ${r2(py(rw.base(rw.b)))}L${r2(px(rw.a))} ${r2(py(rw.base(rw.a)))}Z`;
+      for (let i=rw.i0;i<=rw.i1;i+=st) d += (d ? 'L' : 'M') + r2(px(rw.xs[i])) + ' ' + r2(py(rw.ys[i] + intShift(rw.xs[i])));
+      d += `L${r2(px(rw.b))} ${r2(py(rw.ys[rw.i1] + intShift(rw.b)))}L${r2(px(rw.b))} ${r2(py(rw.base(rw.b) + intShift(rw.b)))}L${r2(px(rw.a))} ${r2(py(rw.base(rw.a) + intShift(rw.a)))}Z`;
       s.push(`<path d="${d}" fill="${run.color}" fill-opacity="0.22" stroke="none"/>`);
-      s.push(`<line x1="${r2(px(rw.a))}" y1="${r2(py(rw.base(rw.a)))}" x2="${r2(px(rw.b))}" y2="${r2(py(rw.base(rw.b)))}" stroke="#555555" stroke-width="0.5"/>`);
-      [[rw.a, rw.ys[rw.i0]], [rw.b, rw.ys[rw.i1]]].forEach(([x, yv]) => s.push(`<line x1="${r2(px(x))}" y1="${r2(py(yv))}" x2="${r2(px(x))}" y2="${r2(py(rw.base(x)))}" stroke="#555555" stroke-width="0.5"/>`));
+      s.push(`<line x1="${r2(px(rw.a))}" y1="${r2(py(rw.base(rw.a) + intShift(rw.a)))}" x2="${r2(px(rw.b))}" y2="${r2(py(rw.base(rw.b) + intShift(rw.b)))}" stroke="#555555" stroke-width="0.5"/>`);
+      [[rw.a, rw.ys[rw.i0]], [rw.b, rw.ys[rw.i1]]].forEach(([x, yv]) => s.push(`<line x1="${r2(px(x))}" y1="${r2(py(yv + intShift(x)))}" x2="${r2(px(x))}" y2="${r2(py(rw.base(x) + intShift(x)))}" stroke="#555555" stroke-width="0.5"/>`));
     });
     s.push('</g>');
   }
