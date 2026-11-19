@@ -263,6 +263,82 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     } finally { await close3(); }
   });
 
+  await T.t('sec_narrow_workflow_panel_v0_vt_clearance', async () => {
+    const {p: p4, errs: errs4, close: close4} = await open(), h4 = H(p4);
+    try {
+      const secXs = [], secYs = [];
+      for (let i = 0; i <= 250; i++) {
+        const x = i * 0.1;
+        const y = 20 * Math.exp(-0.5 * ((x - 8.0) / 0.3) ** 2)
+                + 40 * Math.exp(-0.5 * ((x - 14.0) / 0.5) ** 2)
+                + 140 * Math.exp(-0.5 * ((x - 20.8) / 0.35) ** 2);
+        secXs.push(+x.toFixed(2));
+        secYs.push(+y.toFixed(3));
+      }
+      const proj = {
+        app: 'HPLC Figure Bench', version: 1,
+        runs: [
+          {
+            id: 'r1', name: 'IMAC', inWf: true, uvi: 0,
+            uvs: [{name: 'UV', yu: 'mAU', xs: [0, 5, 10, 15], ys: [0, 20, 80, 0]}],
+            fracs: [], phases: [], integ: []
+          },
+          {
+            id: 'r2', name: 'SEC', inWf: true, uvi: 0, secMode: 'on', secCal: 'c1', wfW: 0.6,
+            uvs: [{name: 'UV', yu: 'mAU', xs: secXs, ys: secYs}],
+            fracs: [], phases: [],
+            integ: [
+              {apex: 20.8, apexY: 140, a: 20.0, b: 21.6, area: 150, name: 'Peak 3'}
+            ]
+          }
+        ],
+        traces: [], gels: [], cur: 'fig',
+        opt: {
+          preset: 'column', fs: 9, w: 3.5, h: 2.2, wfW: 2.5, wfH: 1.8,
+          secStds: true, secMarks: 'both', secLabel: 'mw',
+          secCals: [
+            {
+              id: 'c1', name: 'Superdex 200', unit: 'mL', col: 'custom',
+              v0: 15.0, vt: 21.0,
+              stds: [
+                {name: 'S1', kda: 670, ve: 15.5},
+                {name: 'S2', kda: 158, ve: 17.0},
+                {name: 'S3', kda: 44, ve: 19.0},
+                {name: 'S4', kda: 17, ve: 20.8}
+              ]
+            }
+          ],
+          tidy13: true, tidy14: true
+        }
+      };
+      await p4.setInputFiles('#projFile', {name: 'test_sec_narrow.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(proj))});
+      await h4.wait(500);
+      await p4.evaluate(() => {
+        const b = document.querySelector('[data-fig="workflow"]');
+        if (b) b.click();
+      });
+      await h4.wait(600);
+      const svg = await h4.exportSvg(), m = await h4.svgBoxes(svg);
+      const v0 = m.texts.find(t => t.t.trim() === 'V₀');
+      const vt = m.texts.find(t => t.t.trim() === 'Vₜ');
+      const kda = m.texts.filter(t => /kDa/.test(t.t));
+      const dist = (v0 && vt) ? Math.abs(vt.x - v0.x) : Infinity;
+      const overlaps = [];
+      for (const kt of kda) {
+        for (const marker of [v0, vt]) {
+          if (!marker) continue;
+          const ox = Math.min(kt.right, marker.right) - Math.max(kt.x, marker.x);
+          const oy = Math.min(kt.bottom, marker.bottom) - Math.max(kt.y, marker.y);
+          if (ox > 1 && oy > 1) overlaps.push({kda: kt.t, marker: marker.t, ox, oy, pct: oy / kt.h});
+        }
+      }
+      T.check('sec_narrow_wf_v0_vt_distance', dist < 25, `V0-Vt distance: ${dist}`);
+      T.check('sec_late_peak_kda_present', !!v0 && !!vt && kda.length > 0, `v0=${!!v0} vt=${!!vt} kda=${kda.map(x => x.t)}`);
+      T.check('sec_late_peak_no_v0_vt_overlap', overlaps.length === 0, `overlaps=${JSON.stringify(overlaps)}`);
+      T.check('sec_narrow_wf_no_errors', !errs4.length, errs4.join(' | '));
+    } finally { await close4(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

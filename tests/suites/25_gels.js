@@ -563,4 +563,61 @@ await T.t('top-band-kda-clear-of-lane-headers', async () => {
   }
 });
 
+await T.t('minigel_biorad_ladder_kda_no_overlap', async () => {
+  const a = await open(), p = a.p, h = H(p);
+  try {
+    const marks = [
+      {kda: 250, y: 0.12},
+      {kda: 150, y: 0.20},
+      {kda: 100, y: 0.28},
+      {kda: 75, y: 0.36},
+      {kda: 50, y: 0.46},
+      {kda: 37, y: 0.55},
+      {kda: 25, y: 0.618},
+      {kda: 20, y: 0.67},
+      {kda: 15, y: 0.74},
+      {kda: 10, y: 0.82}
+    ];
+    const im = await p.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = 300; c.height = 360;
+      const x = c.getContext('2d');
+      x.fillStyle = '#fff';
+      x.fillRect(0, 0, 300, 360);
+      return c.toDataURL('image/png');
+    });
+    const proj = {
+      app: 'HPLC Figure Bench', version: 1,
+      runs: [{id: 'r1', name: 'Step 1', inWf: true, uvi: 0, uvs: [{name: 'UV', yu: 'mAU', xs: [0, 1, 2], ys: [0, 10, 0]}], fracs: [], phases: [], integ: []}],
+      traces: [],
+      gels: [{id: 'g1', name: 'mini-gel', image: im, nLanes: 3, labels: 'M, 1, 2', marksManual: true, marks, runId: 'r1', cl: 0, cr: 0, ct: 0, cb: 0, rot: 0, fine: 0, assign: []}],
+      cur: 'fig',
+      opt: {preset: 'column', fs: 9, wfH: 1.8, wfGelH: 1.0, ladder: 'biorad', tidy13: true, tidy14: true}
+    };
+    await p.setInputFiles('#projFile', {name: 'test_minigel.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(proj))});
+    await h.wait(500);
+    await p.evaluate(() => {
+      const b = document.querySelector('[data-fig="workflow"]');
+      if (b) b.click();
+    });
+    await h.wait(500);
+    const svg = await h.exportSvg(), bx = await h.svgBoxes(svg);
+    const kdaTitle = bx.texts.find(t => t.t.trim() === 'kDa');
+    const ladderTexts = kdaTitle ? bx.texts.filter(t => Math.abs(t.right - kdaTitle.right) < 8) : bx.texts;
+    const t37 = ladderTexts.find(t => t.t.trim() === '37');
+    const t25 = ladderTexts.find(t => t.t.trim() === '25');
+    let ox = 0, oy = 0, pct = 0;
+    if (t37 && t25) {
+      ox = Math.min(t37.right, t25.right) - Math.max(t37.x, t25.x);
+      oy = Math.min(t37.bottom, t25.bottom) - Math.max(t37.y, t25.y);
+      pct = oy / t37.h;
+    }
+    T.check('minigel_biorad_37_present', !!t37, `37 found: ${!!t37}`);
+    T.check('minigel_biorad_37_25_no_overlap', !(ox > 1 && oy > 1), `ox=${ox} oy=${oy} pct=${pct}`);
+    T.check('minigel_biorad_no_errors', !a.errs.length, a.errs.join(' | '));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
