@@ -311,4 +311,39 @@ const {open, H, suite, src, DATA, path} = require('../lib/harness');
       finals.some(t => /Size exclusion/.test(t) && /His6-SUMO-standin/.test(t)), finals.join(' | '));
     T.check('no page errors', !errs.length, errs.join(' | ')); await close(); });
 
+  // #1582: side-branched manual step between IMAC/cleavage and SEC keeps SEC on the cleaved trunk, and nc:<id> parents resolve in wfList
+  await T.t('side-branch-manual-trunk-cleavage', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await h.newProject('Side-branch manual trunk'); await h.gb(src('gb'));
+      await h.addRun(src('his')); await h.pool('T1-T6');
+      await h.addConc(null, 2.0);
+      await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep=cleave]'); await h.wait(400);
+      await h.addRun(path.join(DATA, 'science/sec_inject2.csv')); await h.suggest();
+      await h.addRun(src('q')); await h.suggest();
+      const runsTl = (await h.timeline()).filter(x => x.k.startsWith('run:'));
+      const ids = runsTl.map(x => x.k.slice(4));
+      // Insert a side-branched manual step after cleavage (between cleavage and SEC), coming from IMAC
+      await h.step('cleave');
+      await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep="man:batch"]'); await h.wait(400);
+      const manStep = (await h.timeline()).find(x => x.k.startsWith('man:'));
+      const manId = manStep.k.slice(4);
+      await p.selectOption('#man-after', 'cleave'); await h.wait(300);
+      await setFrom(p, h, manStep.k, ids[0]);
+      // Also branch Q from the Concentrated step after IMAC (nc:<imacId>) to verify nc:<id> resolution
+      await setFrom(p, h, runsTl[2].k, 'nc:' + ids[0]);
+      await openWf(p);
+      const ed = await edges(p);
+      T.check('side-branch manual: SEC follows cleavage on main trunk, not the side-branched manual step',
+        ed.some(e => e.e === `cleave>${ids[1]}`) && !ed.some(e => e.e === `${manId}>${ids[1]}`), JSON.stringify(ed));
+      const tb = await h.sumTable(), hd = tb[0] || [], fc = hd.indexOf('Form');
+      const body = tb.slice(1).filter(r => /^\d+\./.test(r[0] || ''));
+      T.check('side-branch manual: SEC inherits cleaved form on main trunk',
+        fc >= 0 && body.length === 3 && body[1][fc] === 'cleaved', JSON.stringify(body));
+      T.check('side-branch manual: Q branching from nc:<IMAC> resolves to uncleaved tagged form',
+        fc >= 0 && body.length === 3 && body[2][fc] === 'tagged', JSON.stringify(body));
+      T.check('no page errors', !errs.length, errs.join(' | '));
+    } finally { await close(); }
+  });
+
   T.done(); })();
