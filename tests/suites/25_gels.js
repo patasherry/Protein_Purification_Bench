@@ -648,4 +648,75 @@ await T.t('dark-background-gel-invert-hint', async () => {
   }
 });
 
+/* #1602: mini-gel ladder kDa tick labels in a workflow figure must not overlap each other */
+await T.t('workflow-mini-gel-ladder-no-overlap', async () => {
+  const a = await open(), {p} = a, h = H(p);
+  try {
+    await h.newProject('Workflow Mini-Gel Ladder');
+    await h.addRun(src('his'));
+    await h.addRun(src('q'));
+    await h.addRun(src('his'));
+    const pngDataUrl = await p.evaluate(() => {
+      const W = 480, H = 200;
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const ctx = c.getContext('2d'), im = ctx.createImageData(W, H);
+      const kdas = [250, 150, 100, 75, 50, 37, 25, 20, 15, 10];
+      const lMax = Math.log10(250), lMin = Math.log10(10);
+      const yOf = k => 0.10 * H + (lMax - Math.log10(k)) / (lMax - lMin) * (0.80 * H);
+      const ladYs = kdas.map(yOf), sampleYs = [yOf(48), yOf(28)];
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const lane = Math.floor(x / 80), dx = Math.abs(x % 80 - 40);
+          const wx = Math.exp(-0.5 * (dx / 18) ** 6);
+          const ys = lane === 0 ? ladYs : sampleYs;
+          let dark = 0;
+          for (const by of ys) dark += 110 * Math.exp(-0.5 * ((y - by) / 2.0) ** 2);
+          const v = Math.round(Math.max(10, 238 - dark * wx));
+          const j = 4 * (y * W + x);
+          im.data[j] = im.data[j + 1] = im.data[j + 2] = v; im.data[j + 3] = 255;
+        }
+      }
+      ctx.putImageData(im, 0, 0);
+      return c.toDataURL('image/png');
+    });
+    const buf = Buffer.from(pngDataUrl.split(',')[1], 'base64');
+    await p.locator('#gelFile').setInputFiles({name: 'mini_gel_6lane.png', mimeType: 'image/png', buffer: buf});
+    await h.wait(1000);
+    await p.evaluate(() => {
+      const set = (id, v) => { const e = document.getElementById(id); if (!e) return; e.value = v; e.dispatchEvent(new Event('input', {bubbles: true})); e.dispatchEvent(new Event('change', {bubbles: true})); };
+      set('g-n', '6');
+      set('g-labels', 'M, Lys, FT, W1, E1, E2');
+      set('g-preset', 'biorad');
+    });
+    await h.wait(400);
+    const runVal = await p.$$eval('#la1 option', os => (os.find(o => /^1\. /.test(o.textContent)) || {}).value);
+    for (const id of ['#la1', '#la2', '#la3', '#la4', '#la5']) {
+      if (runVal) await p.selectOption(id, runVal);
+    }
+    await h.wait(300);
+    await p.click('#g-autoLadder');
+    await h.wait(600);
+    await h.step('figure');
+    await h.wait(600);
+    const svg = await h.exportSvg(), m = await h.svgBoxes(svg);
+    const ladSet = new Set(['250', '150', '100', '75', '50', '37', '25', '20', '15', '10']);
+    const kdaHdr = m.texts.find(t => t.t.trim() === 'kDa');
+    const lads = kdaHdr ? m.texts.filter(t => ladSet.has(t.t.trim()) && Math.abs(t.right - kdaHdr.right) < 8 && t.y > kdaHdr.y) : [];
+    const hits = [];
+    for (let i = 0; i < lads.length; i++) for (let j = i + 1; j < lads.length; j++) {
+      const A = lads[i], B = lads[j];
+      const ox = Math.min(A.right, B.right) - Math.max(A.x, B.x);
+      const oy = Math.min(A.bottom, B.bottom) - Math.max(A.y, B.y);
+      if (ox > 1 && oy > 1) {
+        const pct = (ox * oy) / Math.min(A.w * A.h, B.w * B.h) * 100;
+        hits.push(`${A.t}x${B.t}(${ox.toFixed(1)}x${oy.toFixed(1)}px,${pct.toFixed(0)}%)`);
+      }
+    }
+    T.check('workflow-mini-gel-ladder.no-overlap', lads.length >= 5 && hits.length === 0 && !a.errs.length,
+      `labels=${lads.map(l => l.t).join(',')} hits=${hits.join(', ')}${a.errs.length ? ' | errs: ' + a.errs.join(' | ') : ''}`);
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();

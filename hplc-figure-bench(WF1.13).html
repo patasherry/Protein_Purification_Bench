@@ -3046,14 +3046,21 @@ function buildRunPlainSVG(run, ov){
       if (clampX() > ww*0.2 && /\s\(.*\)$/.test(tt)) { tt = tt.replace(/\s*\(.*\)$/, ''); ww = tt.length*fs*0.45; pick.x = xOrig; clampX(); }
       const e2 = ext(), lift = Math.max(base, hiIn(xlo + (pick.x + e2[0] - L)*k, xlo + (pick.x + e2[1] - L)*k));
       let Y = Math.max(T + fs*0.8, py(lift) - 3);
-      const pBox = y => { const e = ext(); return {x1: pick.x + e[0], x2: pick.x + e[1], y1: y - fs*0.75, y2: y + fs*0.15}; };
-      if (tickBoxes.some(b => hitBox(pBox(Y), b))) { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y - g2*fs*0.45; if (yn < T + fs*0.7) break; if (!tickBoxes.some(b => hitBox(pBox(yn), b))) { Y = yn; break; } } }
-      const hb = tickBoxes.find(b => hitBox(pBox(Y), b));
-      if (hb) { const pad = (!o.ticksOut ? tl : 0) + 1.5, e = ext(), cx = pick.x + (e[0] + e[1])/2;
-        if (hb.x2 <= L + tl + 2) pick.x = Math.max(pick.x, L + pad - e[0]); else if (hb.x1 >= R - tl - 2) pick.x = Math.min(pick.x, R - pad - e[1]);
+      const pBox = (y, x = pick.x) => { const e = ext(); return {x1: x + e[0], x2: x + e[1], y1: y - fs*0.75, y2: y + fs*0.15}; };
+      const hitsTick = (x, y) => tickBoxes.some(b => hitBox(pBox(y, x), b));
+      if (hitsTick(pick.x, Y)) { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y - g2*fs*0.45; if (yn < T + fs*0.7) break; if (!hitsTick(pick.x, yn)) { Y = yn; break; } } }
+      const hbs = tickBoxes.filter(b => hitBox(pBox(Y), b));
+      if (hbs.length) { const pad = (!o.ticksOut ? tl : 0) + 1.5, e = ext(), cx = pick.x + (e[0] + e[1])/2;
+        const hb = hbs.reduce((m, b) => Math.abs(cx - (b.x1 + b.x2)/2) < Math.abs(cx - (m.x1 + m.x2)/2) ? b : m, hbs[0]);
+        const okX = x => x + e[0] >= L + 1 && x + e[1] <= R - 1 && !hitsTick(x, Y);
+        if (hb.x2 <= L + tl + 2) { const xn = Math.max(pick.x, L + pad - e[0]); if (okX(xn)) pick.x = xn; }
+        else if (hb.x1 >= R - tl - 2) { const xn = Math.min(pick.x, R - pad - e[1]); if (okX(xn)) pick.x = xn; }
         else { const xR = hb.x2 + 1.5 - e[0], xL = hb.x1 - 1.5 - e[1];
-          if (cx >= (hb.x1 + hb.x2)/2 && xR + e[1] <= R - 1) pick.x = xR; else if (xL + e[0] >= L + 1) pick.x = xL; else if (xR + e[1] <= R - 1) pick.x = xR;
-          clampX(); const lift2 = Math.max(base, hiIn(xlo + (pick.x + e[0] - L)*k, xlo + (pick.x + e[1] - L)*k)); Y = Math.max(T + fs*0.8, Math.min(Y, py(lift2) - 3)); } }
+          const xGood = (cx >= (hb.x1 + hb.x2)/2 ? [xR, xL] : [xL, xR]).find(okX);
+          if (xGood !== undefined) { pick.x = xGood; clampX();
+            const lift2 = Math.max(base, hiIn(xlo + (pick.x + e[0] - L)*k, xlo + (pick.x + e[1] - L)*k));
+            const yn = Math.max(T + fs*0.8, Math.min(Y, py(lift2) - 3)); if (!hitsTick(pick.x, yn)) Y = yn; } }
+        if (hitsTick(pick.x, Y)) { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y + g2*fs*0.45; if (yn > B - band - fs*0.3) break; if (!hitsTick(pick.x, yn)) { Y = yn; break; } } } }
       const e3 = ext(), cx0 = pick.x + (e3[0] + e3[1])/2;
       if (placed.some(q => Math.abs(q.x - cx0) < (q.w + ww)/2 + 1 && Math.abs(q.y - Y) < fs*0.85)) return;
       placed.push({x: cx0, y: Y, w: ww}); s.push(`<text x="${r2(pick.x)}" y="${r2(Y)}"${pick.an !== 'middle' ? ` text-anchor="${pick.an}"` : ''}>${esc(tt)}</text>`);
@@ -3939,7 +3946,7 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
     /* tick numbers: the one nearest the protein first, then the rest wherever they have room */
     const tk = (g._focus && g._focus.mw) || numOr(opt.protKda, NaN), kept = [];
     ys.slice().sort((a, b) => tk > 0 ? Math.abs(Math.log(a.m.kda/tk)) - Math.abs(Math.log(b.m.kda/tk)) : a.yy - b.yy)
-      .forEach(q => { q.ty = q.yy; const gapK = fs*0.92; if (kept.every(k => Math.abs(k.ty - q.ty) >= gapK)) { kept.push(q); return; }
+      .forEach(q => { q.ty = q.yy; const gapK = fs*1.15; if (kept.every(k => Math.abs(k.ty - q.ty) >= gapK)) { kept.push(q); return; }
         /* crowded: nudge the number a little, else leave it to its tick so numbers never touch */
         for (const d of [0.15, -0.15, 0.3, -0.3]) { const ty = q.yy + d*fs; if (kept.every(k => Math.abs(k.ty - ty) >= gapK)) { q.ty = ty; kept.push(q); return; } } });
     kept.forEach(({m, ty}) => s.push(`<text x="${r2(x0 - 5)}" y="${r2(ty + fs*0.33)}" text-anchor="end">${m.kda}</text>`));

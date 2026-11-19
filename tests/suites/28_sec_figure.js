@@ -263,6 +263,61 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     } finally { await close3(); }
   });
 
+  await T.t('sec_narrow_workflow_peak_near_vt_no_overlap', async () => {
+    const {p: p4, errs: errs4, close: close4} = await open(), h4 = H(p4);
+    try {
+      await h4.newProject('SEC Narrow Workflow Vt Clearance');
+      await h4.addRun(src('his'));
+      await h4.addRun(src('q'));
+      await h4.addRun(src('his'));
+      const rows = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'ml,mAU,ml,Fraction'];
+      for (let i = 0; i <= 500; i++) {
+        const x = i * 0.05;
+        const y = 5 + 195 * Math.exp(-0.5 * ((x - 23.3) / 0.22) ** 2);
+        rows.push(`${x.toFixed(2)},${y.toFixed(3)},,`);
+      }
+      await h4.addRun({name: 'sec_Superdex_200_narrow_vt.csv', mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n'))});
+      const secStep = (await h4.timeline()).filter(x => /^run:/.test(x.k)).pop();
+      if (secStep) await h4.step(secStep.k);
+      if (await p4.isVisible('#moreBtn')) await p4.click('#moreBtn').catch(() => {});
+      await p4.evaluate(() => {
+        for (const id of ['o-secStds', 'sec-v0']) {
+          const el = document.getElementById(id);
+          let d = el && el.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+        }
+        const st = document.getElementById('o-secStds');
+        if (st && !st.checked) { st.checked = true; st.dispatchEvent(new Event('input', {bubbles: true})); st.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      await h4.wait(300);
+      await p4.fill('#sec-v0', '19.3'); await p4.dispatchEvent('#sec-v0', 'change');
+      await p4.fill('#sec-vt', '23.1'); await p4.dispatchEvent('#sec-vt', 'change');
+      const stds = [['S1', 670, 20.0], ['S2', 158, 21.0], ['S3', 44, 22.0], ['S4', 15, 23.3]];
+      while (await p4.locator('#secStdList .krow').count() < stds.length) { await p4.click('#sec-addStd'); await h4.wait(100); }
+      for (let i = 0; i < stds.length; i++) {
+        await p4.fill(`#ss-n${i}`, stds[i][0]); await p4.dispatchEvent(`#ss-n${i}`, 'change');
+        await p4.fill(`#ss-k${i}`, String(stds[i][1])); await p4.dispatchEvent(`#ss-k${i}`, 'change');
+        await p4.fill(`#ss-v${i}`, String(stds[i][2])); await p4.dispatchEvent(`#ss-v${i}`, 'change');
+      }
+      await p4.click('#intAuto'); await h4.wait(400);
+      await h4.step('figure'); await h4.wait(500);
+      const svg = await h4.exportSvg(), m = await h4.svgBoxes(svg);
+      const v0 = m.texts.find(t => t.t.trim() === 'V₀'), vt = m.texts.find(t => t.t.trim() === 'Vₜ');
+      const kda = m.texts.filter(t => /\d.*kDa/.test(t.t));
+      const dist = v0 && vt ? Math.abs(vt.right - v0.right) : Infinity;
+      const hits = [];
+      for (const k of kda) for (const mk of [v0, vt].filter(Boolean)) {
+        const ox = Math.min(k.right, mk.right) - Math.max(k.x, mk.x);
+        const oy = Math.min(k.bottom, mk.bottom) - Math.max(k.y, mk.y);
+        if (ox > 1 && oy > 1) {
+          const pct = (ox * oy) / Math.min(k.w * k.h, mk.w * mk.h) * 100;
+          hits.push(`${k.t}x${mk.t}(${ox.toFixed(1)}x${oy.toFixed(1)}px,${pct.toFixed(0)}%)`);
+        }
+      }
+      T.check('sec_narrow_workflow_vt_no_overlap', !!v0 && !!vt && dist < 25 && kda.length >= 1 && hits.length === 0 && !errs4.length,
+        `dist=${dist.toFixed(1)}px kda=${JSON.stringify(kda.map(x => x.t))} hits=${hits.join(', ')} errs=${errs4.join(' | ')}`);
+    } finally { await close4(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
