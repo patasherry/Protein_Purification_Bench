@@ -107,6 +107,8 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .ag-lane-shade:nth-child(odd){background:rgba(0,114,178,.11)} .clone .ag-lane-shade:nth-child(even){background:rgba(255,255,255,.07)}
 .clone .ag-lane-zone{box-sizing:border-box;border-left:1px solid rgba(0,114,178,.8);border-right:1px solid rgba(0,114,178,.8);cursor:grab}
 .clone .ag-lane-zone:active{cursor:grabbing}.clone .ag-lane-editor .ag-lane-label{top:4px;height:auto;transform:translateY(-100%);text-align:center;color:var(--ink);font-size:12px;font-weight:600;line-height:1.2;pointer-events:none;text-shadow:0 1px 2px #fff,0 0 3px #fff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .clone .ag-lane-editor .ag-lane-label{text-shadow:0 1px 2px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.85)}}
+:root[data-theme="dark"] .clone .ag-lane-editor .ag-lane-label{text-shadow:0 1px 2px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.85)}
 .clone .ag-lane-editor.pub .ag-lane-shade,.clone .ag-lane-editor.pub .ag-lane-zone{display:none}
 .clone .ag-lane-help{margin:6px 0 0;font-size:12px;color:var(--muted);line-height:1.4}
 .projname{font:inherit;font-size:16px;font-weight:600;border:1px solid transparent;background:transparent;color:var(--ink);padding:3px 6px;border-radius:var(--r-s);min-width:0;flex:0 1 26ch}
@@ -8747,7 +8749,6 @@ function onCloneClick(e){ const sw = e.target.closest('[data-ctype]'); if (sw) {
   const b = e.target.closest('[data-cl]'); if (!b) return; const c = CL(), w = b.dataset.cl, v = b.dataset.v || '', s = c.stages.find(x => 'clone:' + x.id === curStep), i = s ? c.stages.indexOf(s) : -1;
   const arm = k => { if (clArm === k) { clArm = ''; return true; } clArm = k; renderClone(true); return false; };
   if (w !== 'rmat' && w !== 'rmst') clArm = '';
-  if (w === 'type') { setCloning(v === 'cloning'); return; }
   if (w === 'ag-pick-band' && s && s.kind === 'gel') {
     s.gel = s.gel || {}; s.gel.calPoints = Array.isArray(s.gel.calPoints) ? s.gel.calPoints : [];
     s.gel.calPoints.push({y:'', bp:+b.dataset.size}); clChanged(true); return;

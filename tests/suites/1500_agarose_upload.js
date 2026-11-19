@@ -94,5 +94,49 @@ const {open, H, suite, fs, path} = require('../lib/harness');
     }
   });
 
+  await T.t('agarose_lane_label_dark_mode_text_shadow', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const png1 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVQIW2Nk+M/wn4GBgYGRAQQAAP//AwA6EQbO1s4ZtwAAAABJRU5ErkJggg==';
+      await h.newProject('Agarose dark label', 'cloning');
+      await cl(p).locator('[data-cl=tpl][data-v=ath]').click();
+      await h.wait(400);
+      await go(h, 'Agarose-gel verification');
+      await h.wait(300);
+
+      await p.evaluate(b => {
+        const u = Uint8Array.from(atob(b), c => c.charCodeAt(0));
+        const dt = new DataTransfer();
+        dt.items.add(new File([u], 'dark_check_gel.png', {type: 'image/png'}));
+        const el = document.querySelector('#clonePanel .cl-gel-upload');
+        el.dispatchEvent(new DragEvent('dragover', {dataTransfer: dt, bubbles: true, cancelable: true}));
+        el.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true}));
+      }, png1);
+      await h.wait(500);
+
+      await p.emulateMedia({colorScheme: 'light'});
+      await p.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+      await h.wait(100);
+      const lightShadow = await p.$eval('.ag-lane-editor .ag-lane-label', el => getComputedStyle(el).textShadow);
+
+      await p.emulateMedia({colorScheme: 'dark'});
+      await h.wait(100);
+      const mediaDarkShadow = await p.$eval('.ag-lane-editor .ag-lane-label', el => getComputedStyle(el).textShadow);
+
+      await p.emulateMedia({colorScheme: 'light'});
+      await p.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+      await h.wait(100);
+      const attrDarkShadow = await p.$eval('.ag-lane-editor .ag-lane-label', el => getComputedStyle(el).textShadow);
+
+      T.check('lane_label_dark_no_white_halo',
+        lightShadow.includes('rgb(255, 255, 255)') && !mediaDarkShadow.includes('rgb(255, 255, 255)') && !attrDarkShadow.includes('rgb(255, 255, 255)'),
+        `light="${lightShadow}" mediaDark="${mediaDarkShadow}" attrDark="${attrDarkShadow}"`);
+      T.check('lane_label_dark_no_page_errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
