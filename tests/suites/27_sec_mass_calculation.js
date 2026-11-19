@@ -133,5 +133,41 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     }
   });
 
+  await T.t('ul_pool_and_concentrated_volumes_are_ml_for_mass', async () => {
+    const {p: q, errs: qe, close: qclose} = await open(), hq = H(q);
+    try {
+      q.setDefaultTimeout(5000);
+      const file = (name, unit) => { const scale = unit === 'mL' ? 1 : 1000, lines = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', `${unit},mAU,${unit},Fraction`];
+        for (let i = 0; i <= 20; i++) { const x = i*scale, y = 100*Math.exp(-0.5*Math.pow((i - 14)/1.1, 2)); lines.push(`${x},${y.toFixed(4)},${x},"F${i + 1}"`); }
+        return {name, mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n'))}; };
+      await hq.newProject('mL and uL pooled mass');
+      await q.click('#tl [data-addmenu]'); await q.click('#tl [data-addstep=run]');
+      await q.setInputFiles('#file', [file('ml_pooled_mass.csv', 'mL'), file('ul_pooled_mass.csv', '\u00b5L')]); await hq.wait(1400);
+      const steps = (await hq.timeline()).filter(x => /^run:/.test(x.k));
+      T.check('ul_two_runs_loaded', steps.length === 2, JSON.stringify(steps));
+      if (steps.length !== 2) return;
+      await hq.step('construct'); const eps = q.locator('#o-eps');
+      await eps.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+      await eps.fill('1.0'); await eps.dispatchEvent('input'); await eps.dispatchEvent('change');
+      const readPool = async step => { await hq.step(step.k); await hq.pool('F13-F16'); await hq.step('figure'); const table = await hq.sumTable(), head = table[0] || [], row = table[steps.indexOf(step) + 1] || [], at = re => num(row[head.findIndex(x => re.test(x))]); return {vol: at(/^Volume/), area: at(/^A/), mg: at(/^Protein/), head}; };
+      const ml = await readPool(steps[0]), ul = await readPool(steps[1]);
+      await hq.step(steps[1].k); await hq.addConc(null);
+      const concInput = q.locator('#btw-conc'); await concInput.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+      T.check('ul_conc_input_visible', await concInput.isVisible(), `steps=${JSON.stringify((await hq.timeline()).filter(x => /^run:|^btw:/.test(x.k)))}`);
+      if (!(await concInput.isVisible())) return;
+      await q.locator('#btw-vOut').fill('50'); await q.locator('#btw-vOut').dispatchEvent('input'); await q.locator('#btw-vOut').dispatchEvent('change');
+      await concInput.fill('2.5'); await concInput.dispatchEvent('input'); await concInput.dispatchEvent('change'); await hq.step('figure');
+      const conc = (await hq.sumTable()).find(r => /Concentrated/i.test(r[0] || '')) || [];
+      ul.concMg = num(conc[ul.head.findIndex(x => /^Protein/.test(x))]);
+      ul.btwLabel = await q.locator('#btw-vOut').evaluate(e => e.closest('label').textContent);
+      ['vol', 'area', 'mg'].forEach(k => T.check(`ul_${k}_matches_ml`, ml[k] != null && ul[k] != null && Math.abs(ml[k] - ul[k]) <= Math.max(0.02, Math.abs(ml[k])*0.02), `mL=${ml[k]}, uL=${ul[k]}`));
+      T.check('ul_concentrated_50ul_is_013mg', ul.concMg != null && Math.abs(ul.concMg - 0.13) <= 0.01, `Concentrated mg=${ul.concMg}, expected=0.13`);
+      T.check('ul_concentrated_field_says_ul', /µL/.test(ul.btwLabel || '') && !/mL/.test(ul.btwLabel || ''), `Volume label: ${ul.btwLabel}`);
+      T.check('ul_pool_no_page_errors', !qe.length, qe.join(' | '));
+    } finally {
+      await qclose();
+    }
+  });
+
   T.done();
 })();
