@@ -734,6 +734,31 @@ ORIGIN
     }
   });
 
+  /* ================= 12. Reduced-cysteine extinction disclosure ================= */
+  await T.t('12_reduced_cysteine_disclosure', async () => {
+    const seq = 'MCCCCWWAAAA'; // 4 Cys, 2 Trp: reduced ε280 = 11,000; all-cystine ε280 = 11,250
+    await clearTagSeq();
+    await setProtSeq(seq);
+    await h.step('figure');
+    await h.wait(400);
+
+    const epsText = await getProtEps();
+    const reduced = epsText.match(/(?:ε₂₈₀|ε280)\s+([\d,]+)/);
+    T.check('12_reduced_cysteine_disclosure.reduced_value', !!reduced && +reduced[1].replace(/,/g, '') === 11000, `expected reduced ε280 11,000, got "${epsText}"`);
+    T.check('12_reduced_cysteine_disclosure.protein_disclosure', /reduced cysteines/i.test(epsText) && /all-cystine.*11,?250/i.test(epsText) && /Pace et al\.,? 1995/i.test(epsText), `expected reduced-Cys and all-cystine Pace disclosure, got "${epsText}"`);
+
+    const methods = await p.$eval('#methodsText', e => e.value);
+    T.check('12_reduced_cysteine_disclosure.methods_disclosure', /assuming reduced cysteines/i.test(methods), `expected methods to disclose reduced cysteines, got "${methods}"`);
+
+    const [dl] = await Promise.all([
+      p.waitForEvent('download', {timeout: 8000}),
+      p.click('#sumCsv')
+    ]);
+    const csv = fs.readFileSync(await dl.path(), 'utf8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+    const header = csv[0].split(',');
+    T.check('12_reduced_cysteine_disclosure.csv_trailing_basis', header[header.length - 1] === 'Extinction basis' && csv.slice(1).some(row => /Pace et al\. \(1995\): reduced cysteines$/.test(row)), `expected trailing reduced-cysteine extinction basis column, got "${header.join('|')}"`);
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
