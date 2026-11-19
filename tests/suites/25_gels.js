@@ -648,4 +648,95 @@ await T.t('dark-background-gel-invert-hint', async () => {
   }
 });
 
+/* #1569: Eliminate false saturation badges on unclipped 16-bit fluorescent gel TIFFs while keeping true ADC clipping */
+await T.t('tiff-16bit-raw-saturation', async () => {
+  const a = await start(), p = a.p;
+  try {
+    await set(p, '#o-gelAutoCrop', false);
+    const uploadTiff = async (name, buf, invert) => {
+      const prev = await p.$$eval('#figtabs [data-fig^="g"]', els => els.length);
+      await p.setInputFiles('#gelFile', { name, mimeType: 'image/tiff', buffer: buf });
+      await p.waitForFunction(n => document.querySelectorAll('#figtabs [data-fig^="g"]').length > n, prev, { timeout: 15000 });
+      await set(p, '#g-invert', invert);
+      await set(p, '#g-n', 4);
+      await set(p, '#g-labels', 'M, A, B, C');
+      await p.waitForTimeout(350);
+    };
+    const countSat = () => p.evaluate(() => {
+      const chips = Array.from(document.querySelectorAll('#bandTable .bchip'));
+      const sat = chips.filter(ch => ch.classList.contains('sat'));
+      return { chips: chips.length, sat: sat.length, texts: sat.map(ch => ch.textContent.trim()) };
+    });
+
+    // (1) Unclipped 16-bit dark-field fluorescent TIFF: peak 16360 / 65535 + 5 hot corner pixels at 16383
+    const hot = new Set(['0,0', '1,0', '2,0', '0,1', '1,1']);
+    const unclipped16 = makeTiff16(320, 480, (x, y) => {
+      if (hot.has(x + ',' + y)) return 16383;
+      const ln = Math.floor(x / 80), dx = Math.abs(x % 80 - 40), wx = Math.exp(-0.5 * Math.pow(dx / 24, 8));
+      let v = 120;
+      if (ln === 0) {
+        for (const mu of [96, 192, 288, 384]) v += 4000 * Math.exp(-0.5 * Math.pow((y - mu) / 6, 2)) * wx;
+      } else if (ln === 1) {
+        v += 16240 * Math.exp(-0.5 * Math.pow((y - 160) / 8, 2)) * wx;
+        v += 4000 * Math.exp(-0.5 * Math.pow((y - 310) / 8, 2)) * wx;
+      } else {
+        v += 6000 * Math.exp(-0.5 * Math.pow((y - 160) / 8, 2)) * wx;
+        v += 3000 * Math.exp(-0.5 * Math.pow((y - 310) / 8, 2)) * wx;
+      }
+      return Math.min(65535, Math.round(v));
+    });
+    await uploadTiff('fluor16_unclipped.tiff', unclipped16, true);
+    const r1 = await countSat();
+    T.check('tiff-16bit-raw-saturation.unclipped-darkfield-no-sat', r1.chips >= 4 && r1.sat === 0, JSON.stringify(r1));
+
+    // Verify rawHiClip/rawLoClip persists across project export/import
+    const [saved] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), p.evaluate(() => document.querySelector('#projSave').click())]);
+    await load(p, JSON.parse(fs.readFileSync(await saved.path(), 'utf8')));
+    const r1rt = await countSat();
+    T.check('tiff-16bit-raw-saturation.unclipped-roundtrip-no-sat', r1rt.chips >= 4 && r1rt.sat === 0, JSON.stringify(r1rt));
+
+    // (2) 12-bit dark-field TIFF clipped at 4095 (#g-invert checked)
+    const clipped12 = makeTiff16(320, 480, (x, y) => {
+      const ln = Math.floor(x / 80), dx = Math.abs(x % 80 - 40), wx = Math.exp(-0.5 * Math.pow(dx / 24, 8));
+      let v = 100;
+      if (ln === 0) {
+        for (const mu of [96, 192, 288, 384]) v += 1500 * Math.exp(-0.5 * Math.pow((y - mu) / 6, 2)) * wx;
+      } else if (ln === 1) {
+        v += 4400 * Math.exp(-0.5 * Math.pow((y - 160) / 7, 2)) * wx;
+        v += 800 * Math.exp(-0.5 * Math.pow((y - 310) / 7, 2)) * wx;
+      } else {
+        v += 1200 * Math.exp(-0.5 * Math.pow((y - 160) / 7, 2)) * wx;
+        v += 600 * Math.exp(-0.5 * Math.pow((y - 310) / 7, 2)) * wx;
+      }
+      return Math.min(4095, Math.round(v));
+    });
+    await uploadTiff('fluor12_clipped.tiff', clipped12, true);
+    const r2 = await countSat();
+    T.check('tiff-16bit-raw-saturation.clipped-12bit-flagged', r2.chips >= 4 && r2.sat >= 1, JSON.stringify(r2));
+
+    // (3) 16-bit bright-field Coomassie TIFF clipped at 0 (#g-invert unchecked)
+    const clippedBf = makeTiff16(320, 480, (x, y) => {
+      const ln = Math.floor(x / 80), dx = Math.abs(x % 80 - 40), wx = Math.exp(-0.5 * Math.pow(dx / 24, 8));
+      let v = 58000;
+      if (ln === 0) {
+        for (const mu of [96, 192, 288, 384]) v -= 22000 * Math.exp(-0.5 * Math.pow((y - mu) / 6, 2)) * wx;
+      } else if (ln === 1) {
+        v -= 64000 * Math.exp(-0.5 * Math.pow((y - 160) / 7, 2)) * wx;
+        v -= 18000 * Math.exp(-0.5 * Math.pow((y - 310) / 7, 2)) * wx;
+      } else {
+        v -= 20000 * Math.exp(-0.5 * Math.pow((y - 160) / 7, 2)) * wx;
+        v -= 12000 * Math.exp(-0.5 * Math.pow((y - 310) / 7, 2)) * wx;
+      }
+      return Math.max(0, Math.round(v));
+    });
+    await uploadTiff('coomassie16_clipped.tiff', clippedBf, false);
+    const r3 = await countSat();
+    T.check('tiff-16bit-raw-saturation.clipped-brightfield-flagged', r3.chips >= 4 && r3.sat >= 1, JSON.stringify(r3));
+
+    T.check('tiff-16bit-raw-saturation.no-errors', !a.errs.length, a.errs.join('|'));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();

@@ -3165,7 +3165,8 @@ const poolDark = () => lerpHex(/^#[0-9a-f]{6}$/i.test(opt.poolColor) ? opt.poolC
 function makeGel(name, canvas){
   return {id: 'g' + (uid++), name, src: canvas, thumb: canvas.toDataURL('image/jpeg', 0.6), rot: 0, fine: 0, cl: 0, cr: 0, ct: 0, cb: 0,
     black: 0, white: 255, invert: false, color: false, nLanes: 10, labels: 'M, 1, 2, 3, 4, 5, 6, 7, 8, 9', assign: [],
-    preset: LADDERS[opt.ladder] ? opt.ladder : 'biorad', ladder: (LADDERS[opt.ladder] || LADDERS.biorad).v, marks: [], runId: '', out: null, hist: null, crop: {l:0, r:1, t:0, b:1}};
+    preset: LADDERS[opt.ladder] ? opt.ladder : 'biorad', ladder: (LADDERS[opt.ladder] || LADDERS.biorad).v, marks: [], runId: '', out: null, hist: null, crop: {l:0, r:1, t:0, b:1},
+    rawHiClip: !(canvas && canvas._rawHiClip === false), rawLoClip: !(canvas && canvas._rawLoClip === false)};
 }
 function processGel(g){
   const s = g.src, r = ((+g.rot % 360) + 360) % 360, sw = s.width, sh = s.height;
@@ -3447,11 +3448,11 @@ function detectBands(g, i, sensPct, gelMax){
   /* saturation: a flat-topped band is wider at 97% of its height than a Gaussian can be, or has a plateau of pixels at pure black
      (the 8-bit ceiling: g.pix.d is 255 minus grey). Being the darkest band in the image is not saturation: #1479 flagged that,
      so the strongest band of almost every gel read as saturated. */
-  const P = g.pix, lw = P ? P.w/gelLabels(g).length : 0, tr = P ? laneTrack(g, i) : null;
+  const P = g.pix, lw = P ? P.w/gelLabels(g).length : 0, tr = P ? laneTrack(g, i) : null, rawClip = g.invert ? g.rawHiClip !== false : g.rawLoClip !== false;
   bands.forEach(b => { if (b.shoulder) return; let a = b.row, z = b.row; while (a > 0 && sig[a-1] >= 0.97*b.h) a--; while (z < h-1 && sig[z+1] >= 0.97*b.h) z++;
     let nCap = 0, nAll = 0; if (P && tr) for (let y = b.hl; y <= b.hr; y++){ const x0 = Math.max(0, Math.floor((i + DET.laneLo)*lw + tr[y])), x1 = Math.min(P.w, Math.ceil((i + DET.laneHi)*lw + tr[y])), o = y*P.w; for (let x = x0; x < x1; x++){ nAll++; if (P.d[o + x] >= 254) nCap++; } }
     const flatSat = (z - a + 1)/Math.max(1, b.hr - b.hl + 1) > DET.satRatio;
-    const peakSat = nCap >= Math.max(6, 0.02*nAll);  /* clipped: at least 2% of the band's pixels (and 6) at the ceiling */
+    const peakSat = rawClip && nCap >= Math.max(6, 0.02*nAll);  /* clipped: at least 2% of the band's pixels (and 6) at the ceiling */
     b.sat = (flatSat || peakSat) && (b.hr - b.hl + 1) >= 5 && b.h >= DET.satRatio*Math.max(gelMax || 0, mx); });
   const c = g.crop; bands.forEach(b => { b.yRot = c.t + (b.row + 0.5)/h*(c.b - c.t); b.pct = total > 0 ? 100*b.area/total : 0; });
   for (let k = bands.length - 1; k >= 0; k--) if (bands[k].shoulder && bands[k].pct < 1) bands.splice(k, 1);
@@ -3826,9 +3827,11 @@ function gelWinForMass(g, mw, sp, lowK){
 /* lanes that are mostly solid black: more than a third of their pixels at the darkest level */
 function gelSaturatedIdx(g){ gelSaturated(g); return g._sat ? g._sat.idx : new Set(); }
 function gelSaturated(g){
-  if (!g.pix) return []; const key = g.out && g.out.url.length + ':' + gelLabels(g).join('|') + ':' + (g.assign || []).join(','); if (g._sat && g._sat.key === key && g._sat.pix === g.pix) return g._sat.v;
+  if (!g.pix) return []; const rawClip = g.invert ? g.rawHiClip !== false : g.rawLoClip !== false;
+  const key = (g.out && g.out.url.length) + ':' + gelLabels(g).join('|') + ':' + (g.assign || []).join(',') + ':' + (rawClip ? 1 : 0);
+  if (g._sat && g._sat.key === key && g._sat.pix === g.pix) return g._sat.v;
   const P = g.pix, labs = gelLabels(g), n = labs.length, out = [], idx = new Set();
-  labs.forEach((l, i) => { if (laneAssign(g, i) === 'marker') return; const x0 = Math.floor((i + 0.2)*P.w/n), x1 = Math.ceil((i + 0.8)*P.w/n); let dark = 0, tot = 0;
+  if (rawClip) labs.forEach((l, i) => { if (laneAssign(g, i) === 'marker') return; const x0 = Math.floor((i + 0.2)*P.w/n), x1 = Math.ceil((i + 0.8)*P.w/n); let dark = 0, tot = 0;
     for (let y = 0; y < P.h; y += 2) for (let x = x0; x < x1; x += 2) { tot++; if (P.d[y*P.w + x] >= 248) dark++; }
     if (tot && dark/tot > 0.33) { out.push(laneShow(l) || 'Lane ' + (i + 1)); idx.add(i); } });
   g._sat = {key, pix: P, v: out, idx}; return out;
@@ -6175,20 +6178,26 @@ async function imageToCanvas(file){
     await tiffLib(); const buf = await file.arrayBuffer(); const ifds = window.UTIF.decode(buf); window.UTIF.decodeImage(buf, ifds[0]);
     const ifd = ifds[0], w = ifd.width, h = ifd.height, n = w*h;
     const bps = ifd.t258 ? ifd.t258[0] : 1, spp = ifd.t277 ? ifd.t277[0] : (ifd.t258 ? ifd.t258.length : 1), intp = ifd.t262 ? ifd.t262[0] : 1;
-    let rgba;
+    let rgba, rawHiClip = true, rawLoClip = true;
     if (bps === 16 && spp === 1 && ifd.data) {
       const raw = ifd.data; let mx = 0;
       for (let i = 0; i < n; i++) { const v = raw[2*i] | (raw[2*i+1] << 8); if (v > mx) mx = v; }
       const ceil = mx <= 4095 ? 4095 : mx <= 16383 ? 16383 : 65535;
+      let hiN = 0, loN = 0;
       rgba = new Uint8ClampedArray(n*4);
       for (let i = 0; i < n; i++) {
-        let px = Math.round((raw[2*i] | (raw[2*i+1] << 8)) * 255 / ceil);
+        const v = raw[2*i] | (raw[2*i+1] << 8);
+        if (v >= ceil) hiN++;
+        if (v <= 4) loN++;
+        let px = Math.round(v * 255 / ceil);
         if (intp === 0) px = 255 - px;
         const qi = i*4; rgba[qi] = rgba[qi+1] = rgba[qi+2] = px; rgba[qi+3] = 255;
       }
+      rawHiClip = (intp === 0 ? loN : hiN) >= 6;
+      rawLoClip = (intp === 0 ? hiN : loN) >= 6;
     } else rgba = window.UTIF.toRGBA8(ifd);
     const c0 = document.createElement('canvas'); c0.width = w; c0.height = h; c0.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, w*h*4), w, h), 0, 0);
-    return toCanvas(c0, w, h);
+    const c = toCanvas(c0, w, h); c._rawHiClip = rawHiClip; c._rawLoClip = rawLoClip; return c;
   }
   const url = URL.createObjectURL(file);
   try { const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; }); return toCanvas(img, img.naturalWidth, img.naturalHeight); }
@@ -7207,7 +7216,7 @@ async function openProject(data, name, noUndo){
   for (const sg of data.gels || []) { try { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = sg.image; });
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
       const g = Object.assign(makeGel(sg.name, c), sg); delete g.image;
-      Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}}); processGel(g); ng.push(g); } catch (e) { failedGels.push(sg); toast(`Could not restore gel ${sg.name}`); } }
+      Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false}); processGel(g); ng.push(g); } catch (e) { failedGels.push(sg); toast(`Could not restore gel ${sg.name}`); } }
   runs = data.runs.map(r => { if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return r; }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); if (!Array.isArray(prep.manual)) prep.manual = []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} }; canonClones(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = data.nanodrop || []; ndMigrate(); ndUid = ndSamples.length + 1 + Date.now() % 1000;
   srcDiag = (data.srcDiag && typeof data.srcDiag === 'object' && !Array.isArray(data.srcDiag)) ? Object.assign({}, data.srcDiag) : {};
   /* the project's settings apply, but calibrations and known proteins kept in this browser are merged rather than replaced */
