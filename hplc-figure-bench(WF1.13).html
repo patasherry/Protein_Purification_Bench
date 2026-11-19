@@ -154,7 +154,8 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .ss-quick .qchip.mine{border-style:dashed}
 .ss-quick .qx{font:inherit;font-size:12px;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 4px;margin-left:-6px}
 .ss-quick .qmine{display:inline-flex;align-items:center;max-width:100%}
-.ss-quick .ql{flex-basis:100%}
+.ss-quick .btn.quiet{min-height:24px;padding:2px 6px;font-size:12px}
+.ss-from{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 10px}
 .uvhint{color:var(--warn);margin:0}
 #sumTable tr.manrow td:first-child{font-style:italic}
 .ss-acts .btn.danger.armed{background:var(--warn);border-color:var(--warn);color:var(--panel)}
@@ -186,7 +187,7 @@ body.proj #prepPanel details.sub{border:0;padding-top:0;margin-top:0} body.proj 
 .clone h3.cl-sub{margin:12px 0 2px;font-size:13px;font-weight:600} .tl li.tl-fold::before{display:none} .tl .tl-fold button{font:inherit;font-size:12.5px;color:var(--muted);background:transparent;border:0;padding:3px 6px 5px 36px;cursor:pointer;text-align:left;border-radius:var(--r-s)}
 .tl .tl-fold button:hover{color:var(--ink);background:var(--hover)} .tl .tl-fold button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tl li.tl-addrow .tl-add{padding:4px 0 6px 36px}
-#ssNotes{font:inherit;font-size:13px}
+#ssNotes{font:inherit;font-size:13px;min-height:48px}
 body.proj #figtabs{display:none!important}
 
 header.top{max-width:1480px;margin:0 auto 14px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;min-height:36px}
@@ -268,7 +269,7 @@ body.proj .noproj, body.proj label:has(#o-runCond2){display:none!important}
 body.proj #panel[data-sec="1"] > #secPanel{order:0}
 .moreopts{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .moreopts .muted{font-size:12px}
-.btwnd{display:grid;gap:5px;padding:2px 0 4px} #btwSplitBox{padding-top:2px} #btwSplitBox > summary{padding:1px 0}
+.btwnd{display:grid;gap:5px;padding:2px 0 4px} #btwNdList:not(:empty){max-height:84px;overflow-y:auto} #btwSplitBox{padding-top:2px} #btwSplitBox > summary{padding:1px 0}
 .btwnd-r{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-variant-numeric:tabular-nums}
 .btwnd-r .muted{font-size:12px}
 .btwnd-x{border:0;background:none;color:inherit;opacity:.6;cursor:pointer;padding:0 4px;font:inherit}
@@ -306,10 +307,10 @@ details.paste[open]{display:grid;gap:8px}
 #list.focus .trace.run:not(.sel) > :not(.thead),#list.focus .trace.gelc:not(.sel) > :not(.thead){display:none}
 #list.focus .trace.run:not(.sel),#list.focus .trace.gelc:not(.sel){padding-block:6px;background:transparent}
 #panel[data-sec="1"] > #secPanel{order:-1}
-#panel:not([data-kind="struct"]) > #protPanel{order:5}
-#panel[data-kind="struct"] > #protPanel,#panel[data-kind="nd"] > #ndPanel{order:-1}
+body:not(.proj) #panel:not([data-kind="struct"]) > #protPanel,body.proj #panel > #protPanel{order:5}
+body:not(.proj) #panel[data-kind="struct"] > #protPanel,body:not(.proj) #panel[data-kind="nd"] > #ndPanel{order:-1}
 #panel > .grp:first-child{order:-2}
-#stepSheet{padding-bottom:6px}
+#stepSheet{padding-bottom:6px;gap:8px} #stepFoot{padding-block:10px 12px;gap:8px}
 .trace.run:hover,.trace.gelc:hover{border-color:var(--line2)}
 .trace.sel{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
 .thead{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
@@ -673,6 +674,7 @@ button,input,select,textarea{font-family:inherit}
       <h2>Protein</h2>
       <label class="f">PDB entry<span class="joined"><input type="text" id="pdbCode" maxlength="4" placeholder="e.g. 3PFN" autocomplete="off" spellcheck="false" aria-label="PDB code"><button type="button" class="btn" id="pdbGet">Load</button></span></label>
       <p class="hint" id="pdbStatus"></p>
+      <div class="tagseg" id="protView" style="grid-template-columns:1fr 1fr" role="group" aria-label="Figure view" hidden><button type="button" class="tagbtn" data-pview="construct" aria-pressed="false">Construct diagram</button><button type="button" class="tagbtn" data-pview="struct" aria-pressed="true">3D structure</button></div>
       <input type="file" id="pdbFile" accept=".cif,.mmcif,.pdb,.ent" hidden>
       <label class="f" id="protEntWrap" hidden>Chain to use for the sequence<select id="protEnt"></select></label>
       <label class="f">Protein sequence, untagged<textarea id="protSeq" data-opt="protSeq" rows="3" spellcheck="false" placeholder="Paste the sequence, or load a PDB entry"></textarea></label>
@@ -5107,7 +5109,7 @@ function render(){
   { const g = curGel(), ls = $('#ladderStatus'); if (ls) ls.textContent = g ? (g.ladderMsg || '') : ''; if (g) stepStatus(g); }
   document.querySelectorAll('[data-for]').forEach(el => { el.hidden = !el.dataset.for.split(' ').includes(kind); });
   /* in a project the panel shows only what the current step needs */
-  if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
+  if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
     document.querySelectorAll('#panel [data-step]').forEach(el => { if (el.closest('#stepsPanel, #stepSheet')) return; el.hidden = !el.dataset.step.split(' ').includes(sk); });
     document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = ({pcon: 'construct', ptr: 'transform', pexp: 'expr', plys: 'lysis', pclv: 'cleave', pbtw: 'btw', pman: 'man', pfin: 'final'})[d.dataset.sub] !== sk; if (!d.hidden) d.open = true; });
     if (sk === 'btw') syncBtw(); if (sk === 'man') syncMan(); document.querySelectorAll('#prepPanel > p.hint, #prepPanel > details.tip').forEach(x => { x.hidden = true; }); }
@@ -6380,12 +6382,14 @@ function renderProt(){
     const parts = big.slice(0, 4).map(e => `${e.n > 1 ? e.n + ' × ' : ''}${fmt(e.fw/1000, 1)} kDa${e.desc ? ' ' + cut(e.desc) : ''}`).join(' + ') + (big.length > 4 ? ' + …' : '');
     $('#auInfo').textContent = `${struct.code} asymmetric unit: ${np} chain${np === 1 ? '' : 's'}, ${fmt(m.all/1000, 1)} kDa${parts ? ` (${parts})` : ''}${Math.abs(m.all - m.poly) > 50 ? ` (polymer ${fmt(m.poly/1000, 1)} kDa)` : ''}${struct.fmt === 'pdb' ? ', polymer chains only' : ''}${struct.ents.some(e => e.partial) ? ', from modeled residues only' : ''}.`; }
   else $('#auInfo').textContent = '';
+  const pv = $('#protView'); if (pv) { pv.hidden = !(PROJ && curStep === 'construct' && struct); if (!pv.hidden) pv.querySelectorAll('[data-pview]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.pview === 'struct') === (cur === 'struct')))); }
   /* say plainly when the table is not the loaded entry, or the gel and SEC still use an older size */
   const note = $('#protNote'), main = struct && struct.ents.find(e => e.id === struct.ent), mine = cleanSeq(opt.protSeq), msg = [];
   if (main && mine && mine !== main.seq) msg.push(`The table uses your pasted sequence, not ${esc(struct.code)}. <button type="button" class="linkbtn" id="protTake">Use ${esc(struct.code)}</button>`);
   if (F.length && +opt.protKda > 0 && Math.abs(opt.protKda - F[0].mass/1000) > 0.15) msg.push(`Gel and SEC still use ${fmt(+opt.protKda, 1)} kDa. <button type="button" class="linkbtn" id="protApply">Update to ${fmt(F[0].mass/1000, 1)}</button>`);
   const h = msg.join(' '); if (note._h !== h) { note._h = h; note.innerHTML = h; } note.hidden = !h;
 }
+$('#protView').addEventListener('click', e => { const b = e.target.closest('[data-pview]'); if (!b) return; cur = b.dataset.pview === 'struct' && struct ? 'struct' : 'step:construct'; syncControls(); render(); });
 $('#protNote').addEventListener('click', e => { if (e.target.id === 'protTake' && struct) { const en = struct.ents.find(x => x.id === struct.ent); if (en) { opt.protSeq = en.seq; opt.protSrc = struct.code; saveOpt(); syncControls(); render(); } } else if (e.target.id === 'protApply') applyProt(); });
 $('#protSeq').addEventListener('input', () => { opt.protSrc = ''; });
 function applyProt(quiet){ const F = protForms(); if (!F.length) return; const u = F[0], t = F[2];
@@ -6653,7 +6657,7 @@ function addNanoDrop(list, name, to){
   if (to) list.forEach(s => { const o = find(s); if (o && o.kind !== 'nucleic') { o.runId = to; o.stage = 'conc'; } });
   const dup = list.length - fresh.length - merged, sp = fresh.some(s => s.spec), uw = [...new Set(fresh.filter(s => s.unitWarn).map(s => s.unitWarn))],
     tiedN = fresh.filter(s => s.tied && !s.runId).length;
-  toast(`Added ${fresh.length} NanoDrop reading${fresh.length === 1 ? '' : 's'}${merged ? `, filled in ${merged} already loaded` : ''}${dup ? `, skipped ${dup} already loaded` : ''}${to ? '' : sp ? '. Spectra are on the NanoDrop spectra tab' : ''}${uw.length ? `. Review required: unrecognised concentration unit ${uw.join(', ')}, kept as read` : ''}${tiedN ? `. Review required: ${tiedN} tied reading${tiedN === 1 ? '' : 's'} left unassigned, select step` : ''}`);
+  toast(`Added ${fresh.length} NanoDrop reading${fresh.length === 1 ? '' : 's'}${merged ? `, filled in ${merged} already loaded` : ''}${dup ? `, skipped ${dup} already loaded` : ''}${to || PROJ ? '' : sp ? '. Spectra are on the NanoDrop spectra tab' : ''}${uw.length ? `. Review required: unrecognised concentration unit ${uw.join(', ')}, kept as read` : ''}${tiedN ? `. Review required: ${tiedN} tied reading${tiedN === 1 ? '' : 's'} left unassigned, select step` : ''}`);
   $('#ndList')._n = -1; renderND(); render();
 }
 /* the A280 of a 1 mg/mL solution for a step: tagged or untagged form from the Protein section, else the single value set, else none */
@@ -8992,7 +8996,7 @@ function renderStepSheet(L){
     + (['transform', 'expr', 'lysis'].includes(kind) ? `<span class="sp"></span><button type="button" class="btn quiet" data-skip="1">${skipped(kind) ? 'Include this step' : 'Skip this step'}</button>` : '')
     + (rmT ? `<span class="sp"></span><button type="button" class="btn danger${rmArm === k ? ' armed' : ''}" data-remove="1">${rmArm === k ? 'Remove? Click again' : rmT}</button>` : '');
   const ae = $('#ssActs'); if (ae._h !== ah) { ae._h = ah; ae.innerHTML = ah; } ae.hidden = !ah;
-  renderQuick(onGel || kind === 'btw' || (clStg && clStg.skip) ? '' : kind);
+  renderQuick(onGel || (clStg && clStg.skip) ? '' : kind);
   syncFrom(onGel ? '' : k);
   renderClone();
   placeFoot();
