@@ -148,5 +148,60 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     }
   });
 
+  await T.t('ul_pool_and_concentrated_volumes_are_ml_for_mass', async () => {
+    const {p: q, errs: qe, close: qclose} = await open(), hq = H(q);
+    q.on('dialog', d => d.accept());
+    try {
+      q.setDefaultTimeout(10000);
+      const file = (name, unit) => {
+        const scale = unit === 'mL' ? 1 : 1000, lines = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', `${unit},mAU,${unit},Fraction`];
+        for (let i = 0; i <= 20; i++) { const x = i*scale, y = 100*Math.exp(-0.5*Math.pow((i - 14)/1.1, 2)); lines.push(`${x},${y.toFixed(4)},${x},"F${i + 1}"`); }
+        return {name, mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n'))};
+      };
+      await hq.newProject('mL and uL pooled mass');
+      await q.click('#tl [data-addmenu]'); await q.click('#tl [data-addstep=run]');
+      await q.setInputFiles('#file', [file('ml_pooled_mass.csv', 'mL'), file('ul_pooled_mass.csv', '\u00b5L')]);
+      await hq.wait(1400);
+      const steps = (await hq.timeline()).filter(x => /^run:/.test(x.k));
+      T.check('ul_two_runs_loaded', steps.length === 2, JSON.stringify(steps));
+      if (steps.length !== 2) return;
+      await hq.step('construct');
+      const openFolds = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+      const eps = q.locator('#o-eps'); await openFolds(eps);
+      await eps.fill('1.0'); await eps.dispatchEvent('input'); await eps.dispatchEvent('change'); await hq.wait(250);
+      for (const s of steps) { await hq.step(s.k); await hq.pool('F13-F16'); }
+      await hq.step('figure');
+      await q.click('#sumMore').catch(() => {}); await hq.wait(250);
+      const tb0 = await hq.sumTable(), hd0 = tb0[0] || [], at = (row, re) => num((row || [])[hd0.findIndex(x => re.test(x))]);
+      const mlRow = tb0.find(r => /^1\./.test(r[0] || '')), ulRow = tb0.find(r => /^2\./.test(r[0] || ''));
+      const ml = {vol: at(mlRow, /^Volume/), area: at(mlRow, /^A/), mg: at(mlRow, /^Protein/)};
+      const ul = {vol: at(ulRow, /^Volume/), area: at(ulRow, /^A/), mg: at(ulRow, /^Protein/)};
+      ['vol', 'area', 'mg'].forEach(k => T.check(`ul_${k}_matches_ml`, ml[k] != null && ul[k] != null && Math.abs(ml[k] - ul[k]) <= Math.max(0.02, Math.abs(ml[k])*0.02), `mL=${ml[k]}, uL=${ul[k]}`));
+
+      await hq.step(steps[1].k); await hq.addConc(null); await hq.wait(300);
+      const concInput = q.locator('#btw-conc'); await openFolds(concInput);
+      const btwLabel = await q.locator('#btw-vOut').evaluate(e => e.closest('label').textContent);
+      T.check('ul_concentrated_field_says_ul', /µL/.test(btwLabel || '') && !/mL/.test(btwLabel || ''), `Volume label: ${btwLabel}`);
+      await concInput.fill('2.5'); await concInput.dispatchEvent('input'); await concInput.dispatchEvent('change'); await hq.wait(250);
+      await hq.step('figure'); await hq.wait(200);
+      const tbUnmeas = await hq.sumTable(), ulUnmeasMg = at(tbUnmeas.find(r => /^2\./.test(r[0] || '')), /^Protein/);
+      T.check('ul_unmeasured_vout_keeps_uv_mg', ulUnmeasMg != null && ml.mg != null && Math.abs(ulUnmeasMg - ml.mg) <= 0.02, `unmeasured vOut run mg=${ulUnmeasMg}, expected UV mg=${ml.mg}`);
+
+      const btwStep = (await hq.timeline()).find(x => /^btw:/.test(x.k));
+      if (btwStep) await hq.step(btwStep.k);
+      await q.locator('#btw-vOut').fill('50'); await q.locator('#btw-vOut').dispatchEvent('input'); await q.locator('#btw-vOut').dispatchEvent('change'); await hq.wait(300);
+      await hq.step('figure');
+      await q.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) b.open = true; }); await hq.wait(300);
+      const tb1 = await hq.sumTable(), concRow = tb1.find(r => /Concentrated/i.test(r[0] || '')) || [];
+      const concMg = at(concRow, /^Protein/), concVolMl = at(concRow, /^Volume/);
+      const mth = await hq.methods();
+      T.check('ul_concentrated_50ul_is_013mg', concMg != null && Math.abs(concMg - 0.13) <= 0.01 && concVolMl != null && Math.abs(concVolMl - 0.05) <= 0.005, `Concentrated mg=${concMg}, vol(mL)=${concVolMl}`);
+      T.check('ul_methods_keeps_mgml_and_50ul', /2\.5(?:0)? mg\/mL in 50 µL/.test(mth) && !/mg\/µL/.test(mth), mth.slice(-300));
+      T.check('ul_pool_no_page_errors', !qe.length, qe.join(' | '));
+    } finally {
+      await qclose();
+    }
+  });
+
   T.done();
 })();
