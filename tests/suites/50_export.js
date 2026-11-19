@@ -222,6 +222,60 @@ function parseZip(buffer) {
     }
   });
 
+  await T.t('sumcsv-conc-n-and-molar-cols', async () => {
+    const {p: p2, errs: errs2, close: close2} = await open(), h2 = H(p2);
+    try {
+      await h2.newProject('Summary CSV n and molar columns');
+      await h2.step('construct');
+      if (await p2.isVisible('#o-tagPreset2')) await p2.selectOption('#o-tagPreset2', 'sumo');
+      await p2.fill('#protSeq', 'M' + 'WAKGSAEKL'.repeat(20));
+      await p2.dispatchEvent('#protSeq', 'input');
+      await p2.dispatchEvent('#protSeq', 'change');
+      await h2.wait(300);
+
+      await h2.addRun(src('his'));
+      await h2.pool('T1-T6');
+      const rawNd = fs.readFileSync(path.join(path.resolve(__dirname, '../data/nd'), 'nd_replicates_sd.csv'));
+      const nd3Lines = rawNd.toString('utf16le').replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean).slice(0, 4).join('\n');
+      await h2.addConc({name: 'nd_replicates_sd.csv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(nd3Lines, 'utf8')}, 0.5);
+
+      await p2.click('#tl [data-addmenu]');
+      await p2.click('#tl [data-addstep=cleave]');
+      await h2.wait(400);
+
+      await h2.addRun(src('q'));
+      await h2.suggest();
+
+      await h2.step('figure');
+      await h2.wait(500);
+
+      const [dl] = await Promise.all([
+        p2.waitForEvent('download', {timeout: 10000}),
+        p2.click('#sumCsv')
+      ]);
+      const csvPath = path.join(path.resolve(__dirname, '../results'), 'sum_conc_molar_' + Date.now() + '.csv');
+      await dl.saveAs(csvPath);
+      const rows = parseCsv(fs.readFileSync(csvPath, 'utf8'));
+      const hdr = rows[0] || [];
+      const iPool = hdr.indexOf('Pool'), iN = hdr.indexOf('NanoDrop n'), iForm = hdr.indexOf('Form'), iNmol = hdr.indexOf('Protein (nmol)');
+      const concRow = rows.slice(1).find(r => r[iPool] === 'NanoDrop');
+      const runRows = rows.slice(1).filter(r => /^\d+$/.test(r[0] || ''));
+
+      T.check('export.csv_summary.conc_nanodrop_n', !!concRow && iN >= 0 && concRow[iN] === '3',
+        `iN=${iN} concRow=${JSON.stringify(concRow)}`);
+      T.check('export.csv_summary.trailing_form_nmol_cols',
+        hdr.length >= 27 && hdr[hdr.length - 2] === 'Form' && hdr[hdr.length - 1] === 'Protein (nmol)' &&
+        rows.every(r => r.length === hdr.length) &&
+        !!concRow && concRow[iForm] === 'tagged' && parseFloat(concRow[iNmol]) > 0 &&
+        runRows.length === 2 && runRows[0][iForm] === 'tagged' && parseFloat(runRows[0][iNmol]) > 0 &&
+        runRows[1][iForm] === 'cleaved' && parseFloat(runRows[1][iNmol]) > 0,
+        `hdrTail=${JSON.stringify(hdr.slice(-3))} conc=${JSON.stringify(concRow?.slice(-3))} runs=${JSON.stringify(runRows.map(r => r.slice(-3)))}`);
+      errs.push(...errs2);
+    } finally {
+      await close2();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
