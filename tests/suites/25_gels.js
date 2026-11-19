@@ -533,4 +533,34 @@ await T.t('tiff-12bit-depth', async () => {
   }
 });
 
+/* #1580: band kDa labels near the top of the cropped gel must not overlap lane headers above iy */
+await T.t('top-band-kda-clear-of-lane-headers', async () => {
+  const a = await open(), {p} = a, h = H(p);
+  try {
+    await h.newProject('Gel Top Band Header');
+    await p.locator('#gelFile').setInputFiles(src('gel'));
+    await h.wait(900);
+    const ct0 = await p.$eval('#g-ct', el => +el.value);
+    await p.evaluate(v => {
+      const ct = document.getElementById('g-ct');
+      ct.value = String(v); ct.dispatchEvent(new Event('input', {bubbles: true})); ct.dispatchEvent(new Event('change', {bubbles: true}));
+      const bl = document.getElementById('o-bandLabels');
+      bl.value = 'all'; bl.dispatchEvent(new Event('input', {bubbles: true})); bl.dispatchEvent(new Event('change', {bubbles: true}));
+    }, ct0 + 3.0);
+    await h.wait(500);
+    const svg = await h.exportSvg(), boxes = await h.svgBoxes(svg, 'svg svg'), img = boxes.box;
+    const headers = img ? boxes.texts.filter(t => /^(M|\d+)$/.test(t.t.trim()) && t.bottom <= img.y + 1) : [];
+    const bands = img ? boxes.texts.filter(t => /^\d+(\.\d+)?$/.test(t.t.trim()) && t.x > img.x && !headers.includes(t)) : [];
+    const hits = [];
+    for (const hd of headers) for (const bd of bands) {
+      if (Math.min(hd.right, bd.right) - Math.max(hd.x, bd.x) > 0.5 && Math.min(hd.bottom, bd.bottom) - Math.max(hd.y, bd.y) > 0.5)
+        hits.push(`${hd.t}x${bd.t}`);
+    }
+    T.check('top-band-kda-clear-of-lane-headers', !!img && headers.length >= 8 && bands.length > 0 && hits.length === 0 && a.errs.length === 0,
+      'overlaps: ' + hits.join(', ') + (a.errs.length ? ' | errs: ' + a.errs.join(' | ') : ''));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();

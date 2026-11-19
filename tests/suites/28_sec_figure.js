@@ -222,6 +222,47 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     } finally { await close2(); }
   });
 
+  await T.t('sec_peak_near_v0_no_marker_overlap', async () => {
+    const {p: p3, errs: errs3, close: close3} = await open(), h3 = H(p3);
+    try {
+      await h3.newProject('SEC V0 Label Clearance');
+      const rows = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'ml,mAU,ml,Fraction'];
+      for (let i = 0; i <= 260; i++) {
+        const x = i * 0.1;
+        const y = 180 * Math.exp(-0.5 * ((x - 8.35) / 0.22) ** 2) + 60 * Math.exp(-0.5 * ((x - 15.0) / 0.4) ** 2);
+        rows.push(`${x.toFixed(2)},${y.toFixed(3)},,`);
+      }
+      await h3.addRun({name: 'sec_Superdex_200_v0_peak.csv', mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n'))});
+      const runStep = (await h3.timeline()).find(x => /^run:/.test(x.k));
+      if (runStep) await h3.step(runStep.k);
+      if (await p3.isVisible('#moreBtn')) await p3.click('#moreBtn').catch(() => {});
+      await p3.evaluate(() => {
+        for (const id of ['o-secStds', 'sec-v0']) {
+          const el = document.getElementById(id);
+          let d = el && el.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+        }
+        const st = document.getElementById('o-secStds');
+        if (st && !st.checked) { st.checked = true; st.dispatchEvent(new Event('input', {bubbles: true})); st.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      await h3.wait(300);
+      await p3.fill('#sec-v0', '8.0'); await p3.dispatchEvent('#sec-v0', 'change');
+      await p3.fill('#sec-vt', '24.0'); await p3.dispatchEvent('#sec-vt', 'change');
+      const stds = [['S1', 670, 9.0], ['S2', 158, 13.0], ['S3', 44, 17.0], ['S4', 17, 20.5]];
+      while (await p3.locator('#secStdList .krow').count() < stds.length) { await p3.click('#sec-addStd'); await h3.wait(100); }
+      for (let i = 0; i < stds.length; i++) {
+        await p3.fill(`#ss-n${i}`, stds[i][0]); await p3.dispatchEvent(`#ss-n${i}`, 'change');
+        await p3.fill(`#ss-k${i}`, String(stds[i][1])); await p3.dispatchEvent(`#ss-k${i}`, 'change');
+        await p3.fill(`#ss-v${i}`, String(stds[i][2])); await p3.dispatchEvent(`#ss-v${i}`, 'change');
+      }
+      await p3.click('#intAuto'); await h3.wait(500);
+      const svg = await h3.exportSvg(), m = await h3.svgBoxes(svg);
+      const v0 = m.texts.find(t => t.t.trim() === 'V₀'), kda = m.texts.filter(t => /kDa/.test(t.t));
+      const hits = v0 ? m.texts.filter(t => t !== v0 && Math.min(t.right, v0.right) - Math.max(t.x, v0.x) > 0.5 && Math.min(t.bottom, v0.bottom) - Math.max(t.y, v0.y) > 0.5) : [m];
+      T.check('sec_v0_peak_label_no_overlap', !!v0 && kda.length >= 2 && hits.length === 0 && !errs3.length,
+        `v0=${JSON.stringify(v0)} hits=${JSON.stringify(hits.map(x => x.t))} errs=${errs3.join(' | ')}`);
+    } finally { await close3(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

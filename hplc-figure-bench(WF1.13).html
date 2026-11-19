@@ -2486,18 +2486,37 @@ function insetClear(z){
   z.zoomInsetW = z.zoomInsetH = z.zoomInsetX = z.zoomInsetY = null;
 }
 function insetAvoid(svg, g){
-  const out = [], fs = Math.max(5, fontSize()*0.85), add = (x, y, t) => { if (isFinite(x) && isFinite(y) && t) out.push({x0:x - Math.min(80, t.length*fs*.28), x1:x + Math.min(80, t.length*fs*.28), y0:y - fs, y1:y + fs*.3}); };
-  const tagged = []; String(svg || '').replace(/<g class="zoom-inset-avoid"[^>]*>([\s\S]*?)<\/g>/g, (_, s) => { tagged.push(s); return _; });
-  tagged.join('').replace(/<text\b([^>]*)>([^<]*)<\/text>/g, (_, a, t) => { const x = /\bx="([^"]+)"/.exec(a), y = /\by="([^"]+)"/.exec(a), tr = /translate\(([-.\d]+)[ ,]([-.\d]+)/.exec(a); add(x ? +x[1] : tr ? +tr[1] : NaN, y ? +y[1] : tr ? +tr[2] : NaN, t.replace(/&[^;]+;/g, 'x')); return _; });
+  const out = [], fs0 = fontSize();
+  String(svg || '').replace(/<g class="zoom-inset-avoid"([^>]*)>([\s\S]*?)<\/g>/g, (_, ga, s) => {
+    const gf = /\bfont-size="([^"]+)"/.exec(ga), f = gf ? +gf[1] : fs0, gaA = /\btext-anchor="([^"]+)"/.exec(ga), defAn = gaA ? gaA[1] : 'start';
+    let leg = false;
+    s.replace(/<line\b([^>]*)\/?>/g, (__, a) => {
+      const x1 = +(/\bx1="([^"]+)"/.exec(a) || [])[1], y1 = +(/\by1="([^"]+)"/.exec(a) || [])[1], x2 = +(/\bx2="([^"]+)"/.exec(a) || [])[1], y2 = +(/\by2="([^"]+)"/.exec(a) || [])[1];
+      if (isFinite(x1) && isFinite(x2) && isFinite(y1) && isFinite(y2) && Math.abs(y2 - y1) < 1 && Math.abs(x2 - x1) > 1) { leg = true; out.push({x0: Math.min(x1, x2), x1: Math.max(x1, x2), y0: y1 - f*0.5, y1: y1 + f*0.5, leg: true}); }
+      return __;
+    });
+    s.replace(/<text\b([^>]*)>([^<]*)<\/text>/g, (__, a, raw) => {
+      const t = raw.replace(/&[^;]+;/g, 'x'); if (!t) return __;
+      const x = /\bx="([^"]+)"/.exec(a), y = /\by="([^"]+)"/.exec(a), tr = /translate\(([-.\d]+)[ ,]([-.\d]+)/.exec(a);
+      const tx = x ? +x[1] : tr ? +tr[1] : NaN, ty = y ? +y[1] : tr ? +tr[2] : NaN; if (!isFinite(tx) || !isFinite(ty)) return __;
+      const tf = +(/\bfont-size="([^"]+)"/.exec(a) || [])[1] || f, an = (/\btext-anchor="([^"]+)"/.exec(a) || [])[1] || defAn, w = Math.min(180, t.length*tf*0.58);
+      if (/rotate\(-90/.test(a)) out.push({x0: tx - tf, x1: tx + tf*0.3, y0: ty - w, y1: ty, leg});
+      else { const x0 = an === 'end' ? tx - w : an === 'middle' ? tx - w/2 : tx; out.push({x0, x1: x0 + w, y0: ty - tf*0.9, y1: ty + tf*0.3, leg}); }
+      return __;
+    });
+    return _;
+  });
   return out.filter(b => b.x1 >= g.L && b.x0 <= g.R && b.y1 >= g.T && b.y0 <= g.B);
 }
 function insetDefault(S, m, iw, ih, beside){
   const g = m.geo, pad = 3;
   if (beside) return {x:S.W-iw, y:0};
-  const c = [{x:g.R-iw-pad,y:g.T+pad,k:'tr'}, {x:g.L+pad,y:g.T+pad,k:'tl'}, {x:g.R-iw-pad,y:g.B-ih-pad,k:'br'}, {x:g.L+pad,y:g.B-ih-pad,k:'bl'}];
-  const avoid = insetAvoid(m.svg, g), prefer = zoomPos();
-  c.forEach(q => { q.x = Math.max(0, Math.min(S.W-iw, q.x)); q.y = Math.max(0, Math.min(S.H-ih, q.y)); q.score = q.k === prefer ? -iw*ih*.8 : .01;
-    avoid.forEach(b => { const w = Math.max(0, Math.min(q.x+iw,b.x1)-Math.max(q.x,b.x0)), h = Math.max(0, Math.min(q.y+ih,b.y1)-Math.max(q.y,b.y0)); q.score += w*h; }); });
+  const avoid = insetAvoid(m.svg, g), prefer = zoomPos(), trX = g.R-iw-pad;
+  const c = [{x:trX,y:g.T+pad,k:'tr'}, {x:g.L+pad,y:g.T+pad,k:'tl'}, {x:trX,y:g.B-ih-pad,k:'br'}, {x:g.L+pad,y:g.B-ih-pad,k:'bl'}];
+  const trLeg = avoid.filter(b => b.leg && b.x1 > trX && b.x0 < trX + iw && b.y1 > g.T + pad && b.y0 < g.T + pad + ih);
+  if (trLeg.length) { const yb = Math.max(...avoid.filter(b => b.leg && b.x1 > trX && b.x0 < trX + iw).map(b => b.y1)) + pad; if (yb + ih <= g.B - 1) c.push({x:trX, y:yb, k:'tr-below'}); }
+  c.forEach(q => { q.x = Math.max(0, Math.min(S.W-iw, q.x)); q.y = Math.max(0, Math.min(S.H-ih, q.y)); q.score = q.k === prefer ? -iw*ih*.8 : q.k === 'tr-below' && prefer === 'tr' ? -iw*ih*.75 : .01;
+    avoid.forEach(b => { const w = Math.max(0, Math.min(q.x+iw,b.x1)-Math.max(q.x,b.x0)), h = Math.max(0, Math.min(q.y+ih,b.y1)-Math.max(q.y,b.y0)); if (w > 0 && h > 0) q.score += w*h*25 + (b.leg ? iw*ih : 0); }); });
   c.sort((a,b) => a.score - b.score || a.k.localeCompare(b.k)); return c[0];
 }
 /* the region zoomed into: the x-window; with none set, the middle third of the run */
@@ -2601,9 +2620,12 @@ function buildOverlaySVG(ov){
   xlo = numOr(o.xmin, xlo); xhi = numOr(o.xmax, xhi); if (!(xhi > xlo)) xhi = xlo + 1;
   const anyPeaks = o.showPeaks && P.some(p => p.t.peaks.length);
   const yr = (yhi - ylo) || 1;
-  const plotH0 = H - (tOut + 3 + fs + 4 + fs*1.25) - fs*0.7, pf0 = fs*0.85;
-  let padPts = 4;
-  if (anyPeaks) { let ml = 4; P.forEach(p => p.t.peaks.forEach(pk => { ml = Math.max(ml, (pk.label || fmt(pk.x, numOr(o.peakDec,2))).length); })); padPts += o.peakRot ? ml*pf0*0.56 + 4 : pf0*2.2; }
+  const mB0 = tOut + 3 + fs + 4 + fs*1.25, pf0 = fs*0.85;
+  let ml = o.ovPeakText !== 'x' ? 10 : 4;
+  if (anyPeaks) P.forEach(p => p.t.peaks.forEach(pk => { ml = Math.max(ml, (pk.label || fmt(pk.x, numOr(o.peakDec,2))).length); }));
+  const minTop = anyPeaks && o.peakRot && (idp === 'zi-' || (ov.nest && zoomPos() === 'beside')) ? Math.min(H*0.28, ml*pf0*0.62 + 6) : fs*0.7;
+  const plotH0 = H - mB0 - minTop;
+  let padPts = 4 + (anyPeaks ? (o.peakRot ? ml*pf0*0.62 + 4 : pf0*2.2) : 0);
   if ((o.legend === 'inside' || o.legend === 'insideL') && P.length) padPts += P.length*fs*1.3 + fs*0.3;
   padPts = Math.min(padPts, plotH0*0.6);
   let y0 = ylo - yr*0.03; let y1 = yhi + (yhi - y0)*padPts/Math.max(1, plotH0 - padPts);
@@ -2613,7 +2635,7 @@ function buildOverlaySVG(ov){
   let xt = ticks(xlo, xhi, Math.max(4, Math.round(numOr(o.w,3.5)*2)));
   const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = idp === 'zi-' ? 3 : 0;
   const mL = padL + (o.showY ? (tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + 5 + fs*1.2) : fs*0.8);
-  const mB = tOut + 3 + fs + 4 + fs*1.25, mT = fs*0.7;
+  const mB = mB0, mT = minTop;
   const plotH = Math.max(H - mB, mT + 24) - mT;
   yt = fitTicks(yt, y0, y1, Math.max(3, Math.round(numOr(o.h,2.6)*1.8)), plotH, 0, fs*1.28);
   let mR = fs*0.8, sbV = 0, sbLab = '';
@@ -2667,26 +2689,21 @@ function buildOverlaySVG(ov){
     });
     /* each label clears every trace under it, and gets a thin leader when that lifts it away from its own peak */
     const k = (xhi - xlo)/(R - L), topIn = (a, b) => { let m = -Infinity; P.forEach(p => { for (let i = Math.max(0, lowerBound(p.xs, a)); i < p.xs.length && p.xs[i] <= b; i++) if (p.yp[i] > m) m = p.yp[i]; }); return m; };
-    items.forEach(it => { it.w = o.peakRot ? pf : it.raw.length*pcw; it.h = o.peakRot ? it.raw.length*pcw : pf; const xd = xlo + (it.X - L)*k, m = topIn(xd - it.w/2*k, xd + it.w/2*k);
+    items.forEach(it => { it.w = o.peakRot ? pf : it.raw.length*pcw; it.h = o.peakRot ? it.raw.length*pf*0.62 + 2 : pf; const xd = xlo + (it.X - L)*k, m = topIn(xd - it.w/2*k, xd + it.w/2*k);
       it.Y0 = Math.max(T + it.h, Math.min(it.Y, isFinite(m) ? py(m) - 3 : it.Y)); });
     items.sort((a,b) => b.Y0 - a.Y0);
-    const leaders = [];
+    const leaders = [], lTop = o.peakRot ? 2 : 0;
     s.push(`<g class="zoom-inset-avoid" font-size="${r2(pf)}">`);
     /* a label that would have to leave the figure to clear the others is left off and named under the figure */
     items.forEach(it => {
-      let bot, w = it.w;
-      if (o.peakRot) {
-        bot = placeLabel(boxes, it.X - it.h/2, it.X + it.h/2, it.Y0, w, 0);
-      } else {
-        bot = placeLabel(boxes, it.X - w/2, it.X + w/2, it.Y0, it.h, 0);
-      }
+      let bot = placeLabel(boxes, it.X - it.w/2, it.X + it.w/2, it.Y0, it.h, lTop);
       if (bot == null) { lblLeft.push(it.raw); return; }
-      const own = () => o.peakRot ? {x1:it.X - it.h/2, x2:it.X + it.h/2, y1:bot - w, y2:bot} : {x1:it.X - w/2, x2:it.X + w/2, y1:bot - it.h, y2:bot};
+      const own = () => ({x1:it.X - it.w/2, x2:it.X + it.w/2, y1:bot - it.h, y2:bot});
       const hit = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
       /* A fixed nudge stays stable as the axis ticks change with a zoom; the opposite direction is the fixed fallback near the top edge. */
       if (axisBoxes.some(b => hit(own(), b))) {
         const other = boxes.slice(0, -1), off = fs*1.1, half = fs*0.55;
-        const moved = [bot - half, bot - off, bot + half, bot + off].find(y => { const was = bot; bot = y; const q = own(); bot = was; return q.y1 >= 0 && q.y2 <= B - 1 && !axisBoxes.some(b => hit(q, b)) && !other.some(b => hit(q, b)); });
+        const moved = [bot - half, bot - off, bot + half, bot + off].find(y => { const was = bot; bot = y; const q = own(); bot = was; return q.y1 >= lTop && q.y2 <= B - 1 && !axisBoxes.some(b => hit(q, b)) && !other.some(b => hit(q, b)); });
         if (moved !== undefined) { bot = moved; Object.assign(boxes[boxes.length - 1], own()); }
       }
       if (it.Y - bot > fs*1.2) leaders.push({x: it.X, a: bot + 1.5, b: it.Y, own: boxes.length - 1});
@@ -2959,6 +2976,7 @@ function buildRunPlainSVG(run, ov){
   xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v); tickBoxes.push({x1: x - t.length*cw/2, x2: x + t.length*cw/2, y1: xly - fs*0.8, y2: xly + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: x - aw, x2: x + aw, y1: B - tl, y2: B}); });
   yt.v.forEach((v, i) => { const y = py(v), ty = y + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; tickBoxes.push({x1: x - w, x2: x, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: L, x2: L + tl, y1: y - aw, y2: y + aw}); });
   if (hasSec) st.v.forEach((v, i) => { const y = py2(v), ty = y + fs*0.35, x = R + tOut + 3, w = stl[i].length*cw; tickBoxes.push({x1: x, x2: x + w, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: R - tl, x2: R, y1: y - aw, y2: y + aw}); });
+  if (showVoid) [[sfit.v0, 'V₀'], [sfit.vt, 'Vₜ']].forEach(([x, t]) => { if (x > xlo && x < xhi) { const xr = px(x) - 2, vf = pf*0.95, vw = t.length*vf*0.68 + 2; tickBoxes.push({x1: xr - vw, x2: xr + 3, y1: T, y2: T + vf*1.25}); } });
   if (capSvg) s.push(capSvg);
   /* an uncalibrated SEC run says so, instead of leaving the reader to guess the size */
   if (calNote) s.push(`<text x="${r2((L + R)/2)}" y="${r2(H - 2 - condH)}" text-anchor="middle" font-size="${r2(fs*0.75)}" font-style="italic" fill="#777777">column not calibrated</text>`);
@@ -3018,10 +3036,15 @@ function buildRunPlainSVG(run, ov){
       /* a label pushed off its peak by the plot edge drops its note in brackets ("void (aggregate)" becomes "void") */
       if (clampX() > ww*0.2 && /\s\(.*\)$/.test(tt)) { tt = tt.replace(/\s*\(.*\)$/, ''); ww = tt.length*fs*0.45; pick.x = xOrig; clampX(); }
       const e2 = ext(), lift = Math.max(base, hiIn(xlo + (pick.x + e2[0] - L)*k, xlo + (pick.x + e2[1] - L)*k));
-      let Y = Math.max(T + fs*0.8, py(lift) - 3), guard = 0;
+      let Y = Math.max(T + fs*0.8, py(lift) - 3);
       const pBox = y => { const e = ext(); return {x1: pick.x + e[0], x2: pick.x + e[1], y1: y - fs*0.75, y2: y + fs*0.15}; };
-      while (tickBoxes.some(b => hitBox(pBox(Y), b)) && guard++ < 6 && Y - fs*0.45 >= T + fs*0.7) Y -= fs*0.45;
-      if (tickBoxes.some(b => hitBox(pBox(Y), b))) { const pad = (!o.ticksOut ? tl : 0) + 1.5, e = ext(); if (pick.x + e[0] < L + pad) pick.x = L + pad - e[0]; else if (pick.x + e[1] > R - pad) pick.x = R - pad - e[1]; }
+      if (tickBoxes.some(b => hitBox(pBox(Y), b))) { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y - g2*fs*0.45; if (yn < T + fs*0.7) break; if (!tickBoxes.some(b => hitBox(pBox(yn), b))) { Y = yn; break; } } }
+      const hb = tickBoxes.find(b => hitBox(pBox(Y), b));
+      if (hb) { const pad = (!o.ticksOut ? tl : 0) + 1.5, e = ext(), cx = pick.x + (e[0] + e[1])/2;
+        if (hb.x2 <= L + tl + 2) pick.x = Math.max(pick.x, L + pad - e[0]); else if (hb.x1 >= R - tl - 2) pick.x = Math.min(pick.x, R - pad - e[1]);
+        else { const xR = hb.x2 + 1.5 - e[0], xL = hb.x1 - 1.5 - e[1];
+          if (cx >= (hb.x1 + hb.x2)/2 && xR + e[1] <= R - 1) pick.x = xR; else if (xL + e[0] >= L + 1) pick.x = xL; else if (xR + e[1] <= R - 1) pick.x = xR;
+          clampX(); const lift2 = Math.max(base, hiIn(xlo + (pick.x + e[0] - L)*k, xlo + (pick.x + e[1] - L)*k)); Y = Math.max(T + fs*0.8, Math.min(Y, py(lift2) - 3)); } }
       const e3 = ext(), cx0 = pick.x + (e3[0] + e3[1])/2;
       if (placed.some(q => Math.abs(q.x - cx0) < (q.w + ww)/2 + 1 && Math.abs(q.y - Y) < fs*0.85)) return;
       placed.push({x: cx0, y: Y, w: ww}); s.push(`<text x="${r2(pick.x)}" y="${r2(Y)}"${pick.an !== 'middle' ? ` text-anchor="${pick.an}"` : ''}>${esc(tt)}</text>`);
@@ -3876,7 +3899,7 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
     idx.forEach(i => { const ln = bl[i]; if (!ln || ln.marker) return;
       const used = [];
       ln.bands.slice().sort((a, b) => b.area - a.area).filter(b => !onlyT || isProt((tagOf(g, i, b) || {}).kind)).slice(0, nTop).forEach(b => { if (b.mw == null || b.yRot < c.t || b.yRot > c.b || !inWin(b.hl/g.pix.h) || !inWin(b.hr/g.pix.h)) return;
-        const yy = fy(Math.max(0, b.hl - 1)/g.pix.h) - 1.2, xr = onlyT ? pos[i] : pos[i] + laneW/2 - 1.2;
+        const yy = Math.max(iy + bf*0.85, fy(Math.max(0, b.hl - 1)/g.pix.h) - 1.2), xr = onlyT ? pos[i] : pos[i] + laneW/2 - 1.2;
         if (used.some(u => Math.abs(u - yy) < bf*1.05)) return; used.push(yy);
         s.push(`<text x="${r2(xr)}" y="${r2(yy)}"${onlyT ? ' text-anchor="middle"' : ''}>${esc(mwText(g, b.mw))}</text>`); }); });
     s.push('</g>');
