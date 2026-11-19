@@ -195,6 +195,81 @@ const F = {gb: src('gb'), imac: src('his'), grad: path.join(DATA, 'chrom/imac_Hi
     T.check('metadata_table_no_false_warning', (await metaTrace.locator('.source-diag').count()) === 0, 'harmless metadata table does not trigger discarded block warning');
   });
 
+  await T.t('saturated_and_duplicate_x_diagnostics', async () => {
+    const {p: p2, errs: errs2, close: close2} = await open(), h2 = H(p2);
+    try {
+      await h2.newProject('Saturated and Duplicate X');
+      const satCsv = [
+        'Time (min),UV 280 (mAU)',
+        '0.0,5.0',
+        '0.5,40.0',
+        '1.0,250.0',
+        '1.0,260.0',
+        '1.5,1400.0',
+        '1.8,2600.0',
+        '2.0,>3000.0',
+        '2.1,>3000.0',
+        '2.2,>3000.0',
+        '2.4,2500.0',
+        '2.7,1200.0',
+        '3.0,180.0',
+        '3.0,190.0',
+        '3.5,25.0',
+        '4.0,5.0'
+      ].join('\n');
+      await p2.setInputFiles('#file', {name: 'sat_apex_dup.csv', mimeType: 'text/csv', buffer: Buffer.from(satCsv)});
+      await h2.wait(800);
+
+      const toasts = await h2.toasts();
+      const [dl] = await Promise.all([p2.waitForEvent('download'), p2.click('#projSave')]);
+      const savePath = path.join(__dirname, '..', 'results', 'sat_apex_dup_proj.json');
+      await dl.saveAs(savePath);
+      const proj = JSON.parse(fs.readFileSync(savePath, 'utf8'));
+      const tr = (proj.traces || []).find(t => t.name === 'sat_apex_dup');
+      const ys = tr ? tr.rows.map(r => r[1]) : [];
+      const svgNums = (await h2.svgTexts()).map(x => x.t.trim());
+
+      T.check('sat_generic.unsplit_reaches_3000',
+        !!tr && tr.rows.length === 15 && tr.rows[0][0] === 0 && tr.rows[tr.rows.length - 1][0] === 4 &&
+        Math.max(...ys) === 3000 && ys.filter(y => y === 3000).length === 3 &&
+        svgNums.includes('3000') && (svgNums.includes('4.0') || svgNums.includes('4')) && !toasts.some(t => /left out|unreadable/i.test(t)),
+        `rows=${tr?.rows?.length} maxY=${ys.length ? Math.max(...ys) : 'none'} svg=${JSON.stringify(svgNums)} toasts=${toasts.join(' | ')}`);
+
+      const cardDiag = p2.locator('.trace:not(.run)').filter({has: p2.locator('input[data-k=name][title="sat_apex_dup"]')}).locator('.source-diag');
+      const cardN = await cardDiag.count();
+      const sumTxt = cardN ? await cardDiag.locator('summary').textContent() : '';
+      const msgTxt = cardN ? await cardDiag.locator('.source-diag-msg').textContent() : '';
+      T.check('sat_generic.source_diag_warns_saturation_and_dupx',
+        cardN === 1 &&
+        /3 detector-saturated/i.test(sumTxt) && /3000/.test(sumTxt) &&
+        /2 duplicate/i.test(sumTxt) &&
+        /lower bounds/i.test(msgTxt) && /collapsed/i.test(msgTxt),
+        `summary="${sumTxt}" msg="${msgTxt}"`);
+
+      const aktaSat = [
+        'UV 1_280\tCond',
+        'ml\tmAU\tml\tmS/cm',
+        '0.0\t<-100\t0.0\t10',
+        '1.0\t1500.0*\t1.0\t10',
+        '1.0\t1520.0\t1.0\t10',
+        '2.0\t3000.0#\t2.0\t10',
+        '3.0\t20.0\t3.0\t10'
+      ].join('\n');
+      await p2.setInputFiles('#file', {name: 'akta_sat_flags.csv', mimeType: 'text/csv', buffer: Buffer.from(aktaSat)});
+      await h2.wait(800);
+
+      const runDiag = p2.locator('.trace.run').first().locator('.source-diag');
+      const runN = await runDiag.count();
+      const rSum = runN ? await runDiag.locator('summary').textContent() : '';
+      const rMsg = runN ? await runDiag.locator('.source-diag-msg').textContent() : '';
+      T.check('sat_akta.flags_and_dupx_diagnosed',
+        runN === 1 && /3 detector-saturated/i.test(rSum) && /1 duplicate/i.test(rSum) && /collapsed/i.test(rMsg) && !errs2.length,
+        `rSum="${rSum}" rMsg="${rMsg}" errs=${errs2.join(' | ')}`);
+    } finally {
+      await close2();
+    }
+  });
+
   await close();
   T.done();
 })();

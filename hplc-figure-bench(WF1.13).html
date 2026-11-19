@@ -1631,7 +1631,9 @@ function svgHead(Wpt, Hpt){
 }
 
 /* ---------- parsing: generic ---------- */
-const NUM = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?([A-Za-z*])?$/;
+const NUM = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?([A-Za-z])?$/;
+const SAT_NUM = /^(?:([<>]=?)\s*)?([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)(?:\s*([*#]+))?$/;
+let satCount = 0;
 function decode(buf){
   const b = new Uint8Array(buf);
   if (b[0]===0xFF && b[1]===0xFE) return new TextDecoder('utf-16le').decode(b.subarray(2));
@@ -1646,17 +1648,33 @@ function splitLine(L, d){ return d === 'ws' ? L.trim().split(/\s+/) : L.split(d)
 /* after the delimiter is chosen: a quoted comma or semicolon ("UV, 280 nm") stays in its field; whitespace, tabs and lines with unbalanced quotes split as before */
 function splitFields(L, d){ return (d === ',' || d === ';') && L.includes('"') && !((L.match(/"/g) || []).length % 2) ? csvSplit(L, d) : splitLine(L, d); }
 /* Generic chromatogram and ÄKTA CSV values use this directly; NanoDrop first applies its delimiter-specific decimal normalization. Zero is a measurement, while blank and malformed fields are not. */
-function measurementNumber(v){ const s = clean(String(v ?? '')); return NUM.test(s) ? parseFloat(s) : null; }
-function toNum(f, dc){ f = clean(f); if (dc) f = f.replace(/^-?\d+,\d+(?:[eE][-+]?\d+)?$/, m => m.replace(',', '.')); const v = measurementNumber(f); return v == null ? NaN : v; }
+function parseMeas(v){ const s = clean(String(v ?? '')); if (!s) return null; const m = SAT_NUM.exec(s); if (m && (m[1] || m[3])) return {v: parseFloat(m[2]), sat: true}; return NUM.test(s) ? {v: parseFloat(s), sat: false} : null; }
+function measurementNumber(v){ const r = parseMeas(v); if (!r) return null; if (r.sat) satCount++; return r.v; }
+function toNumInfo(f, dc){ f = clean(String(f ?? '')); if (dc) f = f.replace(/^(?:[<>]=?\s*)?[-+]?\d+,\d+(?:[eE][-+]?\d+)?(?:\s*[*#]+)?$/, m => m.replace(',', '.')); return parseMeas(f); }
+function toNum(f, dc){ const r = toNumInfo(f, dc); if (!r) return NaN; if (r.sat) satCount++; return r.v; }
+function cleanXY(xs, ys){
+  const pts = []; let sorted = true;
+  for (let i = 0; i < xs.length; i++) { const x = xs[i], y = ys[i]; if (x == null || y == null || !isFinite(x) || !isFinite(y)) continue; if (pts.length && x < pts[pts.length - 1][0]) sorted = false; pts.push([+x, +y]); }
+  if (!sorted) pts.sort((a, b) => a[0] - b[0]);
+  const ox = [], oy = []; let dupX = 0, dupDiff = 0;
+  for (let i = 0; i < pts.length; ) {
+    const x = pts[i][0]; let sum = pts[i][1], n = 1, diff = false;
+    while (i + n < pts.length && pts[i + n][0] === x) { if (Math.abs(pts[i + n][1] - pts[i][1]) > 1e-12) diff = true; sum += pts[i + n][1]; n++; }
+    ox.push(x); oy.push(n > 1 ? sum / n : sum);
+    if (n > 1) { dupX += n - 1; if (diff) dupDiff += n - 1; }
+    i += n;
+  }
+  return {xs: ox, ys: oy, dupX, dupDiff, sorted};
+}
 function parseEZStart(text){
   const lines = text.split(/\r\n|\n|\r/), rate = lines.map(L => /^\s*Sampling Rate\s*:\s*([-+]?\d*\.?\d+)\s*Hz\b/i.exec(L)).find(Boolean), points = lines.map(L => /^\s*Total Data Points\s*:\s*(\d+)\s*Pts\b/i.exec(L)).find(Boolean);
   if (!rate || !points || !(+rate[1] > 0) || !(+points[1] > 1)) return null;
-  const n = +points[1], vals = [];
-  for (const L of lines) { const v = measurementNumber(L); if (v != null) vals.push(v); }
+  const n = +points[1], vals = []; let sat = 0, satMax = -Infinity;
+  for (const L of lines) { const q = parseMeas(L); if (q) { vals.push(q.v); if (q.sat) { sat++; satMax = Math.max(satMax, Math.abs(q.v)); } } }
   const channels = Math.floor(vals.length / n); if (!channels) return null;
   const rows = Array.from({length: n}, (_, i) => [i / (+rate[1] * 60)]);
   for (let c=0;c<channels;c++) for (let i=0;i<n;i++) rows[i].push(vals[c*n+i]);
-  return {rows, cols: ['Time (min)', ...Array.from({length: channels}, (_, i) => `Channel ${i+1}`)], xc: 0, yc: 1};
+  return {rows, cols: ['Time (min)', ...Array.from({length: channels}, (_, i) => `Channel ${i+1}`)], xc: 0, yc: 1, saturated: sat, satMax: isFinite(satMax) ? satMax : NaN};
 }
 function parseText(text){
   const lines = text.split(/\r\n|\n|\r/);
@@ -1671,8 +1689,8 @@ function parseText(text){
   }
   if (!best || best.cnt < 3) {
     /* a single column of signal values (some detectors export only that): plot against point number */
-    const vals = []; let head = null; for (const L of lines) { const t = L.trim(); if (!t) continue; const v = toNum(t, false), v2 = toNum(t, true); const x = !isNaN(v) ? v : v2; if (!isNaN(x)) vals.push(x); else if (!vals.length) head = clean(t); }
-    if (vals.length >= 20) return {rows: vals.map((v, i) => [i + 1, v]), cols: ['Point number', head || 'Signal'], xc: 0, yc: 1};
+    const vals = []; let head = null, sat = 0, satMax = -Infinity; for (const L of lines) { const t = L.trim(); if (!t) continue; const q = toNumInfo(t, false) || toNumInfo(t, true); if (q && !isNaN(q.v)) { vals.push(q.v); if (q.sat) { sat++; satMax = Math.max(satMax, Math.abs(q.v)); } } else if (!vals.length) head = clean(t); }
+    if (vals.length >= 20) return {rows: vals.map((v, i) => [i + 1, v]), cols: ['Point number', head || 'Signal'], xc: 0, yc: 1, saturated: sat, satMax: isFinite(satMax) ? satMax : NaN};
     /* the column header of an export with no points can sit under a long metadata block (LabSolutions ASCII: [Header], [Sample Information], ...) */
     const isChrom = lines.slice(0, 200).some(L => { const s = L.trim(); if (!s) return false;
       for (const d of ['\t', ',', ';']) { const fs = splitLine(s, d).map(clean);
@@ -1684,8 +1702,8 @@ function parseText(text){
   const {d, dc} = best; const runsN = []; let cr = null;
   lines.forEach((L, i) => {
     if (!L.trim()) { cr = null; return; }
-    const nums = splitFields(L, d).map(f => toNum(f, dc)); let k = 0; for (const v of nums) if (!isNaN(v)) k++;
-    if (k >= 2) { if (!cr) { cr = {start:i, rows:[]}; runsN.push(cr); } cr.rows.push(nums); cr.end = i; } else cr = null;
+    const infos = splitFields(L, d).map(f => toNumInfo(f, dc)), nums = infos.map(q => q ? q.v : NaN); let k = 0; for (const v of nums) if (!isNaN(v)) k++;
+    if (k >= 2) { if (!cr) { cr = {start:i, rows:[], sats:[]}; runsN.push(cr); } cr.rows.push(nums); cr.sats.push(infos.map(q => !!(q && q.sat))); cr.end = i; } else cr = null;
   });
   const run = runsN.reduce((a,b) => b.rows.length > a.rows.length ? b : a);
   if (!run || run.rows.length < 2) throw new Error('has no data points');
@@ -1742,7 +1760,11 @@ function parseText(text){
     xc = bestX;
     yc = bestY;
   }
-  return {rows: run.rows, cols, xc, yc, skipped, retained, discarded};
+  const satByCol = Array.from({length: ncol}, (_, c) => run.sats.reduce((s, sr) => s + (sr[c] ? 1 : 0), 0));
+  let satMax = -Infinity;
+  run.rows.forEach((r, idx) => { const sr = run.sats[idx]; if (sr[yc] && isFinite(r[yc])) satMax = Math.max(satMax, Math.abs(r[yc])); });
+  const cl = cleanXY(run.rows.map(r => r[xc]), run.rows.map(r => r[yc]));
+  return {rows: run.rows, cols, xc, yc, skipped, retained, discarded, saturated: (satByCol[yc] || 0) + (satByCol[xc] || 0), satByCol, satMax: isFinite(satMax) ? satMax : NaN, dupX: cl.dupX, dupDiff: cl.dupDiff};
 }
 
 /* ---------- parsing: ÄKTA / UNICORN ---------- */
@@ -1775,12 +1797,12 @@ function parseAkta(text, fname){
     const h = csvSplit(lines[i], dd).map(clean), x = h.findIndex(s => /^(ml|min)$/i.test(s)), ch = h.findIndex(s => /^channel$/i.test(s)), val = h.findIndex(s => /^value$/i.test(s));
     if (x < 0 || ch < 0 || val < 0) continue;
     const byName = new Map();
-    for (let j=i+1;j<lines.length;j++) { const f = csvSplit(lines[j], dd), name = clean(f[ch] || ''), xval = toNum(f[x] || '', dd !== ','), yval = toNum(f[val] || '', dd !== ',');
-      if (!name || !isFinite(xval) || !isFinite(yval)) continue;
-      if (!byName.has(name)) { const kind = curveKind(name, 'mAU'); byName.set(name, {name, xu: h[x], yu: kind === 'uv' ? 'mAU' : kind === 'cond' ? 'mS/cm' : kind === 'grad' ? '% B' : '', kind, xs: [], ys: [], ev: []}); }
-      const cv = byName.get(name); cv.xs.push(xval); cv.ys.push(yval);
+    for (let j=i+1;j<lines.length;j++) { const f = csvSplit(lines[j], dd), name = clean(f[ch] || ''), xi = toNumInfo(f[x] || '', dd !== ','), yi = toNumInfo(f[val] || '', dd !== ',');
+      if (!name || !xi || !yi || !isFinite(xi.v) || !isFinite(yi.v)) continue;
+      if (!byName.has(name)) { const kind = curveKind(name, 'mAU'); byName.set(name, {name, xu: h[x], yu: kind === 'uv' ? 'mAU' : kind === 'cond' ? 'mS/cm' : kind === 'grad' ? '% B' : '', kind, xs: [], ys: [], ev: [], sat: 0, satMax: -Infinity}); }
+      const cv = byName.get(name); cv.xs.push(xi.v); cv.ys.push(yi.v); if (yi.sat) { cv.sat++; cv.satMax = Math.max(cv.satMax, Math.abs(yi.v)); }
     }
-    const curves = [...byName.values()]; curves.forEach(cv => { const pts = cv.xs.map((x, k) => [x, cv.ys[k]]).sort((a,b) => a[0]-b[0]); cv.xs = pts.map(p => p[0]); cv.ys = pts.map(p => p[1]); });
+    const curves = [...byName.values()]; curves.forEach(cv => { const cl = cleanXY(cv.xs, cv.ys); cv.xs = cl.xs; cv.ys = cl.ys; cv.dupX = cl.dupX; cv.dupDiff = cl.dupDiff; });
     const tidy = aktaFromCurves(curves, fname, {delimiter: dd}); if (tidy) return tidy;
   }
   for (let i=0;i<Math.min(50, lines.length) && u < 0;i++) for (const dd of [',', '	', ';']) {
@@ -1795,12 +1817,13 @@ function parseAkta(text, fname){
   const curves = [];
   for (let c=0;c<units.length-1;c+=2){ const nm = names[c] || ''; if (!nm) continue;
     /* UNICORN 6/7 names (UV 1_280, Conductivity) and UNICORN 5 names with a run prefix (run12:10_UV1_280nm, run12:10_Cond) */
-    curves.push({name: nm, xu: units[c], yu: units[c+1], col: c, kind: curveKind(nm, units[c+1]), xs: [], ys: [], ev: []}); }
+    curves.push({name: nm, xu: units[c], yu: units[c+1], col: c, kind: curveKind(nm, units[c+1]), xs: [], ys: [], ev: [], sat: 0, satMax: -Infinity}); }
   for (let i=u+1;i<lines.length;i++){ const L = lines[i]; if (!L) continue; const f = sp(L);
-    for (const cv of curves){ const xs = f[cv.col]; if (xs === undefined || xs === '') continue; const x = toNum(xs, d !== ','); if (!isFinite(x)) continue;
+    for (const cv of curves){ const xs = f[cv.col]; if (xs === undefined || xs === '') continue; const xi = toNumInfo(xs, d !== ','); if (!xi || !isFinite(xi.v)) continue;
       const v = (f[cv.col+1] || '').trim();
-      if (cv.kind === 'frac' || cv.kind === 'log' || cv.kind === 'inj') cv.ev.push({x, label: clean(v)});
-      else { const y = toNum(v, d !== ','); if (isFinite(y)) { cv.xs.push(x); cv.ys.push(y); } } } }
+      if (cv.kind === 'frac' || cv.kind === 'log' || cv.kind === 'inj') cv.ev.push({x: xi.v, label: clean(v)});
+      else { const yi = toNumInfo(v, d !== ','); if (yi && isFinite(yi.v)) { cv.xs.push(xi.v); cv.ys.push(yi.v); if (yi.sat) { cv.sat++; cv.satMax = Math.max(cv.satMax, Math.abs(yi.v)); } } } } }
+  curves.forEach(cv => { if (cv.xs.length > 1) { const cl = cleanXY(cv.xs, cv.ys); cv.xs = cl.xs; cv.ys = cl.ys; cv.dupX = cl.dupX; cv.dupDiff = cl.dupDiff; } });
   const ak = aktaFromCurves(curves, fname, {delimiter: d});
   if (!ak) {
     /* Diagnose only rejected exports: one usable UV curve is enough, and other channels remain optional. */
@@ -1841,8 +1864,10 @@ function aktaFromCurves(curves, fname, extra){
   const flowMed = med(pick('flow')), tempMed = med(pick('temp'));
   /* UNICORN logs the column it was told: "Base CV, 0.962 {ml}, HisTrap FF, 1 ml" */
   const cvl = log.map(e => /Base CV,\s*(?:Vc\s*=\s*)?([\d.]+)\s*\{ml\},\s*([^,]+)(?:,\s*([\d.]+)\s*ml)?/i.exec(e.label)).find(Boolean), colLog = cvl && !/^any$/i.test(cvl[2].trim()) ? `${cvl[2].trim()}${cvl[3] ? ` ${+cvl[3]} mL` : ''}` : '', cvLog = cvl ? +cvl[1] : null;
+  const sat = uvs.reduce((s, c) => s + (c.sat || 0), 0), satMax = uvs.reduce((m, c) => c.sat && isFinite(c.satMax) ? Math.max(m, c.satMax) : m, -Infinity);
+  const dupX = uvs.reduce((s, c) => s + (c.dupX || 0), 0), dupDiff = uvs.reduce((s, c) => s + (c.dupDiff || 0), 0);
   return {name: tidyName(fname), file: fname, flowAuto: flowMed, tempAuto: tempMed, colLog, cvLog, uvs: uvs.map(c => ({name: c.name, yu: c.yu, xs: c.xs, ys: c.ys})), grad: pick('grad'), cond: pick('cond'),
-    fracs: fr.map(e => ({x: e.x - shift, label: e.label})), fracEnd: fracEnd == null ? null : fracEnd - shift, phases, shift, injX, injShift: null, xu: uvs[0].xu, method, time: rt ? rt.t : null, timeStr: rt ? rt.str : '', ...(extra || {})};
+    fracs: fr.map(e => ({x: e.x - shift, label: e.label})), fracEnd: fracEnd == null ? null : fracEnd - shift, phases, shift, injX, injShift: null, xu: uvs[0].xu, method, time: rt ? rt.t : null, timeStr: rt ? rt.str : '', saturated: sat, satMax: isFinite(satMax) ? satMax : NaN, dupX, dupDiff, ...(extra || {})};
 }
 /* ---------- UNICORN 7 result archive (.zip) ---------- */
 /* the archive and each curve inside it are zip files, the curves in zip64 form; their points are .NET float arrays */
@@ -1948,9 +1973,9 @@ function processXY(xs, ys, lo, hi, norm, sc){
   return {xs, ys};
 }
 function processTrace(t, full){
-  const sh = +t.xshift || 0; let xs = [], ys = [], sorted = true;
-  for (const r of t.rows) { const x = r[t.xc], y = r[t.yc]; if (x != null && y != null && isFinite(x) && isFinite(y)) { if (xs.length && x+sh < xs[xs.length-1]) sorted = false; xs.push(x+sh); ys.push(y); } }
-  if (!sorted) { const idx = xs.map((_,i)=>i).sort((a,b)=>xs[a]-xs[b]); xs = idx.map(i=>xs[i]); ys = idx.map(i=>ys[i]); }
+  const sh = +t.xshift || 0, rawX = [], rawY = [];
+  for (const r of t.rows) { const x = r[t.xc], y = r[t.yc]; if (x != null && y != null && isFinite(x) && isFinite(y)) { rawX.push(x + sh); rawY.push(y); } }
+  const {xs, ys} = cleanXY(rawX, rawY);
   return processXY(xs, ys, full ? -Infinity : numOr(opt.xmin, -Infinity), full ? Infinity : numOr(opt.xmax, Infinity), opt.normalize, numOr(t.scale, 1));
 }
 function parsePeaks(val){
@@ -6248,11 +6273,39 @@ function axisOrderDiag(parsed){
     msg: all ? `The selected X axis, ${axis}, decreases from each of its ${n} points to the next (${tr}): the export runs from high to low. The plotted series was sorted by ${axis} in ascending order; the source rows are kept as imported.`
       : `The selected X axis, ${axis}, goes down ${desc === 1 ? 'once' : desc + ' times'}${at} (${tr}), so the export has reset or discontinuous segments. The plotted series was sorted by ${axis} in ascending order, which joins the segments into one curve; the source rows are kept as imported. Check that the file holds a single acquisition before integrating or labelling peaks.`};
 }
+function satDiag(n, maxVal, unit){
+  if (!(n > 0)) return null;
+  const lv = isFinite(maxVal) ? `${fmtAuto(maxVal)}${unit ? ' ' + unit : ''}` : '';
+  return {saturated: n, summary: `${n} detector-saturated point${n > 1 ? 's' : ''} clipped${lv ? ` at ${lv}` : ''}`,
+    msg: `${n} detector-saturated data point${n > 1 ? 's' : ''}${lv ? ` (clipped at ${lv})` : ''} ${n > 1 ? 'were' : 'was'} retained at the clipped level so the peak stays unsplit; peak height and integrated area are lower bounds.`};
+}
+function dupXDiag(axis, dupX, dupDiff, reordered){
+  if (!(dupDiff > 0 || (!reordered && dupX >= 2))) return null;
+  return {dupX, summary: `${dupX} duplicate-${axis} row${dupX > 1 ? 's' : ''} collapsed`,
+    msg: `${dupX} duplicate-${axis} timestamp row${dupX > 1 ? 's were' : ' was'} collapsed by averaging signal values at identical ${axis} positions.`};
+}
 function genericDiag(srcName, nm, parsed){
   const d = genericBlockDiag(srcName, nm, parsed), o = axisOrderDiag(parsed);
-  if (!o) return d;
-  if (!d) return {source: srcName, kind: 'generic', reordered: o, summary: o.summary, msg: o.msg};
-  return Object.assign(d, {reordered: o, summary: `${d.summary}; ${o.summary}`, msg: `${d.msg} ${o.msg}`});
+  const xc = parsed.xc ?? 0, yc = parsed.yc ?? 1, axis = (parsed.cols && parsed.cols[xc]) || 'X', yu = (((parsed.cols && parsed.cols[yc]) || '').match(/\(([^)]+)\)/) || [])[1] || '';
+  const satN = parsed.satByCol ? (parsed.satByCol[yc] || 0) + (parsed.satByCol[xc] || 0) : (parsed.saturated || 0);
+  const cl = parsed.dupX != null ? parsed : cleanXY((parsed.rows || []).map(r => r[xc]), (parsed.rows || []).map(r => r[yc]));
+  const st = satDiag(satN, parsed.satMax, yu), dp = dupXDiag(axis, cl.dupX || 0, cl.dupDiff || 0, !!o);
+  const parts = [d, o, st, dp].filter(Boolean);
+  if (!parts.length) return null;
+  const base = Object.assign({source: srcName, kind: 'generic'}, d || {});
+  if (o) base.reordered = o;
+  if (st) base.saturated = satN;
+  if (dp) base.dupX = cl.dupX;
+  base.summary = parts.map(p => p.summary).join('; ');
+  base.msg = parts.map(p => p.msg).join(' ');
+  return base;
+}
+function aktaDiag(srcName, ak){
+  const yu = (ak.uvs && ak.uvs[0] && ak.uvs[0].yu) || 'mAU', axis = ak.xu || 'volume';
+  const st = satDiag(ak.saturated || 0, ak.satMax, yu), dp = dupXDiag(axis, ak.dupX || 0, ak.dupDiff || 0, false);
+  const parts = [st, dp].filter(Boolean);
+  if (!parts.length) return null;
+  return {source: srcName, kind: 'akta', saturated: ak.saturated || 0, dupX: ak.dupX || 0, summary: parts.map(p => p.summary).join('; '), msg: parts.map(p => p.msg).join(' ')};
 }
 function genericBlockDiag(srcName, nm, parsed){
   if (parsed.discarded && parsed.discarded.length) {
@@ -6321,7 +6374,9 @@ async function loadFiles(files){
       const ak = parseAkta(text, nm);
       if (ak && ak.bad) { bad.push(`${f.name} (${ak.bad})`); continue; }
       if (ak) {
-        clearSourceDiag(f.name);
+        const diag = aktaDiag(f.name, ak);
+        if (diag) setSourceDiag(f.name, diag); else clearSourceDiag(f.name);
+        delete ak.saturated; delete ak.satMax; delete ak.dupX; delete ak.dupDiff;
         ak.source = f.name;
         newRuns.push(makeRun(ak));
       } else {
