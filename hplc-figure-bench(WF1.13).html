@@ -5947,6 +5947,9 @@ function renderIntTable(run){
   const note = sec && !hasMw && opt.secStds ? `<tr><td colspan="${cols}" class="empty-row">Add a column calibration under Size exclusion (SEC) to see apparent molecular weights and oligomer states.</td></tr>` : '';
   const mgWhy = hasMg ? massWhy(run) : '', mgNote = mgWhy ? `<tr><td colspan="${cols}" class="empty-row">No protein mg: ${esc(mgWhy)}.</td></tr>` : hasMg && pathAssumed(run) ? `<tr><td colspan="${cols}" class="empty-row">Protein mg use an assumed UV path of ${esc(fmtAuto(numOr(opt.path, 2)))} mm. Enter the real path on the run card.</td></tr>` : '';
   $('#intTable').innerHTML = head + (body + pr || `<tr><td colspan="${cols}" class="empty-row">No regions yet. Drag across the chromatogram, or click Detect peaks.</td></tr>`) + note + mgNote;
+  if (hasMg && rows.some(r => r.scaled && r.mg != null)) { const tb = $('#intTable'), mgCol = [...tb.rows[0].cells].findIndex(c => c.textContent.trim() === 'Protein (mg)');
+    rows.forEach((r, k) => { if (r.scaled && r.mg != null && mgCol >= 0 && tb.rows[k + 1]) { const cell = tb.rows[k + 1].cells[mgCol]; cell.title = 'Scaled to the pooled NanoDrop protein mass'; cell.insertAdjacentHTML('afterbegin', '&#x2248;'); } });
+    tb.insertAdjacentHTML('beforeend', `<tr><td colspan="${cols}" class="empty-row">&#x2248; Protein mass is scaled to the pooled NanoDrop measurement, not a direct Beer-Lambert estimate.</td></tr>`); }
   /* FWHM, fit quality and A260/A280 wait behind More columns */
   { const tb = $('#intTable'), hd = [...(tb.rows[0] || {cells: []}).cells].map(c => c.textContent), extra = hd.map(t => /FWHM|Fit R|A₂₆₀\/A₂₈₀|Height/.test(t));
     [...tb.rows].forEach(r => { if (r.cells.length !== hd.length) return; [...r.cells].forEach((c, i) => c.classList.toggle('xc', !!extra[i])); });
@@ -5959,11 +5962,11 @@ $('#intTable').addEventListener('click', e => { const b = e.target.closest('[dat
 $('#intAuto').addEventListener('click', () => { const r = curRun(); if (!r) return; const n = autoIntegrate(r); render(); toast(n ? `Found ${n} peak${n > 1 ? 's' : ''}. Adjust start and end in the table if needed.` : 'No peaks above the detection prominence'); });
 $('#intClear').addEventListener('click', () => { const r = curRun(); if (!r) return; r.integ = []; render(); });
 $('#intCsv').addEventListener('click', () => {
-  const q = csvQuote, lines = [['Run','Region','Start','End','Apex or center','X unit','Height (mAU)','Area (mAU*x unit)','% of regions','Protein (mg)','Baseline','Method','FWHM','Fit R2','SEC calibration','Kav','Apparent MW (kDa)','Oligomer (MW / monomer)'].join(',')];
+  const q = csvQuote, lines = [['Run','Region','Start','End','Apex or center','X unit','Height (mAU)','Area (mAU*x unit)','% of regions','Protein (mg)','Scale','Baseline','Method','FWHM','Fit R2','SEC calibration','Kav','Apparent MW (kDa)','Oligomer (MW / monomer)'].join(',')];
   runs.forEach(r => { const u = xUnit(r), cal = isSec(r) ? secCalFor(r) : null;
-    integRows(r).forEach(x => { const si = x.sec || {}; lines.push([q(r.name), x.name, x.a.toFixed(3), x.b.toFixed(3), x.apex.toFixed(3), u, x.height.toFixed(2), x.area.toFixed(3), x.pct == null ? '' : x.pct.toFixed(2), x.mg == null ? '' : x.mg.toFixed(4), opt.intBase === 'zero' ? 'zero' : 'valley to valley', x.gauss ? 'Gaussian fit' : 'trapezoid', x.fwhm == null ? '' : x.fwhm.toFixed(3), x.r2 == null ? '' : x.r2.toFixed(4),
+    integRows(r).forEach(x => { const si = x.sec || {}; lines.push([q(r.name), x.name, x.a.toFixed(3), x.b.toFixed(3), x.apex.toFixed(3), u, x.height.toFixed(2), x.area.toFixed(3), x.pct == null ? '' : x.pct.toFixed(2), x.mg == null ? '' : x.mg.toFixed(4), x.mg == null ? '' : x.scaled ? 'NanoDrop-scaled' : 'Beer-Lambert', opt.intBase === 'zero' ? 'zero' : 'valley to valley', x.gauss ? 'Gaussian fit' : 'trapezoid', x.fwhm == null ? '' : x.fwhm.toFixed(3), x.r2 == null ? '' : x.r2.toFixed(4),
       cal ? q(cal.name) : '', si.kav == null ? '' : si.kav.toFixed(4), si.void ? 'void' : si.mw == null ? '' : (si.extrap ? '~' : '') + si.mw.toFixed(1), si.ratio == null ? '' : si.ratio.toFixed(2)].join(',')); });
-    const p = poolRows(r); if (p) lines.push([q(r.name), q('Pool ' + p.label), p.a.toFixed(3), p.b.toFixed(3), '', u, '', p.area.toFixed(3), '', p.mg == null ? '' : p.mg.toFixed(4), opt.intBase === 'zero' ? 'zero' : 'line across pool', 'trapezoid', '', '', '', '', '', ''].join(','));
+    const p = poolRows(r); if (p) lines.push([q(r.name), q('Pool ' + p.label), p.a.toFixed(3), p.b.toFixed(3), '', u, '', p.area.toFixed(3), '', p.mg == null ? '' : p.mg.toFixed(4), p.mg == null ? '' : p.measured ? 'NanoDrop' : 'Beer-Lambert', opt.intBase === 'zero' ? 'zero' : 'line across pool', 'trapezoid', '', '', '', '', '', ''].join(','));
   });
   if (lines.length < 2) return toast('No integrated regions or pools yet');
   saveFile('peak_integration.csv', lines.join('\r\n'));

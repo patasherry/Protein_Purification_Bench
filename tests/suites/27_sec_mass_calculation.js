@@ -1,4 +1,4 @@
-const {open, H, suite, path, DATA} = require('../lib/harness');
+const {open, H, suite, path, DATA, fs} = require('../lib/harness');
 const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : null; };
 
 (async () => {
@@ -92,17 +92,7 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
 
       await h2.pool('F13-F16');
 
-      await p2.click('#tl [data-addmenu]');
-      await p2.click('#tl [data-addstep=conc]');
-      await h2.wait(400);
-      await openFolds(p2.locator('#btw-conc'));
-      await p2.locator('#btw-conc').fill('1.0');
-      await p2.locator('#btw-conc').dispatchEvent('input');
-      await p2.locator('#btw-conc').dispatchEvent('change');
-      await p2.locator('#btw-vOut').fill('0.5');
-      await p2.locator('#btw-vOut').dispatchEvent('input');
-      await p2.locator('#btw-vOut').dispatchEvent('change');
-      await h2.wait(500);
+      await h2.addConc({name: 'pooled_nanodrop.csv', mimeType: 'text/csv', buffer: Buffer.from(['Sample Name,Protein (mg/mL),A280,A260/A280,Sample Type', 'Pooled F13-F16,1.000,1.000,0.57,1 Abs = 1 mg / mL'].join('\n'))}, 0.5);
 
       await h2.step(runStep.k);
       await h2.wait(300);
@@ -121,6 +111,16 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
       const expP1UvMg = p1Area != null ? (p1Area / 1000) / (1.0 * 0.2) : 0.6267;
 
       T.check('pooled_peak_scales_to_nanodrop', p2Mg != null && Math.abs(p2Mg - 0.50) <= 0.02, `P2 mg=${p2Mg}, expected=0.50`);
+
+      const scaledPeak = await p2.evaluate(() => { const hs = [...document.querySelectorAll('#intTable th')].map(x => x.textContent.trim()), mg = hs.indexOf('Protein (mg)'), row = [...document.querySelectorAll('#intTable tr')].find(x => x.cells[0] && x.cells[0].textContent.trim() === 'P2'), cell = row && row.cells[mg]; return cell ? {text: cell.textContent.trim(), title: cell.title} : null; });
+      T.check('pooled_peak_marks_nanodrop_scaled_mass', scaledPeak && scaledPeak.text.startsWith('\u2248') && scaledPeak.text.slice(1) === p2Mg.toFixed(2) && /NanoDrop/i.test(scaledPeak.title), JSON.stringify(scaledPeak));
+      T.check('pooled_peak_scale_footnote', /pooled NanoDrop/i.test(await p2.locator('#intTable').innerText()), await p2.locator('#intTable').innerText());
+
+      const peakDownload = p2.waitForEvent('download', {timeout: 10000});
+      await p2.click('#intCsv');
+      const peakCsv = fs.readFileSync(await (await peakDownload).path(), 'utf8').trim().split(/\r?\n/).map(x => x.split(','));
+      const scaleCol = peakCsv[0].indexOf('Scale'), p2Csv = peakCsv.find(x => x[1] === 'P2');
+      T.check('pooled_peak_csv_nanodrop_scaled', scaleCol >= 0 && p2Csv && p2Csv[scaleCol] === 'NanoDrop-scaled', `header=${peakCsv[0].join('|')}, P2=${p2Csv && p2Csv.join('|')}`);
       T.check('unpooled_peak_keeps_uv_mg', p1Mg != null && Math.abs(p1Mg - expP1UvMg) <= 0.02, `P1 mg=${p1Mg}, expected unscaled UV mg≈${expP1UvMg.toFixed(2)}`);
 
       await h2.step('figure');
