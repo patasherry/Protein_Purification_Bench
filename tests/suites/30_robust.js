@@ -363,11 +363,11 @@ await T.t('legacy-nd-migrate', async () => { const {p, errs, close} = await open
   T.check('legacy-missing.round-trip', saved.nanodrop && saved.nanodrop.find(x => x.id === 'nd2') && saved.nanodrop.find(x => x.id === 'nd2').stage === 'final', 'reload identity check missing');
 
   await close(); });
-/* a project file dropped together with other files: the others are not loaded, and the user is told */
+/* a project file dropped together with other files: the project opens and the companion files load into it (#1581) */
 await T.t('project-with-others', async () => { const {p, errs, close} = await open(), h = H(p); await h.newProject('Mixed drop'); await watchToasts(p); const e0 = errs.length;
   await p.setInputFiles('#file', [{name: 'tiny_project.json', mimeType: 'application/json', buffer: Buffer.from('{"app":"HPLC Figure Bench","version":1,"runs":[]}')}, {name: path.basename(F.his), mimeType: 'text/csv', buffer: fs.readFileSync(F.his)}]); await p.waitForTimeout(3000);
-  const ts = await takeToasts(p);
-  T.check('mixed.toast', ts.some(t => /not loaded/i.test(t)), `toasts: ${ts.join(' | ') || 'none'}`); // no silent drop of the second file
+  const ts = await takeToasts(p), tl = await h.timeline();
+  T.check('mixed.toast', ts.some(t => /Loaded 1/i.test(t)) && !ts.some(t => /not loaded/i.test(t)) && tl.some(x => x.k.startsWith('run:')), `toasts: ${ts.join(' | ') || 'none'}`); // companion file loads into the opened project
   T.check('mixed.no-error', errs.length === e0, errs.slice(e0).join(' | ')); await close(); });
 /* pictures in formats the browser cannot read, and spreadsheets, get a message that says what to do */
 await T.t('unsupported-formats', async () => { const {p, errs, close} = await open(), h = H(p); await h.newProject('Formats'); await watchToasts(p);
