@@ -479,6 +479,239 @@ const insetCount = p => p.evaluate(() => document.querySelectorAll('#paper svg [
     } finally { await close(); }
   }
 
+  /* Helper to render an exported SVG in a clean browser page and run a geometry inspection callback */
+  const inspectSvg = async (p, svg, fn) => {
+    const pg = await p.context().newPage();
+    try {
+      await pg.setContent('<!doctype html><meta charset="utf-8"><body style="margin:0;padding:0">' + svg + '</body>');
+      await pg.waitForSelector('svg', {timeout: 5000});
+      return await pg.evaluate(fn);
+    } finally { await pg.close(); }
+  };
+
+  /* #1619: multi-panel workflow insets stay strictly inside .zoom-inset-bg, keep unique clipPath IDs, avoid tick collisions, and drag independently */
+  await T.t('wf-multi', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await h.newProject('wf multi inset');
+      for (const k of ['his', 'q', 's200']) { await h.addRun(src(k)); await h.suggest(); }
+      await h.step('figure'); await h.wait(600);
+      for (const ch of ['A', 'B', 'C']) {
+        const pt = await p.evaluate(c => {
+          const e = [...document.querySelectorAll('#paper svg text')].find(x => new RegExp('^' + c + '\\s').test(x.textContent));
+          if (!e) return null;
+          const r = e.getBoundingClientRect();
+          return {x: r.left + 30, y: r.top + 60};
+        }, ch);
+        if (pt) {
+          await p.mouse.click(pt.x, pt.y); await h.wait(250);
+          await p.evaluate(() => {
+            const el = document.querySelector('#wfTool input[data-wfz]');
+            if (el) { el.checked = true; el.dispatchEvent(new Event('input', {bubbles: true})); }
+          });
+          await h.wait(350);
+        }
+      }
+      await p.keyboard.press('Escape'); await h.wait(300);
+
+      const svg = await h.exportSvg(), m = await h.svgBoxes(svg);
+      const wfGeo = await inspectSvg(p, svg, () => {
+        const clips = [...document.querySelectorAll('svg clipPath[id]')].map(c => c.id);
+        const dupClips = clips.filter((id, i) => clips.indexOf(id) !== i);
+        const insets = [...document.querySelectorAll('svg .zoom-inset')];
+        const spills = [];
+        insets.forEach((ins, idx) => {
+          const bg = ins.querySelector('.zoom-inset-bg');
+          if (!bg) { spills.push(`panel ${idx}: missing .zoom-inset-bg`); return; }
+          const br = bg.getBoundingClientRect();
+          [...ins.querySelectorAll('line, path, text')].forEach(el => {
+            if (el.tagName.toLowerCase() === 'text' && !el.textContent.trim()) return;
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) return;
+            if (r.left < br.left - 2 || r.right > br.right + 2 || r.top < br.top - 2 || r.bottom > br.bottom + 2) {
+              spills.push(`panel ${idx} ${el.tagName}(${(el.textContent || '').trim()}): ${r.left.toFixed(1)}..${r.right.toFixed(1)} vs bg ${br.left.toFixed(1)}..${br.right.toFixed(1)}`);
+            }
+          });
+        });
+        return {nInsets: insets.length, nClips: clips.length, dupClips, spills};
+      });
+      const textOv = [];
+      for (let i = 0; i < m.texts.length; i++) {
+        for (let j = i + 1; j < m.texts.length; j++) {
+          const a = m.texts[i], b = m.texts[j];
+          const w = Math.min(a.right, b.right) - Math.max(a.x, b.x), hh = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+          if (w > 0 && hh > 0 && w * hh > 0.22 * Math.min(a.w * a.h, b.w * b.h)) textOv.push(`"${a.t}" vs "${b.t}"`);
+        }
+      }
+      T.check('wf-multi/unique-clip-paths', wfGeo.nInsets === 3 && wfGeo.dupClips.length === 0, `insets=${wfGeo.nInsets} dups=${wfGeo.dupClips.join(',')}`);
+      T.check('wf-multi/insets-contained-in-bg', wfGeo.nInsets === 3 && wfGeo.spills.length === 0, wfGeo.spills.slice(0, 5).join(' | '));
+      T.check('wf-multi/no-text-overlaps', textOv.length === 0 && m.clipped.length === 0, textOv.concat(m.clipped).slice(0, 5).join(' | '));
+
+      /* Dragging panel B's inset handle moves panel B's inset independently without moving panel A's inset */
+      const before = await p.evaluate(() => [...document.querySelectorAll('#paper svg .zoom-inset')].map(e => e.getAttribute('transform')));
+      const bMove = await p.evaluate(() => {
+        const ins = document.querySelectorAll('#paper svg .zoom-inset')[1];
+        const hdl = ins && ins.querySelector('[data-handle="move"]');
+        if (!hdl) return null;
+        const r = hdl.getBoundingClientRect();
+        return {x: r.left + r.width / 2, y: r.top + r.height / 2};
+      });
+      if (bMove) {
+        await p.mouse.move(bMove.x, bMove.y);
+        await p.mouse.down();
+        await p.mouse.move(bMove.x + 28, bMove.y + 18, {steps: 5});
+        await p.mouse.up();
+        await h.wait(400);
+      }
+      const after = await p.evaluate(() => [...document.querySelectorAll('#paper svg .zoom-inset')].map(e => e.getAttribute('transform')));
+      T.check('wf-multi/drag-panel-inset', before.length === 3 && after.length === 3 && before[1] !== after[1] && before[0] === after[0],
+        `before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+      T.check('wf-multi/no-errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
+  /* #1620 & #1621: default ÄKTA full-run overview + pooled-fraction magnification, peak/label avoidance, and automatic headroom */
+  await T.t('akta-nonblocking', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await h.newProject('akta nonblocking');
+      await h.addRun(src('his'));
+      await h.suggest();
+      await setOpt(p, 'o-zoomInset', true); await h.wait(600);
+
+      const mHis = await ticksOf(p, 'main'), zHis = await ticksOf(p, 'inset');
+      T.check('akta-nonblocking/his-main-full-run', !!mHis && mHis.min <= 5 && mHis.max >= 35, JSON.stringify(mHis));
+      const svgHis = await h.exportSvg();
+      const hisCheck = await inspectSvg(p, svgHis, () => {
+        const bg = document.querySelector('svg .zoom-inset-bg');
+        const insPaths = [...document.querySelectorAll('svg .zoom-inset path')];
+        if (!bg || !insPaths.length) return {ok: false, why: 'missing inset elements'};
+        const br = bg.getBoundingClientRect(), pr = insPaths[insPaths.length - 1].getBoundingClientRect();
+        const spanFrac = br.height > 0 ? pr.height / br.height : 0;
+        return {ok: spanFrac >= 0.3, spanFrac};
+      });
+      T.check('akta-nonblocking/his-inset-magnifies-pool',
+        !!zHis && zHis.min >= 18 && zHis.max <= 27 && hisCheck.ok,
+        `zTicks=${JSON.stringify(zHis)} span=${hisCheck.spanFrac && hisCheck.spanFrac.toFixed(2)}`);
+
+      /* SEC run: default tr placement moves clear of the 28.40 min monomer peak and its label */
+      await h.addRun(src('s200'));
+      await h.suggest();
+      await setOpt(p, 'o-zoomInset', true); await h.wait(600);
+      const svgSec = await h.exportSvg();
+      const secCheck = await inspectSvg(p, svgSec, () => {
+        const bg = document.querySelector('svg .zoom-inset-bg');
+        const mainPlot = document.querySelector('svg [data-plot="main"]');
+        if (!bg || !mainPlot) return {ok: false, hits: ['missing elements']};
+        const br = bg.getBoundingClientRect(), hits = [];
+        [...mainPlot.querySelectorAll('text')].forEach(t => {
+          const txt = t.textContent.trim(); if (!txt) return;
+          const r = t.getBoundingClientRect();
+          if (Math.min(r.right, br.right) - Math.max(r.left, br.left) > 1 && Math.min(r.bottom, br.bottom) - Math.max(r.top, br.top) > 1) hits.push('text:' + txt);
+        });
+        /* Sample the main UV chromatogram curve (last stroke path in clip-path url(#plot-area)) */
+        const paths = [...mainPlot.querySelectorAll('g[clip-path] path[fill="none"], g[clip-path][fill="none"] path')];
+        const uvPath = paths[paths.length - 1];
+        if (uvPath && uvPath.getTotalLength) {
+          const len = uvPath.getTotalLength(), ctm = uvPath.getScreenCTM();
+          for (let i = 0; i <= 240; i++) {
+            const pt = uvPath.getPointAtLength(len * i / 240).matrixTransform(ctm);
+            if (pt.x >= br.left + 1 && pt.x <= br.right - 1 && pt.y >= br.top + 1 && pt.y <= br.bottom - 1) { hits.push(`curve@${pt.x.toFixed(0)},${pt.y.toFixed(0)}`); break; }
+          }
+        }
+        return {ok: hits.length === 0, hits};
+      });
+      T.check('akta-nonblocking/s200-no-peak-or-label-blocked', secCheck.ok, secCheck.hits.join(', '));
+      T.check('akta-nonblocking/no-errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
+  /* #1621: crowded 3-peak chromatogram expands headroom automatically; Beside & Above callout modes keep connectors clean */
+  await T.t('callout-modes', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await p.click('#homeQuick'); await h.wait(700);
+      const rows = ['Time (min),UV (mAU)'];
+      for (let i = 0; i <= 240; i++) {
+        const t = i * 0.05;
+        const y = 140 * Math.exp(-0.5 * ((t - 1.8) / 0.35) ** 2)
+          + 45 * Math.exp(-0.5 * ((t - 6.0) / 0.25) ** 2)
+          + 150 * Math.exp(-0.5 * ((t - 10.2) / 0.35) ** 2);
+        rows.push(`${t.toFixed(2)},${y.toFixed(3)}`);
+      }
+      await p.setInputFiles('#file', [{name: 'Crowded_3peak.csv', mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n'))}]);
+      await h.wait(700);
+      await p.click('#detectAll'); await h.wait(350);
+      await setOpt(p, 'o-zoomWinA', '5'); await setOpt(p, 'o-zoomWinB', '7');
+      await setOpt(p, 'o-zoomInset', true); await h.wait(500);
+
+      const svgHead = await h.exportSvg();
+      const headCheck = await inspectSvg(p, svgHead, () => {
+        const bg = document.querySelector('svg .zoom-inset-bg');
+        const mainPlot = document.querySelector('svg [data-plot="main"]');
+        if (!bg || !mainPlot) return {ok: false, hits: ['missing elements']};
+        const br = bg.getBoundingClientRect(), hits = [];
+        [...mainPlot.querySelectorAll('text')].forEach(t => {
+          const txt = t.textContent.trim(); if (!txt) return;
+          const r = t.getBoundingClientRect();
+          if (Math.min(r.right, br.right) - Math.max(r.left, br.left) > 1 && Math.min(r.bottom, br.bottom) - Math.max(r.top, br.top) > 1) hits.push('text:' + txt);
+        });
+        const uvPath = mainPlot.querySelector('g[clip-path] path');
+        if (uvPath && uvPath.getTotalLength) {
+          const len = uvPath.getTotalLength(), ctm = uvPath.getScreenCTM();
+          for (let i = 0; i <= 240; i++) {
+            const pt = uvPath.getPointAtLength(len * i / 240).matrixTransform(ctm);
+            if (pt.x >= br.left + 1 && pt.x <= br.right - 1 && pt.y >= br.top + 1 && pt.y <= br.bottom - 1) { hits.push(`curve@${pt.x.toFixed(0)},${pt.y.toFixed(0)}`); break; }
+          }
+        }
+        return {ok: hits.length === 0, hits};
+      });
+      T.check('callout-modes/crowded-headroom-clears-peaks', headCheck.ok, headCheck.hits.join(', '));
+
+      /* Beside mode: no opaque rect inside #zoom-inset covers #zoom-region connector lines, and connectors clear the 10.20 peak */
+      await setOpt(p, 'o-zoomInsetPos', 'beside'); await h.wait(500);
+      const svgBeside = await h.exportSvg();
+      const besideCheck = await inspectSvg(p, svgBeside, () => {
+        const ins = document.querySelector('svg #zoom-inset');
+        const lines = [...document.querySelectorAll('svg #zoom-region line')];
+        if (!ins || lines.length < 2) return {ok: false, why: 'missing inset or connectors'};
+        const opaqueRects = [...ins.querySelectorAll('rect')].filter(r => {
+          const cs = getComputedStyle(r);
+          return cs.fill !== 'none' && parseFloat(cs.fillOpacity || '1') > 0.05;
+        }).map(r => r.getBoundingClientRect());
+        const covered = lines.some(l => {
+          const lr = l.getBoundingClientRect();
+          return opaqueRects.some(rr => Math.min(lr.right, rr.right) - Math.max(lr.left, rr.left) > 2 && Math.min(lr.bottom, rr.bottom) - Math.max(lr.top, rr.top) > 0.5);
+        });
+        const p10 = [...document.querySelectorAll('svg [data-plot="main"] text')].find(t => /10\.2/.test(t.textContent));
+        const pr = p10 ? p10.getBoundingClientRect() : null;
+        const hitsPeak = pr ? lines.some(l => {
+          const lr = l.getBoundingClientRect();
+          return Math.min(lr.right, pr.right) - Math.max(lr.left, pr.left) > 1 && Math.min(lr.bottom, pr.bottom) - Math.max(lr.top, pr.top) > 0.5;
+        }) : false;
+        return {ok: !covered && !hitsPeak, covered, hitsPeak};
+      });
+      T.check('callout-modes/beside-connectors-unoccluded', besideCheck.ok, JSON.stringify(besideCheck));
+
+      /* Above callout panel mode: zoomed panel sits completely above main plot area with orthogonal connectors */
+      await setOpt(p, 'o-zoomInsetPos', 'above'); await h.wait(500);
+      const posVal = await p.$eval('#o-zoomInsetPos', e => e.value);
+      const svgAbove = await h.exportSvg(), mAbove = await h.svgBoxes(svgAbove);
+      const aboveCheck = await inspectSvg(p, svgAbove, () => {
+        const insGrp = document.querySelector('svg [data-plot="inset"]');
+        const mainGrp = document.querySelector('svg [data-plot="main"]');
+        const lines = [...document.querySelectorAll('svg #zoom-region line')];
+        if (!insGrp || !mainGrp) return {ok: false, why: 'missing groups'};
+        const ir = insGrp.getBoundingClientRect(), mr = mainGrp.getBoundingClientRect();
+        const ortho = lines.length >= 2 && lines.every(l => Math.abs(+l.getAttribute('x1') - +l.getAttribute('x2')) < 0.05 || Math.abs(+l.getAttribute('y1') - +l.getAttribute('y2')) < 0.05);
+        return {ok: ir.bottom <= mr.top + 4 && ortho, irBottom: ir.bottom, mrTop: mr.top, ortho};
+      });
+      T.check('callout-modes/above-separates-panels',
+        posVal === 'above' && aboveCheck.ok && mAbove.clipped.length === 0 && errs.length === 0,
+        `pos=${posVal} above=${JSON.stringify(aboveCheck)} clipped=${mAbove.clipped.join(',')}`);
+    } finally { await close(); }
+  });
+
   T.done();
 
 })();

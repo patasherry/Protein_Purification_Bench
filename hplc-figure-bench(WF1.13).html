@@ -517,6 +517,8 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .colorrow{display:flex;gap:8px;align-items:center}
 .colorrow input[type=color]{width:32px;height:32px;padding:2px;border:1px solid var(--line2);border-radius:var(--r-s);background:var(--field);flex:none;cursor:pointer}
 .paper > svg{display:block;width:100%;height:auto;max-height:max(320px,calc(100vh - 370px));cursor:crosshair}
+.zoom-inset-handles{opacity:.26;transition:opacity .15s}
+.zoom-inset:hover .zoom-inset-handles{opacity:1}
 body.stepfig .paper > svg{max-width:min(100%,680px);margin-inline:auto}
 .paper .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#5a6177;font-size:14px;text-align:center;max-width:36ch;line-height:1.5;margin:auto}
 .figmodal{width:min(1200px,calc(100vw - 32px));height:min(90vh,calc(100vh - 32px));max-width:none;max-height:none;border:1px solid var(--line2);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;box-shadow:var(--shadow)}
@@ -1299,6 +1301,7 @@ button,input,select,textarea{font-family:inherit}
             <option value="tr">Upper right</option>
             <option value="tl">Upper left</option>
             <option value="br">Lower right</option>
+            <option value="above">Above (callout panel)</option>
             <option value="beside">Beside (second panel)</option>
           </select>
         </label>
@@ -2494,7 +2497,7 @@ function style(ov){
 /* Presentation only: the main plot shows the whole run and a small second plot shows the x-window. Nothing that is calculated reads these. */
 function withOpt(patch, fn){ const old = {}; Object.keys(patch).forEach(k => { old[k] = opt[k]; opt[k] = patch[k]; }); try { return fn(); } finally { Object.keys(old).forEach(k => { opt[k] = old[k]; }); } }
 const zoomSize = () => Math.max(0.15, Math.min(0.6, numOr(opt.zoomInsetSize, 0.4)));
-const zoomPos = () => ['tr', 'tl', 'br', 'beside'].includes(opt.zoomInsetPos) ? opt.zoomInsetPos : 'tr';
+const zoomPos = () => ['tr', 'tl', 'br', 'above', 'beside'].includes(opt.zoomInsetPos) ? opt.zoomInsetPos : 'tr';
 /* A layout belongs to the chart that owns the inset.  The old four geometry keys are
    read too, so a figure positioned in an earlier copy stays where its author put it. */
 function insetLayout(z, make){
@@ -2508,7 +2511,7 @@ function insetLayout(z, make){
   return z.zoomInsetLayout;
 }
 function insetVisible(z, fallback){ const l = insetLayout(z, false); return !l || l.visible !== false ? fallback : false; }
-function insetSource(){ const f = curFig(); if (f && f.kind === 'run') return f.run; if (f && f.kind === 'workflow' && wfSel) { const it = wfItem(wfSel); if (it && it.run) return it.run; } return opt; }
+function insetSource(){ const f = curFig(); if (f && f.kind === 'run') return f.run; if (f && f.kind === 'workflow' && wfSel) { const it = wfItem(wfSel); if (it && (it.r || it.run)) return it.r || it.run; } return opt; }
 function insetRemember(z, geo){
   const l = insetLayout(z, true); Object.assign(l, {x: geo.x, y: geo.y, w: geo.w, h: geo.h, manual: true, visible: true});
   ['X','Y','W','H'].forEach(k => { z['zoomInset' + k] = l[k.toLowerCase()]; });
@@ -2520,7 +2523,7 @@ function insetClear(z){
   z.zoomInsetW = z.zoomInsetH = z.zoomInsetX = z.zoomInsetY = null;
 }
 function insetAvoid(svg, g){
-  const out = [], fs0 = fontSize();
+  const out = (g && g.extraAvoid ? g.extraAvoid.slice() : []), fs0 = fontSize();
   String(svg || '').replace(/<g class="zoom-inset-avoid"([^>]*)>([\s\S]*?)<\/g>/g, (_, ga, s) => {
     const gf = /\bfont-size="([^"]+)"/.exec(ga), f = gf ? +gf[1] : fs0, gaA = /\btext-anchor="([^"]+)"/.exec(ga), defAn = gaA ? gaA[1] : 'start';
     let leg = false;
@@ -2540,18 +2543,101 @@ function insetAvoid(svg, g){
     });
     return _;
   });
-  return out.filter(b => b.x1 >= g.L && b.x0 <= g.R && b.y1 >= g.T && b.y0 <= g.B);
+  return out.filter(b => b.x1 >= g.L && b.x0 <= g.R && b.y1 >= g.T - 6 && b.y0 <= g.B);
 }
-function insetDefault(S, m, iw, ih, beside){
+function mainObstacles(m, win, rTop){
+  const g = m.geo, {L, R, T, B} = g, band = g.band || 0, plotB = B - band, avoid = insetAvoid(m.svg, g);
+  const NB = 64, cwCol = Math.max(1, (R - L)/NB), colTop = new Float64Array(NB).fill(Infinity), colBot = new Float64Array(NB).fill(-Infinity), colData = new Float64Array(NB).fill(-Infinity), secTop = new Float64Array(NB).fill(Infinity), secBot = new Float64Array(NB).fill(-Infinity);
+  const binOf = x => Math.min(NB - 1, Math.max(0, Math.floor((x - L)/cwCol)));
+  const markSeg = (topA, botA, x0, y0, x1, y1, padY) => {
+    const b0 = binOf(x0), b1 = binOf(x1), lo = Math.min(b0, b1), hi = Math.max(b0, b1);
+    for (let b = lo; b <= hi; b++) {
+      const t0 = hi === lo ? 0 : (b - lo)/(hi - lo), t1 = hi === lo ? 1 : (b + 1 - lo)/(hi - lo);
+      const ya = b0 <= b1 ? y0 + (y1 - y0)*t0 : y1 + (y0 - y1)*t0, yb = b0 <= b1 ? y0 + (y1 - y0)*t1 : y1 + (y0 - y1)*t1;
+      const mn = Math.min(ya, yb, b === b0 ? y0 : Infinity, b === b1 ? y1 : Infinity), mx = Math.max(ya, yb, b === b0 ? y0 : -Infinity, b === b1 ? y1 : -Infinity);
+      topA[b] = Math.min(topA[b], mn - padY); botA[b] = Math.max(botA[b], mx + padY);
+    }
+  };
+  const src = g.uv ? [{xs: g.uv.xs, yp: g.uv.ys}] : (g.P || []), vals = [];
+  src.forEach(p => {
+    const i0 = Math.max(0, lowerBound(p.xs, g.xlo) - 1); let px0 = NaN, py0 = NaN;
+    for (let i = i0; i < p.xs.length; i++) {
+      const xv = p.xs[i], yv = p.yp[i]; if (!isFinite(xv) || !isFinite(yv)) continue;
+      if (xv >= g.xlo && xv <= g.xhi) vals.push(yv);
+      const X = Math.max(L, Math.min(R, g.px(xv))), Y = Math.max(T, Math.min(plotB, g.py(yv))), b = binOf(X);
+      if (xv >= g.xlo && xv <= g.xhi && yv > colData[b]) colData[b] = yv;
+      if (isFinite(px0)) markSeg(colTop, colBot, px0, py0, X, Y, 3.5);
+      else { colTop[b] = Math.min(colTop[b], Y - 3.5); colBot[b] = Math.max(colBot[b], Y + 3.5); }
+      px0 = X; py0 = Y; if (xv > g.xhi) break;
+    }
+  });
+  vals.sort((a, b) => a - b);
+  const baseVal = vals.length ? vals[Math.floor(vals.length*0.1)] : g.y0, pyBase = Math.max(T, Math.min(plotB, g.py(baseVal)));
+  if (g.secCurve && g.secCurve.xs.length > 1) {
+    const sc = g.secCurve; let sx0 = NaN, sy0 = NaN;
+    for (let i = 0; i < sc.xs.length; i++) {
+      const X = Math.max(L, Math.min(R, g.px(sc.xs[i]))), Y = Math.max(T, Math.min(plotB, sc.py2(sc.ys[i])));
+      if (isFinite(sx0)) markSeg(secTop, secBot, sx0, sy0, X, Y, 2.5);
+      else { const b = binOf(X); secTop[b] = Math.min(secTop[b], Y - 2.5); secBot[b] = Math.max(secBot[b], Y + 2.5); }
+      sx0 = X; sy0 = Y;
+    }
+  }
+  const xa = win ? g.px(win.a) : L, xb = win ? g.px(win.b) : L;
+  const sBox = win ? {x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: Math.min(rTop, B), y1: Math.max(rTop, B)} : null;
+  return {avoid, NB, cwCol, colTop, colBot, colData, secTop, secBot, pyBase, plotB, band, sBox};
+}
+function insetDefault(S, m, iw, ih, beside, win, rTop){
   const g = m.geo, pad = 3;
-  if (beside) return {x:S.W-iw, y:0};
-  const avoid = insetAvoid(m.svg, g), prefer = zoomPos(), trX = g.R-iw-pad;
-  const c = [{x:trX,y:g.T+pad,k:'tr'}, {x:g.L+pad,y:g.T+pad,k:'tl'}, {x:trX,y:g.B-ih-pad,k:'br'}, {x:g.L+pad,y:g.B-ih-pad,k:'bl'}];
-  const trLeg = avoid.filter(b => b.leg && b.x1 > trX && b.x0 < trX + iw && b.y1 > g.T + pad && b.y0 < g.T + pad + ih);
-  if (trLeg.length) { const yb = Math.max(...avoid.filter(b => b.leg && b.x1 > trX && b.x0 < trX + iw).map(b => b.y1)) + pad; if (yb + ih <= g.B - 1) c.push({x:trX, y:yb, k:'tr-below'}); }
-  c.forEach(q => { q.x = Math.max(0, Math.min(S.W-iw, q.x)); q.y = Math.max(0, Math.min(S.H-ih, q.y)); q.score = q.k === prefer ? -iw*ih*.8 : q.k === 'tr-below' && prefer === 'tr' ? -iw*ih*.75 : .01;
-    avoid.forEach(b => { const w = Math.max(0, Math.min(q.x+iw,b.x1)-Math.max(q.x,b.x0)), h = Math.max(0, Math.min(q.y+ih,b.y1)-Math.max(q.y,b.y0)); if (w > 0 && h > 0) q.score += w*h*25 + (b.leg ? iw*ih : 0); }); });
-  c.sort((a,b) => a.score - b.score || a.k.localeCompare(b.k)); return c[0];
+  if (beside) return {x: S.W - iw, y: 0, hard: 0, score: 0};
+  const obs = mainObstacles(m, win, rTop == null ? g.T : rTop), {avoid, NB, cwCol, colTop, colBot, secTop, secBot, pyBase, plotB, band, sBox} = obs;
+  const prefer = zoomPos(), trX = g.R - iw - pad, tlX = g.L + pad, botY = Math.max(g.T + pad, Math.min(plotB - pad, pyBase - 3.5) - ih), brY = Math.max(g.T + pad, plotB - ih - pad);
+  const c = [{x: trX, y: g.T + pad, k: 'tr'}, {x: tlX, y: g.T + pad, k: 'tl'}, {x: trX, y: botY, k: 'br'}, {x: tlX, y: botY, k: 'bl'}];
+  if (Math.abs(brY - botY) > 2) { c.push({x: trX, y: brY, k: 'br-low'}, {x: tlX, y: brY, k: 'bl-low'}); }
+  const spanX = Math.max(0, trX - tlX);
+  if (spanX > 6) [0.25, 0.5, 0.75].forEach((f, idx) => c.push({x: tlX + spanX*f, y: g.T + pad, k: 'top-' + idx}));
+  const addBelowLeg = (x0, key) => {
+    const hits = avoid.filter(b => b.leg && b.x1 > x0 && b.x0 < x0 + iw && b.y1 > g.T + pad && b.y0 < g.T + pad + ih);
+    if (hits.length) { const yb = Math.max(...avoid.filter(b => b.leg && b.x1 > x0 && b.x0 < x0 + iw).map(b => b.y1)) + pad; if (yb + ih <= plotB - 1) c.push({x: x0, y: yb, k: key}); }
+  };
+  addBelowLeg(trX, 'tr-below'); addBelowLeg(tlX, 'tl-below');
+  /* tuck cleanly under a high horizontal %B plateau (e.g. 100% step elution) when the space beneath it is open */
+  [trX, tlX].forEach((x0, idx) => {
+    const b0 = Math.max(0, Math.floor((x0 - g.L)/cwCol)), b1 = Math.min(NB - 1, Math.floor((x0 + iw - g.L)/cwCol));
+    let sBot = -Infinity; for (let b = b0; b <= b1; b++) if (secBot[b] > sBot && secTop[b] <= g.T + 18) sBot = secBot[b];
+    if (isFinite(sBot) && sBot > g.T + pad && sBot + 2 + ih <= plotB - 2) c.push({x: x0, y: sBot + 2, k: (idx ? 'tl' : 'tr') + '-sec'});
+  });
+  const prefX = prefer === 'tl' ? tlX : trX, prefY = prefer === 'br' ? botY : g.T + pad, diag = Math.hypot(Math.max(1, g.R - g.L), Math.max(1, plotB - g.T));
+  c.forEach(q => {
+    q.x = Math.max(0, Math.min(S.W - iw, q.x)); q.y = Math.max(0, Math.min(S.H - ih, q.y));
+    let hard = 0, soft = 0;
+    if (band > 0 && q.y + ih > plotB - 0.5) hard += (q.y + ih - (plotB - 0.5))*iw*60;
+    avoid.forEach(b => {
+      const w = Math.max(0, Math.min(q.x + iw, b.x1) - Math.max(q.x, b.x0)), h = Math.max(0, Math.min(q.y + ih, b.y1) - Math.max(q.y, b.y0));
+      if (w > 0 && h > 0) hard += w*h*(b.pool ? 18 : 35) + (b.leg ? iw*ih : 0);
+    });
+    if (sBox) {
+      const sw = Math.max(0, Math.min(q.x + iw, sBox.x1) - Math.max(q.x, sBox.x0) - 2), sh = Math.max(0, Math.min(q.y + ih, sBox.y1) - Math.max(q.y, sBox.y0) - 2);
+      if (sw > 0 && sh > 0) hard += sw*sh*40;
+    }
+    const b0 = Math.max(0, Math.floor((q.x - g.L)/cwCol)), b1 = Math.min(NB - 1, Math.floor((q.x + iw - g.L)/cwCol));
+    for (let b = b0; b <= b1; b++) {
+      const bx0 = g.L + b*cwCol, bx1 = bx0 + cwCol, bw = Math.max(0, Math.min(q.x + iw, bx1) - Math.max(q.x, bx0));
+      if (bw <= 0) continue;
+      if (colTop[b] <= colBot[b]) {
+        const bh = Math.max(0, Math.min(q.y + ih, colBot[b]) - Math.max(q.y, colTop[b]));
+        if (bh > 0) { if (colTop[b] < pyBase - 6) hard += bw*bh*45; else soft += bw*bh*4; }
+      }
+      if (secTop[b] <= secBot[b]) {
+        const sh2 = Math.max(0, Math.min(q.y + ih, secBot[b]) - Math.max(q.y, secTop[b]));
+        if (sh2 > 0) soft += bw*sh2*12;
+      }
+    }
+    const dist = Math.hypot(q.x - prefX, q.y - prefY)/diag;
+    const prefBonus = q.k === prefer ? -iw*ih*0.12 : (q.k === 'tr-below' || q.k === 'tr-sec') && prefer === 'tr' ? -iw*ih*0.1 : (q.k === 'tl-below' || q.k === 'tl-sec') && prefer === 'tl' ? -iw*ih*0.1 : dist*iw*ih*0.08;
+    q.hard = hard; q.score = hard + soft + prefBonus;
+  });
+  c.sort((a, b) => a.score - b.score || a.k.localeCompare(b.k));
+  return Object.assign({}, c[0], {obs});
 }
 /* the region zoomed into: the x-window; with none set, the middle third of the run */
 function zoomWindow(lo, hi, a, b){
@@ -2559,30 +2645,124 @@ function zoomWindow(lo, hi, a, b){
   const za = Math.max(lo, hasA ? +a : hasB ? lo : lo + (hi - lo)/3), zb = Math.min(hi, hasB ? +b : hasA ? hi : lo + (hi - lo)*2/3);
   return zb > za ? {a: za, b: zb} : null;
 }
+/* smart default magnified window for ÄKTA runs and overlays when zoomWinA/B are blank */
+function zoomDefaultWin(run, lo, hi, zA, zB, wa, wb){
+  if (numOr(zA, null) !== null || numOr(zB, null) !== null) return zoomWindow(lo, hi, zA, zB);
+  if (numOr(wa, null) !== null || numOr(wb, null) !== null) {
+    const w = zoomWindow(lo, hi, wa, wb);
+    if (w && w.b - w.a < (hi - lo)*0.96) return w;
+  }
+  if (run && !run.prep) {
+    const pB = poolBlocks(run);
+    if (pB.length) {
+      const pa = Math.min(...pB.map(k => k.a)), pb = Math.max(...pB.map(k => k.b)), sp = Math.max(1e-6, pb - pa);
+      const uvC = uvOf(run), segs = fracSegments(run, uvC.xs[uvC.xs.length - 1]).filter(s => !s.waste), ws = segs.map(s => s.b - s.a).sort((a, b) => a - b), fw = ws.length ? ws[ws.length >> 1] : 0;
+      const pad = Math.max(fw*2, sp*0.65, (hi - lo)*0.04), za = Math.max(lo, pa - pad), zb = Math.min(hi, pb + pad);
+      if (zb > za && zb - za < (hi - lo)*0.92) return {a: za, b: zb};
+    }
+    const iR = (run.integ || []).filter(g => isFinite(g.a) && isFinite(g.b) && g.b !== g.a);
+    if (iR.length) {
+      const pf = procFull(run), areaOf = g => { const a0 = Math.min(g.a, g.b), b0 = Math.max(g.a, g.b); let m = 0; for (let i = Math.max(0, lowerBound(pf.xs, a0)); i < pf.xs.length && pf.xs[i] <= b0; i++) m = Math.max(m, pf.ys[i]); return m*(b0 - a0); };
+      const topA = Math.max(...iR.map(areaOf)), keep = iR.filter(g => areaOf(g) >= 0.15*topA), ia = Math.min(...keep.map(g => Math.min(g.a, g.b))), ib = Math.max(...keep.map(g => Math.max(g.a, g.b))), pad = Math.max((ib - ia)*0.4, (hi - lo)*0.05);
+      const za = Math.max(lo, ia - pad), zb = Math.min(hi, ib + pad);
+      if (zb > za && zb - za < (hi - lo)*0.92) return {a: za, b: zb};
+    }
+    const pf = procFull(run), segs = fracSegments(run, pf.xs[pf.xs.length - 1]).filter(s => !s.waste);
+    const sLo = segs.length ? Math.max(lo, segs[0].a) : lo, sHi = segs.length ? Math.min(hi, segs[segs.length - 1].b) : hi;
+    const i0 = Math.max(0, lowerBound(pf.xs, sLo)), i1 = Math.min(pf.xs.length - 1, lowerBound(pf.xs, sHi));
+    if (i1 > i0 + 2) {
+      let pk = i0, mn = Infinity;
+      for (let i = i0; i <= i1; i++) { if (pf.ys[i] > pf.ys[pk]) pk = i; if (pf.ys[i] < mn) mn = pf.ys[i]; }
+      const prom = pf.ys[pk] - mn;
+      if (prom > 1e-6) {
+        const cut = mn + prom*0.06; let l = pk, r = pk;
+        while (l > i0 && pf.ys[l] > cut) l--; while (r < i1 && pf.ys[r] > cut) r++;
+        const sp = Math.max(pf.xs[r] - pf.xs[l], (hi - lo)*0.05), pad = Math.max(sp*0.55, (hi - lo)*0.04), za = Math.max(lo, pf.xs[l] - pad), zb = Math.min(hi, pf.xs[r] + pad);
+        if (zb > za && zb - za < (hi - lo)*0.9) return {a: za, b: zb};
+      }
+    }
+  } else {
+    const mid = zoomWindow(lo, hi, '', '');
+    const pks = traces.filter(t => t.visible && t.peaks && t.peaks.length).flatMap(t => t.peaks.map(p => p.x + (+t.xshift || 0))).filter(x => x >= lo && x <= hi);
+    if (mid && pks.length && !pks.some(x => x >= mid.a && x <= mid.b)) {
+      const mn = Math.min(...pks), mx = Math.max(...pks), pad = Math.max((mx - mn)*0.35, (hi - lo)*0.1), za = Math.max(lo, mn - pad), zb = Math.min(hi, mx + pad);
+      if (zb > za && zb - za < (hi - lo)*0.9) return {a: za, b: zb};
+    }
+  }
+  return zoomWindow(lo, hi, zA, zB);
+}
 /* the inset shares its parent's ordinate, so its Y title is the unit alone, and none when even that is longer than the inset's side */
 function zoomYTitle(t, fsz, side){ t = String(t || '').trim(); const u = t.match(/\(([^()]+)\)\s*$/), s = u ? u[1].trim() : t; return s && s.length*fsz*0.56 <= side ? s : ''; }
-function zoomCompose(S, m, win, buildIn, zObj){
-  const o = opt, pos = zoomPos(), beside = pos === 'beside', g = m.geo, {L, R, T, B} = g;
+function insetHeadroom(m, iw, ih, win){
+  const g = m.geo, {L, R, T, B} = g, plotB = B - (g.band || 0), pad = 3, obs = mainObstacles(m, win, T);
+  const tlX = L + pad, trX = R - iw - pad, span = Math.max(0, trX - tlX);
+  if (span < 0 || B - T < ih + 20) return null;
+  const search = skipSBox => {
+    let best = Infinity;
+    for (let s = 0; s <= 8; s++) {
+      const qx = tlX + span*s/8;
+      const legHits = obs.avoid.filter(b => b.leg && b.x1 > qx && b.x0 < qx + iw);
+      const qy = legHits.length ? Math.max(...legHits.map(b => b.y1)) + pad : T + pad;
+      if (skipSBox && obs.sBox && Math.min(qx + iw, obs.sBox.x1) - Math.max(qx, obs.sBox.x0) > 2) continue;
+      const b0 = Math.max(0, Math.floor((qx - 2 - L)/obs.cwCol)), b1 = Math.min(obs.NB - 1, Math.floor((qx + iw + 2 - L)/obs.cwCol));
+      let yMax = -Infinity;
+      for (let b = b0; b <= b1; b++) if (obs.colData[b] > yMax) yMax = obs.colData[b];
+      const availCurve = B - (qy + ih + 5);
+      if (availCurve <= Math.max(16, (plotB - T)*0.24)) continue;
+      let y1Slot = isFinite(yMax) && yMax > g.y0 ? g.y0 + (yMax - g.y0)*(B - T)/availCurve : -Infinity;
+      obs.avoid.forEach(b => {
+        if (b.leg || b.pool || b.x1 <= qx - 2 || b.x0 >= qx + iw + 2) return;
+        const hLbl = Math.max(6, b.y1 - b.y0 + 3), availLbl = B - hLbl - (qy + ih + 3);
+        if (availLbl <= Math.max(14, (plotB - T)*0.22)) { y1Slot = Infinity; return; }
+        const yAnc = g.y0 + (B - Math.min(B, b.y1 + 2))/Math.max(1, B - T)*(g.y1 - g.y0);
+        if (yAnc > g.y0) y1Slot = Math.max(y1Slot, g.y0 + (yAnc - g.y0)*(B - T)/availLbl);
+      });
+      if (isFinite(y1Slot) && y1Slot > g.y1 && y1Slot < best) best = y1Slot;
+    }
+    return best;
+  };
+  let bestY1 = search(true);
+  if (!isFinite(bestY1)) bestY1 = search(false);
+  return isFinite(bestY1) && bestY1 <= g.y0 + (g.y1 - g.y0)*2.65 ? bestY1 : null;
+}
+function zoomCompose(S, m, win, buildIn, zObj, cfg){
+  cfg = cfg || {};
+  const o = opt, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = cfg.idp || '', zf = cfg.nest ? Math.min(zoomSize(), 0.35) : zoomSize();
   zObj = zObj || opt;
-  const lay = insetLayout(zObj, false), val = v => v !== null && v !== undefined && isFinite(+v) ? +v : null, old = k => lay && val(lay[k]) !== null ? val(lay[k]) : (zObj ? val(zObj['zoomInset' + k.toUpperCase()]) : null), ar = Math.max(.2, (R-L)/Math.max(1, B-T));
-  let iw = old('w') > 0 ? old('w') : (beside ? S.W*zoomSize() : (R - L)*zoomSize());
-  let ih = old('h') > 0 ? old('h') : (beside ? S.H : iw/ar);
+  const lay = insetLayout(zObj, false), val = v => v !== null && v !== undefined && isFinite(+v) ? +v : null, old = k => !beside && !above && lay && val(lay[k]) !== null ? val(lay[k]) : (!beside && !above && zObj ? val(zObj['zoomInset' + k.toUpperCase()]) : null);
+  const pad = 3, oyMain = above ? (cfg.aboveH || Math.round(S.H*0.38)) + (cfg.aboveGap || 10) : 0;
+  let g = m.geo, {L, R, T, B} = g, plotB = B - (g.band || 0), ar = Math.max(.2, (R - L)/Math.max(1, B - T));
+  let iw = old('w') > 0 ? old('w') : beside ? S.W*zoomSize() : above ? S.W : (R - L)*zf;
+  let ih = old('h') > 0 ? old('h') : beside ? S.H : above ? (cfg.aboveH || Math.round(S.H*0.38)) : iw/ar;
+  const minAutoW = cfg.nest ? 46 : 54, minAutoH = cfg.nest ? 34 : 38;
+  if (!beside && !above && !(old('w') > 0) && iw < minAutoW && R - L > minAutoW + 8) { iw = Math.min(R - L - pad*2, minAutoW + 2); ih = Math.max(minAutoH, iw/ar); }
   iw = Math.max(30, Math.min(S.W, iw)); ih = Math.max(20, Math.min(S.H, ih));
-  const pad = 3;
-  if (!beside && ih > B-T-pad*2) { ih = B-T-pad*2; iw = ih*ar; }
-  const def = insetDefault(S, m, iw, ih, beside);
+  if (!beside && !above && !(old('h') > 0) && ih > plotB - T - pad*2 && plotB - T - pad*2 >= 34) { ih = plotB - T - pad*2; iw = Math.min(R - L - pad*2, Math.max(cfg.nest ? 44 : 52, ih*ar)); }
+  else if (!beside && !above && ih > B - T - pad*2) { ih = Math.max(20, B - T - pad*2); iw = Math.max(30, ih*ar); }
+  const calcRTop = geo => {
+    const s = geo.uv ? [{xs: geo.uv.xs, yp: geo.uv.ys}] : geo.P; let mx = -Infinity;
+    s.forEach(p => { for (let i = Math.max(0, lowerBound(p.xs, win.a)); i < p.xs.length && p.xs[i] <= win.b; i++) if (p.yp[i] > mx) mx = p.yp[i]; });
+    return isFinite(mx) ? Math.max(geo.T, Math.min(geo.B - 4, geo.py(mx) - 3)) : geo.T;
+  };
+  let rTop = calcRTop(g);
+  let def = above ? {x: 0, y: 0, hard: 0} : insetDefault(S, m, iw, ih, beside, win, rTop);
+  if (!beside && !above && old('x') === null && old('y') === null && def.hard > 0 && cfg.rebuildMain) {
+    const y1New = insetHeadroom(m, iw, ih, win);
+    if (y1New !== null) {
+      const m2 = cfg.rebuildMain(y1New);
+      if (m2 && m2.svg && m2.geo) { m = m2; g = m.geo; ({L, R, T, B} = g); rTop = calcRTop(g); def = insetDefault(S, m, iw, ih, false, win, rTop); }
+    }
+  }
   let ix = old('x') !== null ? old('x') : def.x;
   let iy = old('y') !== null ? old('y') : def.y;
   ix = Math.max(0, Math.min(S.W - iw, ix)); iy = Math.max(0, Math.min(S.H - ih, iy));
   if (ix + iw > S.W) iw = Math.max(30, S.W - ix);
   if (iy + ih > S.H) ih = Math.max(20, S.H - iy);
-  const ins = buildIn(iw, ih); if (!ins || !ins.svg) return null;
-  const src = g.uv ? [{xs: g.uv.xs, yp: g.uv.ys}] : g.P; let mx = -Infinity;
-  src.forEach(p => { for (let i = Math.max(0, lowerBound(p.xs, win.a)); i < p.xs.length && p.xs[i] <= win.b; i++) if (p.yp[i] > mx) mx = p.yp[i]; });
-  const rTop = isFinite(mx) ? Math.max(T, Math.min(B - 4, g.py(mx) - 3)) : T, xa = g.px(win.a), xb = g.px(win.b);
-  const tg = beside ? {x0: ix + ins.geo.L, x1: ix + ins.geo.R, y0: ins.geo.T, y1: ins.geo.B} : {x0: ix, x1: ix + iw, y0: iy, y1: iy + ih};
+  const ins = buildIn(iw, ih, g); if (!ins || !ins.svg) return null;
+  const xa = g.px(win.a), xb = g.px(win.b);
+  const tg = beside ? {x0: ix + ins.geo.L, x1: ix + ins.geo.R, y0: ins.geo.T, y1: ins.geo.B} : above ? {x0: ix + ins.geo.L, x1: ix + ins.geo.R, y0: ins.geo.T, y1: ih + 1.5} : {x0: ix, x1: ix + iw, y0: iy, y1: iy + ih};
   const ln = (x1, y1, x2, y2) => `<line x1="${r2(x1)}" y1="${r2(y1)}" x2="${r2(x2)}" y2="${r2(y2)}"/>`;
-  const sBox = {x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: Math.min(rTop, B), y1: Math.max(rTop, B)};
+  const sBox = {x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: oyMain + Math.min(rTop, B), y1: oyMain + Math.max(rTop, B)};
   const iBox = {x0: Math.min(tg.x0, tg.x1), x1: Math.max(tg.x0, tg.x1), y0: Math.min(tg.y0, tg.y1), y1: Math.max(tg.y0, tg.y1)};
   let con = '';
   const abut = sBox.x0 <= iBox.x1 + 1 && sBox.x1 >= iBox.x0 - 1 && sBox.y0 <= iBox.y1 + 1 && sBox.y1 >= iBox.y0 - 1;
@@ -2595,12 +2775,30 @@ function zoomCompose(S, m, win, buildIn, zObj){
     else if (sBox.y0 > iBox.y1) { dy = sBox.y0 - iBox.y1; dirY = -1; }
     const axis = (dy === 0 || (dx > 0 && dx <= dy)) ? 'x' : 'y';
     if (axis === 'x') {
-      const sx = dirX > 0 ? sBox.x1 : sBox.x0;
-      const tx = dirX > 0 ? iBox.x0 : iBox.x1;
-      [sBox.y0, sBox.y1].forEach(ys => {
+      const sx = dirX > 0 ? sBox.x1 : sBox.x0, tx = dirX > 0 ? iBox.x0 : iBox.x1;
+      let peakBlock = Infinity;
+      if (beside) {
+        const bObs = def.obs || mainObstacles(m, win, rTop), loX = Math.min(sx, g.R), hiX = Math.max(sx, Math.min(tx, g.R));
+        const b0 = Math.max(0, Math.floor((loX + 1 - L)/bObs.cwCol)), b1 = Math.min(bObs.NB - 1, Math.floor((hiX - L)/bObs.cwCol));
+        for (let b = b0; b <= b1; b++) if (bObs.colTop[b] < peakBlock) peakBlock = bObs.colTop[b];
+        bObs.avoid.forEach(b => { if (!b.leg && b.x1 > loX + 1 && b.x0 < hiX && b.y0 < peakBlock) peakBlock = b.y0; });
+      }
+      [sBox.y0, sBox.y1].forEach((ys, idx) => {
         const yt = Math.max(iBox.y0, Math.min(iBox.y1, ys));
-        con += ln(sx, ys, tx, ys);
-        if (Math.abs(yt - ys) > 0.05) con += ln(tx, ys, tx, yt);
+        if (beside && idx === 0 && peakBlock < ys - 2) {
+          const yOver = iBox.y0;
+          if (Math.abs(yOver - ys) > 0.05) con += ln(sx, ys, sx, yOver);
+          con += ln(sx, yOver, tx, yOver);
+        } else {
+          con += ln(sx, ys, tx, ys);
+          if (Math.abs(yt - ys) > 0.05) con += ln(tx, ys, tx, yt);
+        }
+      });
+    } else if (above) {
+      const ym = (iBox.y1 + oyMain + Math.min(rTop, g.T - 2))/2;
+      [[sBox.x0, iBox.x0], [sBox.x1, iBox.x1]].forEach(([xs, xt]) => {
+        if (Math.abs(xs - xt) <= 0.05) con += ln(xs, sBox.y0, xs, iBox.y1);
+        else con += ln(xs, sBox.y0, xs, ym) + ln(xs, ym, xt, ym) + ln(xt, ym, xt, iBox.y1);
       });
     } else {
       const sy = dirY > 0 ? sBox.y1 : sBox.y0;
@@ -2612,34 +2810,37 @@ function zoomCompose(S, m, win, buildIn, zObj){
       });
     }
   }
-  const inner = beside ? m.svg : m.svg.slice(S.head.length, m.svg.length - 6);
+  const inner = (beside || above) ? m.svg : m.svg.slice(S.head.length, m.svg.length - 6);
+  const regId = !idp || idp === 'p0-' ? 'zoom-region' : idp + 'zoom-region';
+  const conId = !idp || idp === 'p0-' ? 'zoomInsetContainer' : idp + 'zoomInsetContainer';
+  const insId = !idp || idp === 'p0-' ? 'zoom-inset' : idp + 'zoom-inset';
   const out = [S.head];
-  if (beside && o.bg) out.push(`<rect width="${r2(S.W)}" height="${r2(S.H)}" fill="#ffffff"/>`);
-  out.push(`<g data-plot="main">${inner}</g>`);
-  out.push(`<g id="zoom-region" stroke="#777777" stroke-width="${r2(Math.max(0.3, S.aw*0.6))}" fill="none"><rect x="${r2(xa)}" y="${r2(rTop)}" width="${r2(xb - xa)}" height="${r2(B - rTop)}" fill="#000000" fill-opacity="0.05"/>${con}</g>`);
+  if ((beside || above) && o.bg && !cfg.nest) out.push(`<rect width="${r2(S.W)}" height="${r2(S.H)}" fill="#ffffff"/>`);
+  out.push(`<g data-plot="main"${oyMain ? ` transform="translate(0 ${r2(oyMain)})"` : ''}>${inner}</g>`);
+  out.push(`<g id="${regId}" class="zoom-inset-region" stroke="#777777" stroke-width="${r2(Math.max(0.3, S.aw*0.6))}" fill="none"><rect x="${r2(xa)}" y="${r2(oyMain + rTop)}" width="${r2(xb - xa)}" height="${r2(B - rTop)}" fill="#000000" fill-opacity="0.05"/>${con}</g>`);
   let handles = '';
-  if (FIG_SCREEN && !beside) {
-    const hw = 7, hit = 14;
+  if (FIG_SCREEN && !beside && !above) {
+    const hw = 5.5, mw = 6, mh2 = 4, hit = 13;
     handles = `<g class="zoom-inset-handles">`
-      + `<rect class="zoom-inset-handle" data-handle="move" x="${r2(iw/2-hw)}" y="0" width="${hw*2}" height="${hw}" rx="1" fill="#ffffff" stroke="#0072B2" stroke-width="1.2" style="cursor:move;pointer-events:all;"/>`
-      + `<rect class="zoom-inset-handle" data-handle="se" x="${r2(iw - hw)}" y="${r2(ih - hw)}" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1.2" style="cursor:se-resize;pointer-events:all;"/>`
+      + `<rect class="zoom-inset-handle" data-handle="move" x="${r2(iw/2 - mw)}" y="0" width="${mw*2}" height="${mh2}" rx="1" fill="#ffffff" stroke="#0072B2" stroke-width="1" style="cursor:move;pointer-events:all;"/>`
+      + `<rect class="zoom-inset-handle" data-handle="se" x="${r2(iw - hw)}" y="${r2(ih - hw)}" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1" style="cursor:se-resize;pointer-events:all;"/>`
       + `<rect data-handle="se" x="${r2(iw - hit)}" y="${r2(ih - hit)}" width="${hit}" height="${hit}" fill="transparent" style="cursor:se-resize;pointer-events:all;"/>`
-      + `<rect class="zoom-inset-handle" data-handle="sw" x="0" y="${r2(ih - hw)}" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1.2" style="cursor:sw-resize;pointer-events:all;"/>`
+      + `<rect class="zoom-inset-handle" data-handle="sw" x="0" y="${r2(ih - hw)}" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1" style="cursor:sw-resize;pointer-events:all;"/>`
       + `<rect data-handle="sw" x="0" y="${r2(ih - hit)}" width="${hit}" height="${hit}" fill="transparent" style="cursor:sw-resize;pointer-events:all;"/>`
-      + `<rect class="zoom-inset-handle" data-handle="ne" x="${r2(iw - hw)}" y="0" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1.2" style="cursor:ne-resize;pointer-events:all;"/>`
+      + `<rect class="zoom-inset-handle" data-handle="ne" x="${r2(iw - hw)}" y="0" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1" style="cursor:ne-resize;pointer-events:all;"/>`
       + `<rect data-handle="ne" x="${r2(iw - hit)}" y="0" width="${hit}" height="${hit}" fill="transparent" style="cursor:ne-resize;pointer-events:all;"/>`
-      + `<rect class="zoom-inset-handle" data-handle="nw" x="0" y="0" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1.2" style="cursor:nw-resize;pointer-events:all;"/>`
+      + `<rect class="zoom-inset-handle" data-handle="nw" x="0" y="0" width="${hw}" height="${hw}" fill="#ffffff" stroke="#0072B2" stroke-width="1" style="cursor:nw-resize;pointer-events:all;"/>`
       + `<rect data-handle="nw" x="0" y="0" width="${hit}" height="${hit}" fill="transparent" style="cursor:nw-resize;pointer-events:all;"/>`
       + `</g>`;
   }
-  out.push(`<g id="zoomInsetContainer" class="zoom-inset" data-plot="inset" transform="translate(${r2(ix)} ${r2(iy)})"><g id="zoom-inset">${beside ? '' : `<rect class="zoom-inset-bg" width="${r2(iw)}" height="${r2(ih)}" fill="#ffffff" stroke="#999999" stroke-width="0.4"/>`}${ins.svg}</g>${handles}</g></svg>`);
-  return {svg: out.join(''), geo: Object.assign({}, g, {zoomInset: {x: ix, y: iy, w: iw, h: ih, figW: S.W, figH: S.H, zObj}})};
+  out.push(`<g id="${conId}" class="zoom-inset" data-plot="inset" transform="translate(${r2(ix)} ${r2(iy)})"><g id="${insId}" class="zoom-inset-inner">${(beside || above) ? '' : `<rect class="zoom-inset-bg" width="${r2(iw)}" height="${r2(ih)}" fill="#ffffff" stroke="#999999" stroke-width="0.4"/>`}${ins.svg}</g>${handles}</g></svg>`);
+  return {svg: out.join(''), geo: Object.assign({}, g, {oyMain, zoomInset: (beside || above) ? null : {x: ix, y: iy, w: iw, h: ih, figW: S.W, figH: S.H, zObj}})};
 }
 
 /* ---------- figure: HPLC overlay ---------- */
 function buildOverlaySVG(ov){
   ov = ov || {};
-  const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '';
+  const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '', isInset = /zi-$/.test(idp), compactIn = isInset && !ov.split;
   const vis = traces.filter(t => t.visible); const order = o.flip ? vis.slice().reverse() : vis;
   const P = order.map(t => Object.assign({t}, processTrace(t))).filter(p => p.xs.length > 1);
   if (!P.length) return {svg: null, geo: null};
@@ -2654,31 +2855,37 @@ function buildOverlaySVG(ov){
   xlo = numOr(o.xmin, xlo); xhi = numOr(o.xmax, xhi); if (!(xhi > xlo)) xhi = xlo + 1;
   const anyPeaks = o.showPeaks && P.some(p => p.t.peaks.length);
   const yr = (yhi - ylo) || 1;
-  const mB0 = tOut + 3 + fs + 4 + fs*1.25, pf0 = fs*0.85;
+  let xLabel = o.xlabel;
+  if (xLabel === DEF.xlabel) {
+    const visFirst = traces.find(t => t.visible);
+    if (visFirst && visFirst.cols && visFirst.cols[visFirst.xc]) xLabel = visFirst.cols[visFirst.xc];
+  }
+  const mB0 = tOut + (xLabel ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*0.95), pf0 = fs*0.85;
   let ml = o.ovPeakText !== 'x' ? 10 : 4;
   if (anyPeaks) P.forEach(p => p.t.peaks.forEach(pk => { ml = Math.max(ml, (pk.label || fmt(pk.x, numOr(o.peakDec,2))).length); }));
-  const minTop = anyPeaks && o.peakRot && (idp === 'zi-' || (ov.nest && zoomPos() === 'beside')) ? Math.min(H*0.28, ml*pf0*0.62 + 6) : fs*0.7;
+  const minTop = anyPeaks && o.peakRot && (isInset || (ov.nest && ['beside', 'above'].includes(zoomPos()))) ? Math.min(H*0.28, ml*pf0*0.62 + 6) : Math.max(compactIn ? 5.2 : 0, fs*0.7);
   const plotH0 = H - mB0 - minTop;
   let padPts = 4 + (anyPeaks ? (o.peakRot ? ml*pf0*0.62 + 4 : pf0*2.2) : 0);
   if ((o.legend === 'inside' || o.legend === 'insideL') && P.length) padPts += P.length*fs*1.3 + fs*0.3;
-  padPts = Math.min(padPts, plotH0*0.6);
+  padPts = Math.min(padPts, plotH0*(compactIn ? 0.28 : 0.6));
   let y0 = ylo - yr*0.03; let y1 = yhi + (yhi - y0)*padPts/Math.max(1, plotH0 - padPts);
   y0 = numOr(o.ymin, y0); y1 = numOr(o.ymax, y1); if (!(y1 > y0)) y1 = y0 + 1;
 
   let yt = ticks(y0, y1, Math.max(3, Math.round(numOr(o.h,2.6)*1.8)));
   let xt = ticks(xlo, xhi, Math.max(4, Math.round(numOr(o.w,3.5)*2)));
-  const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = idp === 'zi-' ? 3 : 0;
-  const mL = padL + (o.showY ? (tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + 5 + fs*1.2) : fs*0.8);
-  const mB = mB0, mT = minTop;
-  const plotH = Math.max(H - mB, mT + 24) - mT;
+  const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = compactIn ? 3 : 0, yl = o.showY ? yLabelText() : '';
+  const mL = ov.fixL != null ? ov.fixL : padL + (o.showY ? (tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + (yl ? 5 + fs*1.2 : 2)) : fs*0.8);
+  const mB = mB0, mT = ov.fixT != null ? ov.fixT : minTop;
+  const B = ov.fixB != null ? ov.fixB : compactIn ? Math.max(mT + 8, H - mB) : Math.max(H - mB, mT + 24), T = mT;
+  const plotH = Math.max(8, B - T);
   yt = fitTicks(yt, y0, y1, Math.max(3, Math.round(numOr(o.h,2.6)*1.8)), plotH, 0, fs*1.28);
-  let mR = fs*0.8, sbV = 0, sbLab = '';
+  let mR = compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8, sbV = 0, sbLab = '';
   if (o.scalebar) { sbV = numOr(o.sbValue, niceStep((y1-y0)*0.2)); sbLab = fmtAuto(sbV) + (o.sbUnit ? ' ' + o.sbUnit : ''); mR += 10 + sbLab.length*cw; }
-  /* keep a usable plot even when fonts or margins are too big for the figure size */
-  const L = mL, R = Math.max(W - mR, mL + 24), T = mT, B = Math.max(H - mB, mT + 24);
+  /* keep a usable plot even when fonts or margins are too big for the figure size; compact insets never spill past W */
+  const L = mL, R = ov.fixR != null ? ov.fixR : compactIn ? Math.max(mL + 8, W - mR) : Math.max(W - mR, mL + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(numOr(o.w,3.5)*2)), R - L, cw, fs);
   const px = x => L + (x-xlo)/(xhi-xlo)*(R-L), py = y => B - (y-y0)/(y1-y0)*(B-T), invX = X => xlo + (X-L)/(R-L)*(xhi-xlo);
-  const s = [S.head];
+  const s = [S.head], extraAvoid = [];
   if (o.bg) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
   s.push(`<defs><clipPath id="${idp}plot-area"><rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(B-T)}"/></clipPath></defs>`);
   s.push(`<g clip-path="url(#${idp}plot-area)" fill="none" stroke-width="${lw}" stroke-linejoin="round" stroke-linecap="round">`);
@@ -2694,16 +2901,10 @@ function buildOverlaySVG(ov){
   s.push('</g>');
   s.push(`<g fill="#000000">`);
   const xly = B + tOut + 3 + fs*0.78;
-  xt.v.forEach(v => s.push(`<text x="${r2(px(v))}" y="${r2(xly)}" text-anchor="middle">${tkf(v, xt.dec)}</text>`));
-  let xLabel = o.xlabel;
-  if (xLabel === DEF.xlabel) {
-    const visFirst = traces.find(t => t.visible);
-    if (visFirst && visFirst.cols && visFirst.cols[visFirst.xc]) xLabel = visFirst.cols[visFirst.xc];
-  }
+  { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle">${t}</text>`); }); }
   if (xLabel) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle">${esc(xLabel)}</text>`);
   if (o.showY) {
     yt.v.forEach((v,i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
-    const yl = yLabelText();
     if (yl) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+B)/2)}) rotate(-90)" text-anchor="middle">${esc(yl)}</text>`);
   }
   s.push('</g>');
@@ -2723,10 +2924,10 @@ function buildOverlaySVG(ov){
     });
     /* each label clears every trace under it, and gets a thin leader when that lifts it away from its own peak */
     const k = (xhi - xlo)/(R - L), topIn = (a, b) => { let m = -Infinity; P.forEach(p => { for (let i = Math.max(0, lowerBound(p.xs, a)); i < p.xs.length && p.xs[i] <= b; i++) if (p.yp[i] > m) m = p.yp[i]; }); return m; };
-    items.forEach(it => { it.w = o.peakRot ? pf : it.raw.length*pcw; it.h = o.peakRot ? it.raw.length*pf*0.62 + 2 : pf; const xd = xlo + (it.X - L)*k, m = topIn(xd - it.w/2*k, xd + it.w/2*k);
+    items.forEach(it => { it.w = o.peakRot ? pf : it.raw.length*pcw; it.h = o.peakRot ? it.raw.length*pf*0.62 + 2 : pf; if (compactIn && !o.peakRot) it.X = Math.max(L + it.w/2 + 1, Math.min(W - it.w/2 - 1.5, it.X)); const xd = xlo + (it.X - L)*k, m = topIn(xd - it.w/2*k, xd + it.w/2*k);
       it.Y0 = Math.max(T + it.h, Math.min(it.Y, isFinite(m) ? py(m) - 3 : it.Y)); });
     items.sort((a,b) => b.Y0 - a.Y0);
-    const leaders = [], lTop = o.peakRot ? 2 : 0;
+    const leaders = [], lTop = compactIn ? 2 : o.peakRot ? 2 : 0;
     s.push(`<g class="zoom-inset-avoid" font-size="${r2(pf)}">`);
     /* a label that would have to leave the figure to clear the others is left off and named under the figure */
     items.forEach(it => {
@@ -2756,11 +2957,12 @@ function buildOverlaySVG(ov){
   if ((o.legend === 'inside' || o.legend === 'insideL') && P.length) {
     const items = o.mode === 'stack' ? P.slice().reverse() : P;
     const rowH = fs*1.3, ll = fs*1.6, maxW = Math.max(...items.map(p=>p.t.name.length))*cw;
-    const x0 = o.legend === 'inside' ? R - fs*0.4 - maxW - ll - 4 : L + fs*0.8;
+    const x0 = o.legend === 'inside' ? Math.max(L + 4, R - fs*0.4 - maxW - ll - 4) : L + fs*0.8;
+    const roomCh = Math.max(6, Math.floor((R - (x0 + ll + 4) - 2)/cw));
     s.push(`<g class="zoom-inset-avoid">`);
-    items.forEach((p,k) => { const y = T + fs*0.8 + k*rowH;
+    items.forEach((p,k) => { const y = T + fs*0.8 + k*rowH, nm = p.t.name.length > roomCh + 2 ? p.t.name.slice(0, Math.max(4, roomCh - 1)).trim() + '…' : p.t.name;
       s.push(`<line x1="${r2(x0)}" y1="${r2(y - fs*0.3)}" x2="${r2(x0+ll)}" y2="${r2(y - fs*0.3)}" stroke="${p.t.color}" stroke-width="${Math.max(lw,1)}" stroke-linecap="round"/>`);
-      s.push(`<text x="${r2(x0+ll+4)}" y="${r2(y)}" fill="#000000">${esc(p.t.name)}</text>`); });
+      s.push(`<text x="${r2(x0+ll+4)}" y="${r2(y)}" fill="#000000">${esc(nm)}</text>`); });
     s.push('</g>');
   }
   if (o.legend === 'direct') {
@@ -2768,10 +2970,10 @@ function buildOverlaySVG(ov){
       const w = p.t.name.length*cw, xa = invX(R - w - 2);
       let top = -Infinity; for (let i = lowerBound(p.xs, xa); i < p.xs.length && p.xs[i] <= xhi; i++) if (p.yp[i] > top) top = p.yp[i];
       if (!isFinite(top)) top = p.yp[p.yp.length-1];
-      return {p, y: Math.max(T + fs, py(top) - fs*0.45)};
+      return {p, y: Math.max(T + fs, py(top) - fs*0.45), w};
     }).sort((a,b)=>b.y-a.y);
     for (let k=1;k<labs.length;k++) if (labs[k-1].y - labs[k].y < fs*1.1) labs[k].y = labs[k-1].y - fs*1.1;
-    labs.forEach(l => s.push(`<text x="${r2(R)}" y="${r2(l.y)}" text-anchor="end" fill="${l.p.t.color}">${esc(l.p.t.name)}</text>`));
+    labs.forEach(l => { extraAvoid.push({x0: R - l.w, x1: R, y0: l.y - fs*0.9, y1: l.y + fs*0.25}); s.push(`<text x="${r2(R)}" y="${r2(l.y)}" text-anchor="end" fill="${l.p.t.color}">${esc(l.p.t.name)}</text>`); });
   }
   if (o.scalebar && sbV > 0) {
     const bx = R + 6, len = sbV/(y1-y0)*(B-T), yb = B, ytp = B - len;
@@ -2779,17 +2981,20 @@ function buildOverlaySVG(ov){
     s.push(`<text x="${r2(bx+4)}" y="${r2((yb+ytp)/2 + fs*0.35)}" fill="#000000">${esc(sbLab)}</text>`);
   }
   s.push('</svg>');
-  return {svg: s.join(''), geo: {L,R,T,B,xlo,xhi,y0,y1,P,px,py,W,H,lblLeft}};
+  return {svg: s.join(''), geo: {L,R,T,B,xlo,xhi,y0,y1,P,px,py,W,H,lblLeft,extraAvoid}};
 }
 
 function buildSVG(ov){
   ov = ov || {};
   if (!insetVisible(opt, opt.zoomInset) || ov.noZoom || ov.nest) return buildOverlaySVG(ov);
-  const S = style(), wa = opt.xmin, wb = opt.xmax, beside = zoomPos() === 'beside';
-  const m = withOpt({xmin: '', xmax: ''}, () => buildOverlaySVG(beside ? {noZoom: true, nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H} : {noZoom: true}));
+  const S = style(), wa = opt.xmin, wb = opt.xmax, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above';
+  const aboveH = Math.round(S.H*Math.min(0.42, Math.max(0.28, zoomSize()*0.88))), aboveGap = 10;
+  const mkMain = ym => withOpt(Object.assign({xmin: '', xmax: ''}, ym != null ? {ymax: ym} : {}), () => buildOverlaySVG(beside ? {noZoom: true, nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H} : above ? {noZoom: true, nest: true, wPt: S.W, hPt: Math.max(60, S.H - aboveH - aboveGap)} : {noZoom: true}));
+  const m = mkMain(null);
   if (!m.svg) return m;
-  const win = zoomWindow(m.geo.xlo, m.geo.xhi, opt.zoomWinA, opt.zoomWinB);
-  const z = win && zoomCompose(S, m, win, (w, h) => withOpt({xmin: win.a, xmax: win.b, legend: 'none', scalebar: false, xlabel: '', showY: true, ylabel: zoomYTitle(yLabelText(), fontSize()*0.8, h), ymin: '', ymax: '', fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildOverlaySVG({noZoom: true, nest: true, wPt: w, hPt: h, idp: 'zi-'})), opt);
+  const win = zoomDefaultWin(null, m.geo.xlo, m.geo.xhi, opt.zoomWinA, opt.zoomWinB, wa, wb);
+  const canY = numOr(opt.ymax, null) === null;
+  const z = win && zoomCompose(S, m, win, (w, h, mg) => withOpt({xmin: win.a, xmax: win.b, bg: false, legend: 'none', scalebar: false, xlabel: beside ? opt.xlabel : '', showY: true, ylabel: zoomYTitle(yLabelText(), fontSize()*0.8, h), ymin: '', ymax: '', fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildOverlaySVG(Object.assign({noZoom: true, nest: true, wPt: w, hPt: h, idp: 'zi-', split: beside || above}, beside ? {fixT: mg.T, fixB: mg.B} : above ? {fixL: mg.L, fixR: mg.R} : {}))), opt, {aboveH, aboveGap, rebuildMain: canY ? mkMain : null});
   return z || buildOverlaySVG({noZoom: true});
 }
 
@@ -2801,20 +3006,27 @@ function buildRunSVG(run, ov){
   ov = ov || {};
   const doZoom = ov.nest ? (run.wfZoom && insetVisible(run, true)) : insetVisible(run, opt.zoomInset);
   if (!doZoom || run.prep || ov.noZoom) return buildRunPlainSVG(run, ov);
-  const S = style(ov), wa = run.xmin, wb = run.xmax, beside = zoomPos() === 'beside', put = (a, b) => { run.xmin = a; run.xmax = b; };
-  let m; try { put('', ''); m = buildRunPlainSVG(run, beside ? Object.assign({}, ov, {noZoom: true, nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H}) : Object.assign({}, ov, {noZoom: true})); } finally { put(wa, wb); }
+  const S = style(ov), wa = run.xmin, wb = run.xmax, wy = run.ymax, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = ov.idp || '';
+  const put = (a, b, ym) => { run.xmin = a; run.xmax = b; if (ym !== undefined) run.ymax = ym; };
+  const aboveH = Math.round(S.H*Math.min(0.42, Math.max(0.28, zoomSize()*0.88))), aboveGap = 10;
+  const mkMain = ym => { try { put('', '', ym != null ? ym : wy); return buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: true}, beside ? {nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H} : above ? {nest: true, wPt: S.W, hPt: Math.max(60, S.H - aboveH - aboveGap)} : {})); } finally { put(wa, wb, wy); } };
+  const m = mkMain(null);
   if (!m.svg) return m;
-  const win = zoomWindow(m.geo.xlo, m.geo.xhi, run.zoomWinA !== undefined ? run.zoomWinA : opt.zoomWinA, run.zoomWinB !== undefined ? run.zoomWinB : opt.zoomWinB);
-  const z = win && zoomCompose(S, m, win, (w, h) => { try { put(win.a, win.b);
-    return withOpt({rxlabel: '', rylabel: zoomYTitle(opt.rylabel, fontSize()*0.8, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, ymin: m.geo.y0, ymax: m.geo.y1, fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, nest: true, wPt: w, hPt: h, idp: 'zi-'}))); } finally { put(wa, wb); } }, ov.nest ? run : (curRun() || opt));
+  const zA = run.zoomWinA !== undefined && run.zoomWinA !== '' ? run.zoomWinA : opt.zoomWinA;
+  const zB = run.zoomWinB !== undefined && run.zoomWinB !== '' ? run.zoomWinB : opt.zoomWinB;
+  const effWa = numOr(wa, null) !== null ? wa : opt.xmin, effWb = numOr(wb, null) !== null ? wb : opt.xmax;
+  const win = zoomDefaultWin(run, m.geo.xlo, m.geo.xhi, zA, zB, effWa, effWb);
+  const canY = numOr(wy, null) === null;
+  const z = win && zoomCompose(S, m, win, (w, h, mg) => { try { put(win.a, win.b, '');
+    return withOpt({bg: false, rxlabel: beside ? opt.rxlabel : '', rylabel: zoomYTitle(opt.rylabel, fontSize()*0.8, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: false, nest: true, wPt: w, hPt: h, idp: idp + 'zi-', split: beside || above}, beside ? {fixT: mg.T, fixB: mg.B} : above ? {fixL: mg.L, fixR: mg.R} : {}))); } finally { put(wa, wb, wy); } }, ov.nest ? run : (curRun() || opt), {idp, nest: !!ov.nest, aboveH, aboveGap, rebuildMain: canY ? mkMain : null});
   return z || buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true}));
 }
 function buildRunPlainSVG(run, ov){
   ov = ov || {};
   if (run.prep) return buildPrepSVG(run, ov);
-  const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '';
+  const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '', isInset = /zi-$/.test(idp), compactIn = isInset && !ov.split;
   const uvC = uvOf(run), dEnd = uvC.xs[uvC.xs.length-1];
-  const auto = runAuto(run), wfF = opt.wfFull && ov.nest && idp !== 'zi-', xlo = wfF ? uvC.xs[0] : numOr(run.xmin, auto.lo); let xhi = wfF ? dEnd : numOr(run.xmax, auto.hi); if (!(xhi > xlo)) xhi = xlo + 1;
+  const auto = runAuto(run), wfF = (ov.fullRun || (opt.wfFull && ov.nest)) && !isInset, xlo = wfF ? uvC.xs[0] : numOr(run.xmin, auto.lo); let xhi = wfF ? dEnd : numOr(run.xmax, auto.hi); if (!(xhi > xlo)) xhi = xlo + 1;
   const uv = windowXY(procFull(run), xlo, xhi);
   if (uv.xs.length < 2) return {svg: null, geo: null};
   const secC = o.sec === 'grad' ? run.grad : o.sec === 'cond' ? run.cond : null;
@@ -2829,9 +3041,10 @@ function buildRunPlainSVG(run, ov){
   const segsAll = fracSegments(run, dEnd), shaded = shadeSet(run);
   const segs = segsAll.map((sg,i) => Object.assign({i}, sg)).filter(sg => sg.b > xlo && sg.a < xhi);
   const nonW = segs.filter(sg => !sg.waste);
-  const showFr = o.fracFmt !== 'off' && nonW.length > 0;
-  const plateRun = isPlate(run), labOf = sg => o.fracFmt === 'num' ? ((sg.label.match(/\d+/) || [sg.label])[0]) : plateRun ? plateShort(sg.label) : sg.label;
-  const pf = fs*0.8, pcw = pf*0.56, fTick = fs*0.55;
+  const effFracFmt = compactIn && H < 80 && o.fracFmt !== 'off' ? 'none' : o.fracFmt;
+  const showFr = effFracFmt !== 'off' && nonW.length > 0;
+  const plateRun = isPlate(run), labOf = sg => effFracFmt === 'num' ? ((sg.label.match(/\d+/) || [sg.label])[0]) : plateRun ? plateShort(sg.label) : sg.label;
+  const pf = fs*0.8, pcw = pf*0.56, fTick = compactIn ? fs*0.42 : fs*0.55;
 
   let s0 = 0, s1 = 104, st = null, stl = [], secTitle = '', secCol = '';
   if (hasSec) {
@@ -2846,47 +3059,49 @@ function buildRunPlainSVG(run, ov){
   const medW = widths.length ? widths[Math.floor(widths.length/2)] : 0;
   const maxLab = nonW.reduce((m,sg) => Math.max(m, labOf(sg).length), 1);
   let rot = false, every = numOr(o.fracEvery, 0);
-  if (o.fracFmt !== 'none' && showFr) {
+  if (effFracFmt !== 'none' && showFr) {
     if (maxLab*pcw + 2 > medW) rot = true;
     if (!every) every = rot ? Math.max(1, Math.ceil((pf*1.05)/Math.max(0.1, medW))) : 1;
   }
-  const labH = o.fracFmt === 'none' ? 0 : rot ? maxLab*pcw : pf;
-  const band = showFr ? fTick + 2 + labH + 3 : 0;
+  const labH = effFracFmt === 'none' ? 0 : rot ? maxLab*pcw : pf;
+  const band = showFr ? fTick + (effFracFmt === 'none' ? 1 : 2 + labH + 3) : 0;
 
   const ylo = arrMin(uv.ys), yhi = arrMax(uv.ys), yr = (yhi - ylo) || 1;
   const titleH = (o.runTitle && !ov.nest) ? fs*1.5 : 0, stdH = showStd ? fs*1.9 : 0;
   /* NanoDrop result for this step, printed just above the pooled fractions */
   const ndR = o.ndFig && o.ndFig !== 'none' && shadeSet(run).size && !(prep.on && prep.btw && prep.btw[run.id]) ? ndForRun(run) : null, ndTxt = ndR && ndR.mgml != null ? [`${fmt(ndR.mgml, ndR.mgml < 10 ? 2 : 1)} mg/mL`, (o.ndFig === 'mg' || o.ndFig === 'full') && ndR.mg != null ? `${fmt(ndR.mg, ndR.mg < 10 ? 1 : 0)} mg` : '', o.ndFig === 'full' && ndR.r280 != null ? `A₂₆₀/A₂₈₀ ${fmt(ndR.r280, 2)}` : ''].filter(Boolean).join(', ') : '', ndH = ndTxt ? fs*1.15 : 0;
-  const calNote = opt.secStds && secRun && !(sfit && sfit.mw) && ov && ov.nest && idp !== 'zi-';
+  const calNote = opt.secStds && secRun && !(sfit && sfit.mw) && ov && ov.nest && !isInset;
   /* run conditions under the axis title, wrapped to the panel */
   /* full conditions sit left, from about the axis, with continued lines indented; short ones are centered; neither runs past the panel */
   const cf = fs*0.75, cFull = o.runCond === 'full', cRoom = Math.max(10, Math.floor((W - (cFull ? fs*5.2 : fs*1.2))/(cf*0.52)));
   const condL = runCondLines(run, o.runCond).flatMap(t => wrapWords(t, cRoom).map((x, j) => ({t: x, cont: j > 0}))).slice(0, ov.nest ? 16 : 8);
   /* in a workflow every panel reserves the same room, so the chromatograms keep one height */
-  const nCond = ov.nest && idp !== 'zi-' && COND_N ? Math.max(condL.length, COND_N) : condL.length, condH = nCond ? nCond*cf*1.2 + fs*0.5 : 0;
-  const mB = tOut + 3 + fs + 4 + fs*1.25 + (calNote ? fs*0.95 : 0) + condH, mT = fs*0.7 + titleH + stdH + ndH, plotH0 = H - mB - mT;
+  const nCond = ov.nest && !isInset && COND_N ? Math.max(condL.length, COND_N) : condL.length, condH = nCond ? nCond*cf*1.2 + fs*0.5 : 0;
+  const xlab = runXLabel(run);
+  const mB = tOut + (xlab ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*0.95) + (calNote ? fs*0.95 : 0) + condH, mT = ov.fixT != null ? ov.fixT : Math.max(compactIn ? 5.2 : 0, fs*0.7) + titleH + stdH + ndH, plotH0 = H - mB - mT;
   /* room above the tallest peak for its label, so the label never sits on the trace */
-  const poolCap = poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
+  const poolCap = compactIn && H < 55 ? '' : poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
   const usable = Math.max(10, plotH0 - band - top);
   let y0 = ylo - yr*band/usable - yr*0.02, y1 = yhi + yr*top/usable;
   y0 = numOr(run.ymin, y0); y1 = numOr(run.ymax, y1); if (!(y1 > y0)) y1 = y0 + 1;
 
   const n = Math.max(3, Math.round(H/72*1.8));
   let yt = ticks(y0, y1, n);
-  const plotH = Math.max(H - mB, mT + 24) - mT;
+  const B = ov.fixB != null ? ov.fixB : compactIn ? Math.max(mT + 8, H - mB) : Math.max(H - mB, mT + 24), T = mT;
+  const plotH = Math.max(8, B - T);
   yt = fitTicks(yt, y0, y1, n, plotH, 0, fs*1.28);
   /* the strip under the trace holds fraction labels, not data, so no y values are printed there */
   if (band && (run.ymin ?? '') === '') { const keep = yt.v.filter(v => v >= ylo - yr*0.05); if (keep.length >= 2) yt.v = keep; }
   let xt = ticks(xlo, xhi, Math.max(3, Math.round(W/72*2)));
-  const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = idp === 'zi-' ? 3 : 0;
-  const mL = padL + tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + 5 + fs*1.2;
-  const mR = hasSec ? tOut + 3 + Math.max(...stl.map(s=>s.length))*cw + 5 + fs*1.2 : fs*0.8;
-  /* keep a usable plot even when fonts or margins are too big for the figure size */
-  const L = mL, R = Math.max(W - mR, mL + 24), T = mT, B = Math.max(H - mB, mT + 24);
+  const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = compactIn ? 3 : 0;
+  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + (o.rylabel ? 5 + fs*1.2 : 2);
+  const mR = hasSec ? tOut + 3 + Math.max(...stl.map(s=>s.length))*cw + 5 + fs*1.2 : compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8;
+  /* keep a usable plot even when fonts or margins are too big for the figure size; compact insets never spill past W */
+  const L = mL, R = ov.fixR != null ? ov.fixR : compactIn ? Math.max(mL + 8, W - mR) : Math.max(W - mR, mL + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(W/72*2)), R - L, cw, fs);
   const px = x => L + (x-xlo)/(xhi-xlo)*(R-L), py = y => B - (y-y0)/(y1-y0)*(B-T);
   const secB = B - band, py2 = v => secB - (v-s0)/(s1-s0)*(secB-T);
-  const s = [S.head];
+  const s = [S.head], extraAvoid = [];
   if (o.bg && !ov.nest) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
   s.push(`<defs><clipPath id="${idp}plot-area"><rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(B-T)}"/></clipPath></defs>`);
   /* pool blocks split only by a tiny waste segment are drawn as one, so the shading has no hairline seams */
@@ -2897,10 +3112,12 @@ function buildRunPlainSVG(run, ov){
   const links = [...laneLinks().values()].filter(l => l.run === run), laneFills = o.laneMark !== 'strip' && laneLinks().size > 0;
   if (ndTxt && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), nf = fs*0.8, w = ndTxt.length*nf*0.5;
     const X = Math.max(L + w/2, Math.min(R - w/2, px((a + b)/2))), Y = T - fs*0.4;
+    extraAvoid.push({x0: X - w/2, x1: X + w/2, y0: Y - nf, y1: Y + nf*0.3});
     s.push(`<text x="${r2(X)}" y="${r2(Y)}" text-anchor="middle" font-size="${r2(nf)}" fill="${poolDark()}">${esc(ndTxt)}</text>`); }
   if (pBlocks.length && o.poolStyle !== 'none') {
     s.push(`<g clip-path="url(#${idp}plot-area)" fill="${esc(o.poolColor)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*(laneFills ? 0.5 : 1))}" stroke="none">`);
     pBlocks.forEach(k => {
+      extraAvoid.push({x0: px(k.a), x1: px(k.b), y0: T, y1: B - band, pool: true});
       if (o.poolStyle === 'area') {
         const i0 = lowerBound(uv.xs, k.a), i1 = Math.min(uv.xs.length-1, lowerBound(uv.xs, k.b)), st = Math.max(1, Math.ceil((i1-i0)/500));
         let d = `M${r2(px(k.a))} ${r2(yBase)}`; for (let i=i0;i<=i1;i+=st) d += `L${r2(px(uv.xs[i]))} ${r2(Math.min(yBase, py(uv.ys[i])))}`;
@@ -2911,8 +3128,9 @@ function buildRunPlainSVG(run, ov){
   }
   let capSvg = '';
   if (poolCap && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), cf = fs*0.8, w = poolCap.length*cf*0.52;
-    const X = Math.max(L + w/2 + 1, Math.min(R - w/2 - 1, px((a + b)/2)));
-    capSvg = `<rect x="${r2(X - w/2 - 2)}" y="${r2(T + 1)}" width="${r2(w + 4)}" height="${r2(cf*1.2)}" fill="#ffffff" fill-opacity="0.85"/><text x="${r2(X)}" y="${r2(T + cf*1.05)}" text-anchor="middle" font-size="${r2(cf)}" fill="${poolDark()}" stroke="#ffffff" stroke-width="${r2(cf*0.4)}" stroke-linejoin="round" paint-order="stroke">${esc(poolCap)}</text>`; }
+    const X = Math.max(L + w/2 + 2.5, Math.min((compactIn ? W : R) - w/2 - 1.5, px((a + b)/2))), capY = compactIn ? Math.max(T + 4.5, T + 1) : T + 1;
+    extraAvoid.push({x0: X - w/2 - 2, x1: X + w/2 + 2, y0: capY, y1: capY + cf*1.25});
+    capSvg = `<rect x="${r2(X - w/2 - 2)}" y="${r2(capY)}" width="${r2(w + 4)}" height="${r2(cf*1.2)}" fill="#ffffff" fill-opacity="0.85"/><text x="${r2(X)}" y="${r2(capY + cf*0.95)}" text-anchor="middle" font-size="${r2(cf)}" fill="${poolDark()}" stroke="#ffffff" stroke-width="${r2(cf*0.4)}" stroke-linejoin="round" paint-order="stroke">${esc(poolCap)}</text>`; }
   /* one floor for every lane fill in the panel: zero, or the lowest point of the trace across the linked fractions */
   let yLinkFloor = yBase; if (links.length) { const sp = links.filter(l => l.t.b > xlo && l.t.a < xhi), a0 = Math.min(...sp.map(l => l.t.a)), b0 = Math.max(...sp.map(l => l.t.b)); let lm = 0;
     for (let j = Math.max(0, lowerBound(uv.xs, a0)); j < uv.xs.length && uv.xs[j] <= b0; j++) lm = Math.min(lm, uv.ys[j]);
@@ -2963,22 +3181,26 @@ function buildRunPlainSVG(run, ov){
     s.push('</g>');
   }
   if (o.phases) {
-    s.push(`<g font-size="${r2(Math.max(6, pf*0.9))}" fill="${RUN_COLORS.phase}">`);
-    run.phases.forEach(ph => { if (ph.x <= xlo || ph.x >= xhi) return; const X = r2(px(ph.x));
+    const phf = Math.max(6, pf*0.9);
+    s.push(`<g font-size="${r2(phf)}" fill="${RUN_COLORS.phase}">`);
+    run.phases.forEach(ph => { if (ph.x <= xlo || ph.x >= xhi) return; const xp = px(ph.x), X = r2(xp);
+      extraAvoid.push({x0: xp - phf*0.3, x1: xp + phf*1.3, y0: T, y1: Math.min(B - band, T + String(ph.label || '').length*phf*0.58 + 4)});
       s.push(`<line x1="${X}" y1="${r2(T)}" x2="${X}" y2="${r2(B - band)}" stroke="${RUN_COLORS.phase}" stroke-width="${r2(aw*0.8)}" stroke-dasharray="1.5 2"/>`);
-      s.push(`<text transform="translate(${r2(px(ph.x) + 2)} ${r2(T + 2)}) rotate(90)">${esc(ph.label)}</text>`); });
+      s.push(`<text transform="translate(${r2(xp + 2)} ${r2(T + 2)}) rotate(90)">${esc(ph.label)}</text>`); });
     s.push('</g>');
   }
-  if (showVoid) { s.push(`<g font-size="${r2(pf*0.95)}" fill="#666666">`);
-    [[sfit.v0, 'V₀'], [sfit.vt, 'Vₜ']].forEach(([x, t]) => { if (!(x > xlo && x < xhi)) return; const X = r2(px(x));
+  if (showVoid) { const vf = pf*0.95; s.push(`<g font-size="${r2(vf)}" fill="#666666">`);
+    [[sfit.v0, 'V₀'], [sfit.vt, 'Vₜ']].forEach(([x, t]) => { if (!(x > xlo && x < xhi)) return; const xp = px(x), X = r2(xp), vw = t.length*vf*0.68 + 2;
+      extraAvoid.push({x0: xp - vw - 2, x1: xp + 2, y0: T, y1: T + vf*1.3});
       s.push(`<line x1="${X}" y1="${r2(T)}" x2="${X}" y2="${r2(B - band)}" stroke="#888888" stroke-width="${r2(aw*0.8)}" stroke-dasharray="3 2"/>`);
-      s.push(`<text x="${r2(px(x) - 2)}" y="${r2(T + pf*0.95)}" text-anchor="end">${t}</text>`); });
+      s.push(`<text x="${r2(xp - 2)}" y="${r2(T + vf)}" text-anchor="end">${t}</text>`); });
     s.push('</g>'); }
-  if (showStd) { s.push(`<g font-size="${r2(Math.max(6, pf*0.9))}" fill="#555555" text-anchor="middle">`); let lastX = -Infinity, lift = 0;
-    sfit.pts.slice().sort((p, q) => p.ve - q.ve).forEach(q => { if (!(q.ve > xlo && q.ve < xhi)) return; const X = px(q.ve), tri = pf*0.55;
+  if (showStd) { const sf = Math.max(6, pf*0.9); s.push(`<g font-size="${r2(sf)}" fill="#555555" text-anchor="middle">`); let lastX = -Infinity, lift = 0;
+    sfit.pts.slice().sort((p, q) => p.ve - q.ve).forEach(q => { if (!(q.ve > xlo && q.ve < xhi)) return; const X = px(q.ve), tri = pf*0.55, kt = kdaText(q.kda), kw = kt.length*sf*0.56;
       lift = X - lastX < pf*2.6 && lift === 0 ? pf*0.95 : 0; lastX = X;
+      extraAvoid.push({x0: X - kw/2, x1: X + kw/2, y0: T - tri - lift - sf, y1: T});
       s.push(`<path d="M${r2(X - tri*0.6)} ${r2(T - tri - 1)}L${r2(X + tri*0.6)} ${r2(T - tri - 1)}L${r2(X)} ${r2(T - 1)}Z" fill="#555555"/>`);
-      s.push(`<text x="${r2(X)}" y="${r2(T - tri - 2.5 - lift)}">${kdaText(q.kda)}</text>`); });
+      s.push(`<text x="${r2(X)}" y="${r2(T - tri - 2.5 - lift)}">${kt}</text>`); });
     s.push('</g>'); }
   const nb = Math.max(200, Math.round((R-L)*4));
   s.push(`<g clip-path="url(#${idp}plot-area)" fill="none" stroke-linejoin="round" stroke-linecap="round">`);
@@ -2996,8 +3218,8 @@ function buildRunPlainSVG(run, ov){
   s.push(`<g fill="#000000">`);
   const xly = B + tOut + 3 + fs*0.78;
   const halo = ov && ov.nest ? ` stroke="#ffffff" stroke-width="${r2(fs*0.32)}" paint-order="stroke" stroke-linejoin="round"` : '';
-  xt.v.forEach(v => s.push(`<text x="${r2(px(v))}" y="${r2(xly)}" text-anchor="middle"${halo}>${tkf(v, xt.dec)}</text>`));
-  const xlab = runXLabel(run); if (xlab) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle"${halo}>${esc(xlab)}</text>`);
+  { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle"${halo}>${t}</text>`); }); }
+  if (xlab) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle"${halo}>${esc(xlab)}</text>`);
   yt.v.forEach((v,i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
   if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+B)/2)}) rotate(-90)" text-anchor="middle" fill="${hasSec ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
   if (hasSec) {
@@ -3024,7 +3246,7 @@ function buildRunPlainSVG(run, ov){
     nonW.forEach(sg => [sg.a, sg.b].forEach(x => { if (x < xlo || x > xhi) return; const k = x.toFixed(4); if (seen.has(k)) return; seen.add(k);
       const X = r2(px(x)); s.push(`<line x1="${X}" y1="${r2(B)}" x2="${X}" y2="${r2(B - fTick)}"/>`); }));
     s.push('</g>');
-    if (o.fracFmt !== 'none') {
+    if (effFracFmt !== 'none') {
       /* a thin white halo keeps fraction names readable where they sit on a colored fill */
       s.push(`<g font-size="${r2(pf)}" fill="${RUN_COLORS.frac}" stroke="#ffffff" stroke-width="${r2(pf*0.28)}" stroke-linejoin="round" paint-order="stroke">`);
       /* thinning keeps the fractions that matter (linked to a gel lane, or a pool's first and last) and spaces the rest around them;
@@ -3065,8 +3287,10 @@ function buildRunPlainSVG(run, ov){
       const opts = [[X, 'middle', -w/2, w/2], [X - fs*0.3, 'start', -fs*0.3, w - fs*0.3], [X + fs*0.3, 'end', -w + fs*0.3, fs*0.3]].map(([x, an, a, b]) => ({x, an, a, b, lift: Math.max(base, hiIn(rw.apex + a*k, rw.apex + b*k))}));
       const pick = Object.assign({}, rw.sec && rw.sec.void ? opts[1] : opts[0].lift <= base*1.04 ? opts[0] : opts.reduce((m, q) => q.lift < m.lift - 1e-9 ? q : m, opts[0]));
       /* keep the text inside the plot so it never runs into the axis or its title */
-      let tt = t, ww = w; const xOrig = pick.x, ext = () => pick.an === 'middle' ? [-ww/2, ww/2] : pick.an === 'start' ? [0, ww] : [-ww, 0];
-      const clampX = () => { const e = ext(), x0 = pick.x; if (pick.x + e[0] < L + 1) pick.x = L + 1 - e[0]; else if (pick.x + e[1] > R - 1) pick.x = R - 1 - e[1]; return Math.abs(pick.x - x0); };
+      let tt = t, ww = w; const maxRight = compactIn ? Math.min(R - 1, W - 2) : R - 1;
+      if (compactIn && ww > maxRight - (L + 1)) { tt = tt.replace(/\s+(mL|min|CV)$/, ''); ww = tt.length*fs*0.45; }
+      const xOrig = pick.x, ext = () => pick.an === 'middle' ? [-ww/2, ww/2] : pick.an === 'start' ? [0, ww] : [-ww, 0];
+      const clampX = () => { const e = ext(), x0 = pick.x, minL = compactIn ? Math.min(L + 1, Math.max(2, maxRight - ww)) : L + 1; if (pick.x + e[0] < minL) pick.x = minL - e[0]; if (pick.x + e[1] > maxRight) pick.x = maxRight - e[1]; return Math.abs(pick.x - x0); };
       /* a label pushed off its peak by the plot edge drops its note in brackets ("void (aggregate)" becomes "void") */
       if (clampX() > ww*0.2 && /\s\(.*\)$/.test(tt)) { tt = tt.replace(/\s*\(.*\)$/, ''); ww = tt.length*fs*0.45; pick.x = xOrig; clampX(); }
       const e2 = ext(), lift = Math.max(base, hiIn(xlo + (pick.x + e2[0] - L)*k, xlo + (pick.x + e2[1] - L)*k));
@@ -3076,10 +3300,10 @@ function buildRunPlainSVG(run, ov){
       if (!freeT(Y)) { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y - g2*fs*0.45; if (yn < T + fs*0.7) break; if (freeT(yn)) { Y = yn; break; } } }
       if (!freeT(Y)) { const pad = (!o.ticksOut ? tl : 0) + 1.5, e = ext(), cx = pick.x + (e[0] + e[1])/2;
         const edge = tickBoxes.find(b => hitBox(pBox(Y), b) && (b.x2 <= L + tl + 2 || b.x1 >= R - tl - 2));
-        if (edge) { if (edge.x2 <= L + tl + 2) pick.x = Math.max(pick.x, L + pad - e[0]); else pick.x = Math.min(pick.x, R - pad - e[1]); }
+        if (edge) { if (edge.x2 <= L + tl + 2) pick.x = Math.max(pick.x, L + pad - e[0]); else pick.x = Math.min(pick.x, maxRight - pad - e[1]); }
         if (!freeT(Y)) { const cands = [];
           tickBoxes.filter(b => hitBox(pBox(Y), b)).forEach(hb => { const xR = hb.x2 + 1.5 - e[0], xL = hb.x1 - 1.5 - e[1];
-            (cx >= (hb.x1 + hb.x2)/2 ? [xR, xL] : [xL, xR]).forEach(xc => { if (xc + e[0] < L + 1 || xc + e[1] > R - 1) return;
+            (cx >= (hb.x1 + hb.x2)/2 ? [xR, xL] : [xL, xR]).forEach(xc => { if (xc + e[0] < L + 1 || xc + e[1] > maxRight) return;
               const lift2 = Math.max(base, hiIn(xlo + (xc + e[0] - L)*k, xlo + (xc + e[1] - L)*k)), Y2 = Math.max(T + fs*0.8, Math.min(Y, py(lift2) - 3));
               if (freeT(Y2, xc)) cands.push({x: xc, y: Y2, d: Math.abs(xc - pick.x)}); }); });
           if (cands.length) { cands.sort((a, b) => a.d - b.d); pick.x = cands[0].x; Y = cands[0].y; }
@@ -3093,7 +3317,7 @@ function buildRunPlainSVG(run, ov){
   }
   s.push('</svg>');
   const fracC = nonW.map(sg => ({label: sg.label, x: px((Math.max(sg.a, xlo) + Math.min(sg.b, xhi))/2)}));
-  return {svg: s.join(''), geo: {L,R,T,B,xlo,xhi,y0,y1,P:[],uv,px,py,W,H,run:true, fracC, nFr: nonW.length, frA: nonW[0] && nonW[0].label, frB: nonW.length && nonW[nonW.length-1].label}};
+  return {svg: s.join(''), geo: {L,R,T,B,xlo,xhi,y0,y1,P:[],uv,px,py,W,H,run:true,band,extraAvoid,secCurve: hasSec ? {xs: sec.xs, ys: sec.ys, py2} : null, fracC, nFr: nonW.length, frA: nonW[0] && nonW[0].label, frB: nonW.length && nonW[nonW.length-1].label}};
 }
 
 /* SEC calibration figure: standards and the fitted line on log(MW) against Kav (or Ve), with sample peaks sized on it */
@@ -4103,7 +4327,7 @@ function composeRuns(list, cfg){
   const yTitle = Math.max(String(opt.rylabel || '').length, String(opt.y2grad || '').length, 12)*fs*0.56 + fs;
   const sideK = r => opt.gelPos === 'right' && cfg.showGels && gelsFor(r).length ? Math.min(0.9, Math.max(0.3, numOr(opt.gelSide, 60)/100)) : 1;
   list.forEach((r, i) => { const k = sideK(r), c = buildRunSVG(r, {wPt: pw[i]*k, hPt: chromH, idp: 'dry-', nest: true}); if (!c.geo) { ovL[i] = fs*4; ovR[i] = fs; return; } ovL[i] = c.geo.L; ovR[i] = pw[i]*k - c.geo.R;
-    { const need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + fs*9.5)/k; if (pw[i] < need) { pw[i] = need; widened = 1; } }
+    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5, need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (pw[i] < need) { pw[i] = need; widened = 1; } }
     const needH = chromH - (c.geo.B - c.geo.T) + Math.max(fs*9, yTitle); if (chromH < needH) { chromH = needH; taller = 1; } });
   if (widened) Wt = row ? pw.reduce((a, b) => a + b, 0) + (n-1)*gap : grid ? 2*Math.max(...pw) + gap : Math.max(...pw);
   if (widened && !row) pw.fill(grid ? (Wt - gap)/2 : Wt);
@@ -4213,7 +4437,7 @@ function composeRuns(list, cfg){
   const railBase = fs*1.3, topPad = row && skips.length ? railBase + skips.length*fs : 0, leftPad = !row && skips.length ? fs*0.8 + skips.length*fs*0.6 : 0;
   if (topPad) { pos.forEach(q => { q.y += topPad; }); Ht += topPad; }
   if (leftPad) { pos.forEach(q => { q.x += leftPad; }); Wt += leftPad; }
-  const defs = new Map(), body = [], links = [], gelBoxes = [];
+  const defs = new Map(), body = [], links = [], gelBoxes = [], zoomInsets = [];
   panels.forEach((p, i) => {
     const {x, y} = pos[i];
     if (cfg.titles) {
@@ -4223,12 +4447,13 @@ function composeRuns(list, cfg){
       if (tl[1]) body.push(`<text x="${r2(x + ind)}" y="${r2(y + fs*2.25)}" fill="#000000">${esc(tl[1])}</text>`);
     }
     if (p.chart.svg) body.push(`<g data-wfp="${esc(p.r.id)}" transform="translate(${r2(x)} ${r2(y + titleH)})">${p.chart.svg}</g>`);
+    if (p.chart.geo && p.chart.geo.zoomInset) zoomInsets.push(Object.assign({}, p.chart.geo.zoomInset, {ox: x, oy: y + titleH, panelId: p.r.id}));
     if (p.slot) { const q = p.slot; body.push(`<rect x="${r2(x + q.x)}" y="${r2(y + q.y)}" width="${r2(q.w)}" height="${r2(q.h)}" fill="none" stroke="#999999" stroke-width="0.6" stroke-dasharray="2 2"/><text x="${r2(x + q.x + q.w/2)}" y="${r2(y + q.y + q.h/2 + fs*0.3)}" text-anchor="middle" font-size="${r2(fs*0.8)}" fill="#777777">no gel for this step</text><text x="${r2(x + q.x + q.w/2)}" y="${r2(y + q.y + q.h/2 + fs*1.2)}" text-anchor="middle" font-size="${r2(fs*0.65)}" fill="#999999">(not in exports)</text>`); }
     p.gi.forEach((gg, k) => {
       const gy = y + gg.gy, part = gelPart(gg.g, x + gg.gx, gy, gg.gw, gH, gg.idx, false, gg.view); defs.set(part.id, part.defs);
       gelBoxes.push({run: p.r, gid: gg.g.id, x: part.ix, y: part.top, w: part.iw, h: part.h});
       if (k === 0 && cfg.connectors && p.chart.geo && !p.sideHere && !p.r.prep) {
-        const cg = p.chart.geo, oy = y + titleH, yAxis = oy + cg.B, yTk = yAxis + fs*0.45, yLow = oy + chromH + 1, y2c = gy - 1, fromAxis = opt.linkFrom !== 'below';
+        const cg = p.chart.geo, oy = y + titleH + (cg.oyMain || 0), yAxis = oy + cg.B, yTk = yAxis + fs*0.45, yLow = y + titleH + chromH + 1, y2c = gy - 1, fromAxis = opt.linkFrom !== 'below';
         const pd = poolDark(), gray = '#7d7d7d', yBr = yLow + fs*0.45, LLc = laneLinks();
         if (y2c > yBr + 2) gg.idx.filter(li => laneAssign(gg.g, li) === p.r.id).forEach(li => {
           const t = laneTarget(p.r, part.labels[li], cg); if (!t) return;
@@ -4305,13 +4530,13 @@ function composeRuns(list, cfg){
       } });
     body.push('</g>');
   }
-  if (cfg.raw) return {body: links.join('') + body.join(''), defs, geo: {W: Wt, H: Ht, W0, H0, comp: true, gelBoxes, widened: widened ? cfg.W : 0, taller: taller ? cfg.chromH : 0, pos: pos.map((q, i) => ({x: q.x, y: q.y, w: pw[i], h: panels[i].h, id: list[i].id, th: titleH}))}};
+  if (cfg.raw) return {body: links.join('') + body.join(''), defs, geo: {W: Wt, H: Ht, W0, H0, comp: true, gelBoxes, zoomInsets, widened: widened ? cfg.W : 0, taller: taller ? cfg.chromH : 0, pos: pos.map((q, i) => ({x: q.x, y: q.y, w: pw[i], h: panels[i].h, id: list[i].id, th: titleH}))}};
   const s = [svgHead(Wt, Ht)];
   if (defs.size) s.push(`<defs>${[...defs.values()].join('')}</defs>`);
   if (opt.bg) s.push(`<rect width="${r2(Wt)}" height="${r2(Ht)}" fill="#ffffff"/>`);
   s.push(links.join(''), body.join(''), '</svg>');
-  const chart = cfg.single && panels[0].chart.geo ? {g: panels[0].chart.geo, ox: pos[0].x, oy: pos[0].y + titleH, run: list[0]} : null;
-  return {svg: s.join(''), geo: {W: Wt, H: Ht, W0, H0, comp: true, chart, gelBoxes, widened: widened ? cfg.W : 0, taller: taller ? cfg.chromH : 0, pos: pos.map((q, i) => ({x: q.x, y: q.y, w: pw[i], h: panels[i].h, id: list[i].id, th: titleH}))}};
+  const chart = cfg.single && panels[0].chart.geo ? {g: panels[0].chart.geo, ox: pos[0].x, oy: pos[0].y + titleH + (panels[0].chart.geo.oyMain || 0), run: list[0]} : null;
+  return {svg: s.join(''), geo: {W: Wt, H: Ht, W0, H0, comp: true, chart, gelBoxes, zoomInsets, zoomInset: cfg.single && zoomInsets[0] ? zoomInsets[0] : null, widened: widened ? cfg.W : 0, taller: taller ? cfg.chromH : 0, pos: pos.map((q, i) => ({x: q.x, y: q.y, w: pw[i], h: panels[i].h, id: list[i].id, th: titleH}))}};
 }
 function buildRunFig(run){
   if (!opt.runGel || !gelsFor(run).length) return buildRunSVG(run);
@@ -4386,7 +4611,7 @@ function buildWorkflow(){
     const note = String(pre[pre.length - 1].note || '').trim();
     out.push(`<g fill="#000000" stroke="#000000"><path d="M${r2(xa)} ${r2(y1)}V${r2(ym)}H${r2(xb)}V${r2(y2 - 5)}" fill="none" stroke-width="1"/><path d="M${r2(xb)} ${r2(y2)}L${r2(xb - 2.6)} ${r2(y2 - 5)}L${r2(xb + 2.6)} ${r2(y2 - 5)}Z" stroke="none"/>${note ? `<text x="${r2(xb + fs*0.6)}" y="${r2(ym - 3)}" text-anchor="start" stroke="none" fill="#444444" font-size="${r2(fs*0.8)}">${esc(note)}</text>` : ''}</g>`); }
   out.push('</svg>');
-  const geo = {W, H, comp: true, chart: null, gelBoxes: top.geo.gelBoxes.concat(bot.geo.gelBoxes.map(b => Object.assign({}, b, {y: b.y + oy}))), widened: bot.geo.widened || top.geo.widened, taller: bot.geo.taller, fitted: bot.geo.fitted, band: true, pos: top.geo.pos.concat(bot.geo.pos.map(q => Object.assign({}, q, {y: q.y + oy})))};
+  const geo = {W, H, comp: true, chart: null, gelBoxes: top.geo.gelBoxes.concat(bot.geo.gelBoxes.map(b => Object.assign({}, b, {y: b.y + oy}))), zoomInsets: (top.geo.zoomInsets || []).concat((bot.geo.zoomInsets || []).map(z => Object.assign({}, z, {oy: (z.oy || 0) + oy}))), widened: bot.geo.widened || top.geo.widened, taller: bot.geo.taller, fitted: bot.geo.fitted, band: true, pos: top.geo.pos.concat(bot.geo.pos.map(q => Object.assign({}, q, {y: q.y + oy})))};
   return yieldLine({svg: out.join(''), geo});
 }
 
@@ -5578,7 +5803,7 @@ function onOpt(e){
     else { opt.showY = true; opt.scalebar = false; if (opt.legend === 'direct') opt.legend = 'inside'; }
     syncControls();
   }
-  if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); const cr = curRun(); if (cr) insetClear(cr); }
+  if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); runs.forEach(insetClear); }
   if (k === 'peakDec') renderList();
   if (k === 'runCond') syncControls();
   render();
@@ -5601,7 +5826,7 @@ $('#panel').addEventListener('change', e => { if (e.target.type === 'radio') onO
 $('#o-dpi').addEventListener('change', onOpt);
 $('#resetRange').addEventListener('click', () => { const ro = rangeObj(); RANGE.forEach(k => ro[k] = ''); ro.zoomWinA = ''; ro.zoomWinB = ''; syncControls(); render(); });
 $('#zoomPeak').addEventListener('click', () => { const ro = rangeObj(); const rs = curRun() ? [curRun()] : traces; for (const r of rs) { let pk = null; if (r.integ && r.integ.length) { const q = r.integ[r.integ.length-1]; pk = {a: q.a, b: q.b}; } else if (r.peaks && r.peaks.length) { const p = r.peaks.find(x => x.label) || r.peaks.slice().sort((p1,p2)=>p2.prom-p1.prom)[0]; if (p) { const pr = processTrace(r); const idx = peakApex(pr.xs, pr.ys, p.x); let l = idx, r_idx = idx; while(l > 0 && pr.ys[l] > pr.ys[idx]*0.1) l--; while(r_idx < pr.ys.length-1 && pr.ys[r_idx] > pr.ys[idx]*0.1) r_idx++; pk = {a: pr.xs[l], b: pr.xs[r_idx]}; } } if (pk && pk.a != null && pk.b != null) { const w = pk.b - pk.a; ro.xmin = pk.a - w*0.1; ro.xmax = pk.b + w*0.1; syncControls(); render(); return; } } });
-$('#zoomInsetHide').addEventListener('click', () => { const z = insetSource(), l = insetLayout(z, true); if (G && G.zoomInset && G.zoomInset.zObj === z) l.lastVisible = {x:G.zoomInset.x, y:G.zoomInset.y, w:G.zoomInset.w, h:G.zoomInset.h}; else if (l.x != null) l.lastVisible = {x:l.x, y:l.y, w:l.w, h:l.h}; l.visible = false; saveOpt(); render(); });
+$('#zoomInsetHide').addEventListener('click', () => { const z = insetSource(), l = insetLayout(z, true), zi = allInsets().find(q => q.zObj === z); if (zi) l.lastVisible = {x:zi.x, y:zi.y, w:zi.w, h:zi.h}; else if (l.x != null) l.lastVisible = {x:l.x, y:l.y, w:l.w, h:l.h}; l.visible = false; saveOpt(); render(); });
 $('#zoomInsetRestore').addEventListener('click', () => { const z = insetSource(), l = insetLayout(z, true); if (l.lastVisible) Object.assign(l, l.lastVisible); l.visible = true; saveOpt(); render(); });
 $('#zoomInsetReset').addEventListener('click', () => { const z = insetSource(); insetClear(z); saveOpt(); render(); });
 $('#detectAll').addEventListener('click', () => { traces.forEach(detectPeaks); renderList(); render(); });
@@ -5731,14 +5956,18 @@ $('#g-clear').addEventListener('click', () => { const g = curGel(); if (!g) retu
 
 /* figure clicks: peak labels, ladder marking, hover readout */
 function svgPoint(e){ const svg = paper.querySelector('svg'); if (!svg || !G) return null; const m = svg.getScreenCTM(); if (!m) return null; return new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()); }
-function chartAt(){ if (!G || G.cal) return null; if (G.run && G.L !== undefined) return {g: G, ox: 0, oy: 0, run: curRun()}; if (G.chart) return G.chart; if (G.L !== undefined) return {g: G, ox: 0, oy: 0, run: null}; return null; }
+function chartAt(){ if (!G || G.cal) return null; if (G.run && G.L !== undefined) return {g: G, ox: 0, oy: G.oyMain || 0, run: curRun()}; if (G.chart) return G.chart; if (G.L !== undefined) return {g: G, ox: 0, oy: G.oyMain || 0, run: null}; return null; }
 const invx = X => G.xlo + (X - G.L)/(G.R - G.L)*(G.xhi - G.xlo);
+function allInsets(){ return !G ? [] : G.zoomInsets && G.zoomInsets.length ? G.zoomInsets : G.zoomInset ? [Object.assign({ox: 0, oy: 0}, G.zoomInset)] : []; }
 paper.addEventListener('mousemove', e => {
-  const ro = $('#readout');
-  if (G && G.zoomInset) {
-    const p = svgPoint(e), act = insetHit(p, G.zoomInset);
-    if (act && act !== 'move') { ro.textContent = 'drag to resize inset (Shift to unlock aspect ratio)'; return; }
-    if (act === 'move') { ro.textContent = 'drag inset to position'; return; }
+  const ro = $('#readout'), zs = allInsets();
+  if (zs.length) {
+    const p = svgPoint(e);
+    for (let i = 0; p && i < zs.length; i++) {
+      const zi = zs[i], act = insetHit({x: p.x - (zi.ox || 0), y: p.y - (zi.oy || 0)}, zi);
+      if (act && act !== 'move') { ro.textContent = 'drag to resize inset (Shift to unlock aspect ratio)'; return; }
+      if (act === 'move') { ro.textContent = 'drag inset to position'; return; }
+    }
   }
   const c = chartAt(); if (!c) { ro.textContent = ''; return; }
   const p = svgPoint(e); if (!p) return; const g = c.g, lx = p.x - c.ox, ly = p.y - c.oy;
@@ -5805,15 +6034,16 @@ function insetHit(p, zi){
   return null;
 }
 paper.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || !G || !G.zoomInset) return;
-  const p0 = svgPoint(e); if (!p0) return;
-  const zi = G.zoomInset;
-  const targetHandle = e.target && e.target.dataset && e.target.dataset.handle;
-  const action = targetHandle;
+  if (e.button !== 0 || !G) return;
+  const action = e.target && e.target.dataset && e.target.dataset.handle;
   if (!action) return;
+  const p0 = svgPoint(e), zs = allInsets(); if (!p0 || !zs.length) return;
+  const wfp = e.target.closest && e.target.closest('[data-wfp]');
+  const zi = (wfp && zs.find(q => q.panelId === wfp.dataset.wfp)) || zs.find(q => insetHit({x: p0.x - (q.ox || 0), y: p0.y - (q.oy || 0)}, q)) || zs[0];
+  if (!zi) return;
   e.preventDefault(); e.stopImmediatePropagation();
   if (paper.setPointerCapture) paper.setPointerCapture(e.pointerId);
-  const insetEl = e.target.closest && e.target.closest('#zoomInsetContainer'), insetRect = insetEl && insetEl.getBoundingClientRect();
+  const insetEl = e.target.closest && e.target.closest('.zoom-inset'), insetRect = insetEl && insetEl.getBoundingClientRect();
   insetDrag = {
     action, p0, x0: zi.x, y0: zi.y, w0: zi.w, h0: zi.h,
     aspect: insetRect && insetRect.width > 0 && insetRect.height > 0 ? insetRect.width/insetRect.height : zi.w/zi.h, figW: zi.figW, figH: zi.figH, zObj: zi.zObj, pointerId: e.pointerId
@@ -5821,7 +6051,7 @@ paper.addEventListener('pointerdown', e => {
 }, true);
 window.addEventListener('pointermove', e => {
   if (!insetDrag) {
-    if (G && G.zoomInset && e.target && e.target.dataset) {
+    if (allInsets().length && e.target && e.target.dataset) {
       const act = e.target.dataset.handle;
       if (act === 'se' || act === 'nw') paper.style.cursor = 'nwse-resize';
       else if (act === 'sw' || act === 'ne') paper.style.cursor = 'nesw-resize';
@@ -5908,6 +6138,7 @@ window.addEventListener('pointermove', e => {
   if (insetDrag && e.pointerId === insetDrag.pointerId) {
     if (paper.hasPointerCapture && paper.hasPointerCapture(insetDrag.pointerId)) paper.releasePointerCapture(insetDrag.pointerId);
     insetDrag = null;
+    gelMovedAt = Date.now();
     paper.style.cursor = '';
     render();
     saveOpt();
@@ -5930,13 +6161,16 @@ window.addEventListener('pointermove', e => {
 let wfDrag = null, wfRaf = 0;
 function wfDragCursor(e){
   if (wfDrag) { paper.style.cursor = wfDrag.on ? 'grabbing' : 'grab'; return; }
+  if (e && e.target && e.target.closest && e.target.closest('.zoom-inset')) return;
   const f = curFig(), p = svgPoint(e), q = p && G && G.pos && wfSel && G.pos.find(x => x.id === wfSel);
   if (!PROJ || !f || f.kind !== 'workflow' || !q || !p) { paper.style.cursor = ''; return; }
   if (gelBoxAt(p)) return;
   paper.style.cursor = p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h ? 'grab' : '';
 }
 paper.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || !wfSel || !PROJ || !G || !G.pos) return; const f = curFig(), svg = paper.querySelector('svg'); if (!f || f.kind !== 'workflow' || !svg) return;
+  if (e.button !== 0 || !wfSel || !PROJ || !G || !G.pos) return;
+  if (e.target && e.target.closest && e.target.closest('.zoom-inset')) return;
+  const f = curFig(), svg = paper.querySelector('svg'); if (!f || f.kind !== 'workflow' || !svg) return;
   const p = svgPoint(e), q = p && G.pos.find(x => x.id === wfSel), it = q && wfItem(wfSel), m = svg.getScreenCTM(); if (!it || !m || !(p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h)) return;
   wfDrag = {it, cx: e.clientX, cy: e.clientY, k: 1/m.a, ox: it.ox, oy: it.oy, minX: it.ox - q.x, minY: it.oy - q.y, on: false};
   wfDragCursor(e);
@@ -5950,7 +6184,7 @@ window.addEventListener('pointermove', e => {
 ['pointerup', 'pointercancel'].forEach(ev => window.addEventListener(ev, e => { if (wfDrag && wfDrag.on) gelMovedAt = Date.now(); wfDrag = null; wfDragCursor(e); }));
 $('#gelOffReset').addEventListener('click', () => { runs.forEach(r => { r.gelOff = {}; }); prep.offs = {}; render(); });
 paper.addEventListener('pointerdown', e => {
-  if (e.target.closest && e.target.closest('#zoomInsetContainer')) return;
+  if (e.target.closest && e.target.closest('.zoom-inset')) return;
   const c = chartAt(); if (!c || (!c.run && !opt.zoomMode && !e.shiftKey) || e.button !== 0) return;
   const p = svgPoint(e); if (!p) return; const lx = p.x - c.ox, ly = p.y - c.oy, g = c.g;
   if (lx < g.L || lx > g.R || ly < g.T || ly > g.B) return;
@@ -6184,10 +6418,10 @@ paper.addEventListener('click', e => {
     if (marking.idx >= vals.length) { marking = null; toast('Ladder marked. The kDa labels now appear with every run that uses this gel.'); }
     render(); return;
   }
-  if (G.run || G.comp || G.L === undefined) return;
-  const p = svgPoint(e); if (!p || p.x < G.L - 4 || p.x > G.R + 4) return;
+  if (G.run || G.comp || G.L === undefined || (e.target.closest && e.target.closest('.zoom-inset'))) return;
+  const p = svgPoint(e), oyM = G.oyMain || 0; if (!p || p.x < G.L - 4 || p.x > G.R + 4) return;
   const dx = invx(p.x); let best = null;
-  G.P.forEach(q => { const i = nearestIdx(q.xs, dx); const d = Math.abs(G.py(q.yp[i]) - p.y); if (!best || d < best.d) best = {q, d}; });
+  G.P.forEach(q => { const i = nearestIdx(q.xs, dx); const d = Math.abs(G.py(q.yp[i]) + oyM - p.y); if (!best || d < best.d) best = {q, d}; });
   if (!best || best.d > 24) { toast('Click closer to a trace to label a peak'); return; }
   const {q} = best, span = 8*(G.xhi - G.xlo)/(G.R - G.L);
   let a = lowerBound(q.xs, dx - span), bI = lowerBound(q.xs, dx + span), m = a;
