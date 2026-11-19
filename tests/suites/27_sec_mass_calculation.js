@@ -1,4 +1,5 @@
-const {open, H, suite, path, DATA} = require('../lib/harness');
+const {open, H, suite, path, DATA, fs} = require('../lib/harness');
+const {pooledNdRun, pooledNdReading} = require('../data/gen_pooled_nd');
 const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : null; };
 
 (async () => {
@@ -64,17 +65,10 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     p2.on('dialog', d => d.accept());
     try {
       await h2.newProject('Pooled NanoDrop peak scope');
-      const lines = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'ml,mAU,ml,Fraction'];
-      for (let i = 0; i <= 400; i++) {
-        const x = i * 0.05;
-        const y = 100 * Math.exp(-0.5 * Math.pow((x - 4) / 0.5, 2)) + 200 * Math.exp(-0.5 * Math.pow((x - 14) / 0.5, 2));
-        const fx = i <= 20 ? i.toFixed(3) : '';
-        const fl = i < 20 ? `"F${i + 1}"` : i === 20 ? '"Waste"' : '';
-        lines.push(`${x.toFixed(3)},${y.toFixed(4)},${fx},${fl}`);
-      }
       await p2.click('#tl [data-addmenu]');
       await p2.click('#tl [data-addstep=run]');
-      await p2.setInputFiles('#file', {name: 'imac_two_peak_synth.csv', mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n'))});
+      p2.setDefaultTimeout(15000);
+      await p2.setInputFiles('#file', {name: 'imac_two_peak_synth.csv', mimeType: 'text/csv', buffer: Buffer.from(pooledNdRun())});
       await h2.wait(1500);
 
       const openFolds = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
@@ -104,6 +98,10 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
       await p2.locator('#btw-vOut').dispatchEvent('change');
       await h2.wait(500);
 
+      await p2.setInputFiles('#btwNdFile', {name: 'pooled_nd.csv', mimeType: 'text/csv', buffer: Buffer.from(pooledNdReading())});
+      await h2.wait(500);
+      T.check('concentrated_nanodrop_loaded', /1 reading/.test(await p2.locator('#btwNdList').innerText()), await p2.locator('#btwNdList').innerText());
+
       await h2.step(runStep.k);
       await h2.wait(300);
       await p2.click('#intAuto');
@@ -122,6 +120,23 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
 
       T.check('pooled_peak_scales_to_nanodrop', p2Mg != null && Math.abs(p2Mg - 0.50) <= 0.02, `P2 mg=${p2Mg}, expected=0.50`);
       T.check('unpooled_peak_keeps_uv_mg', p1Mg != null && Math.abs(p1Mg - expP1UvMg) <= 0.02, `P1 mg=${p1Mg}, expected unscaled UV mg≈${expP1UvMg.toFixed(2)}`);
+
+      T.check('scaled_peak_mg_disclosed', p2Row && p2Row[mgCol] === '≈0.50', `P2 cell=${p2Row && p2Row[mgCol]}, expected=≈0.50`);
+      T.check('peak_mg_digits_unchanged', p1 && p2Row && p1[mgCol] === '0.62' && p2Row[mgCol].replace(/^≈/, '') === '0.50', `P1=${p1 && p1[mgCol]}, P2=${p2Row && p2Row[mgCol]}`);
+      const disclosure = await p2.locator('#intTable').evaluate(tb => {
+        const col = [...tb.rows[0].cells].findIndex(c => /^Protein \(mg\)/.test(c.textContent));
+        const row = [...tb.rows].find(r => r.cells[0].textContent.trim() === 'P2');
+        return {title: row.cells[col].title, note: [...tb.querySelectorAll('caption, .empty-row')].map(e => e.textContent).join(' ')};
+      });
+      T.check('scaled_peak_tooltip', /pool/i.test(disclosure.title) && /NanoDrop/.test(disclosure.title), disclosure.title);
+      T.check('scaled_peak_footnote', /≈/.test(disclosure.note) && /pool/i.test(disclosure.note) && /NanoDrop/.test(disclosure.note), disclosure.note);
+      const [dl] = await Promise.all([p2.waitForEvent('download', {timeout: 15000}), p2.click('#intCsv')]);
+      const csv = fs.readFileSync(await dl.path(), 'utf8').trim().split(/\r?\n/).map(r => r.split(','));
+      const scaleCol = csv[0].indexOf('Scale'), csvMgCol = csv[0].indexOf('Protein (mg)');
+      const csvP1 = csv.find(r => r[1] === 'P1'), csvP2 = csv.find(r => r[1] === 'P2'), csvPool = csv.find(r => /^"?Pool /.test(r[1]));
+      T.check('integration_csv_scale', scaleCol >= 0 && csvP1[scaleCol] === 'Beer-Lambert' && csvP2[scaleCol] === 'NanoDrop-scaled' && csvPool[scaleCol] === 'NanoDrop', `Scale column=${scaleCol}; P1=${csvP1[scaleCol]}, P2=${csvP2[scaleCol]}, Pool=${csvPool[scaleCol]}`);
+      T.check('integration_csv_columns_aligned', csv.every(r => r.length === csv[0].length), csv.map(r => r.length).join(','));
+      T.check('integration_csv_numeric_mg', /^0\.\d{4}$/.test(csvP1[csvMgCol]) && Math.abs(+csvP1[csvMgCol] - expP1UvMg) < 0.003 && /^0\.\d{4}$/.test(csvP2[csvMgCol]) && Math.abs(+csvP2[csvMgCol] - 0.5) < 0.02 && csvPool[csvMgCol] === '0.5000', `CSV mg: ${[csvP1, csvP2, csvPool].map(r => r[csvMgCol]).join(', ')}`);
 
       await h2.step('figure');
       await h2.wait(300);
