@@ -7042,7 +7042,7 @@ function projectData(){
   /* The name shown to the user is Protein Purification Bench. This schema field stays 'HPLC Figure Bench' for good:
      change it and every project file saved before the rename fails to import, and every file saved after it fails to
      open in an older copy. The same goes for the 'hplc-fig-opt' settings key and the 'hfb-projects' database. */
-  const pExp = JSON.parse(JSON.stringify(prep)); if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; } });
+  const pExp = JSON.parse(JSON.stringify(prep)); if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; delete s.gel.adjImage; } });
   return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep: pExp, srcDiag: Object.assign({}, srcDiag)};
 }
 let projUndo = null, failedGels = [];
@@ -7095,6 +7095,7 @@ async function openProject(data, name, noUndo){
     if (myKnown) { const pk = tidyKnown(dopt.known); opt.known = myKnown.concat(pk.filter(k => !myKnown.some(m => m.name === k.name && +m.kda === +k.kda))); } tidyLists(); tidyOpt(dopt); }
   let mx = 0; [...runs, ...gels].forEach(x => { const m = String(x.id).match(/\d+/); if (m) mx = Math.max(mx, +m[0]); }); traces.forEach(t => { mx = Math.max(mx, +t.id || 0); }); uid = Math.max(mx + 1, numOr(prep.nextUid, 0));
   cur = data.cur || 'overlay'; marking = null; tagMode = '';
+  await agEnsureAdjImage();
   renderList(); syncControls(); render(); saveOpt();
   toast(`Opened ${name || 'project'}: ${runs.length} run${runs.length === 1 ? '' : 's'}, ${traces.length} trace${traces.length === 1 ? '' : 's'}, ${gels.length} gel${gels.length === 1 ? '' : 's'}${skipped ? `. Skipped ${skipped} damaged or incomplete item${skipped === 1 ? '' : 's'} in the file` : ''}`);
   nextHidden.delete('undoOpen'); renderNext();
@@ -7191,6 +7192,7 @@ async function packCloud(S, P){
   /* agarose gel images in cloning stages are offloaded to blobs just like SDS-PAGE gels */
   for (const sg of (st.prep && st.prep.cloning && st.prep.cloning.stages) || []) {
     const g = sg && sg.gel; if (!g) continue;
+    delete g.adjImage;
     const lv = PROJ === P && prep && prep.cloning && (prep.cloning.stages || []).find(x => x.id === sg.id);
     if (typeof g.image === 'string' && g.image.startsWith('data:')) {
       if (!g.imageId) { g.imageId = await upDataUrl(g.image); if (lv && lv.gel && lv.gel.image === g.image) lv.gel.imageId = g.imageId; }
@@ -7276,7 +7278,7 @@ function setSaveState(t, err){ const el = $('#saveState'); if (!el) return; el.t
 const PEND = id => 'hfb-pending-' + id, isDirty = P => !!P && (P.editSeq || 0) > (P.savedSeq || 0);
 function savedTo(P, seq){ P.savedSeq = Math.max(P.savedSeq || 0, seq || 0); if (!isDirty(P)) { try { localStorage.removeItem(PEND(P.id)); } catch (e) {} } }
 function writePending(){ if (!PROJ || !isDirty(PROJ) || PROJ.blocked) return; const light = r => { const o = plain(r); RUN_HEAVY.forEach(k => delete o[k]); delete o.rows; return o; };
-  const pLight = JSON.parse(JSON.stringify(prep)); if (pLight && pLight.cloning && Array.isArray(pLight.cloning.stages)) pLight.cloning.stages.forEach(s => { if (s && s.gel) { s.gel.image = ''; s.gel.origImage = ''; } });
+  const pLight = JSON.parse(JSON.stringify(prep)); if (pLight && pLight.cloning && Array.isArray(pLight.cloning.stages)) pLight.cloning.stages.forEach(s => { if (s && s.gel) { s.gel.image = ''; s.gel.origImage = ''; delete s.gel.adjImage; } });
   try { localStorage.setItem(PEND(PROJ.id), JSON.stringify({t: Date.now(), rev: PROJ.rev, name: PROJ.name, prep: pLight, o: Object.fromEntries(QKEYS.concat(['tagPreset', 'tagPos']).map(k => [k, opt[k]])), runIds: runs.map(r => r.id), gelIds: gels.map(g => g.id), runNames: runs.map(r => r.name), runs: runs.map(light), gels: gels.map(g => { const o = plain(g); ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist', 'image'].forEach(k => delete o[k]); return o; })})); } catch (e) {} }
 function applyPending(P, meta){ let pd = null; try { pd = JSON.parse(localStorage.getItem(PEND(P.id)) || 'null'); } catch (e) {} if (!pd) return false;
   if ((pd.rev || 0) < (P.rev || 0) || pd.t < (meta.updated || 0)) { try { localStorage.removeItem(PEND(P.id)); } catch (e) {} return false; }
@@ -7650,7 +7652,7 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         ladderManufacturer: str(s.gel.ladderManufacturer),
         calPoints: Array.isArray(s.gel.calPoints) ? s.gel.calPoints : [],
         ladderProduct: str(s.gel.ladderProduct || s.gel.ladder),
-        ladderCat: str(s.gel.ladderCat),
+        ladderCat: s.gel.ladderCat !== undefined ? str(s.gel.ladderCat) : undefined,
         ladderSizes: str(s.gel.ladderSizes),
         pct: str(s.gel.pct != null ? s.gel.pct : ''),
         buffer: str(s.gel.buffer),
@@ -7666,6 +7668,7 @@ function canonCloning(pr){ const c = pr.cloning && typeof pr.cloning === 'object
         contrast: str(s.gel.contrast),
         adjustments: obj(s.gel.adjustments),
         adj: s.gel.adj && typeof s.gel.adj === 'object' ? agAdj(s.gel) : null,
+        adjImage: s.gel.adjImage || null,
         adjBrightnessContrast: !!(s.gel.adjBrightnessContrast || (s.gel.adjustments && (s.gel.adjustments.brightness || s.gel.adjustments.contrast)) || (s.gel.brightness && s.gel.brightness !== '100' && s.gel.brightness !== '0')),
         lanesCroppedRearranged: !!s.gel.lanesCroppedRearranged,
         notes: str(s.gel.notes || s.gel.deviations),
@@ -7908,7 +7911,7 @@ function buildAgaroseGelSVG(stg){
   const voltage = hasTxt(g.voltage) ? String(g.voltage) : '100 V';
   const duration = hasTxt(g.duration) ? String(g.duration) : '45 min';
   const ladderProd = hasTxt(g.ladderProduct) ? String(g.ladderProduct) : (hasTxt(f0.ladder) ? String(f0.ladder) : '1 kb ladder');
-  const ladderCat = hasTxt(g.ladderCat) ? String(g.ladderCat) : 'N3232S';
+  const ladderCat = g.ladderCat !== undefined ? String(g.ladderCat) : 'N3232S';
   const ladderSizesStr = hasTxt(g.ladderSizes) ? String(g.ladderSizes) : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
   const ladderSizes = agSizes(ladderSizesStr);
   if (!ladderSizes.length) {
@@ -7919,7 +7922,16 @@ function buildAgaroseGelSVG(stg){
   const laneDetails = lanes.map((l, idx) => `Lane ${idx + 1}: ${l.label || (l.type === 'DNA ladder' ? 'M' : 'Unassigned')} (${l.type || 'Unassigned'}${l.expected ? `, expected: ${l.expected}` : ''})`).join('; ');
   const ladderDesc = `${ladderProd}${ladderCat ? ` (Cat. #${ladderCat})` : ''}; fragments: ${ladderSizes.join(', ')} bp`;
   const condDesc = `${pct.replace(/%$/, '')}% agarose, ${buffer}, ${stain}, ${voltage}, ${duration}`;
-  const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + condDesc.length);
+
+  const a = agAdj(g);
+  const disclosures = [];
+  const brightAdj = !!(g.adjBrightnessContrast || (a && (a.bright !== 100 || a.contrast !== 100)) || (g.adjustments && ((g.adjustments.brightness != null && g.adjustments.brightness !== '100' && g.adjustments.brightness !== '') || (g.adjustments.contrast != null && g.adjustments.contrast !== '100' && g.adjustments.contrast !== ''))) || (g.brightness && g.brightness !== '100' && g.brightness !== '0'));
+  const lanesAdj = !!(g.lanesCroppedRearranged || (a && a.crop));
+  if (brightAdj) disclosures.push('Brightness or contrast adjusted');
+  if (lanesAdj) disclosures.push('Lanes cropped or rearranged');
+  if (a && a.rot && !disclosures.length) disclosures.push('Image rotated');
+  const discDesc = disclosures.join('; ');
+  const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + condDesc.length, disclosures.length ? (16 + discDesc.length) : 0);
 
   const ladderW = 48;
   const gelX = pad + ladderW;
@@ -7955,8 +7967,9 @@ function buildAgaroseGelSVG(stg){
   s.push('</defs>');
   if (opt.bg) s.push(`<rect width="${r2(W)}" height="100%" fill="#ffffff"/>`);
 
-  if (g.image) {
-    s.push(`<image href="${esc(g.image)}" x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" preserveAspectRatio="none"/>`);
+  const gelImgHref = g.adjImage || g.image;
+  if (gelImgHref) {
+    s.push(`<image href="${esc(gelImgHref)}" x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" preserveAspectRatio="none"/>`);
     s.push(`<rect x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" fill="none" stroke="#222222" stroke-width="0.75"/>`);
   } else {
     s.push(`<rect x="${r2(gelX)}" y="${r2(gelTop)}" width="${r2(gelW)}" height="${r2(gelH)}" fill="#16181e" rx="3" stroke="#222222" stroke-width="0.75"/>`);
@@ -8054,7 +8067,14 @@ function buildAgaroseGelSVG(stg){
   const legCondY = legLanesY + fs * 1.4;
   s.push(`<text x="${r2(legX)}" y="${r2(legCondY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Ladder: </tspan>${esc(ladderDesc)} · <tspan font-weight="bold">Conditions: </tspan>${esc(condDesc)}</text>`);
 
-  const H = legCondY + pad + 8;
+  let lastY = legCondY;
+  if (disclosures.length) {
+    const legDiscY = legCondY + fs * 1.4;
+    s.push(`<text x="${r2(legX)}" y="${r2(legDiscY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Disclosures: </tspan>${esc(discDesc)}</text>`);
+    lastY = legDiscY;
+  }
+
+  const H = lastY + pad + 8;
   s[0] = svgHead(W, H).replace('<svg ', '<svg data-dpi="600" ');
   s.push('</svg>');
 
@@ -8318,7 +8338,7 @@ function clAgaroseHtml(s){
   const voltage = hasTxt(g.voltage) ? String(g.voltage) : '100 V';
   const duration = hasTxt(g.duration) ? String(g.duration) : '45 min';
   const ladderProd = hasTxt(g.ladderProduct) ? String(g.ladderProduct) : (hasTxt(f0.ladder) ? String(f0.ladder) : '1 kb ladder');
-  const ladderCat = hasTxt(g.ladderCat) ? String(g.ladderCat) : 'N3232S';
+  const ladderCat = g.ladderCat !== undefined ? String(g.ladderCat) : 'N3232S';
   const ladderSizes = hasTxt(g.ladderSizes) ? String(g.ladderSizes) : '100, 200, 300, 400, 500, 600, 700, 800, 900, 1000';
   const date = hasTxt(g.date) ? String(g.date) : (f0._d || '');
   const operator = hasTxt(g.operator) ? String(g.operator) : (f0._op || '');
@@ -8461,9 +8481,33 @@ function agPaint(){ const cv = $('#ag-canvas'); if (!cv) return; const s = agSta
     for (let v = 0; v < 256; v++) lut[v] = Math.round((v * b - 127.5) * k + 127.5);
     for (let i = 0; i < p.length; i += 4) { p[i] = lut[p[i]]; p[i + 1] = lut[p[i + 1]]; p[i + 2] = lut[p[i + 2]]; }
     x.putImageData(d, 0, 0); }
+  if (!agCropMode) { const hasEdits = !!(a.rot || a.crop || a.bright !== 100 || a.contrast !== 100); try { g.adjImage = hasEdits ? cv.toDataURL('image/png') : null; } catch (e) {} }
   if (agCropMode) { const q = agDrag || a.crop; if (q) { const rx = q.x * sw, ry = q.y * sh, rw = q.w * sw, rh = q.h * sh, lw = Math.max(1, sw / 200);
     x.fillStyle = 'rgba(0,0,0,.45)'; x.fillRect(0, 0, sw, ry); x.fillRect(0, ry + rh, sw, sh - ry - rh); x.fillRect(0, ry, rx, rh); x.fillRect(rx + rw, ry, sw - rx - rw, rh);
     x.strokeStyle = '#fff'; x.lineWidth = lw; x.setLineDash([4 * lw, 3 * lw]); x.strokeRect(rx, ry, rw, rh); } } }
+async function agEnsureAdjImage(target){
+  const stages = target ? (target.kind === 'gel' ? [target] : (target.gel ? [{gel: target.gel}] : [{gel: target}])) : ((prep && prep.cloning && prep.cloning.stages) || []);
+  for (const s of stages) {
+    const g = s && s.gel; if (!g || !g.image) continue;
+    const a = agAdj(g), hasEdits = !!(a.rot || a.crop || a.bright !== 100 || a.contrast !== 100);
+    if (!hasEdits) { g.adjImage = null; continue; }
+    if (g.adjImage) continue;
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = g.image; });
+      const W = img.naturalWidth, H = img.naturalHeight; let src = img, SW = W, SH = H;
+      if (a.rot) { const r = a.rot * Math.PI / 180, cs = Math.abs(Math.cos(r)), sn = Math.abs(Math.sin(r)), rc = document.createElement('canvas'); SW = rc.width = Math.max(1, Math.round(W * cs + H * sn)); SH = rc.height = Math.max(1, Math.round(W * sn + H * cs));
+        const rx = rc.getContext('2d'); rx.translate(SW / 2, SH / 2); rx.rotate(r); rx.drawImage(img, -W / 2, -H / 2); src = rc; }
+      const cr = a.crop ? a.crop : null, sx = cr ? Math.round(cr.x * SW) : 0, sy = cr ? Math.round(cr.y * SH) : 0, sw = cr ? Math.max(1, Math.min(SW - sx, Math.round(cr.w * SW))) : SW, sh = cr ? Math.max(1, Math.min(SH - sy, Math.round(cr.h * SH))) : SH;
+      const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh; const x = cv.getContext('2d'); x.clearRect(0, 0, sw, sh); x.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+      if (a.bright !== 100 || a.contrast !== 100) { const d = x.getImageData(0, 0, sw, sh), p = d.data, b = a.bright / 100, k = a.contrast / 100, lut = new Uint8ClampedArray(256);
+        for (let v = 0; v < 256; v++) lut[v] = Math.round((v * b - 127.5) * k + 127.5);
+        for (let i = 0; i < p.length; i += 4) { p[i] = lut[p[i]]; p[i + 1] = lut[p[i + 1]]; p[i + 2] = lut[p[i + 2]]; }
+        x.putImageData(d, 0, 0); }
+      g.adjImage = cv.toDataURL('image/png');
+    } catch (e) {}
+  }
+}
 function agSetAdj(s, k, v){ const a = agAdj(s.gel); if (k === 'crop') a.crop = v; else a[k] = Number(v); s.gel.adj = agAdj({adj: a}); if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1; }
 const agFrac = (cv, e) => { const r = cv.getBoundingClientRect(); return {x: Math.min(1, Math.max(0, (e.clientX - r.left) / (r.width || 1))), y: Math.min(1, Math.max(0, (e.clientY - r.top) / (r.height || 1)))}; };
 async function handleAgaroseGelUpload(file, s){
@@ -8602,8 +8646,17 @@ function onCloneField(e){ const t = e.target, c = CL();
         s.gel.orientation = t.checked ? 'bottom-to-top' : (s.gel.orientation === 'bottom-to-top' ? 'top-to-bottom' : (s.gel.orientation || ''));
       }
       if (k === 'pct' && s.at && s.at[0]) s.at[0].f.pct = t.value;
-      if (k === 'ladderPreset' && AG_LADDERS[t.value] && t.value !== 'custom') {
-        const p = AG_LADDERS[t.value]; s.gel.ladderProduct = p.name; s.gel.ladderManufacturer = p.manufacturer; s.gel.ladderCat = p.catalog; s.gel.ladderSizes = p.sizes;
+      if (k === 'ladderPreset') {
+        if (t.value === 'custom') {
+          s.gel.ladderCat = '';
+          const elCat = $('#ag-ladder-cat'); if (elCat) elCat.value = '';
+        } else if (AG_LADDERS[t.value]) {
+          const p = AG_LADDERS[t.value]; s.gel.ladderProduct = p.name; s.gel.ladderManufacturer = p.manufacturer; s.gel.ladderCat = p.catalog; s.gel.ladderSizes = p.sizes;
+          const elProd = $('#ag-ladder-product'); if (elProd) elProd.value = p.name;
+          const elMfr = $('#ag-ladder-manufacturer'); if (elMfr) elMfr.value = p.manufacturer;
+          const elCat = $('#ag-ladder-cat'); if (elCat) elCat.value = p.catalog;
+          const elSizes = $('#ag-ladder-sizes'); if (elSizes) elSizes.value = p.sizes;
+        }
       }
       if (k === 'ladderProduct' && s.at && s.at[0]) s.at[0].f.ladder = t.value;
       if (k === 'notes') {
@@ -9375,6 +9428,7 @@ $('#saveAll').addEventListener('click', async () => {
   const dpi = +opt.dpi || 600, enc = new TextEncoder(), files = [], used = new Set();
   const keep = marking; marking = null;
   toast('Rendering figures…');
+  await agEnsureAdjImage();
   for (const f of figures()) {
     const {svg, geo} = buildFig(f); if (!svg) continue;
     let b = baseName(f), n = 2; while (used.has(b)) b = baseName(f) + '_' + (n++); used.add(b);
