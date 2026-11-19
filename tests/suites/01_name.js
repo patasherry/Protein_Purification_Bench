@@ -35,4 +35,17 @@ const NAME = 'Protein Purification Bench', OLD = 'HPLC Figure Bench';
     T.check('not rejected as the wrong kind of file', !/is not a project/i.test(msg), msg);
   });
 
+  await T.t('standards-mode-and-mobile-viewport', async () => {
+    const mode = await p.evaluate(() => document.compatMode);
+    T.check('standards mode', mode === 'CSS1Compat', mode);
+    const lang = await p.evaluate(() => document.documentElement.lang);
+    T.check('html lang', lang === 'en', JSON.stringify(lang));
+    const m = await open({width: 390, height: 844, isMobile: true});
+    try {
+      const iw = await m.p.evaluate(() => window.innerWidth);
+      T.check('mobile innerWidth', iw === 390, `innerWidth=${iw}`);
+      if (m.errs.length) errs.push(...m.errs);
+    } finally { await m.close(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | ')); await close(); T.done(); })();
