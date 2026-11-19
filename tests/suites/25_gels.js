@@ -739,4 +739,36 @@ await T.t('tiff-16bit-raw-saturation', async () => {
   }
 });
 
+/* #1602: mini-gel ladder kDa labels in a workflow figure must not overlap each other */
+await T.t('workflow-minigel-ladder-kda-no-overlap', async () => {
+  const a = await open(), {p} = a, h = H(p);
+  try {
+    await h.newProject('Mini-Gel Ladder Spacing');
+    await h.addRun(src('his'));
+    await h.suggest();
+    await p.locator('#gelFile').setInputFiles(src('gel'));
+    await h.wait(2200);
+    if (await p.isVisible('#g-fill')) { await p.click('#g-fill'); await h.wait(400); }
+    await h.addRun(src('q'));
+    await h.addRun(src('secZip'));
+    await h.step('figure');
+    await h.wait(600);
+    const svg = await h.exportSvg(), m = await h.svgBoxes(svg);
+    const kdaTitle = m.texts.find(t => t.t.trim() === 'kDa');
+    const ladderVals = new Set(['250', '150', '100', '75', '50', '37', '25', '20', '15', '10']);
+    const nums = kdaTitle ? m.texts.filter(t => ladderVals.has(t.t.trim()) && Math.abs(t.right - kdaTitle.right) < 12).sort((x, y) => x.y - y.y) : [];
+    const hits = [];
+    for (let i = 0; i < nums.length - 1; i++) {
+      const u = nums[i], v = nums[i + 1];
+      const ox = Math.min(u.right, v.right) - Math.max(u.x, v.x);
+      const oy = Math.min(u.bottom, v.bottom) - Math.max(u.y, v.y);
+      if (ox > 1 && oy > 1) hits.push(`${u.t}x${v.t}(${ox.toFixed(1)}x${oy.toFixed(1)})`);
+    }
+    T.check('workflow-minigel-ladder-kda-no-overlap', !!kdaTitle && nums.length >= 4 && hits.length === 0 && !a.errs.length,
+      `nums=${nums.map(n => n.t).join(',')} overlaps=${hits.join(', ')}${a.errs.length ? ' | errs=' + a.errs.join(' | ') : ''}`);
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
