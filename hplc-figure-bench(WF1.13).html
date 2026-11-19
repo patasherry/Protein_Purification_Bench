@@ -4565,9 +4565,9 @@ function parseGenBank(text){
     return {type: f.type, a: wrap ? nums[0] : Math.min(...nums), b: wrap ? nums[nums.length - 1] : Math.max(...nums), rev, label: lab, qtxt: [f.q.label, f.q.gene, f.q.product].filter(Boolean).join(' '), tx: (f.q.translation || '').replace(/[^A-Z*]/gi, '').toUpperCase(), wrap, loc: f.loc, codonStart, translTable, partial5}; }).filter(Boolean);
   return {name: lm ? lm[1] : 'plasmid', len, circ: /circular/i.test(loc), def, feats: out, seq, recs, lenBad: !!lm && seq.length >= 100 && seq.length !== +lm[2]};
 }
-const RES_RE = /\bkan|neo|aph\(|nptii|\bbla\b|amp|beta-lactamase|\bcat\b|chloramph|\bcmr?\b|\btet|spec|aad|strep|gent|zeo|\bble\b|hyg|\bbsd/i, REG_RE = /laci|\blac\s*repressor\b|\brop\b|arac|\bara\s*repressor\b|tetr|\btet\s*repressor\b|lacz|lac ?y|\bori\b/i;
+const RES_RE = /\bkan|neo|aph\(|nptii|\bbla\b|amp|beta-lactamase|\bcat\b|chloramph|\bcmr?\b|\btet|spec|aad|(?<!twin[-_ ]?)strep(?![-_ ]?(?:tag|ii|tactin))|gent|zeo|\bble\b|hyg|\bbsd/i, REG_RE = /laci|\blac\s*repressor\b|\brop\b|arac|\bara\s*repressor\b|tetr|\btet\s*repressor\b|lacz|lac ?y|\bori\b/i;
 const isBackbone = f => RES_RE.test(f.qtxt || f.label) || REG_RE.test(f.qtxt || f.label);
-const resName = t => /kan|neo|aph|nptii/i.test(t) ? 'kanamycin' : /bla|amp|lactamase/i.test(t) ? 'ampicillin' : /\bcat\b|chloramph|\bcm/i.test(t) ? 'chloramphenicol' : /tet/i.test(t) ? 'tetracycline' : /spec|aad/i.test(t) ? 'spectinomycin' : /strep/i.test(t) ? 'streptomycin' : /gent/i.test(t) ? 'gentamicin' : /zeo|ble/i.test(t) ? 'zeocin' : /hyg/i.test(t) ? 'hygromycin' : t;
+const resName = t => /kan|neo|aph|nptii/i.test(t) ? 'kanamycin' : /bla|amp|lactamase/i.test(t) ? 'ampicillin' : /\bcat\b|chloramph|\bcm/i.test(t) ? 'chloramphenicol' : /tet/i.test(t) ? 'tetracycline' : /spec|aad/i.test(t) ? 'spectinomycin' : /(?<!twin[-_ ]?)strep(?![-_ ]?(?:tag|ii|tactin))/i.test(t) ? 'streptomycin' : /gent/i.test(t) ? 'gentamicin' : /zeo|ble/i.test(t) ? 'zeocin' : /hyg/i.test(t) ? 'hygromycin' : t;
 const RES_SHORT = {Kan: 'kanamycin', Amp: 'ampicillin', Cm: 'chloramphenicol', Spec: 'spectinomycin', Tet: 'tetracycline'};
 /* the expressed ORF in a GenBank file: the CDS that contains the protein sequence, else the longest CDS that is not a marker or regulator */
 function gbCassette(gb){
@@ -4638,11 +4638,17 @@ const SITES = [['sumo', /(QIGG|EQTGG|QTGG)/g, 0, 'SUMO protease'], ['tev', /ENLY
 const TAG_NAME_RE = [[/smt3|sumo/i, 'SUMO'], [/\bgst\b|glutathione/i, 'GST'], [/\bmbp\b|male|maltose/i, 'MBP'], [/\btrx|thioredoxin/i, 'Trx'], [/gfp/i, 'GFP'], [/strep/i, 'Strep-tag'], [/flag/i, 'FLAG'], [/avi/i, 'Avi']];
 function splitOrf(tx, ps, inner){
   ps = ps || ''; const n = tx.length, pi = ps.length >= 8 ? tx.indexOf(ps.slice(0, Math.min(20, ps.length))) : -1;
-  const cterm = pi === 0 || (pi < 0 && /H{6}[^H]{0,30}$/.test(tx) && !/^.{0,30}H{6}/.test(tx));
+  const specRe = /QIGG|EQTGG|QTGG|ENLYFQ(?=[GS])|LEVLFQ(?=GP)|LVPR(?=GS)/, affMot = /WSHPQFEK|DYKDDDDK|GLNDIFEAQKIEWHE/;
+  const hasNtag = /^.{0,30}H{6}/.test(tx) || new RegExp(`^.{0,30}(?:${affMot.source})`).test(tx) || (inner || []).some(x => x.a <= 40 && TAG_NAME_RE.some(([re]) => re.test(x.label))) || specRe.test(tx.slice(0, 60));
+  const hasCtag = /H{6}[^H]{0,30}$/.test(tx) || new RegExp(`(?:${affMot.source}).{0,30}$`).test(tx) || (inner || []).some(x => (x.b >= n - 40 || x.a >= n - 60) && TAG_NAME_RE.some(([re]) => re.test(x.label))) || specRe.test(tx.slice(Math.max(0, n - 60)));
+  const cterm = pi === 0 || (pi < 0 && hasCtag && !hasNtag);
   let cut = null; SITES.forEach(([k, re, , nm]) => { re.lastIndex = 0; let m; while ((m = re.exec(tx))) { const pos = m.index + m[0].length;
     /* enterokinase and factor Xa motifs also occur in native proteins, so they count only close to the ends */
+    const isSpec = k === 'sumo' || k === 'tev' || k === '3c' || k === 'thrombin';
+    const tagPart = cterm ? tx.slice(pos) : tx.slice(0, pos);
+    const hasFusion = /H{6}|KIEEG|MKIKTG|MKTEEG|KLVIW|FWYAVR|MSPIL|PILGYWK|GDHPPK|M?SDSEV|EQIGG|M?SDKII|WCGPC|M[VS]?SKGEE|FSYGVQC|MDELYK|WSHPQFEK|DYKDDDDK|GLNDIFEAQKIEWHE/i.test(tagPart) || (inner || []).some(x => (cterm ? x.b >= pos : x.a <= pos) && TAG_NAME_RE.some(([r]) => r.test(x.label)));
     const nearEnd = k !== 'ek' && k !== 'xa' || (cterm ? pos > n - 60 : pos < 60);
-    const ok = nearEnd && (cterm ? (pi === 0 ? pos >= ps.length - 2 && pos <= ps.length + 30 : pos > n*0.55) : (pi > 0 ? pos <= pi + 2 && pos >= pi - 30 : pos < n*0.55));
+    const ok = nearEnd && (cterm ? (pi === 0 ? pos >= ps.length - 2 && pos <= ps.length + 30 : pos >= (isSpec && hasFusion ? n*0.18 : n*0.55)) : (pi > 0 ? pos <= pi + 2 && pos >= pi - 30 : pos <= (isSpec && hasFusion ? n*0.82 : n*0.55)));
     if (ok && (!cut || (cterm ? pos < cut.pos : pos > cut.pos))) cut = {pos, k, name: nm}; } });
   const bnd = cut ? cut.pos : pi > 0 ? pi : cterm && pi === 0 ? ps.length : 0; /* consistent cleavage boundary */
   const tagPart = cterm ? tx.slice(bnd) : tx.slice(0, bnd), prot = cterm ? tx.slice(0, bnd) : tx.slice(bnd);
@@ -4650,7 +4656,17 @@ function splitOrf(tx, ps, inner){
   /* the tag in parts: the His run with its linker, then any larger tag (SUMO, GST, MBP ...) */
   const off = cterm ? bnd : 0, hm = /H{6,10}/.exec(tagPart), segs = [];
   const tagName = (a, b) => { const f = (inner || []).find(x => x.a <= b && x.b >= a && TAG_NAME_RE.some(([re]) => re.test(x.label))); if (f) return TAG_NAME_RE.find(([re]) => re.test(f.label))[1];
-    if (cut && cut.k === 'sumo') return 'SUMO'; const p = {gst: 'GST', hisgst: 'GST', mbp: 'MBP', hismbp: 'MBP', trx: 'Trx', gfp: 'GFP'}[opt.tagPreset]; return p || 'tag'; };
+    if (cut && cut.k === 'sumo') return 'SUMO';
+    const sub = tx.slice(Math.max(0, a - 1), b);
+    if (/KIEEG|MKIKTG|MKTEEG|KLVIW|FWYAVR/i.test(sub)) return 'MBP';
+    if (/MSPIL|PILGYWK|GDHPPK/i.test(sub)) return 'GST';
+    if (/M?SDSEV/i.test(sub)) return 'SUMO';
+    if (/M?SDKII|WCGPC/i.test(sub)) return 'Trx';
+    if (/M[VS]?SKGEE|FSYGVQC|MDELYK/i.test(sub)) return 'GFP';
+    if (/WSHPQFEK/i.test(sub)) return 'Strep-tag';
+    if (/DYKDDDDK/i.test(sub)) return 'FLAG';
+    if (/GLNDIFEAQKIEWHE/i.test(sub)) return 'Avi';
+    const p = {gst: 'GST', hisgst: 'GST', mbp: 'MBP', hismbp: 'MBP', trx: 'Trx', gfp: 'GFP'}[opt.tagPreset]; return p || 'tag'; };
   if (hm) { const hEnd = hm.index + hm[0].length, rest = tagPart.length - hEnd;
     if (!cterm) { if (rest > 25) {
         /* the larger tag starts where the file's feature starts, or at SUMO's own first residues; the linker between (often a thrombin site) stays with His */

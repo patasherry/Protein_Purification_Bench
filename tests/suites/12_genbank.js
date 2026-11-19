@@ -338,6 +338,113 @@ const files = {
     }
   });
 
+  /* 14. Strep-tagged CDS, C-terminal non-His cleavable tag, and large fusion tags in GenBank ORF splitting (#1601) */
+  await T.t('strep_and_fusion_orf_splitting', async () => {
+    const fmtOrigin = s => {
+      const out = [];
+      for (let i = 0; i < s.length; i += 60) out.push(String(i + 1).padStart(9) + ' ' + s.slice(i, i + 60).toLowerCase().match(/.{1,10}/g).join(' '));
+      return out.join('\n');
+    };
+    const filler = n => 'ACGT'.repeat(Math.ceil(n / 4)).slice(0, n);
+    const CODONS = {A:'GCT',C:'TGC',D:'GAT',E:'GAA',F:'TTT',G:'GGT',H:'CAT',I:'ATT',K:'AAA',L:'CTG',M:'ATG',N:'AAT',P:'CCG',Q:'CAG',R:'CGT',S:'TCT',T:'ACC',V:'GTG',W:'TGG',Y:'TAT'};
+    const aaToNt = aa => aa.split('').map(c => CODONS[c] || 'GCT').join('');
+    const kanNt = 'ATG' + 'GCTGAA'.repeat(135) + 'TAA';
+    const gfp238 = 'M' + 'SKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTFSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITLGMDELYK';
+
+    const P = await open(), h = H(P.p);
+    P.p.on('dialog', d => d.accept());
+    try {
+      /* (a) CDS /label="GFP-Strep-tag-II" ending with ENLYFQGWSHPQFEK populates #gbStatus with TEV protease site and #protTable with Untagged, Tagged, and Tag only */
+      await P.p.click('text=All projects').catch(() => {}); await h.wait(400);
+      await h.newProject('GenBank Strep Tag');
+      await P.p.click('#tl [data-step=construct]'); await h.wait(300);
+      const orfA_aa = gfp238 + 'ENLYFQGWSHPQFEK'; // 238 + 15 = 253 aa
+      const orfA_nt = aaToNt(orfA_aa) + 'TAA';
+      const seqA = filler(49) + 'TAATACGACTCACTATAGG' + filler(110 - 1 - 68) + 'AAGGAGATATACATAA' + filler(131 - 1 - 125) + orfA_nt + filler(1200 - 1 - (130 + orfA_nt.length)) + kanNt + filler(2400 - 2015);
+      const gbA = [
+        `LOCUS       pET_STREP_TEV           ${seqA.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'DEFINITION  pET Strep-tagged construct.',
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7_promoter"',
+        '     RBS             110..125',
+        '                     /label="RBS"',
+        `     CDS             131..${130 + orfA_nt.length}`,
+        '                     /label="GFP-Strep-tag-II"',
+        '     CDS             1200..2015',
+        '                     /label="KanR"',
+        'ORIGIN',
+        fmtOrigin(seqA),
+        '//'
+      ].join('\n');
+      await P.p.setInputFiles('#gbFile', {name: 'pET_strep_tev.gb', mimeType: 'text/plain', buffer: Buffer.from(gbA)});
+      await h.wait(1000);
+      const stA = await P.p.$eval('#gbStatus', e => e.textContent.replace(/\u00a0/g, ' ').trim());
+      const ptA = await P.p.$eval('#protTable', e => e.textContent.replace(/\u00a0/g, ' ').trim());
+      T.check('strep_tag.status_tev', stA.includes('TEV protease site'), `status: ${stA}`);
+      T.check('strep_tag.prot_table_forms', ptA.includes('Untagged') && ptA.includes('Tagged') && ptA.includes('Tag only'), `protTable: ${ptA}`);
+
+      /* (b) N-terminal MHHHHHHSSG + MBP (370 aa) + ENLYFQG + 140 aa domain splits at TEV (Untagged 141 aa, main leaves 524 aa unsplit) */
+      await P.p.click('text=All projects').catch(() => {}); await h.wait(400);
+      await h.newProject('GenBank His6-MBP');
+      await P.p.click('#tl [data-step=construct]'); await h.wait(300);
+      const mbp367 = 'KIEEGKLVIWINGDKGYNGLAEVGKKFEKDTGIKVTVEHPDKLEEKFPQVAATGDGPDIIFWAHDRFGGYAQSGLLAEITPDKAFQDKLYPFTWDAVRYNGKLIAYPIAVEALSLIYNKDLLPNPPKTWEEIPALDKELKAKGKSALMFNLQEPYFTWPLIAADGGYAFKYENGKYDIKDVGVDNAGAKAGLTFLVDLIKNKHMNADTDYSIAEAAFNKGETAMTINGPWAWSNIDTSKVNYGVTVLPTFKGQPSKPFVGVLSAGINAASPNKELAKEFLENYLLTDEGLEAVNKDKPLGAVALKSYEEELAKDPRIAATMENAQKGEIMPNIPQMSAFWYAVRTAVINAASGRQTVDEALKDAQTNSSS'.slice(0, 367);
+      const orfB_aa = 'MHHHHHHSSG' + mbp367 + 'ENLYFQG' + 'AE'.repeat(70); // 10 + 367 + 7 + 140 = 524 aa
+      const orfB_nt = aaToNt(orfB_aa) + 'TAA';
+      const seqB = filler(49) + 'TAATACGACTCACTATAGG' + filler(110 - 1 - 68) + 'AAGGAGATATACATAA' + filler(131 - 1 - 125) + orfB_nt + filler(2000 - 1 - (130 + orfB_nt.length)) + kanNt + filler(3200 - 2815);
+      const gbB = [
+        `LOCUS       pET_HIS_MBP_TEV         ${seqB.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'DEFINITION  pET His-MBP TEV construct.',
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7_promoter"',
+        '     RBS             110..125',
+        '                     /label="RBS"',
+        `     CDS             131..${130 + orfB_nt.length}`,
+        '                     /label="His-MBP-Domain"',
+        '     CDS             2000..2815',
+        '                     /label="KanR"',
+        'ORIGIN',
+        fmtOrigin(seqB),
+        '//'
+      ].join('\n');
+      await P.p.setInputFiles('#gbFile', {name: 'pET_his_mbp_tev.gb', mimeType: 'text/plain', buffer: Buffer.from(gbB)});
+      await h.wait(1000);
+      const ptB = await P.p.$eval('#protTable', e => e.innerText.replace(/\u00a0/g, ' ').trim());
+      T.check('mbp_tev.splits_141aa', /Untagged\s+141\b/.test(ptB), `protTable: ${ptB}`);
+
+      /* (c) 238 aa target + LEVLFQGP + GFP (238 aa) + HHHHHHHH splits at 3C (Untagged 244 aa, main leaves 492 aa unsplit) */
+      await P.p.click('text=All projects').catch(() => {}); await h.wait(400);
+      await h.newProject('GenBank 3C-GFP-His8');
+      await P.p.click('#tl [data-step=construct]'); await h.wait(300);
+      const orfC_aa = 'M' + 'AE'.repeat(118) + 'A' + 'LEVLFQGP' + gfp238 + 'H'.repeat(8); // 238 aa target + 8 aa 3C + 238 aa GFP + 8 aa His = 492 aa
+      const orfC_nt = aaToNt(orfC_aa) + 'TAA';
+      const seqC = filler(49) + 'TAATACGACTCACTATAGG' + filler(110 - 1 - 68) + 'AAGGAGATATACATAA' + filler(131 - 1 - 125) + orfC_nt + filler(2000 - 1 - (130 + orfC_nt.length)) + kanNt + filler(3200 - 2815);
+      const gbC = [
+        `LOCUS       pET_3C_GFP_HIS8         ${seqC.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'DEFINITION  pET 3C-GFP-His8 construct.',
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7_promoter"',
+        '     RBS             110..125',
+        '                     /label="RBS"',
+        `     CDS             131..${130 + orfC_nt.length}`,
+        '                     /label="Target-GFP-His8"',
+        '     CDS             2000..2815',
+        '                     /label="KanR"',
+        'ORIGIN',
+        fmtOrigin(seqC),
+        '//'
+      ].join('\n');
+      await P.p.setInputFiles('#gbFile', {name: 'pET_3c_gfp_his8.gb', mimeType: 'text/plain', buffer: Buffer.from(gbC)});
+      await h.wait(1000);
+      const ptC = await P.p.$eval('#protTable', e => e.innerText.replace(/\u00a0/g, ' ').trim());
+      T.check('c_term_3c.splits_244aa', /Untagged\s+244\b/.test(ptC), `protTable: ${ptC}`);
+    } finally {
+      await P.close();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
