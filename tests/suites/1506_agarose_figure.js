@@ -23,17 +23,12 @@ const {open, H, suite} = require('../lib/harness');
       // - 1 kb ladder in lane 1 (M)
       // - sample in lane 2 (PCR-1) with expected product at 1200 bp
       // - no-template control in lane 3 (NTC)
-      // - metadata: ladder product, catalog #, agarose %, buffer, stain, voltage, duration
+      // - metadata: ladder product, agarose %, buffer, stain, voltage, duration
+      // Note: ladderCat is left untouched to verify default N3232S
       const ladderProd = p.locator('#ag-ladder-product');
       if (await ladderProd.count() > 0) {
         await ladderProd.fill('1 kb ladder');
         await ladderProd.dispatchEvent('change');
-      }
-
-      const ladderCat = p.locator('#ag-ladder-cat');
-      if (await ladderCat.count() > 0) {
-        await ladderCat.fill('N3232S');
-        await ladderCat.dispatchEvent('change');
       }
 
       const pctInput = p.locator('#ag-pct');
@@ -150,6 +145,78 @@ const {open, H, suite} = require('../lib/harness');
 
       // Check no text is clipped outside the exported SVG viewBox
       T.check('no_clipped_text', boxes.clipped.length === 0, 'clipped: ' + boxes.clipped.join(' | '));
+
+      // Issue #1570 Check (1): untouched default gel shows (Cat. #N3232S), switching preset to custom omits N3232S
+      T.check('untouched_has_n3232s', exportedSvg.includes('N3232S'), 'untouched agarose gel shows N3232S');
+      await p.locator('#ag-ladder-preset').selectOption('custom');
+      await p.locator('#ag-ladder-preset').dispatchEvent('change');
+      await p.locator('#cl-gen-ag-fig').click();
+      await h.wait(400);
+      const svgCustom = await h.exportSvg();
+      T.check('custom_ladder_omits_n3232s', !svgCustom.includes('N3232S'), 'switching to custom ladder omits N3232S');
+
+      // Blanking #ag-ladder-cat also omits catalog number
+      const ladderCatInput = p.locator('#ag-ladder-cat');
+      if (await ladderCatInput.count() > 0) {
+        await ladderCatInput.fill('N3231S');
+        await ladderCatInput.dispatchEvent('change');
+        await p.locator('#cl-gen-ag-fig').click();
+        await h.wait(300);
+        const svgWithCat = await h.exportSvg();
+        T.check('explicit_cat_rendered', svgWithCat.includes('N3231S'), 'explicit catalog number rendered');
+
+        await ladderCatInput.fill('');
+        await ladderCatInput.dispatchEvent('change');
+        await p.locator('#cl-gen-ag-fig').click();
+        await h.wait(300);
+        const svgBlankCat = await h.exportSvg();
+        T.check('blank_ladder_cat_omitted', !svgBlankCat.includes('N3231S') && !svgBlankCat.includes('N3232S'), 'blanking catalog number omits it from figure');
+      }
+
+      // Issue #1570 Check (2): upload synthetic solid RGB(100,100,100) PNG, set #ag-bright to 140,
+      // check #ag-adj-brightness and #ag-lanes-adjusted, generate figure, assert embedded PNG pixel > 120,
+      // Disclosures: appears, and clipped.length === 0
+      await p.evaluate(async () => {
+        const c = document.createElement('canvas'); c.width = 80; c.height = 60; const x = c.getContext('2d');
+        x.fillStyle = 'rgb(100,100,100)'; x.fillRect(0, 0, 80, 60);
+        const blob = await new Promise(r => c.toBlob(r, 'image/png')), file = new File([blob], 'solid_gray.png', {type: 'image/png'});
+        const dt = new DataTransfer(); dt.items.add(file);
+        const el = document.querySelector('#clonePanel .cl-gel-upload');
+        el.dispatchEvent(new DragEvent('dragover', {dataTransfer: dt, bubbles: true, cancelable: true}));
+        el.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true}));
+      });
+      await h.wait(600);
+
+      const brightSlider = p.locator('#ag-bright');
+      if (await brightSlider.count() > 0) {
+        await brightSlider.fill('140');
+        await brightSlider.dispatchEvent('change');
+      }
+      await p.locator('#ag-adj-brightness').check();
+      await p.locator('#ag-adj-brightness').dispatchEvent('change');
+      await p.locator('#ag-lanes-adjusted').check();
+      await p.locator('#ag-lanes-adjusted').dispatchEvent('change');
+
+      await p.locator('#cl-gen-ag-fig').click();
+      await h.wait(600);
+
+      const adjSvg = await h.exportSvg();
+      const adjBoxes = await h.svgBoxes(adjSvg);
+      const adjTexts = adjBoxes.texts.map(x => x.t);
+
+      const pixelVal = await p.evaluate(async svg => {
+        const m = svg.match(/<image[^>]+(?:href|xlink:href)="([^"]+)"/);
+        if (!m) return 0;
+        const im = new Image();
+        await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = m[1]; });
+        const c = document.createElement('canvas'); c.width = 1; c.height = 1;
+        const ctx = c.getContext('2d'); ctx.drawImage(im, 0, 0, 1, 1);
+        return ctx.getImageData(0, 0, 1, 1).data[0];
+      }, adjSvg);
+
+      T.check('pixel_brightened_over_120', pixelVal > 120, `brightened pixel value is ${pixelVal} (> 120)`);
+      T.check('disclosures_present', adjTexts.some(t => t.includes('Disclosures:')), 'Disclosures: appears in figure');
+      T.check('no_clipped_text_disclosures', adjBoxes.clipped.length === 0, 'no clipped text with disclosures: ' + adjBoxes.clipped.join(' | '));
 
       T.check('no_page_errors', errs.length === 0, errs.join(' | '));
     } finally {
