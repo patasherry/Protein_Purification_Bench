@@ -440,6 +440,45 @@ const insetCount = p => p.evaluate(() => document.querySelectorAll('#paper svg [
     } catch (e) { T.check('title-fit/wf/threw', false, String(e).slice(0, 300)); } finally { await close(); }
   }
 
+  /* #1580: inside legend must not be occluded by 'tr' zoom inset, and 'beside' + rotated peak labels must not clip at y < 0 */
+  {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await p.click('#homeQuick'); await h.wait(700);
+      const mkCsv = (hgt, sh) => {
+        const rows = ['Time (min),UV (mAU)'];
+        for (let i = 0; i <= 120; i++) {
+          const t = i * 0.1, y = hgt * Math.exp(-0.5 * ((t - (6.0 + sh)) / 0.15) ** 2);
+          rows.push(`${t.toFixed(2)},${y.toFixed(3)}`);
+        }
+        return Buffer.from(rows.join('\n'));
+      };
+      await p.setInputFiles('#file', [
+        {name: 'Sample_A_replicate_1.csv', mimeType: 'text/csv', buffer: mkCsv(120, 0)},
+        {name: 'Sample_B_replicate_2.csv', mimeType: 'text/csv', buffer: mkCsv(115, 0.05)},
+        {name: 'Sample_C_replicate_3.csv', mimeType: 'text/csv', buffer: mkCsv(110, 0.10)}
+      ]);
+      await h.wait(800);
+      await setOpt(p, 'o-zoomInset', true); await h.wait(500);
+      const svg1 = await h.exportSvg(), m1 = await h.svgBoxes(svg1, '#zoom-inset'), bx1 = m1.box;
+      const legTexts = m1.texts.filter(t => /Sample_[ABC]_replicate/.test(t.t));
+      const legHits = bx1 ? legTexts.filter(t => Math.min(t.right, bx1.right) - Math.max(t.x, bx1.x) > 0.5 && Math.min(t.bottom, bx1.bottom) - Math.max(t.y, bx1.y) > 0.5) : legTexts;
+      T.check('legend-avoid/no-inside-legend-overlap', !!bx1 && legTexts.length === 3 && legHits.length === 0,
+        'overlapping legend texts: ' + legHits.map(t => t.t).join(', '));
+
+      await setOpt(p, 'o-zoomInsetPos', 'beside');
+      await setOpt(p, 'o-peakRot', true);
+      await setOpt(p, 'o-peakDec', '3');
+      await h.wait(500);
+      const svg2 = await h.exportSvg(), m2 = await h.svgBoxes(svg2, '#zoom-inset');
+      T.check('beside-rot/no-clipped-peak-labels', m2.clipped.length === 0 && errs.length === 0,
+        'clipped: ' + m2.clipped.join(', ') + (errs.length ? ' | errs: ' + errs.join(' | ') : ''));
+    } catch (e) {
+      T.check('legend-avoid/no-inside-legend-overlap', false, String(e).slice(0, 300));
+      T.check('beside-rot/no-clipped-peak-labels', false, String(e).slice(0, 300));
+    } finally { await close(); }
+  }
+
   T.done();
 
 })();
