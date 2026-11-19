@@ -138,6 +138,46 @@ const {open, H, suite, src} = require('../lib/harness');
     }
   });
 
+  await T.t('search_savitzky_cards_and_empty', async () => {
+    await p.setInputFiles('#file', src('ndSpec'));
+    await h.wait(500);
+    await h.step('figure');
+    await h.wait(300);
+
+    await p.fill('#panelSearch', 'Savitzky');
+    await h.wait(250);
+    const smoothShown = await vis('#o-smooth');
+    await p.fill('#panelSearch', 'SEC calibrations');
+    await h.wait(250);
+    const fsHiddenOnHint = !(await vis('#o-fs'));
+    T.check('search_savitzky_without_hint_bleed', smoothShown && fsHiddenOnHint, `smooth=${smoothShown} fsHidden=${fsHiddenOnHint}`);
+
+    await p.fill('#panelSearch', 'S200');
+    await h.wait(250);
+    const traceVis = await p.$$eval('#list .trace', els => els.filter(e => !e.hidden && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none').map(e => {
+      const inp = e.querySelector('.thead input[type=text]');
+      return inp ? inp.value : e.textContent.trim();
+    }));
+    T.check('search_matches_trace_card', traceVis.length === 1 && /S200/i.test(traceVis[0]), JSON.stringify(traceVis));
+
+    await p.fill('#panelSearch', 'Sample 2');
+    await h.wait(250);
+    const ndVis = await p.$$eval('#ndList .ndr', els => els.filter(e => !e.hidden && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none').map(e => {
+      const inp = e.querySelector('input[data-ndk="name"]');
+      return inp ? inp.value : e.textContent.trim();
+    }));
+    T.check('search_matches_nd_card', ndVis.length === 1 && ndVis[0] === 'Sample 2', JSON.stringify(ndVis));
+
+    await p.fill('#panelSearch', 'zzzznonexistent');
+    await h.wait(250);
+    const emptyVis = await vis('#searchEmpty');
+    const ph = await p.getAttribute('#panelSearch', 'placeholder');
+    await p.fill('#panelSearch', '');
+    await h.wait(250);
+    const emptyCleared = !(await vis('#searchEmpty'));
+    T.check('search_empty_state_hint', emptyVis && emptyCleared && ph === 'Search settings/data/files', `emptyVis=${emptyVis} emptyCleared=${emptyCleared} ph=${ph}`);
+  });
+
   T.check('no_errors', !errs.length, errs.join('|'));
   await close();
   if (T.done) T.done();

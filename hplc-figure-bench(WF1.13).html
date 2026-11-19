@@ -256,8 +256,8 @@ details.tip[open]{display:grid;gap:6px;background:var(--well);border:1px solid v
 body:not(.secstds) .secstd{display:none!important}
 /* in a project the panel shows the step; settings wait behind More options */
 body.proj:not(.moreopen) #panel > .optsec{display:none!important}
-body.proj.searching #panel > .optsec:not([hidden]):not(.srchmiss){display:grid!important}
-.psearch{padding:10px 16px 0;order:-2}.psearch input{width:100%;box-sizing:border-box}
+body.proj.searching #panel > .optsec:not([hidden]):not(.srchmiss),body.proj.searching #list .trace:not(.srchmiss){display:grid!important}
+.psearch{padding:10px 16px 0;order:-2}.psearch input{width:100%;box-sizing:border-box}.psearch #searchEmpty{padding:8px 2px 2px}
 .srchmiss{display:none!important}
 details.more{border-top:1px dashed var(--line);padding-top:8px}
 details.more > summary{cursor:pointer;font-size:12px;color:var(--muted)}
@@ -630,7 +630,7 @@ button,input,select,textarea{font-family:inherit}
 
 <div class="app">
   <aside class="panel" id="panel">
-    <div class="psearch"><input type="search" id="panelSearch" placeholder="Search settings/data/files" aria-label="Search settings" autocomplete="off"></div>
+    <div class="psearch"><input type="search" id="panelSearch" placeholder="Search settings/data/files" aria-label="Search settings" autocomplete="off"><p class="hint" id="searchEmpty" hidden>No matching settings, traces or readings.</p></div>
     <section class="grp steps" id="stepsPanel" hidden>
       <h2>Steps<span class="steps-prog" id="stepsProg"></span></h2>
       <ol class="tl" id="tl"></ol>
@@ -1311,7 +1311,7 @@ button,input,select,textarea{font-family:inherit}
             <option value="linear">Linear drift removal</option>
           </select>
         </label>
-        <label class="f">Smoothing
+        <label class="f" title="Savitzky–Golay smoothing filter">Smoothing
           <select id="o-smooth" data-opt="smooth" data-type="num">
             <option value="0">Off</option>
             <option value="5">Light (5 pt)</option>
@@ -6927,19 +6927,31 @@ Object.entries(ADV).forEach(([key, ids]) => {
 function moreSync(){
   moreBoxes.forEach(d => { const nd = [...d.querySelectorAll('[data-opt]')].some(e => { const k = e.dataset.opt; return k in DEF && JSON.stringify(opt[k]) !== JSON.stringify(DEF[k]); });
     if (nd && !d._nd) d.open = true; d._nd = nd; }); }
-{ const inp = $('#panelSearch'); let saved = null;
+{ const inp = $('#panelSearch'), emp = $('#searchEmpty'); let saved = null, unhid = [];
+  const matchEl = (el, q, card) => { let t = card ? (el.title || '') : el.textContent + ' ' + (el.title || '');
+    if (card) { const w = document.createTreeWalker(el, 4); for (let n; (n = w.nextNode()); ) if (!n.parentElement || n.parentElement.tagName !== 'OPTION') t += ' ' + n.nodeValue; }
+    el.querySelectorAll('input, select, textarea, [title]').forEach(x => { if (x.title) t += ' ' + x.title;
+      if (x.tagName === 'SELECT') { if (x.selectedOptions) [...x.selectedOptions].forEach(o => { t += ' ' + o.textContent + ' ' + o.value; }); }
+      else if (x.value && x.type !== 'checkbox' && x.type !== 'radio' && x.type !== 'color') t += ' ' + x.value; });
+    return t.toLowerCase().includes(q); };
   const run = () => { const q = inp.value.trim().toLowerCase(), pn = $('#panel');
+    unhid.forEach(g => { g.hidden = true; }); unhid = [];
     if (!q) { if (saved) { saved.forEach(([el, st]) => { if (el.matches('.grp')) { el.classList.toggle('collapsed', st); const h = el.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', String(!st)); } else el.open = st; }); saved = null; }
-      document.body.classList.remove('searching'); pn.querySelectorAll('.srchmiss').forEach(x => x.classList.remove('srchmiss')); return; }
+      document.body.classList.remove('searching'); pn.querySelectorAll('.srchmiss').forEach(x => x.classList.remove('srchmiss')); if (emp) emp.hidden = true; return; }
     if (!saved) saved = [...pn.querySelectorAll(':scope > .grp'), ...pn.querySelectorAll('details.sub, details.more')].map(el => [el, el.matches('.grp') ? el.classList.contains('collapsed') : el.open]);
     document.body.classList.add('searching');
     pn.querySelectorAll('.srchmiss').forEach(x => x.classList.remove('srchmiss'));
-    const labs = [...pn.querySelectorAll('label')].filter(l => !l.closest('#stepsPanel, #stepSheet, .psearch'));
-    labs.forEach(l => { if (!(l.textContent + ' ' + (l.title || '')).toLowerCase().includes(q)) l.classList.add('srchmiss'); });
-    const hits = labs.filter(l => !l.classList.contains('srchmiss') && !l.hidden);
+    const labs = [...pn.querySelectorAll('label')].filter(l => !l.closest('#stepsPanel, #stepSheet, .psearch, #list .trace, #ndList .ndr'));
+    labs.forEach(l => { if (!matchEl(l, q, false)) l.classList.add('srchmiss'); });
+    const cards = [...pn.querySelectorAll('#list .trace, #ndList .ndr')];
+    cards.forEach(c => { if (!matchEl(c, q, true)) c.classList.add('srchmiss'); else { c.querySelectorAll('details').forEach(d => { if (matchEl(d, q, true)) d.open = true; });
+      const g = c.closest('#dataPanel, #ndPanel'); if (g && g.hidden) { unhid.push(g); g.hidden = false; } } });
+    pn.querySelectorAll('#ndList .ndg').forEach(g => { if (!g.querySelector('.ndr:not(.srchmiss)')) g.classList.add('srchmiss'); });
+    const hits = [...labs.filter(l => !l.classList.contains('srchmiss') && !l.closest('[hidden]')), ...cards.filter(c => !c.classList.contains('srchmiss') && !c.closest('[hidden]'))];
     hits.forEach(l => { for (let a = l.parentElement; a && a !== pn; a = a.parentElement) { if (a.matches('details')) a.open = true; if (a.matches('.grp')) { a.classList.remove('collapsed'); const h = a.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', 'true'); } } });
-    pn.querySelectorAll('details.more, details.sub').forEach(d => { if (!d.querySelector('label:not(.srchmiss)')) d.classList.add('srchmiss'); });
-    pn.querySelectorAll(':scope > .grp').forEach(g => { if (!g.closest('#stepsPanel, #stepSheet') && !g.querySelector('label:not(.srchmiss)')) g.classList.add('srchmiss'); }); };
+    pn.querySelectorAll('details.more, details.sub').forEach(d => { if (!d.closest('#list .trace, #ndList .ndr') && !hits.some(x => d.contains(x))) d.classList.add('srchmiss'); });
+    pn.querySelectorAll(':scope > .grp').forEach(g => { if (!g.closest('#stepsPanel, #stepSheet') && !hits.some(x => g.contains(x))) g.classList.add('srchmiss'); });
+    if (emp) emp.hidden = hits.length > 0; };
   inp.addEventListener('input', run); }
 function grpStatus(){
   const set = (name, t) => { document.querySelectorAll('#panel > .grp > h2').forEach(h => { if (h.firstChild.textContent.trim() === name) { const st = h.querySelector('.st'); if (st) st.textContent = t; } }); };
