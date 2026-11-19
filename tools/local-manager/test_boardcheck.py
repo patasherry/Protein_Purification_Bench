@@ -87,5 +87,12 @@ waits = bc.chain_adopted([
 ], {'needs': [{'id': 'P3', 'needs': 'P2'}]})
 check('same-section and explicit dependencies chain in order', waits == {'P2': 'P1', 'P3': 'P2'}, waits)
 
+# 11. standing board-tracker is not work, and extract_json_obj handles unclosed <think>, trailing code braces, and trailing commas
+check('a standing board-tracker issue is not work', not bc.is_work({'labels': [{'name': 'board-tracker'}]}))
+tricky = '<think>reasoning about {foo: 1} never closed... {"review": "ok", "proposals": [{"title": "Fix `fn`", "check": "const {root, texts} = box;"}],}\nExtra note: see {a, b}.'
+parsed = bc.extract_json_obj(tricky)
+check('extract_json_obj recovers JSON after unclosed <think>, trailing comma, and extra prose braces',
+      parsed.get('review') == 'ok' and len(parsed.get('proposals', [])) == 1, parsed)
+
 print(f'\n{len(bad)} failed' if bad else '\nall passed')
 sys.exit(1 if bad else 0)

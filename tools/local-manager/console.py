@@ -25,9 +25,9 @@ When you talk to the other agents (this is exact, use it when asked):
   then you try once more with their notes. Only if all of that fails does it go to the lead (Claude), with the label for-coordinator.
 - Anything that would change a number the app reports goes to Patrick (label needs-owner), never decided by an AI.
 - Items labelled for-coordinator: you ask ChatGPT (Codex) for a written recommendation for the lead, and Claude Code only if ChatGPT's daily cap is used up.
-- The direction board is GitHub issue #222. When Patrick comments "Discuss: <topic>" there (or after every 10 merged PRs, or on Sundays) you run a debate:
-  you, Gemini and ChatGPT each propose up to 3 directions with evidence and risks, argue for 2 rounds, then vote 1 to 5. Proposals all three back become issues automatically.
-  Patrick replies "No 2" to drop one or "OK 4" to add one. If Patrick asks how to start it: open issue #222 on GitHub and comment "Discuss: <topic>".
+- There are two boards:
+  1. The Polishing board is GitHub issue #222, for code-grounded bugs, unit checks, parser edge cases and figure geometry. Comment "Discuss: <topic>" on #222 to run a polishing audit.
+  2. The Creative Direction board (standing issue labelled board-tracker) pairs two domains across the app and pitches 2 to 3 Concept Cards before any code is written. Patrick replies "OK 1" to greenlight one (or "No all" to archive them), or "Discuss: <theme>" there (or "Creative: <theme>" on #222) to brainstorm new capabilities.
 - GitHub Copilot: its cloud agent takes overflow jobs. While the cloud agent is paused (for example out of AI Credits), you run the Copilot CLI on this PC instead, one job at a time, like a Claude Code job.
 - Your review gate checks every finished PR and sends weak ones back to the queue. When the queue workers are out of tries, you hand the job to Claude Code on this PC.
 - Otherwise you use Claude Code only as the last step of the question ladder, and for recommendations when ChatGPT's cap is used up. Each agent has a daily cap (shown under "use").
@@ -66,7 +66,7 @@ def start(m, port=8765):
             short = lambda rows: [{'issue': i['number'], 'title': i['title']} for i in rows if 'pull_request' not in i]
             res = {'running': running, 'queued': len({i['number'] for i in lab(m.QUEUE) + lab(m.QUEUE_OLD)}),
                    'waiting_on_lead': short(lab('for-coordinator')) + short(lab('needs-coordinator')),
-                   'waiting_on_patrick': short(lab('needs-owner')),
+                   'waiting_on_patrick': short(lab('needs-owner')) + short(lab('pitches-ready')),
                    'open_pull_requests': [{'pr': p['number'], 'title': p['title']} for p in m.gh(f'repos/{m.REPO}/pulls?state=open&per_page=50')]}
         except Exception as e:
             res = {'error': f'could not read GitHub: {e}'}
@@ -90,7 +90,7 @@ def start(m, port=8765):
         age = (time.time() - last) / 60 if last else None
         busy = s.get('busy') or {}
         bmin = (time.time() - busy['since']) / 60 if busy.get('since') else None
-        names = {'board': 'a team meeting on the direction board', 'claude jobs': 'a Claude Code job', 'questions': 'a coding agent\'s question (the ladder)', 'gate': 'reviewing PRs', 'review': 'reviewing PRs'}
+        names = {'board': 'a meeting on the polishing board', 'creative board': 'a studio session on the creative board', 'claude jobs': 'a Claude Code job', 'questions': 'a coding agent\'s question (the ladder)', 'gate': 'reviewing PRs', 'review': 'reviewing PRs'}
         if bmin is not None:
             checks.append({'part': 'Manager loop', 'ok': bmin < (75 if busy.get('duty') == 'claude jobs' else 45),
                            'detail': f'busy with {names.get(busy.get("duty"), busy.get("duty"))} for {int(bmin)} min'})

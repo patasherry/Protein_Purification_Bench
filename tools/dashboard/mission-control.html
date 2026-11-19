@@ -188,15 +188,18 @@ async function load() {
     const digest = [...track].reverse().find((c) => c.body.startsWith('### Daily digest'));
 
     const inbox = [];
-    for (const i of open) { if (i.pull_request) continue; const l = names(i);
+    for (const i of open) { const l = names(i);
+      if (i.pull_request) { if (l.has('awaiting-owner')) inbox.push({n: i.number, title: i.title, why: 'Board PR ready: reply OK or No', url: i.html_url}); continue; }
       if (l.has('needs-owner')) inbox.push({n: i.number, title: i.title, why: 'Needs your OK', url: i.html_url});
+      if (l.has('pitches-ready')) inbox.push({n: i.number, title: i.title, why: 'Creative pitches ready: reply OK 1 or No all', url: i.html_url});
       if (l.has('for-antigravity')) inbox.push({n: i.number, title: i.title, why: 'Issues labelled for-antigravity are picked up automatically, and anything not started within antigravity_stall_minutes (config key, default 45) returns to the queue', url: i.html_url}); }
     if (checkin) for (const line of checkin.body.split('\n')) { const m = line.match(/^\s*[-*]\s*\**Patrick:?\**:?\s*(.+)/); if (m) inbox.push({n: TRACK, title: clean(m[1]), why: 'From the lead check-in', url: checkin.html_url}); }
 
     const work = [];
     for (const i of open) { if (i.number === TRACK) continue;
       if (i.pull_request) { work.push({n: i.number, title: i.title, stage: 'Pull request in review', url: i.html_url, updated: i.updated_at}); continue; }
-      const l = names(i), st = (LABELS.find(([lab]) => l.has(lab)) || [])[1];
+      const l = names(i); if (l.has('board-tracker')) continue;
+      const st = (LABELS.find(([lab]) => l.has(lab)) || [])[1];
       if (st) work.push({n: i.number, title: i.title, stage: st, yours: l.has('from-patrick'), url: i.html_url, updated: i.updated_at}); }
 
     const merged = closed.filter((p) => p.merged_at && hrs(p.merged_at) < 24 * 30)

@@ -1,0 +1,102 @@
+{
+  "entries": [
+    {
+      "key": "#1528",
+      "title": "Lock every publication figure background to explicit white",
+      "kind": "owner_declined",
+      "why": "Declined by Patrick: do not force explicit white rects over figure backgrounds without asking",
+      "where": ["figure: shared bits", "figure: HPLC overlay", "figure: ÄKTA run chart"]
+    },
+    {
+      "key": "#1455",
+      "title": "Warn when SEC elution volume or Kav falls outside the column void-to-total [0, 1] range",
+      "kind": "merged",
+      "why": "SEC calibration already warns when elution volume / Kav falls outside [V0, Vt]",
+      "where": ["size exclusion (SEC)", "SEC panel"]
+    },
+    {
+      "key": "#1454",
+      "title": "Label and range-check the SEC flow-rate input to prevent a 1000x elution-volume error",
+      "kind": "merged",
+      "why": "SEC flow-rate unit label and range check already merged",
+      "where": ["SEC panel", "size exclusion (SEC)"]
+    },
+    {
+      "key": "#1469",
+      "title": "Show R-squared of the SEC calibration fit",
+      "kind": "merged",
+      "why": "SEC calibration already displays R-squared fit quality",
+      "where": ["size exclusion (SEC)", "SEC panel"]
+    },
+    {
+      "key": "main:PAL",
+      "title": "Use Wong / Okabe-Ito color-blind-safe accessible palette on chromatogram figures",
+      "kind": "already_on_main",
+      "why": "PAL in the app already defaults to the Okabe-Ito colorblind-safe publication palette",
+      "where": ["figure: shared bits", "figure: HPLC overlay"]
+    },
+    {
+      "key": "main:bandEnergy",
+      "title": "Height-proportional vertical morphological background subtraction for smiling SDS-PAGE lanes",
+      "kind": "already_on_main",
+      "why": "bandEnergy already uses height-proportional morphological opening Math.max(3, Math.round(h*0.03))",
+      "where": ["gel densitometry: lane profiles, bands, ladder calibration"]
+    },
+    {
+      "key": "#1456",
+      "title": "Show R-squared of the SDS-PAGE gel ladder calibration fit",
+      "kind": "merged",
+      "why": "Gel ladder calibration fit already reports R-squared",
+      "where": ["gel densitometry: lane profiles, bands, ladder calibration"]
+    },
+    {
+      "key": "#1476",
+      "title": "Flag detector/pixel saturated bands in the gel band table and handle 16-bit TIFF ADC clipping",
+      "kind": "merged",
+      "why": "Saturated gel bands and 16-bit TIFF true ADC clipping (#1569) are already flagged",
+      "where": ["gels", "gel densitometry: lane profiles, bands, ladder calibration"]
+    },
+    {
+      "key": "#1477",
+      "title": "Label gel-derived molecular weight as apparent",
+      "kind": "merged",
+      "why": "Gel-derived molecular weights are already labelled apparent",
+      "where": ["gels", "band tags and purity"]
+    },
+    {
+      "key": "#1518",
+      "title": "Recognise microgram-per-microlitre (ug/uL) concentration unit and multi-block NanoDrop TSV exports",
+      "kind": "merged",
+      "why": "NanoDrop parser already handles ug/uL (#1518), A340 turbidity (#1519), A260/A280 ratio (#1457), and multi-block TSV (#1574)",
+      "where": ["NanoDrop: protein A280 readings"]
+    },
+    {
+      "key": "#1510",
+      "title": "Save project data on pagehide and include schemaVersion in exported project JSON",
+      "kind": "merged",
+      "why": "pagehide autosave (#1510) and schemaVersion (#1511) are already implemented",
+      "where": ["projects: everything in one JSON file", "projects: a project per purification, saved with the page (db + assets) or in this browser"]
+    },
+    {
+      "key": "#1532",
+      "title": "Cloning stage archival, restoration toggle, and confirmation dialog when toggling Include Cloning OFF",
+      "kind": "merged",
+      "why": "Include Cloning toggle (#1433), persistence (#1434), archival/restoration (#1532), and confirmation dialog (#1533) are already built",
+      "where": ["home", "cloning workflow: stages, attempts and lineage"]
+    },
+    {
+      "key": "#1563",
+      "title": "Expose baseline integration mode selector for overlapping peaks and align shaded area with baseline",
+      "kind": "merged",
+      "why": "Baseline integration mode selector (#1563) and baseline-aligned run-chart shading (#1571) are already merged",
+      "where": ["peak integration", "figure: ÄKTA run chart"]
+    },
+    {
+      "key": "#1490",
+      "title": "Report CDS feature count and handle multi-ORF GenBank files, repressor CDS filtering, and Strep/cleavable tags",
+      "kind": "merged",
+      "why": "GenBank multi-ORF reporting (#1490), lacI filtering (#1577), His6-GST chain (#1489), and Strep/fusion tags (#1601) are already built",
+      "where": ["construct and expression panel", "upstream steps: construct, expression and lysis, drawn before the first column"]
+    }
+  ]
+}

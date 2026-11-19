@@ -45,6 +45,8 @@ for i in issues:
     l = names(i)
     if 'needs-owner' in l:
         inbox.append({'number': i['number'], 'title': i['title'], 'why': 'Needs your OK (changes a number the app reports)', 'url': i['html_url'], 'since': i['updated_at']})
+    if 'pitches-ready' in l:
+        inbox.append({'number': i['number'], 'title': i['title'], 'why': 'Creative pitches ready: reply OK 1 or No all', 'url': i['html_url'], 'since': i['updated_at']})
     if 'for-antigravity' in l:
         inbox.append({'number': i['number'], 'title': i['title'], 'why': 'Issues labelled for-antigravity are picked up automatically, and anything not started within antigravity_stall_minutes (config key, default 45) returns to the queue', 'url': i['html_url'], 'since': i['updated_at']})
 for p in prs:
@@ -61,9 +63,9 @@ STAGES = [('needs-owner', 'Waiting on you'), ('for-coordinator', 'Waiting on the
           ('queued', 'Queued'), ('jules-queue', 'Queued'), ('needs-triage', 'Being sorted')]
 work = []
 for i in issues:
-    if i['number'] == TRACK:
-        continue
     l = names(i)
+    if i['number'] == TRACK or 'board-tracker' in l:
+        continue
     stage = next((s for lab, s in STAGES if lab in l), None)
     if stage:
         work.append({'number': i['number'], 'title': i['title'], 'stage': stage, 'yours': 'from-patrick' in l,

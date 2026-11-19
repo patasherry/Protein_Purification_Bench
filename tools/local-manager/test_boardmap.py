@@ -79,4 +79,7 @@ for _ in range(5):
 check('sliding window wraps back to 0 at section end', soffs.get('sec_a') == 0, soffs)
 dcks = bm.domain_checks(doms[0], ROOT / 'tests' / 'suites')
 check('domain_checks lists existing checks from domain suites', 'tests/suites/' in dcks and len(dcks) <= 2200, dcks[:120])
+wrapped = '{"adviser": "Gemini", "domain": "Upstream", "homework_response": "Benchling stores promoters as sequence parts with typed links."}'
+check('clean_report_text unwraps accidental JSON homework objects into prose',
+      bm.clean_report_text(wrapped) == 'Benchling stores promoters as sequence parts with typed links.', bm.clean_report_text(wrapped))
 sys.exit(1 if bad else 0)

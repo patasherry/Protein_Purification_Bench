@@ -7,15 +7,16 @@ out let a user switch themes:
 - an adopted part (remember the theme) depended on a part that was not adopted (the switch)
 - the issue text kept only the debate's revision and said "P4" and "proposal 1", which mean nothing outside the meeting
 """
+import json
 import math
 import re
 
 # Issues that record something rather than ask for work. They stay in the advisers' context but never count as a duplicate.
-NOT_WORK = {'ux-report', 'from-ux-test', 'status-page'}
+NOT_WORK = {'ux-report', 'from-ux-test', 'status-page', 'board-tracker'}
 
 
 def is_work(issue):
-    """True for an issue that is a job: not a UX walk report, not the status page."""
+    """True for an issue that is a job: not a UX walk report, not the status page, not a standing board tracker."""
     return not ({l['name'] if isinstance(l, dict) else l for l in issue.get('labels', [])} & NOT_WORK)
 
 
@@ -211,3 +212,66 @@ def chain_adopted(adopted_props, verdict=None):
         for s in secs:
             last_sec[s] = pid
     return waits
+
+
+def _try_parse_dict(raw):
+    for candidate in (raw, re.sub(r',\s*([}\]])', r'\1', raw)):
+        try:
+            obj = json.loads(candidate, strict=False)
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+    return None
+
+
+def extract_json_obj(text):
+    """Extract the largest valid JSON dict from model output, surviving unclosed <think> tags, markdown fences,
+    trailing commas, and extra `{...}` braces in surrounding prose or code snippets."""
+    s = re.sub(r'<think>.*?</think>', '', str(text or ''), flags=re.S).strip()
+    if '<think>' in s:
+        ti = s.find('<think>')
+        bi = s.find('{', ti)
+        s = (s[:ti] + (s[bi:] if bi != -1 else '')).strip()
+    if not s:
+        return {}
+    fenced = re.findall(r'```(?:json)?\s*(\{.*?\})\s*```', s, flags=re.S | re.I)
+    for blk in reversed(fenced):
+        got = _try_parse_dict(blk)
+        if got is not None:
+            return got
+    direct = _try_parse_dict(s)
+    if direct is not None:
+        return direct
+    best = {}
+    n = len(s)
+    i = 0
+    while i < n:
+        if s[i] != '{':
+            i += 1
+            continue
+        depth, in_str, esc = 0, False, False
+        for j in range(i, n):
+            ch = s[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == '\\':
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        got = _try_parse_dict(s[i:j + 1])
+                        if got is not None and len(s[i:j + 1]) > len(json.dumps(best)):
+                            best = got
+                        break
+        i += 1
+    return best
+

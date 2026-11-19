@@ -27,7 +27,7 @@ const BIG_CHARS = 2500, STUCK_DAYS = 3, DONE_DAYS = 14, SCORE_DAYS = 7;
 const HAND = 'hand-running', HAND_HOURS = 3;
 const PARK_LOW = 3, PARK_WAIT_DAYS = 2, PARK_PER_DAY = 2, KEEP = 'keep-parked';
 /* a label that says whose move it is. An open issue with none of these, and no open PR, is invisible to every worker. */
-const isState = l => /^(for-|needs-|awaiting-|relay|paste-)/.test(l) || /-running$/.test(l) || ['queued', 'jules-queue', 'parked', 'ux-report', 'ready-for-lead', 'status-page'].includes(l);
+const isState = l => /^(for-|needs-|awaiting-|relay|paste-)/.test(l) || /-running$/.test(l) || ['queued', 'jules-queue', 'parked', 'ux-report', 'ready-for-lead', 'status-page', 'board-tracker', 'pitches-ready'].includes(l);
 const QUEUE_OLD = 'jules-queue';
 const SAFE = f => /^(tests\/|docs\/|\.github\/ISSUE_TEMPLATE\/)/.test(f) || f === 'README.md' || f === 'tests/README.md';
 /* a few edits outside those folders are routine for test and docs PRs: adding a suite to the Test suite matrix, or adding up to 3 lines to AGENTS.md */
@@ -56,7 +56,7 @@ module.exports = async ({github, context, core}) => {
     for (const name of [L.queue, QUEUE_OLD]) for (const i of await issues(name)) if (!seen.has(i.number)) seen.set(i.number, i);
     return [...seen.values()]; };
   const ensureLabels = async () => { const have = new Set((await github.paginate(github.rest.issues.listLabelsForRepo, {owner, repo, per_page: 100})).map(l => l.name));
-    const want = {[L.queue]: '0E8A16', [L.fail]: 'D93F0B', [L.triage]: 'C5DEF5', [L.parked]: 'EEEEEE', [KEEP]: 'EEEEEE', [HAND]: 'BFD4F2', [L.plan]: 'FBCA04', [L.status]: '1D76DB'};
+    const want = {[L.queue]: '0E8A16', [L.fail]: 'D93F0B', [L.triage]: 'C5DEF5', [L.parked]: 'EEEEEE', [KEEP]: 'EEEEEE', [HAND]: 'BFD4F2', [L.plan]: 'FBCA04', [L.status]: '1D76DB', 'board-tracker': '5319E7', 'pitches-ready': 'FBCA04'};
     for (const [name, color] of Object.entries(want)) if (!have.has(name)) await github.rest.issues.createLabel({owner, repo, name, color}); };
   const setLabels = async (n, add, remove) => { for (const r of remove) await github.rest.issues.removeLabel({owner, repo, issue_number: n, name: r}).catch(() => {});
     if (add.length) await github.rest.issues.addLabels({owner, repo, issue_number: n, labels: add}); };
@@ -159,7 +159,7 @@ module.exports = async ({github, context, core}) => {
     const livePrs = await github.paginate(github.rest.pulls.list, {owner, repo, state: 'open', per_page: 100}), prOf = new Map();
     for (const p of livePrs) { for (const m of `${p.title}\n${p.body || ''}`.matchAll(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi)) prOf.set(+m[1], p.number);
       const b = /issue-(\d+)/.exec(p.head.ref); if (b) prOf.set(+b[1], p.number); }
-    for (const i of open) { const ls = labels(i); if (TRACKERS.has(i.number) || ls.includes(L.status)) continue;
+    for (const i of open) { const ls = labels(i); if (TRACKERS.has(i.number) || ls.includes(L.status) || ls.includes('board-tracker')) continue;
       const others = ls.filter(l => isState(l) && l !== L.parked && l !== L.triage);
       if (ls.includes('owner-declined')) {
         const drop = ls.filter(l => l === L.parked || l === L.queue || l === QUEUE_OLD);
@@ -194,7 +194,7 @@ module.exports = async ({github, context, core}) => {
        and the status page read finished work as waiting. Each run cleans the issues closed in the last three days. */
     try {
       const TRANSIENT = new Set([L.queue, 'for-antigravity', 'for-codex', 'for-claude-code', 'for-copilot', 'for-coordinator', 'needs-coordinator', 'needs-triage',
-        L.plan, L.parked, KEEP, 'needs-previous', 'awaiting-parts', 'needs-owner', 'ag-returned', HAND]);
+        L.plan, L.parked, KEEP, 'needs-previous', 'awaiting-parts', 'needs-owner', 'ag-returned', HAND, 'pitches-ready']);
       const since = new Date(Date.now() - 3 * 864e5).toISOString();
       const shut = await github.paginate(github.rest.issues.listForRepo, {owner, repo, state: 'closed', since, per_page: 100});
       for (const i of shut) {
@@ -207,7 +207,7 @@ module.exports = async ({github, context, core}) => {
     /* parked issues trickle back to the workers */
     const statusPage = open.find(i => labels(i).includes(L.status)), today = new Date().toISOString().slice(0, 10);
     let out = {day: today, n: 0}; try { const m = ((statusPage && statusPage.body) || '').match(/<!-- park-out (\{.*?\}) -->/); if (m && JSON.parse(m[1]).day === today) out = JSON.parse(m[1]); } catch (e) { /* a bad marker counts as none */ }
-    const live = i => i.state !== 'closed' && !TRACKERS.has(i.number) && !labels(i).includes(L.status);
+    const live = i => i.state !== 'closed' && !TRACKERS.has(i.number) && !labels(i).includes(L.status) && !labels(i).includes('board-tracker');
     const queuedN = open.filter(i => live(i) && labels(i).includes(L.queue)).length;
     const ready = open.filter(i => live(i) && labels(i).includes(L.parked) && !labels(i).includes(KEEP) && !labels(i).includes('owner-declined') && (Date.now() - Date.parse(i.updated_at)) / 864e5 >= PARK_WAIT_DAYS)
       .sort((a, b) => (/^Bug found by /.test(b.title) ? 1 : 0) - (/^Bug found by /.test(a.title) ? 1 : 0) || a.number - b.number);
@@ -221,7 +221,7 @@ module.exports = async ({github, context, core}) => {
     /* the status page */
     const days = t => Math.floor((Date.now() - Date.parse(t)) / 864e5), link = i => `#${i.number} ${String(i.title).replace(/\|/g, '/').slice(0, 90)}`;
     const stateOf = i => { const ls = labels(i), pr = prOf.get(i.number);
-      if (ls.includes('needs-owner') && !ls.includes('owner-approved')) return ['you', 'Waiting on you: reply OK or No on the issue'];
+      if ((ls.includes('needs-owner') && !ls.includes('owner-approved')) || ls.includes('pitches-ready')) return ['you', 'Waiting on you: reply OK or No on the issue'];
       if (ls.includes(L.plan)) return ['claude', 'Waiting for a plan'];
       if (ls.some(l => ['for-coordinator', 'needs-coordinator', 'ready-for-lead'].includes(l))) return ['claude', 'Waiting on the lead'];
       if (pr) return ['work', `Pull request #${pr} open`];
@@ -239,7 +239,7 @@ module.exports = async ({github, context, core}) => {
     const mine = openNow.filter(i => labels(i).includes(L.mine) && !labels(i).includes(L.status));
     const awaitingPrs = livePrs.filter(p => labels(p).includes('awaiting-owner'));
     const askYou = openNow.filter(i => !labels(i).includes(L.status) && stateOf(i)[0] === 'you').concat(awaitingPrs);
-    const askClaude = openNow.filter(i => stateOf(i)[0] === 'claude' && !TRACKERS.has(i.number) && !labels(i).includes(L.status));
+    const askClaude = openNow.filter(i => stateOf(i)[0] === 'claude' && !TRACKERS.has(i.number) && !labels(i).includes(L.status) && !labels(i).includes('board-tracker'));
     const working = mine.filter(i => stateOf(i)[0] === 'work'), stuck = working.filter(i => days(i.updated_at) >= STUCK_DAYS);
     const hours = t => (Date.now() - Date.parse(t)) / 36e5;
     const handStale = openNow.filter(i => labels(i).includes(HAND) && !prOf.get(i.number) && hours(i.updated_at) >= HAND_HOURS);
@@ -262,7 +262,7 @@ module.exports = async ({github, context, core}) => {
     const score = Object.keys(tally).length ? '| Worker | Merged | Closed without merging | Open | Merged share |\n|---|---|---|---|---|\n' + Object.entries(tally).sort((a, b) => b[1].merged - a[1].merged).map(([k, t]) => `| ${k} | ${t.merged} | ${t.closed} | ${t.open} | ${t.merged + t.closed ? Math.round(100 * t.merged / (t.merged + t.closed)) + '%' : 'n/a'} |`).join('\n') : '_No pull requests in this period._';
     const body = ['<!-- status-page -->', '# Where your requests stand', '',
       `Rebuilt by the queue leader whenever something changes. To ask for something, open a [new request](https://github.com/${owner}/${repo}/issues/new?template=request.yml) or tell Claude in a chat. A request is filed in your own words and stays on this page until it is done.`, '',
-      `## Waiting on you (${askYou.length})`, list(askYou, i => `- ${link(i)}${labels(i).includes('awaiting-owner') ? ' (board PR ready: reply OK or No on the PR)' : ''}`), '',
+      `## Waiting on you (${askYou.length})`, list(askYou, i => `- ${link(i)}${labels(i).includes('awaiting-owner') ? ' (board PR ready: reply OK or No on the PR)' : labels(i).includes('pitches-ready') ? ' (creative pitches ready: reply OK 1 or No all)' : ''}`), '',
       `## Waiting on Claude (${askClaude.length})`, askClaude.length ? 'Open a chat with Claude and say "work through my status page".\n' + list(askClaude, i => `- ${link(i)}: ${stateOf(i)[1].toLowerCase()}`) : '_Nothing._', '',
       ...(handStale.length ? [`## Started by hand, no pull request (${handStale.length})`, `Started in Antigravity ${HAND_HOURS} or more hours ago with no pull request. Open that session in Antigravity: it probably stopped before pushing. Remove \`${HAND}\` and add \`queued\` to let the PC do it instead.\n` + list(handStale, i => `- ${link(i)}: ${Math.round(hours(i.updated_at))} hours`), ''] : []),
       `## Stuck (${stuck.length})`, stuck.length ? `No movement for ${STUCK_DAYS} days or more.\n` + list(stuck, i => `- ${link(i)}: ${stateOf(i)[1].toLowerCase()}, ${days(i.updated_at)} days`) : '_Nothing._', '',
