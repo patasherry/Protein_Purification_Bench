@@ -77,7 +77,7 @@ Think across these THREE creative archetypes (propose up to {each} distinct Conc
 
 HARD GUARDRAILS:
 - **No nitpicks or lint tickets:** Do NOT propose input validation regexes, generic out-of-range warning badges, minor CSS tweaks, or repeats of anything in the Capability Digest or Permanent Board Ledger below.
-- **Single-file reality:** Everything must work offline/client-side inside `hplc-figure-bench(WF1.13).html` with zero frameworks, servers, or new network dependencies (unless explicitly justified).
+- **Single-file reality:** Everything must work offline/client-side inside `protein-purification-bench.html` with zero frameworks, servers, or new network dependencies (unless explicitly justified).
 - **Zero-bloat UX:** Prefer capabilities that activate automatically when relevant data exists or tuck cleanly into existing panels/`More` sections without adding mandatory form busywork.
 - Name the real `docs/CODEMAP.md` sections it would connect in `"where"`, estimate `"scope"` as `"small"` (fits cleanly in 1 PR) or `"medium"` (2 to 5 ordered jobs split by `planner.py`), and state `"science_check"` if it introduces a scientific formula needing a cited source.
 

@@ -9,7 +9,7 @@ import boardledger as bl
 import manager as mgr
 
 ROOT = HERE.parents[1]
-app = (ROOT / 'hplc-figure-bench(WF1.13).html').read_text(encoding='utf-8', errors='replace')
+app = (ROOT / 'protein-purification-bench.html').read_text(encoding='utf-8', errors='replace')
 cmap = (ROOT / 'docs' / 'CODEMAP.md').read_text(encoding='utf-8', errors='replace')
 
 # 1. Live capability digest finds built features and optional data model
@@ -34,6 +34,6 @@ with tempfile.TemporaryDirectory() as tmp:
 # 3. code_for verifies existing test suite files so peer audit never falsely claims 42_figures.js is missing
 excerpt = mgr.code_for('Verify stroke width in tests/suites/42_figures.js and `PAL` palette.', limit=4000)
 assert 'verified existing suite tests/suites/42_figures.js' in excerpt, excerpt[:300]
-assert 'PAL in hplc-figure-bench(WF1.13).html' in excerpt, excerpt[:500]
+assert 'PAL in protein-purification-bench.html' in excerpt, excerpt[:500]
 
 print('test_boardledger: all asserts passed')

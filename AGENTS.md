@@ -10,9 +10,9 @@ The owner is a biochemistry graduate student who uses it for real lab data. Scie
 
 ## Repository layout
 
-- `hplc-figure-bench(WF1.13).html`: the entire application (HTML, CSS and JavaScript in one file). Do not rename it unless the task asks you to. The owner manages the version label.
+- `protein-purification-bench.html`: the entire application (HTML, CSS and JavaScript in one file). Do not rename it unless the task asks you to.
 
-**The name.** The app is called **Protein Purification Bench** (the Direction board's unanimous choice on #222, 2026-10-30, carried out in PR #1018). That is the name in the page title, the header and all prose. Three things keep the old name for good, because they are data rather than labels: the file name above, the `hplc-fig-opt` settings key, and the `app: 'HPLC Figure Bench'` field in project files, which both the exporter writes and the importer checks. Renaming any of those stops every project saved before the rename from loading, and stops every file saved after it from opening in an older copy. `tests/suites/01_name.js` checks both halves.
+**The name.** The app is called **Protein Purification Bench** (the Direction board's unanimous choice on #222, 2026-10-30, carried out in PR #1018; the file and repository were renamed in November 2026). That is the name in the page title, the header, the file name and all prose. Three stored identifiers keep the old name for good, because they are data rather than labels: the `hplc-fig-opt` settings key, the `hfb-projects` IndexedDB database, and the `app: 'HPLC Figure Bench'` field written in exported project files (while the importer accepts both `'HPLC Figure Bench'` and `'Protein Purification Bench'`). Keeping those ensures every project saved before the rename still loads, and every file saved today still opens in an older copy. `tests/suites/01_name.js` checks all of these.
 - `README.md`: user-facing documentation.
 - `AGENTS.md`: this file.
 - `CLAUDE.md`: points Claude Code to this file.
@@ -98,12 +98,12 @@ Two pull requests were lost to not having this. #1378 carried the correct app fi
 
 **Rules for the suite:**
 
-- Tests drive the app only through its UI and DOM, never internal functions, never through window.__HFB.
+- Tests drive the app only through its UI and DOM, never internal functions, never through `window.__HFB` or `window.__PPB`.
 - All test data is synthetic. Never add real lab files to `tests/`. Inputs that were first real files are mapped to synthetic stand-ins in `tests/lib/harness.js`.
 - Keep every existing check. Do not delete, weaken or comment out a check to make a change pass. If a check is wrong, say why in the PR.
 - User-visible numerical fixes require minimal main-failing evidence: add one UI-level synthetic case that fails on main and passes on the branch. Assert the displayed value with an appropriate tolerance or exact text when rounding is contractual, allowing domain-specific tests to define the expected semantics.
 
-For a quick manual look: open the HTML file in a browser (example chromatograms load automatically), or add `#quick` to the URL for Quick-Figure mode. `#selftest` exposes internal functions on `window.__HFB` for the browser console.
+For a quick manual look: open the HTML file in a browser (example chromatograms load automatically), or add `#quick` to the URL for Quick-Figure mode. `#selftest` exposes internal functions on `window.__PPB` (`window.__HFB`) for the browser console.
 
 In every PR description, say exactly what you tested and how. Do not claim testing that did not happen.
 
@@ -124,7 +124,7 @@ You are one coding worker among several. A manager program hands you one issue, 
 What a worker needs to know:
 
 - **Order of workers (Patrick's choice, 2026-11-12).** Google Antigravity takes the coding work, and gets a second attempt on a stronger model when its first fails or the gate sends it back. Codex takes only what Antigravity has handed back or what is labelled `for-codex`. Claude is the last resort and reviews changes to reported numbers. Google Jules was removed on 2026-11-12.
-- **The gate.** Your PR is checked by plain code: only the app, `tests/`, `docs/`, `README.md` and `.gitignore` change. No regressions. At least one check fails on main and passes on the PR. No check you add fails on the PR. No existing check is deleted or commented out. A new check fails on main because main looks or behaves wrong, not because of how the markup is spelled (comparing `getAttribute('fill')` with `'#fff'` is sent back: read the computed style, the exported SVG or pixels). A change that only rewrites a colour another way is sent back. A blocking problem named by the local first-pass review is sent back to be fixed or answered. No test reaches into `window.__HFB`. `expected.json` is not rewritten. No merge conflict. A PR that fails is closed and the reasons are added to its issue.
+- **The gate.** Your PR is checked by plain code: only the app, `tests/`, `docs/`, `README.md` and `.gitignore` change. No regressions. At least one check fails on main and passes on the PR. No check you add fails on the PR. No existing check is deleted or commented out. A new check fails on main because main looks or behaves wrong, not because of how the markup is spelled (comparing `getAttribute('fill')` with `'#fff'` is sent back: read the computed style, the exported SVG or pixels). A change that only rewrites a colour another way is sent back. A blocking problem named by the local first-pass review is sent back to be fixed or answered. No test reaches into `window.__HFB` or `window.__PPB`. `expected.json` is not rewritten. No merge conflict. A PR that fails is closed and the reasons are added to its issue.
 - **Empty pull requests are never merged.** If the fix is already on main, say so on the issue and close the issue directly, without a PR.
 - **Reported numbers are Patrick's call.** An issue labelled `needs-owner` without `owner-approved` is not yours to start.
 - **A job has a check.** A queued issue follows the job-card form (`.github/ISSUE_TEMPLATE/job.md`): Change, Check, Where, Rules. The Check is how you know you are done. For one of Patrick's own requests, which may not name a check, write the check yourself first.

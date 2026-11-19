@@ -26,9 +26,9 @@ Each run, work at most ONE job:
    map of the app. Follow them on every later run too.
 
 2. List the queue. Prefer:
-     gh issue list --repo patasherry/hplc-figure-bench --label for-antigravity --state open --limit 50
+     gh issue list --repo patasherry/protein-purification-bench --label for-antigravity --state open --limit 50
    If gh is not available, the repository is public, so an unauthenticated read works:
-     curl -s "https://api.github.com/repos/patasherry/hplc-figure-bench/issues?labels=for-antigravity&state=open&per_page=50"
+     curl -s "https://api.github.com/repos/patasherry/protein-purification-bench/issues?labels=for-antigravity&state=open&per_page=50"
    That endpoint returns pull requests as well as issues. Skip any entry that has a "pull_request" field:
    a pull request is work already done, not a job. `gh issue list` drops them for you.
 
@@ -43,11 +43,11 @@ Each run, work at most ONE job:
 4. Create the branch antigravity/issue-<N> from the main you just pulled.
 
 5. Read the issue and do what it asks, and nothing more. Change only
-   hplc-figure-bench(WF1.13).html and files under tests/. Never add real lab data: all test data is synthetic
+   protein-purification-bench.html and files under tests/. Never add real lab data: all test data is synthetic
    and the stand-ins are in tests/lib/harness.js.
 
 6. Add a check that fails on current main and passes with your change, driven only through the UI and the DOM,
-   never through window.__HFB. Keep every existing check. Run the suites you touched:
+   never through window.__HFB or window.__PPB. Keep every existing check. Run the suites you touched:
      cd tests && node suites/NN_name.js
    Record the before and after, because the review gate requires that evidence.
 
@@ -70,7 +70,7 @@ If you would rather it empty the queue now and stop, without a schedule, paste t
 own work and keeps going until the queue is empty.
 
 ```
-You are working in this repository (patasherry/hplc-figure-bench). Work through the queue of issues
+You are working in this repository (patasherry/protein-purification-bench). Work through the queue of issues
 labelled for-antigravity, one at a time, until none are left or you have opened 5 pull requests.
 
 Setup, once:
@@ -80,9 +80,9 @@ Setup, once:
 For each job:
 
 1. List the queue. Prefer:
-     gh issue list --repo patasherry/hplc-figure-bench --label for-antigravity --state open --limit 50
+     gh issue list --repo patasherry/protein-purification-bench --label for-antigravity --state open --limit 50
    If gh is not available, the repository is public, so an unauthenticated read works:
-     curl -s "https://api.github.com/repos/patasherry/hplc-figure-bench/issues?labels=for-antigravity&state=open&per_page=50"
+     curl -s "https://api.github.com/repos/patasherry/protein-purification-bench/issues?labels=for-antigravity&state=open&per_page=50"
    That endpoint returns pull requests as well as issues. Skip any entry that has a "pull_request" field:
    a pull request is work already done, not a job. `gh issue list` drops them for you.
 
@@ -95,11 +95,11 @@ For each job:
 3. git checkout main && git pull, then create the branch antigravity/issue-<N>.
 
 4. Read the issue and do what it asks, and nothing more. Change only
-   hplc-figure-bench(WF1.13).html and files under tests/. Never add real lab data: all test data is synthetic
+   protein-purification-bench.html and files under tests/. Never add real lab data: all test data is synthetic
    and the stand-ins are in tests/lib/harness.js.
 
 5. Add a check that fails on current main and passes with your change, driven only through the UI and the DOM,
-   never through window.__HFB. Keep every existing check. Run the suites you touched:
+   never through window.__HFB or window.__PPB. Keep every existing check. Run the suites you touched:
      cd tests && node suites/NN_name.js
    Record the before and after, because the review gate requires that evidence.
 

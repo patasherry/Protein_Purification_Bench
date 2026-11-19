@@ -2,12 +2,12 @@
 manager.py does the GitHub side (see relay() there). Protocol: docs/RELAY.md."""
 import datetime as dt, hashlib, re, secrets
 
-APP = 'hplc-figure-bench(WF1.13).html'
+APP = 'protein-purification-bench.html'
 MAX_LINES = 1400  # total excerpt lines per request: these are the hard jobs, and the agent reading them has room for whole sections
 MAX_CHARS = 20000  # and a character budget beside it, which is the one that actually binds. This app's lines run long
                    # (median 89, longest 3126), so 631 lines of it came to 64,000 characters and #1060's request went
                    # out at 104,314: too long to paste into most agents, and spam in the owner's notifications.
-ALLOWED = re.compile(r'^(hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests/(suites|data|lib|ux)/|tests/README\.md|docs/)')  # same as the gate's in manager.py
+ALLOWED = re.compile(r'^(protein-purification-bench\.html|hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests/(suites|data|lib|ux)/|tests/README\.md|docs/)')  # same as the gate's in manager.py
 REQ_HEAD, REQ_END = '=== HFB-RELAY REQUEST v1 ===', '=== END REQUEST ==='
 RESP_HEAD, RESP_END = '=== HFB-RELAY RESPONSE v1 ===', '=== END RESPONSE ==='
 MARK = '<!-- relay-req {} {} -->'  # on every request comment: id and base, so the PC and cloud copies agree on what is outstanding

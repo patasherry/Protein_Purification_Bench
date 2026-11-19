@@ -9,8 +9,9 @@ Run:  python3 tools/dashboard/snapshot.py out/
 import datetime as dt, json, os, re, subprocess, sys
 from pathlib import Path
 
-REPO = 'patasherry/hplc-figure-bench'
-APP = 'hplc-figure-bench(WF1.13).html'
+REPO_NEW, REPO_OLD = 'patasherry/protein-purification-bench', 'patasherry/hplc-figure-bench'
+REPO = REPO_NEW
+APPS = {'protein-purification-bench.html', 'hplc-figure-bench(WF1.13).html'}
 TRACK = 17
 OWNER = REPO.split('/')[0]
 NOW = dt.datetime.now(dt.timezone.utc)
@@ -18,7 +19,14 @@ ENV = {k: v for k, v in os.environ.items() if k != 'GH_TOKEN'}
 
 
 def gh(path):
+    global REPO
     out = subprocess.run(['gh', 'api', path], capture_output=True, text=True, env=ENV)
+    if out.returncode and REPO_NEW in path and '404' in (out.stderr or ''):
+        alt = path.replace(REPO_NEW, REPO_OLD, 1)
+        out2 = subprocess.run(['gh', 'api', alt], capture_output=True, text=True, env=ENV)
+        if not out2.returncode:
+            REPO = REPO_OLD
+            return json.loads(out2.stdout or 'null')
     if out.returncode:
         raise RuntimeError(f'gh api {path}: {out.stderr.strip()[:200]}')
     return json.loads(out.stdout or 'null')
@@ -82,7 +90,7 @@ for page in (1, 2, 3):
         if not p.get('merged_at') or ago(p['merged_at']) > 24 * 30:
             continue
         files = [f['filename'] for f in gh(f'repos/{REPO}/pulls/{p["number"]}/files?per_page=100')]
-        kind = 'App fix' if APP in files else 'Tests' if all(f.startswith('tests/') for f in files) else 'Tools and docs'
+        kind = 'App fix' if (APPS & set(files)) else 'Tests' if all(f.startswith('tests/') for f in files) else 'Tools and docs'
         merged.append({'number': p['number'], 'title': p['title'], 'day': p['merged_at'][:10], 'kind': kind, 'url': p['html_url']})
     if len(batch) < 100 or (batch and ago(batch[-1]['updated_at']) > 24 * 30):
         break

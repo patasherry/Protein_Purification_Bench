@@ -1,7 +1,7 @@
 {
-  "name": "hplc-figure-bench-tests",
+  "name": "protein-purification-bench-tests",
   "private": true,
-  "description": "Browser test suite for HPLC Figure Bench",
+  "description": "Browser test suite for Protein Purification Bench",
   "scripts": {
     "test": "node run.js",
     "compare": "node compare.js"

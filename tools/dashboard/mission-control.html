@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Figure Bench Mission Control</title>
+<title>Protein Purification Bench Mission Control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif&display=swap">
 <style>
@@ -78,7 +78,7 @@ details.log pre { font-size: .75rem; max-height: 16rem; overflow: auto; backgrou
 <div class="wrap">
   <header class="bar">
     <div>
-      <h1>Figure Bench Mission Control</h1>
+      <h1>Protein Purification Bench Mission Control</h1>
       <p class="take" id="take">Reading GitHub…</p>
     </div>
     <div style="text-align:right">
@@ -91,7 +91,7 @@ details.log pre { font-size: .75rem; max-height: 16rem; overflow: auto; backgrou
   <section class="card">
     <div><h2>Needs you</h2><p class="note">Decisions only you can make: changes to numbers the app reports. Issues labelled for-antigravity are picked up automatically, and anything not started within antigravity_stall_minutes (config key, default 45) returns to the queue.</p></div>
     <div id="inbox"></div>
-    <p class="cta">Hit a problem while using the app? <a href="https://github.com/patasherry/hplc-figure-bench/issues/new?template=from-patrick.md" target="_blank" rel="noopener">Report it with the From Patrick form</a>. Those go to the front of the queue.</p>
+    <p class="cta">Hit a problem while using the app? <a id="cta-link" href="https://github.com/patasherry/protein-purification-bench/issues/new?template=from-patrick.md" target="_blank" rel="noopener">Report it with the From Patrick form</a>. Those go to the front of the queue.</p>
   </section>
 
   <section class="card" id="ai">
@@ -149,8 +149,9 @@ details.log pre { font-size: .75rem; max-height: 16rem; overflow: auto; backgrou
 
 <script>
 "use strict";
-const REPO = 'patasherry/hplc-figure-bench', APP = 'hplc-figure-bench(WF1.13).html', TRACK = 17, OWNER = 'patasherry';
-const API = 'https://api.github.com/repos/' + REPO;
+const REPO_NEW = 'patasherry/protein-purification-bench', REPO_OLD = 'patasherry/hplc-figure-bench';
+let REPO = REPO_NEW;
+const APP = 'protein-purification-bench.html', APP_OLD = 'hplc-figure-bench(WF1.13).html', TRACK = 17, OWNER = 'patasherry';
 const ORDER = ['Waiting on you', 'Waiting on the lead', 'Pull request in review', 'Queued', 'Being sorted'];
 const DOT = {'Waiting on you': 'warn', 'Waiting on the lead': 'warn', 'Pull request in review': '', 'Queued': 'idle', 'Being sorted': 'idle'};
 const LABELS = [['needs-owner', 'Waiting on you'], ['for-coordinator', 'Waiting on the lead'], ['needs-coordinator', 'Waiting on the lead'],
@@ -165,7 +166,11 @@ const clean = (s) => s.replace(/\*\*|`|_/g, '').replace(/^#+\s*/, '').trim();
 let left = null, pick = null, data = null;
 
 async function gh(path) {
-  const r = await fetch(API + path, {headers: {Accept: 'application/vnd.github+json'}});
+  let r = await fetch('https://api.github.com/repos/' + REPO + path, {headers: {Accept: 'application/vnd.github+json'}});
+  if (r.status === 404 && REPO === REPO_NEW) {
+    const r2 = await fetch('https://api.github.com/repos/' + REPO_OLD + path, {headers: {Accept: 'application/vnd.github+json'}});
+    if (r2.ok) { REPO = REPO_OLD; const cl = $('cta-link'); if (cl) cl.href = 'https://github.com/' + REPO_OLD + '/issues/new?template=from-patrick.md'; r = r2; }
+  }
   left = r.headers.get('x-ratelimit-remaining') ?? left;
   if (!r.ok) throw new Error(r.status === 403 || r.status === 429 ? 'GitHub allows 60 reads an hour without signing in, and that is used up. It resets within the hour.' : `GitHub answered ${r.status} for ${path}`);
   return r.json();
@@ -175,13 +180,16 @@ async function load() {
   $('refresh').disabled = true; $('err').hidden = true;
   try {
     const since30 = new Date(Date.now() - 30 * 864e5).toISOString(), since3 = new Date(Date.now() - 3 * 864e5).toISOString();
-    const [open1, open2, closed, appCommits, track, leader, tests, recent] = await Promise.all([
+    await gh('/issues/' + TRACK);
+    const [open1, open2, closed, appCommitsNew, appCommitsOld, track, leader, tests, recent] = await Promise.all([
       gh('/issues?state=open&per_page=100&page=1'), gh('/issues?state=open&per_page=100&page=2'),
       gh('/pulls?state=closed&sort=updated&direction=desc&per_page=100'),
       gh('/commits?sha=main&per_page=100&since=' + since30 + '&path=' + encodeURIComponent(APP)),
+      gh('/commits?sha=main&per_page=100&since=' + since30 + '&path=' + encodeURIComponent(APP_OLD)).catch(() => []),
       gh(`/issues/${TRACK}/comments?per_page=100&since=${since3}`),
       gh('/actions/workflows/queue-leader.yml/runs?per_page=15'), gh('/actions/workflows/tests.yml/runs?per_page=15'),
       gh('/issues/comments?sort=created&direction=desc&per_page=60')]);
+    const appCommits = appCommitsNew.concat(appCommitsOld);
     const open = open1.concat(open2), names = (i) => new Set(i.labels.map((l) => l.name));
     const appPRs = new Set(appCommits.map((c) => (c.commit.message.split('\n')[0].match(/\(#(\d+)\)\s*$/) || [])[1]).filter(Boolean).map(Number));
     const checkin = [...track].reverse().find((c) => c.body.startsWith('### Lead check-in') && c.user.login === OWNER);

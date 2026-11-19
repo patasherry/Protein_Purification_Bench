@@ -7,7 +7,7 @@ from boardpaths import ROOT, repo_files, invented_paths, unknown_idents, verifie
 
 
 def pointers(repo):
-    app = (repo / 'hplc-figure-bench(WF1.13).html').read_text(encoding='utf-8', errors='replace')
+    app = (repo / 'protein-purification-bench.html').read_text(encoding='utf-8', errors='replace')
     vp = verified_pointers('Update `zoomCompose` and check `#saveSvg` vs `#brandNewControlId` ignoring `#fff` and `#abcdef` with `exportSvg()`.', app=app)
     assert '`zoomCompose` (line ' in vp, vp
     assert '`#saveSvg` (line ' in vp, vp
@@ -22,7 +22,7 @@ def pointers(repo):
 def idents(repo):
     """The board may name a function that is not in the app. That is a warning, never a rejection, because a
     proposal may mean to add one. #1384 rested its whole premise on `drawZoomInset`, which does not exist."""
-    app = (repo / 'hplc-figure-bench(WF1.13).html').read_text(encoding='utf-8', errors='replace')
+    app = (repo / 'protein-purification-bench.html').read_text(encoding='utf-8', errors='replace')
     assert app, 'app file not read'
     ok = 0
     # the real #1384 text
@@ -56,7 +56,7 @@ def main(repo):
     assert bad == ['src/workflows/templates/miniprep.js', 'test/workflows/reusability.test.js'], bad
     ok += 1
     # real references must pass
-    for good in ['change tests/suites/25_gels.js and hplc-figure-bench(WF1.13).html',
+    for good in ['change tests/suites/25_gels.js and protein-purification-bench.html',
                  'update README.md and docs/CODEMAP.md',
                  'the gels section of the app, no paths at all',
                  'add a check to tests/lib/harness.js']:

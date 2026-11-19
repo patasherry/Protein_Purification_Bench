@@ -7483,7 +7483,7 @@ function projectData(){
   const pExp = JSON.parse(JSON.stringify(prep)); if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; delete s.gel.adjImage; } });
   return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep: pExp, srcDiag: Object.assign({}, srcDiag)};
 }
-let projUndo = null, failedGels = [];
+let projUndo = null, failedGels = []; const isApp = a => a === 'HPLC Figure Bench' || a === 'Protein Purification Bench';
 /* a project file can be partial or damaged: keep what can be used and count what was skipped */
 function cleanProject(d){
   const isO = o => o && typeof o === 'object' && !Array.isArray(o), hasXY = c => isO(c) && Array.isArray(c.xs) && Array.isArray(c.ys); let skipped = 0;
@@ -7516,7 +7516,7 @@ function cleanProject(d){
   }
   return skipped; }
 async function openProject(data, name, noUndo){
-  if (!data || data.app !== 'HPLC Figure Bench' || !Array.isArray(data.runs)) { toast(`${name || 'That file'} is not a project saved by this tool`); return; }
+  if (!data || !isApp(data.app) || !Array.isArray(data.runs)) { toast(`${name || 'That file'} is not a project saved by this tool`); return; }
   const skipped = cleanProject(data);
   projUndo = !noUndo && (runs.length || gels.length || traces.some(t => !t.ex)) ? projectData() : null;
   const ng = []; failedGels = [];
@@ -7548,7 +7548,7 @@ $('#projFile').addEventListener('change', async e => { const f = e.target.files[
   await importAsProject(data, f.name); });
 /* from the home screen or a project, a project file opens as a project of its own and never replaces the open one */
 async function importAsProject(data, fname){
-  if (!data || data.app !== 'HPLC Figure Bench' || !Array.isArray(data.runs)) { toast(`${fname} is not a project saved by this tool`); return; }
+  if (!data || !isApp(data.app) || !Array.isArray(data.runs)) { toast(`${fname} is not a project saved by this tool`); return; }
   await leaveWorkspace(); resetWorkspace(); try { await openProject(data, fname, true); } catch (e) { console.warn('import failed', e); toast(`Could not open ${fname}: the file is damaged`); showHome(); return; } stripBlobIds(); traces = traces.filter(t => !t.ex);
   PROJ = mkProj(newPid(), fname.replace(/(_project)?\.json$/i, '').replace(/_/g, ' '), Date.now());
   if (failedGels.length) PROJ.lost.gels = failedGels.map(g => Object.assign({}, g, {imageId: undefined}));
@@ -7791,7 +7791,7 @@ async function storeLoad(id){
     return {meta: doc, data: await unpackCloud(st)}; }
   const p = await idbDo('readonly', st => st.get(id)); if (!p) throw new Error('gone');
   let d = JSON.parse(p.data);
-  if (d.app === 'HPLC Figure Bench' && d.version >= 2) d = await unpackLocal(d);
+  if (isApp(d.app) && d.version >= 2) d = await unpackLocal(d);
   return {meta: p, data: d};
 }
 async function storeDelete(id){
@@ -9914,7 +9914,7 @@ function exampleTraces(){
   traces.forEach(detectPeaks);
 }
 
-if (location.hash === '#selftest') window.__HFB = {DET, opt, gels, gelBands, detectBands, laneProfile, autoLadder, autoCrop, applyAutoCrop, laneTrack, gridTrack, fracIdx, shadeSet, laneTarget, suggestPool, runs: () => runs, calib, getG: () => G, tags: g => g.tags, tagOf, processGel, autoContrast, render, curGel: () => curGel(), LADDERS};
+if (location.hash === '#selftest') window.__PPB = window.__HFB = {DET, opt, gels, gelBands, detectBands, laneProfile, autoLadder, autoCrop, applyAutoCrop, laneTrack, gridTrack, fracIdx, shadeSet, laneTarget, suggestPool, runs: () => runs, calib, getG: () => G, tags: g => g.tags, tagOf, processGel, autoContrast, render, curGel: () => curGel(), LADDERS};
 exampleTraces();
 syncControls();
 renderList();

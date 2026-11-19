@@ -181,7 +181,7 @@ def probe_card(p):
     out['change'] = (
         'Peer review marked this hypothesis for verification before full adoption. '
         'First write and run the synthetic UI-level check below against `main` in `tests/suites/`.\n'
-        '- **If `main` already passes:** do NOT edit `hplc-figure-bench(WF1.13).html`; open a `tests/`-only PR adding the passing regression guard.\n'
+        '- **If `main` already passes:** do NOT edit `protein-purification-bench.html`; open a `tests/`-only PR adding the passing regression guard.\n'
         '- **If `main` fails (confirming the bug):** do NOT open a PR whose own check fails. If fixing it would change a reported number, comment the exact reproduction on the issue and stop; otherwise apply the minimal scoped fix in the named section so the check fails on `main` and passes on your branch.\n\n'
         f'Scoped target if `main` fails: {p.get("change", "")}'
     )[:1500]
