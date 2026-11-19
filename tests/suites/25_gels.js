@@ -563,4 +563,89 @@ await T.t('top-band-kda-clear-of-lane-headers', async () => {
   }
 });
 
+/* #1604: Surface an actionable Invert hint when loading a dark-background gel image */
+await T.t('dark-background-gel-invert-hint', async () => {
+  const a = await start(), {p} = a, h = H(p);
+  try {
+    const pngDataUrl = await p.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = 400; c.height = 300;
+      const ctx = c.getContext('2d'), im = ctx.createImageData(400, 300);
+      const lanes = [{ x: 40, bands: [50, 90, 130, 170, 210, 250] }];
+      for (let lx = 80; lx <= 360; lx += 40) lanes.push({ x: lx, bands: [110, 190] });
+      for (let y = 0; y < 300; y++) {
+        for (let x = 0; x < 400; x++) {
+          let signal = 0;
+          for (const ln of lanes) {
+            const dx = Math.abs(x - ln.x);
+            if (dx > 8) continue;
+            const wx = Math.exp(-0.5 * Math.pow(dx / 5, 2));
+            for (const by of ln.bands) {
+              const dy = Math.abs(y - by);
+              if (dy > 8) continue;
+              const wy = Math.exp(-0.5 * Math.pow(dy / 2.5, 2));
+              signal = Math.max(signal, wx * wy);
+            }
+          }
+          const r = Math.round(6 + (240 - 6) * signal);
+          const g = Math.round(6 + (240 - 6) * signal);
+          const b = Math.round(8 + (244 - 8) * signal);
+          const idx = 4 * (y * 400 + x);
+          im.data[idx] = r;
+          im.data[idx + 1] = g;
+          im.data[idx + 2] = b;
+          im.data[idx + 3] = 255;
+        }
+      }
+      ctx.putImageData(im, 0, 0);
+      return c.toDataURL('image/png');
+    });
+    const buf = Buffer.from(pngDataUrl.split(',')[1], 'base64');
+    await p.setInputFiles('#gelFile', { name: 'dark_gel.png', mimeType: 'image/png', buffer: buf });
+    await h.wait(800);
+
+    const invertBtn = p.locator('#toast button', { hasText: 'Invert' });
+    const hasInvertBtn = await invertBtn.isVisible().catch(() => false);
+    T.check('dark-gel.toast-surfaces-invert-button', hasInvertBtn, 'toast should include an actionable Invert button');
+
+    const invertCheckedBefore = await p.$eval('#g-invert', el => el.checked);
+    T.check('dark-gel.invert-initially-unchecked', !invertCheckedBefore, 'Invert should remain false until user action');
+
+    const hintVisible = await p.evaluate(() => {
+      const ls = document.getElementById('ladderStatus');
+      const dh = document.getElementById('g-darkHint');
+      const bt = document.getElementById('bandTable');
+      return (ls && /invert/i.test(ls.textContent)) || (dh && !dh.hidden) || (bt && /invert/i.test(bt.textContent));
+    });
+    T.check('dark-gel.hint-points-out-invert', hintVisible, 'concise hint should point out Invert while invert is false');
+
+    if (hasInvertBtn) {
+      await invertBtn.click();
+      await h.wait(800);
+    }
+
+    const invertCheckedAfter = await p.$eval('#g-invert', el => el.checked);
+    T.check('dark-gel.invert-checked-after-click', invertCheckedAfter, '#g-invert should be checked after clicking Invert button');
+
+    const res = await p.evaluate(() => {
+      const chips = Array.from(document.querySelectorAll('#bandTable .bchip'));
+      const satChips = chips.filter(ch => ch.classList.contains('sat') || /saturated/i.test(ch.textContent));
+      return {
+        chips: chips.length,
+        satChips: satChips.length
+      };
+    });
+    T.check('dark-gel.detects-bright-bands-without-false-saturation', res.chips > 0 && res.satChips === 0, JSON.stringify(res));
+
+    const hintGone = await p.evaluate(() => {
+      const dh = document.getElementById('g-darkHint');
+      const bdh = document.getElementById('bandDarkHint');
+      return (!dh || dh.hidden) && (!bdh || bdh.hidden);
+    });
+    T.check('dark-gel.hint-hidden-after-invert', hintGone, 'dark background hint should hide once inverted');
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
