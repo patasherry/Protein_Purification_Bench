@@ -4,7 +4,7 @@ Protein Purification Bench is a single-file browser application for making publi
 
 ## How to use
 
-Double-click `hplc-figure-bench(WF1.13).html` to open it in any web browser (or add `#quick` to the URL to jump straight into Quick-Figure mode).
+Double-click `protein-purification-bench.html` to open it in any web browser (or add `#quick` to the URL to jump straight into Quick-Figure mode).
 
 **1. Quick figure from one chromatogram**
 Click **"Make a quick figure without a project"** on the home screen. Drop a CSV, TSV, TXT, or UNICORN 7 `.zip` file from the ÄKTA or HPLC (or paste two columns from Excel). Drag across the chart to integrate a peak, or click **"Detect peaks"** under Peak integration. Copy the SVG or save a PNG at journal column widths.
@@ -147,10 +147,10 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 
 ## Repository Layout
 
-*   `hplc-figure-bench(WF1.13).html`: Single-file web application (HTML, CSS, and JavaScript).
+*   `protein-purification-bench.html`: Single-file web application (HTML, CSS, and JavaScript).
 *   `README.md`: User-facing documentation.
 *   `AGENTS.md` / `CLAUDE.md`: Shared instructions and rules for coding agents.
 *   `.github/workflows/`: GitHub Actions for automated browser tests and PR reviews.
 *   `tests/`: Automated Playwright browser test suite and synthetic test datasets.
 
-**A note on the name.** The app was called HPLC Figure Bench until November 2026. Project files still carry `"app": "HPLC Figure Bench"` inside them and the browser still stores settings under `hplc-fig-opt`, so everything you saved under the old name keeps working, and a file you save today still opens in an older copy of the app.
+**A note on the name.** The app was called HPLC Figure Bench until November 2026. Exported project files still write `"app": "HPLC Figure Bench"` (while the importer accepts both `"HPLC Figure Bench"` and `"Protein Purification Bench"`), and the browser still stores settings under `hplc-fig-opt` and projects under `hfb-projects`, so everything you saved under the old name keeps working and a file you save today still opens in an older copy of the app.

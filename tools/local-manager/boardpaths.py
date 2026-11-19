@@ -4,7 +4,7 @@ import re, subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = 'hplc-figure-bench(WF1.13).html'
+APP = 'protein-purification-bench.html'
 
 # a token that looks like a source path: has a slash or a code extension
 PATHY = re.compile(r'[\w./-]*\w+\.(?:js|ts|jsx|tsx|json|html|css|md|py)\b')

@@ -14,7 +14,7 @@ from pathlib import Path
 
 PAGE = Path(__file__).resolve().parents[2] / 'tools' / 'dashboard' / 'mission-control.html'
 
-ASK = """You are the local manager of the HPLC Figure Bench project, running on Patrick's PC (model {model}).
+ASK = """You are the local manager of the Protein Purification Bench project, running on Patrick's PC (model {model}).
 Patrick is asking you about the project's automation. Answer in plain language, at most 8 short lines, no em dashes, no semicolons.
 What you do, every few minutes: leave first-pass notes on app pull requests, answer coding agents' questions, sort new issues
 (safe ones to the work queue, ones that change a reported number to Patrick), flag pull requests whose tests have failed for over an hour,

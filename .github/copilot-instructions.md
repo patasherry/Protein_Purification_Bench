@@ -4,14 +4,14 @@ Read `AGENTS.md` first and follow it exactly. It is the rulebook for every agent
 
 ## The project
 
-Protein Purification Bench is one HTML file, `hplc-figure-bench(WF1.13).html`, that a biochemistry graduate student uses for real protein purification data: chromatograms, SDS-PAGE gels, SEC calibration, NanoDrop readings, yields and Methods text. A wrong number is worse than a missing feature. Read `docs/CODEMAP.md` to find code, and `docs/GOALS.md` for priorities.
+Protein Purification Bench is one HTML file, `protein-purification-bench.html`, that a biochemistry graduate student uses for real protein purification data: chromatograms, SDS-PAGE gels, SEC calibration, NanoDrop readings, yields and Methods text. A wrong number is worse than a missing feature. Read `docs/CODEMAP.md` to find code, and `docs/GOALS.md` for priorities.
 
 ## When you work on an issue (coding agent)
 
-- Change only `hplc-figure-bench(WF1.13).html` and files under `tests/suites/`, `tests/data/` and `tests/lib/`. Change `README.md` or `docs/` only when the issue asks.
+- Change only `protein-purification-bench.html` and files under `tests/suites/`, `tests/data/` and `tests/lib/`. Change `README.md` or `docs/` only when the issue asks.
 - Never commit scratch scripts, patch files, logs, test results, `node_modules`, `package.json` at the root, or anything else. The review gate closes PRs that do.
 - Never reformat or reindent the HTML file. Keep the compact style of the code around your change.
-- Add a check that **fails on the current main and passes with your change**, in the suite it belongs to. Tests drive the app only through its UI and DOM (see `tests/lib/harness.js` and the helpers at the top of each suite). Never use `window.__HFB` or other internals in tests.
+- Add a check that **fails on the current main and passes with your change**, in the suite it belongs to. Tests drive the app only through its UI and DOM (see `tests/lib/harness.js` and the helpers at the top of each suite). Never use `window.__HFB`, `window.__PPB`, or other internals in tests.
 - Keep every existing check. Never delete, weaken or comment out a check to make your change pass.
 - Test data is synthetic and made by the generators (`tests/data/gen_chrom.py`, `tests/data/gen_nd.py`). Change `tests/data/expected.json` only by running the generator, and only for your new file. Never add real lab data.
 - Don't change scientific constants (`LADDERS`, `KNOWN_DEFAULT`, extinction coefficients, SEC math, integration) or anything else that changes a reported number unless the issue says the owner approved it.

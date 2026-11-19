@@ -3,7 +3,7 @@
 // placeholders, controls off the right edge, and slow steps. It judges nothing else; the local manager adds a model's notes.
 // Usage: node tests/ux/scope.js <scope-id> <output-folder>   (prints the scope ids with no arguments)
 // Not a suite: CI never runs it. Synthetic data only.
-delete process.env.HFB_PRIVATE_DATA;
+delete process.env.PPB_PRIVATE_DATA; delete process.env.HFB_PRIVATE_DATA;
 const {open, H, src, fs, path} = require('../lib/harness');
 const SCOPES = require('./scopes');
 

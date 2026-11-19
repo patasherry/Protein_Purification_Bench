@@ -15,9 +15,9 @@ It never merges, pushes, approves or edits code.
 
 ## Setup
 
-Needs the local reviewer set up first (token in `~/.hfb-reviewer.json`), plus `claude` and `codex` signed in, and `GEMINI_API_KEY` set as a Windows user environment variable.
+Needs the local reviewer set up first (token in `~/.ppb-reviewer.json` or existing `~/.hfb-reviewer.json`), plus `claude` and `codex` signed in, and `GEMINI_API_KEY` set as a Windows user environment variable.
 
-Optional settings in `~/.hfb-reviewer.json`: `max_claude` (10 a day), `max_codex` (5), `max_gemini` (100), `max_queue` (20), `tracking_issue` (17), `digest_hour` (7).
+Optional settings in `~/.ppb-reviewer.json` (or `~/.hfb-reviewer.json`): `max_claude` (10 a day), `max_codex` (5), `max_gemini` (100), `max_queue` (20), `tracking_issue` (17), `digest_hour` (7).
 
 ```
 python tools\local-manager\manager.py --dry    # one pass, prints what it would do, changes nothing
@@ -30,7 +30,7 @@ python tools\local-manager\manager.py          # keeps running
 
 ## Console
 
-While the manager runs, open **http://localhost:8765** in a browser on this PC. It shows Mission Control (`tools/dashboard/mission-control.html`) with a **Your local AI** panel: quick status checks, a box to ask the local model questions (for example "is everything working?"), a **Check every agent** button (the same test as `--selftest`) and the manager's log. It listens on this PC only and accepts calls only from the page it serves. Change the port with `"console_port"` in `~/.hfb-reviewer.json`, or turn it off with `--no-console`.
+While the manager runs, open **http://localhost:8765** in a browser on this PC. It shows Mission Control (`tools/dashboard/mission-control.html`) with a **Your local AI** panel: quick status checks, a box to ask the local model questions (for example "is everything working?"), a **Check every agent** button (the same test as `--selftest`) and the manager's log. It listens on this PC only and accepts calls only from the page it serves. Change the port with `"console_port"` in `~/.ppb-reviewer.json` (or `~/.hfb-reviewer.json`), or turn it off with `--no-console`.
 
 ## Updates
 
