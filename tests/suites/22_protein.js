@@ -734,6 +734,38 @@ ORIGIN
     }
   });
 
+  /* ================= 12. Reduced-cysteine disclosure (Pace 1995) ================= */
+  await T.t('12_reduced_cysteine_disclosure', async () => {
+    const seq = 'M' + 'CWAK'.repeat(2) + 'CAGC' + 'GSAEKL'.repeat(10); // 4 Cys and 2 Trp
+    const nC = [...seq].filter(c => c === 'C').length, nW = [...seq].filter(c => c === 'W').length;
+    const {p: p12, errs: errs12, close: close12} = await open();
+    try {
+      const h12 = H(p12);
+      await h12.newProject('Test12');
+      await h12.addRun(path.join(DATA, 'chrom', 'imac_HisTrap_FF_1mL_step_u7.csv')); await h12.pool('T1-T3'); await h12.wait(300);
+      await h12.step('construct'); await h12.wait(200);
+      await p12.fill('#protSeq', seq); await p12.dispatchEvent('#protSeq', 'input'); await p12.dispatchEvent('#protSeq', 'change'); await h12.wait(400);
+      const eps = await p12.$eval('#protEps', e => e.textContent.trim());
+      const base = calcExtinction(seq).a280;
+      T.check('12_cys.counts', nC === 4 && nW === 2, `nC ${nC} nW ${nW}`);
+      const m = eps.match(/ε₂₈₀ ([\d,]+) M/);
+      const mass = calcMW(seq);
+      T.check('12_cys.eps_unchanged', !!m && Math.abs(+m[1].replace(/,/g, '') - Math.round(base * mass)) <= 2, `eps text: ${eps}; expected about ${Math.round(base * mass)}`);
+      T.check('12_cys.disclosed', /reduced cysteines/.test(eps) && /cystine/.test(eps) && /Pace/.test(eps), eps);
+      const m2 = eps.match(/cystine, ε₂₈₀ ([\d,]+)/);
+      T.check('12_cys.cystine_value', !!m2 && Math.abs(+m2[1].replace(/,/g, '') - (Math.round(base * mass) + 125 * Math.floor(nC / 2))) <= 2, eps);
+      await h12.addConc(path.join(DATA, 'nd', 'nd_one_protein_a280.csv'), 0.5); await h12.wait(400);
+      await h12.step('figure');
+      await p12.evaluate(() => { const b = document.querySelector('#methodsBox'); if (b) b.open = true; }); await h12.wait(500);
+      const mt = await p12.$eval('#methodsText', e => e.value);
+      T.check('12_cys.methods', /reduced cysteines/.test(mt), mt.slice(0, 400));
+      const [dl] = await Promise.all([p12.waitForEvent('download', {timeout: 8000}).catch(() => null), p12.click('#sumCsv')]);
+      const txt = dl ? fs.readFileSync(await dl.path(), 'utf8') : '';
+      T.check('12_cys.csv_column', /Extinction basis/.test(txt.split(/\r?\n/)[0] || '') && /reduced cysteines/.test(txt), txt.slice(0, 300));
+      errs.push(...errs12);
+    } finally { await close12(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
