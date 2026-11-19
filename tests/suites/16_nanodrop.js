@@ -429,5 +429,41 @@ async function fresh(id, fn){
     T.check(id + '/restore-thresh-warns', await turbidWarn.count() > 0 && await turbidWarn.first().isVisible(), 'Restoring threshold to 0.1 should re-display turbidity warning');
   });
 
+  // #1574: synthetic spectra, a Gaussian band at 280 nm with heights 0.5, 1.0 and 1.5
+  const band = (w, h) => (h * Math.exp(-Math.pow((w - 280) / 15, 2))).toFixed(4);
+  const ndSpectra = async (p, file) => {
+    await p.click(SEL.quick); await p.waitForTimeout(600);
+    await p.setInputFiles(SEL.nd, file); await p.waitForTimeout(800);
+    const names = await p.$$eval('#ndList .ndr input[data-ndk="name"]', es => es.map(e => e.value.trim()));
+    const tab = p.locator('#figtabs .figtab').filter({hasText: /nanodrop/i}).first();
+    if (await tab.count()) { await tab.click(); await p.waitForTimeout(400); }
+    const paths = await p.$$eval('#paper svg g[clip-path="url(#ndclip)"] path', es => es.length);
+    return {names, paths};
+  };
+  // (1) NanoDrop One .tsv with three per-sample blocks stacked: every block loads, not only the first
+  await fresh('nd-one-stacked-blocks', async p => {
+    const id = 'nd/one-stacked-blocks';
+    const block = (name, h) => [name, '11/18/2026 10:0' + h * 2 + ' AM', 'Wavelength (nm)\t10mm Absorbance', '// calibration comment',
+      ...Array.from({length: 61}, (_, i) => `${220 + i * 2}\t${band(220 + i * 2, h)}`)].join('\n');
+    const tsv = [block('Peak A', 0.5), block('Pool B', 1.0), block('Final C', 1.5)].join('\n');
+    const r = await ndSpectra(p, {name: 'stacked.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(tsv)});
+    T.check(id + '/rows', JSON.stringify(r.names) === JSON.stringify(['Peak A', 'Pool B', 'Final C']), JSON.stringify(r.names));
+    // each block keeps its own A280 (0.5 : 1.0 : 1.5), whatever coefficient converts it
+    const conc = await p.$$eval('#ndList .ndr .nd-v', es => es.map(e => parseFloat(e.textContent)));
+    T.check(id + '/a280', conc.length === 3 && conc[0] > 0 && Math.abs(conc[1] / conc[0] - 2) < 0.05 && Math.abs(conc[2] / conc[0] - 3) < 0.05, JSON.stringify(conc));
+    T.check(id + '/spectra', r.paths === 3, `${r.paths} spectrum paths`);
+  });
+  // (2) NanoDrop Eight .txt: UUID Sample Id, Sample Name blank on row 2, comma-decimal wavelength headers 250,0..300,0
+  await fresh('nd-eight-names-comma-wl', async p => {
+    const id = 'nd/eight-names-comma-wl';
+    const wl = Array.from({length: 51}, (_, i) => 250 + i), uuid = ['3f2a9c1e-0b7d-4e5a-9c21-7d8e6f5a4b31', '8c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f'];
+    const txt = [['Sample Id', 'Sample Name', 'Date', 'A280', 'A260/A280', ...wl.map(w => w + ',0')].join('\t'),
+      [uuid[0], 'Pool B', '18.11.2026', '1,00', '0,57', ...wl.map(w => band(w, 1.0).replace('.', ','))].join('\t'),
+      [uuid[1], '', '18.11.2026', '1,50', '0,58', ...wl.map(w => band(w, 1.5).replace('.', ','))].join('\t')].join('\n');
+    const r = await ndSpectra(p, {name: 'eight.txt', mimeType: 'text/plain', buffer: Buffer.from(txt)});
+    T.check(id + '/names', JSON.stringify(r.names) === JSON.stringify(['Pool B', uuid[1]]), JSON.stringify(r.names));
+    T.check(id + '/spectra', r.paths === 2, `${r.paths} spectrum paths`);
+  });
+
   T.done();
 })();
