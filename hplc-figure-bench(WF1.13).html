@@ -539,6 +539,8 @@ dialog.cl-archive-dlg::backdrop{display:none}
 .note{font-size:12.5px;color:var(--muted);border:1px solid var(--line);background:var(--well);border-radius:var(--r);padding:8px 11px;line-height:1.45}
 .toast{pointer-events:none;position:fixed;top:var(--tt,56px);bottom:auto;left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:6px;z-index:10;width:max-content;max-width:min(560px,calc(100% - 32px))}
 .toast .pill{background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:13px;box-shadow:var(--shadow);line-height:1.4;text-align:center;pointer-events:auto;cursor:pointer}
+.toast .pill button{margin-left:10px;font:inherit;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid currentColor;background:var(--bg);color:var(--ink);cursor:pointer;vertical-align:middle}
+.toast .pill button:hover{filter:brightness(0.9)}
 .toast .pill::after{content:"\00d7";margin-left:10px;font-size:16px;line-height:1;opacity:.75}
 .toast .pill:focus-visible{outline:2px solid var(--bg);outline-offset:2px}
 @media (max-width:880px){
@@ -1173,6 +1175,7 @@ button,input,select,textarea{font-family:inherit}
         <button class="btn quiet" id="g-clear" type="button">Clear marks</button>
       </div>
       <p class="hint" id="ladderStatus"></p>
+      <p class="hint" id="g-darkHint" hidden>Dark background: check <label for="g-invert"><strong>Invert</strong></label> under Crop and contrast.</p>
       <p class="hint">Found automatically and updated when the crop or lanes change. To mark by hand, click each band from the top down. Auto-detect ladder switches back.</p>
       </details>
       <details class="sub" data-sub="gbands" open><summary>4. Bands and purity<span class="st" id="st-bands"></span></summary>
@@ -1469,6 +1472,7 @@ button,input,select,textarea{font-family:inherit}
       <div class="intp-head"><strong>Bands and estimated sizes</strong>
         <div class="btns"><button type="button" class="mini" id="bandCsv">Save table (CSV)</button></div></div>
       <div class="tablewrap"><table class="itab mono" id="bandTable"></table></div>
+      <p class="hint" id="bandDarkHint" hidden>Dark background: check <label for="g-invert"><strong>Invert</strong></label> under Crop and contrast.</p>
       <p class="hint">Click a band chip to cycle it through unmarked, untagged target, tagged form and contaminant for that lane only. × (or Delete) removes the band. Dashed chips were added by hand.</p>
       <p class="hint">Sizes are interpolated between ladder bands on a log scale. % of lane is each band's share of all stain detected in that lane.</p>
       <p class="hint">To flag bands whose size matches common E. coli co-purifiers or your protease, turn it on under 6. Known proteins and contaminants.</p>
@@ -3182,7 +3186,16 @@ function processGel(g){
   }
   x2.putImageData(img, 0, 0);
   g.pix = {w: ow, h: oh, d: dk, q: dq}; g._bands = null;
+  let tot = 0; for (let i=0; i<256; i++) tot += hist[i];
+  let acc = 0, med = 128; for (let i=0; i<256; i++){ acc += hist[i]; if (acc >= tot * 0.5) { med = i; break; } }
+  g.rawMedian = med;
   g.out = {url: c2.toDataURL('image/jpeg', 0.92), w: ow, h: oh}; g.hist = hist; g.crop = {l, r: rr, t, b};
+}
+function gelRawMedian(g){
+  if (!g) return 128;
+  if (g.rawMedian != null) return g.rawMedian;
+  if (g.hist) { let tot = 0; for (const v of g.hist) tot += v; if (!tot) return 128; let acc = 0; for (let i=0; i<256; i++){ acc += g.hist[i]; if (acc >= tot * 0.5) return (g.rawMedian = i); } }
+  return 128;
 }
 /* ---------- auto crop: find the stained lanes, their spacing, and the top and bottom of the bands ---------- */
 function autoCrop(g){
@@ -5132,7 +5145,10 @@ function render(){
   paper.innerHTML = svg || '<div class="empty"><p>Load a CSV or ASCII export to start.</p><button type="button" class="btn primary" id="paperPick">Choose data files</button></div>';
   const kind = f ? f.kind : 'overlay';
   document.body.classList.toggle('stepfig', kind === 'step'); document.body.classList.toggle('onhplc', !!PROJ && kind === 'overlay');
-  { const g = curGel(), ls = $('#ladderStatus'); if (ls) ls.textContent = g ? (g.ladderMsg || '') : ''; if (g) stepStatus(g); }
+  { const g = curGel(), ls = $('#ladderStatus'), dh = $('#g-darkHint'); const isDark = !!(g && !g.invert && gelRawMedian(g) < 64);
+    if (ls) { let msg = g ? (g.ladderMsg || '') : ''; if (isDark) msg = (msg ? msg + ' ' : '') + 'Dark background: check Invert (#g-invert) under Crop and contrast.'; ls.textContent = msg; }
+    if (dh) { dh.hidden = !isDark; }
+    if (g) stepStatus(g); }
   document.querySelectorAll('[data-for]').forEach(el => { el.hidden = !el.dataset.for.split(' ').includes(kind); });
   /* in a project the panel shows only what the current step needs */
   if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
@@ -5486,9 +5502,12 @@ function renderBandTable(g){
   const hint = `<tr><td colspan="6" class="empty-row">Click a band chip to cycle it through unmarked, untagged target, tagged form and contaminant for that lane only. × (or Delete) removes the band. Dashed chips were added by hand.</td></tr>`;
   const cols = anyG ? 8 : 6;
   const anySat = lanes.some(ln => !ln.marker && ln.bands.some(b => b.sat));
-  const note = (anySat ? 'Saturated bands read low, so a shorter exposure gives truer percentages. ' : '') + (!cal ? (g.marks.length >= 2 ? 'Check the ladder: ' + (calibBad(g).length ? 'marks ' + calibBad(g).join(', ') + ' kDa are at the same position or out of order. ' : '') + 'Each band must have a distinct position, with sizes decreasing from top to bottom.' : 'Find or mark the ladder to get sizes in kDa.') : !anyT ? 'Mark the target band to estimate purity.' : !anyC && opt.purBase === 'tagged' ? 'Mark one contaminant band to calculate purity.' : '');
+  const isDark = !!(g && !g.invert && gelRawMedian(g) < 64);
+  const darkHint = isDark ? 'Dark background: check Invert (#g-invert) under Crop and contrast. ' : '';
+  const note = darkHint + (anySat ? 'Saturated bands read low, so a shorter exposure gives truer percentages. ' : '') + (!cal ? (g.marks.length >= 2 ? 'Check the ladder: ' + (calibBad(g).length ? 'marks ' + calibBad(g).join(', ') + ' kDa are at the same position or out of order. ' : '') + 'Each band must have a distinct position, with sizes decreasing from top to bottom.' : 'Find or mark the ladder to get sizes in kDa.') : !anyT ? 'Mark the target band to estimate purity.' : !anyC && opt.purBase === 'tagged' ? 'Mark one contaminant band to calculate purity.' : '');
   const r2 = ladderRSquared(g), fit = r2 == null ? '' : `<tr><td colspan="${cols}" class="empty-row">Ladder calibration linear fit R&sup2;: ${fmt(r2, 3)}</td></tr>`;
   el.innerHTML = head + rows + fit + (note ? `<tr><td colspan="${cols}" class="empty-row">${note}</td></tr>` : '');
+  const bdh = $('#bandDarkHint'); if (bdh) bdh.hidden = !isDark;
 }
 document.querySelectorAll('[data-tagmode]').forEach(b => b.addEventListener('click', () => { tagMode = b.dataset.tagmode; if (tagMode) marking = null; render(); }));
 function chipAct(e){
@@ -6096,7 +6115,18 @@ async function addGelFiles(files){
     catch (e) { bad.push(f.name); }
   }
   gelTarget = null;
-  if (last) { cur = last.id; renderList(); syncControls(); render(); toast(last.autoCropped ? `Gel added and cropped to ${last.nLanes} lanes. Select lane labels in the sidebar to set the count, then detect the ladder.` : 'Gel added. Trim it to the lanes, then mark the ladder.'); }
+  if (last) {
+    cur = last.id; renderList(); syncControls(); render();
+    const msg = last.autoCropped ? `Gel added and cropped to ${last.nLanes} lanes. Select lane labels in the sidebar to set the count, then detect the ladder.` : 'Gel added. Trim it to the lanes, then mark the ladder.';
+    if (!last.invert && gelRawMedian(last) < 64) {
+      toast(msg, {label: 'Invert', fn: () => {
+        last.invert = true; processGel(last); autoContrast(last); processGel(last);
+        const r = applyAutoCrop(last);
+        if (!r.err) { const cu = $('#g-cropUndo'); if (cu) cu.hidden = false; last.autoCropped = true; last.trimTouched = false; }
+        syncControls(); render();
+      }});
+    } else toast(msg);
+  }
   if (bad.length) toast(`Could not open ${bad.join(', ')}. Try exporting the gel as PNG or JPEG.`);
 }
 /* processTrace sorts a trace whose X axis goes down; say so, and tell a wholly reversed export from one that resets, without changing the source rows */
@@ -9448,9 +9478,18 @@ $('#copySvg').addEventListener('click', () => {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(svg).then(() => toast('SVG copied'), fallback); else fallback();
 });
 /* each message is its own pill at the bottom of the window, newest last, gone after a few seconds */
-function toast(msg){ const box = $('#toast'); if ([...box.children].some(c => c.textContent === msg)) return;
-  const pill = document.createElement('div'); pill.className = 'pill'; pill.textContent = msg; pill.tabIndex = 0; pill.setAttribute('role', 'button'); pill.title = 'Dismiss';
-  const gone = () => { pill.remove(); if (!box.children.length) { box.hidden = true; box.classList.remove('overlap'); } }; pill.addEventListener('click', gone); pill.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); gone(); } });
+function toast(msg, act){ const box = $('#toast'); if ([...box.children].some(c => (c._msg || c.textContent) === msg)) return;
+  const pill = document.createElement('div'); pill.className = 'pill'; pill._msg = msg; pill.tabIndex = 0; pill.title = 'Dismiss';
+  if (!act) pill.setAttribute('role', 'button');
+  const span = document.createElement('span'); span.textContent = msg; pill.appendChild(span);
+  const gone = () => { pill.remove(); if (!box.children.length) { box.hidden = true; box.classList.remove('overlap'); } };
+  pill.addEventListener('click', e => { if (e.target.closest('button')) return; gone(); });
+  pill.addEventListener('keydown', e => { if (e.key === 'Escape' || (e.target === pill && (e.key === 'Enter' || e.key === ' '))) { e.preventDefault(); gone(); } });
+  if (act && act.label && act.fn) {
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn mini toast-btn'; btn.textContent = act.label;
+    btn.addEventListener('click', e => { e.stopPropagation(); gone(); act.fn(); });
+    pill.appendChild(btn);
+  }
   const hd = document.querySelector('header.top'); box.style.setProperty('--tt', Math.max(16, hd ? Math.round(hd.getBoundingClientRect().bottom) + 8 : 0) + 'px'); box.appendChild(pill); box.hidden = false;
   while (box.children.length > 3) box.firstChild.remove();
   setTimeout(gone, Math.min(6000, 2600 + msg.length*25)); }
