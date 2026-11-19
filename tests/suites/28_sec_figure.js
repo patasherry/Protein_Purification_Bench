@@ -170,6 +170,58 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     }
   });
 
+  await T.t('baseline_corrected_integration_fill_tracks_uv', async () => {
+    const aktaCsv = () => {
+      const rows = ['Chrom.1,,Chrom.1,,Chrom.1,', 'UV 1_280,,Gradient Concentration,,Fraction,', 'ml,mAU,ml,%B,ml,Fraction'];
+      for (let i = 0; i <= 200; i++) {
+        const x = i / 10, peak = 140 * Math.exp(-0.5 * ((x - 10) / 0.9) ** 2), y = 180 + 0.8 * x + peak;
+        rows.push(`${x.toFixed(3)},${y.toFixed(3)},${x.toFixed(3)},0.00,,`);
+      }
+      return rows.join('\n');
+    };
+    const {p: p2, errs: errs2, close: close2} = await open(), h2 = H(p2);
+    try {
+      const areas = async () => p2.$$eval('#intTable tr', rs => {
+        const head = [...(rs[0] || {}).cells || []].map(c => c.textContent.trim()), i = head.findIndex(t => /^Area/.test(t));
+        return i < 0 ? [] : rs.slice(1).map(r => r.cells[i] && r.cells[i].textContent.trim()).filter(Boolean);
+      });
+      const traceSelector = 'g[fill="none"][stroke-linejoin="round"] path:last-child';
+      const checkFill = async (method, baseline) => {
+        const svg = await h2.exportSvg(), fillSelector = method === 'gauss' ? 'path[fill-opacity="0.18"]' : 'path[fill-opacity="0.22"]';
+        const fill = await h2.svgBoxes(svg, fillSelector), trace = await h2.svgBoxes(svg, traceSelector);
+        const delta = fill.box && trace.box ? Math.abs(fill.box.y - trace.box.y) : Infinity;
+        T.check(`baseline_${baseline}_${method}_fill_top`, delta <= 5,
+          `integration fill top ${fill.box && fill.box.y}, UV trace top ${trace.box && trace.box.y}, delta ${delta.toFixed(2)} px`);
+      };
+
+      await h2.newProject('Baseline-shift SVG');
+      await h2.addRun({name: 'baseline_offset_akta.csv', mimeType: 'text/csv', buffer: Buffer.from(aktaCsv())});
+      const runStep = (await h2.timeline()).find(x => /^run:/.test(x.k));
+      if (runStep) await h2.step(runStep.k);
+      await openFolds(p2.locator('#o-intMethod'));
+      await openFolds(p2.locator('#o-baseline'));
+
+      for (const method of ['gauss', 'trap']) {
+        await p2.selectOption('#o-intMethod', method, {force: true});
+        await p2.click('#intClear');
+        await p2.selectOption('#o-baseline', 'min', {force: true});
+        await p2.click('#intAuto');
+        await h2.wait(400);
+        const minAreas = await areas();
+        T.check(`baseline_min_${method}_has_area`, minAreas.length > 0, `areas: ${minAreas.join(', ')}`);
+        await checkFill(method, 'min');
+
+        await p2.selectOption('#o-baseline', 'linear', {force: true});
+        await h2.wait(300);
+        const linearAreas = await areas();
+        T.check(`baseline_linear_${method}_area_unchanged`, JSON.stringify(linearAreas) === JSON.stringify(minAreas),
+          `min ${minAreas.join(', ')}, linear ${linearAreas.join(', ')}`);
+        await checkFill(method, 'linear');
+      }
+      T.check('baseline_corrected_integration_no_page_errors', !errs2.length, errs2.join(' | '));
+    } finally { await close2(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
