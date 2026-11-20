@@ -228,3 +228,23 @@ def sources_text(papers, web, wiki=()):
     if web:
         parts.append('Web research:\n' + web)
     return '\n\n'.join(parts) or '(no sources found)'
+
+
+def clean_report_text(ans):
+    """Ensure a homework report reads as clean prose even if a JSON-mode model wrapped it in an object (#222, 2026-11-19)."""
+    txt = re.sub(r'<think>.*?</think>', '', str(ans or ''), flags=re.S).strip()
+    if txt.startswith('```'):
+        txt = re.sub(r'^```(?:json|text|markdown)?\s*|\s*```$', '', txt, flags=re.I).strip()
+    if txt.startswith('{') and txt.endswith('}'):
+        try:
+            obj = json.loads(txt)
+            if isinstance(obj, dict):
+                for k in ('homework_response', 'answer', 'report', 'response', 'summary', 'text'):
+                    if isinstance(obj.get(k), str) and obj[k].strip():
+                        return obj[k].strip()
+                strs = [v.strip() for k, v in obj.items() if isinstance(v, str) and len(v.strip()) > 40 and k not in ('adviser', 'board', 'domain', 'question')]
+                if strs:
+                    return ' '.join(strs)
+        except Exception:
+            pass
+    return txt

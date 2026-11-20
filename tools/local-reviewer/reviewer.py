@@ -112,18 +112,27 @@ def memory(diff=None):
     return '\n\n'.join(x for x in out if x)
 
 
-def ask_model(system, user, diff=None):
+def ask_model(system, user, diff=None, json_mode=False, temp=None):
     mem = memory(diff)
     if mem:
         system = system + '\n\n===== Project notes (background you can rely on) =====\n' + mem
-    body = {'model': MODEL, 'stream': False, 'options': {'temperature': 0.2, 'num_ctx': int(cfg.get('num_ctx', 65536))},
+    opts = {'temperature': float(temp) if temp is not None else 0.2, 'num_ctx': int(cfg.get('num_ctx', 65536))}
+    if json_mode:
+        opts['num_predict'] = int(cfg.get('num_predict', 8192))
+    body = {'model': MODEL, 'stream': False, 'options': opts,
+            **({'format': 'json'} if json_mode else {}),
             'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]}
     req = urllib.request.Request(OLLAMA + '/api/chat', data=json.dumps(body).encode(),
                                  headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=600) as r:  # 10 minutes for one local answer, so one slow call can't hold up the loop
         out = json.loads(r.read())['message']['content']
     # reasoning models (Qwen3, gpt-oss and others) may put their working in <think> tags: keep only the answer
-    return re.sub(r'<think>.*?</think>', '', out, flags=re.S).strip()
+    out = re.sub(r'<think>.*?</think>', '', out or '', flags=re.S)
+    if '<think>' in out:  # truncated before </think>: keep any JSON object emitted after <think>, else drop the unfinished trace
+        ti = out.find('<think>')
+        bi = out.find('{', ti)
+        out = (out[:ti] + (out[bi:] if bi != -1 and json_mode else ''))
+    return out.strip()
 
 
 DATA = re.compile(r'^(?!.*\.(py|js|mjs)$)(tests/data/|.*\.(csv|tsv|txt|json|zip|asc|dat|gb|dna|png|jpe?g|tiff?|xml)$)', re.I)
