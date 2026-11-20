@@ -96,13 +96,31 @@ def ledger_prompt_block(entries=None, focus_secs=(), cap=2200):
     return '\n'.join(lines) if len(lines) > 1 else ''
 
 
-def capability_digest(app_text, codemap_text='', include_data_model=False, cap=2800):
+def trim_prose(text, cap=300):
+    """Trim prose cleanly at a sentence boundary (or word boundary with ellipsis), never mid-word."""
+    s = re.sub(r'\s+', ' ', str(text or '')).strip()
+    if len(s) <= cap:
+        return s
+    head = s[:cap + 1]
+    sent_ends = [m.end() for m in re.finditer(r'[.!?](?=\s|$)', head)]
+    good = [e for e in sent_ends if int(cap * 0.55) <= e <= cap]
+    if good:
+        return head[:good[-1]].strip()
+    cut = s[:max(1, cap - 1)]
+    if ' ' in cut:
+        cut = cut.rsplit(' ', 1)[0]
+    return cut.rstrip(' ,;:-') + '…'
+
+
+def capability_digest(app_text, codemap_text='', include_data_model=False, cap=None):
     """Live machine-extracted summary of capabilities and data models already in `protein-purification-bench.html`."""
+    eff_cap = (6200 if include_data_model else 2800) if cap is None else cap
     out = ['Capabilities already built in `main` (verified from source; build BEYOND these rather than reinventing them):']
     if app_text:
-        m_def = re.search(r'\bconst\s+DEF\s*=\s*\{([^}]{20,2500})\}', app_text, re.S)
+        m_def = re.search(r'\bconst\s+DEF\s*=\s*\{([\s\S]{20,6000}?)\};', app_text)
         if m_def:
-            keys = list(dict.fromkeys(re.findall(r'(?:^|[,{\s])([A-Za-z_]\w*)\s*:', m_def.group(1))))[:38]
+            clean_def = re.sub(r'/\*[\s\S]*?\*/', '', m_def.group(1))
+            keys = list(dict.fromkeys(re.findall(r'(?:^|[,{\s])([A-Za-z_]\w*)\s*:', clean_def)))[:65]
             if keys:
                 out.append('- Settings keys already in `DEF`/`opt`: ' + ', '.join(f'`{k}`' for k in keys))
         checks = [
@@ -126,11 +144,13 @@ def capability_digest(app_text, codemap_text='', include_data_model=False, cap=2
         compact = []
         for ln in ds.splitlines():
             s = ln.strip()
-            if s.startswith('### ') or (s.startswith('- `') and ':' in s):
-                compact.append(s[:160])
-            if sum(len(x) for x in compact) > 1300:
+            indent = '  ' if ln.startswith('  ') else ''
+            if s.startswith('### ') or (s.startswith('- ') and ('`' in s or ':' in s)):
+                compact.append((indent + s)[:145])
+            if sum(len(x) + 1 for x in compact) > 4200:
                 break
         if compact:
             out.append('\nIn-memory data model available to connect across features (`docs/CODEMAP.md`):')
             out.extend(compact)
-    return '\n'.join(out)[:cap]
+    return '\n'.join(out)[:eff_cap]
+

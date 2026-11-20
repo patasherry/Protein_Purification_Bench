@@ -151,14 +151,23 @@ def ask_model(system, user, diff=None, json_mode=False, temp=None):
         system = system + '\n\n===== Project notes (background you can rely on) =====\n' + mem
     opts = {'temperature': float(temp) if temp is not None else 0.2, 'num_ctx': int(cfg.get('num_ctx', 65536))}
     if json_mode:
-        opts['num_predict'] = int(cfg.get('num_predict', 8192))
+        opts['num_predict'] = int(cfg.get('num_predict', 12288))
     body = {'model': MODEL, 'stream': False, 'options': opts,
-            **({'format': 'json'} if json_mode else {}),
+            **({'format': 'json', 'think': bool(cfg.get('ollama_think_json', False))} if json_mode else {}),
             'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]}
-    req = urllib.request.Request(OLLAMA + '/api/chat', data=json.dumps(body).encode(),
-                                 headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=600) as r:  # 10 minutes for one local answer, so one slow call can't hold up the loop
-        out = json.loads(r.read())['message']['content']
+    def _post(payload):
+        req = urllib.request.Request(OLLAMA + '/api/chat', data=json.dumps(payload).encode(),
+                                     headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=600) as r:  # 10 minutes for one local answer, so one slow call can't hold up the loop
+            return json.loads(r.read())['message']['content']
+    try:
+        out = _post(body)
+    except urllib.error.HTTPError as e:
+        if e.code == 400 and 'think' in body:
+            body.pop('think', None)
+            out = _post(body)
+        else:
+            raise
     # reasoning models (Qwen3, gpt-oss and others) may put their working in <think> tags: keep only the answer
     out = re.sub(r'<think>.*?</think>', '', out or '', flags=re.S)
     if '<think>' in out:  # truncated before </think>: keep any JSON object emitted after <think>, else drop the unfinished trace
@@ -190,11 +199,13 @@ def code_only(diff):
 def flags(diff):
     """Checks done by plain code, not the model, so they are always right about what they look for."""
     added = [l[1:] for l in diff.splitlines() if l.startswith('+') and not l.startswith('+++')]
-    removed = [l[1:] for l in diff.splitlines() if l.startswith('-') and not l.startswith('---')]
-    both = added + removed
+    app_parts = [p for p in re.split(r'(?=^diff --git )', diff or '', flags=re.M)
+                 if p.startswith('diff --git') and APP in p.split('\n', 1)[0]]
+    app_both = [l[1:] for p in app_parts for l in p.splitlines()
+                if l.startswith(('+', '-')) and not l.startswith(('+++', '---'))]
     out = []
     sci = r'\b(LADDERS|KNOWN_DEFAULT|PRESETS|AA_MASS|SEC_COLUMNS|TAG_SEQ|PAL)\b|^\s*const DEF\b'
-    if any(re.search(sci, l) for l in both):
+    if any(re.search(sci, l) for l in app_both):
         out.append('Touches a scientific constant or figure default (LADDERS, KNOWN_DEFAULT, PRESETS, AA_MASS, SEC_COLUMNS, TAG_SEQ, PAL or DEF). Needs a cited source and the owner\'s OK.')
     hollow = [l.strip() for l in added if re.search(r'T\.check\([^)]*,\s*true\s*[,)]', l)]
     if hollow:
