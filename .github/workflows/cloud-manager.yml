@@ -38,21 +38,27 @@ jobs:
       - name: Restore the manager's memory from the last cloud pass
         uses: actions/cache/restore@v4
         with:
-          path: ~/.hfb-manager-state.json
-          key: hfb-cloud-state-${{ github.run_id }}
-          restore-keys: hfb-cloud-state-
+          path: |
+            ~/.ppb-manager-state.json
+            ~/.hfb-manager-state.json
+          key: ppb-cloud-state-${{ github.run_id }}
+          restore-keys: |
+            ppb-cloud-state-
+            hfb-cloud-state-
       - name: One pass
         env:
-          GITHUB_TOKEN: ${{ secrets.HFB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PPB_TOKEN || secrets.HFB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -z "$GITHUB_TOKEN" ]; then echo "The HFB_TOKEN secret is not set, so the cloud manager does nothing."; exit 0; fi
-          git config --global user.name "HFB local manager"
-          git config --global user.email "hfb-manager@users.noreply.github.com"
+          if [ -z "$GITHUB_TOKEN" ]; then echo "Neither PPB_TOKEN nor HFB_TOKEN is set, so the cloud manager does nothing."; exit 0; fi
+          git config --global user.name "PPB local manager"
+          git config --global user.email "ppb-manager@users.noreply.github.com"
           python tools/local-manager/manager.py --cloud
       - name: Keep the manager's memory for the next pass
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: ~/.hfb-manager-state.json
-          key: hfb-cloud-state-${{ github.run_id }}
+          path: |
+            ~/.ppb-manager-state.json
+            ~/.hfb-manager-state.json
+          key: ppb-cloud-state-${{ github.run_id }}

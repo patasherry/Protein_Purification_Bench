@@ -19,7 +19,7 @@ check('a board idea is work', bc.is_work({'labels': [{'name': 'from-board'}, {'n
 check('an unlabelled issue is work', bc.is_work({'labels': []}))
 
 # 2. a topic meeting sees the code that already deals with its topic
-app = (ROOT / 'hplc-figure-bench(WF1.13).html').read_text(encoding='utf-8', errors='replace')
+app = (ROOT / 'protein-purification-bench.html').read_text(encoding='utf-8', errors='replace')
 rows = bm.codemap_rows((ROOT / 'docs' / 'CODEMAP.md').read_text(encoding='utf-8'))
 code = bc.topic_code('how should we let users switch between light and dark mode in the app?', app, rows)
 check('the dark mode topic finds the existing data-theme styles', 'data-theme' in code, code[:200])

@@ -22,7 +22,7 @@ const MAP = [
   [/^(run conditions|quick fill)/, ['21_methods', '1089_actionable_methods_gaps', '1468_methods_between_step_volume_unit', '23_provenance']],
   [/^NanoDrop/, ['16_nanodrop', '1457_nd_ratio_warn', 'test_nanodrop_units']],
   [/^(UI$|collapsible panel|More options|what to do next|home$)/, ['05_quick', '44_panel_more', '48_empty_start', '936_add_run_button', '950_panel_padding', '1060_sidebar_trace_wrap', '1267_toast_dismiss']],
-  [/^projects/, ['01_name', '47_export_project', '669_persistence_roundtrip', '30_robust', '915_raw_files', '1022_downstream_allocation', '1023_carryover_semantics', '1324_export_gel']],
+  [/^projects/, ['01_name', '32_project_ux', '47_export_project', '669_persistence_roundtrip', '30_robust', '915_raw_files', '1022_downstream_allocation', '1023_carryover_semantics', '1324_export_gel']],
   [/^(cloning workflow|agarose)/, ['1402_cloning_engine', '1305_selected_clone', '1433_include_cloning', '1436_clone_fold', '1439_clone_join', '1500_agarose_upload', '1501_agarose_adjust', '1502_agarose_lanes', '1503_agarose_calibration', '1504_agarose_bands', '1505_agarose_metadata', '1506_agarose_figure']],
   [/^the step timeline/, ['31_wf_full', '44_panel_more', '936_add_run_button', '1089_actionable_methods_gaps', '1402_cloning_engine', '1415_hplc_in_project', '1433_include_cloning', '1436_clone_fold', '1439_clone_join', '1468_methods_between_step_volume_unit']],
   [/^export$/, ['01_name', '50_export', '47_export_project']],
@@ -35,7 +35,7 @@ const pick = new Set(['00_preflight', '00_smoke']), why = [];
 /* 2. the app sections the diff touches */
 const lines = fs.readFileSync(APPF, 'utf8').split('\n'), marks = []; lines.forEach((l, i) => { const m = /\/\*\s*----------\s*(.*?)\s*----------\s*\*\//.exec(l); if (m) marks.push({at: i + 1, name: m[1].trim()}); });
 const sectionAt = n => { let s = 'markup and styles'; for (const m of marks) { if (m.at <= n) s = m.name; else break; } return s; };
-const touched = new Set(); for (const m of git('diff', '-U0', base, '--', rel).matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) { const a = +m[1], c = m[2] === undefined ? 1 : +m[2]; for (let n = a; n < a + Math.max(c, 1); n++) touched.add(sectionAt(n)); }
+const touched = new Set(); for (const m of git('diff', '-M', '-U0', base, '--', rel, 'hplc-figure-bench(WF1.13).html').matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) { const a = +m[1], c = m[2] === undefined ? 1 : +m[2]; for (let n = a; n < a + Math.max(c, 1); n++) touched.add(sectionAt(n)); }
 let unmapped = false; for (const s of touched) { const hits = MAP.filter(([re]) => re.test(s)); if (!hits.length) unmapped = true; hits.forEach(([, names]) => names.forEach(n => { if (all.includes(n)) { if (!pick.has(n)) why.push(`${n}: section "${s}"`); pick.add(n); } })); }
 /* 3. anything named on the command line */
 const args = process.argv.slice(2), listOnly = args.includes('--list'); args.filter(a => a !== '--list').forEach(a => all.filter(n => n.includes(a.replace(/\.js$/, ''))).forEach(n => { if (!pick.has(n)) why.push(`${n}: asked for`); pick.add(n); }));

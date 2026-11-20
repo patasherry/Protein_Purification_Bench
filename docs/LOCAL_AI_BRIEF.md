@@ -4,7 +4,7 @@ This page is sent to the local model with every job (review notes, triage, answe
 
 ## The project
 
-- Protein Purification Bench is one HTML file, `hplc-figure-bench(WF1.13).html`, that makes publication figures from protein purification data: HPLC and ÄKTA chromatograms, SDS-PAGE gels with densitometry, SEC calibration, NanoDrop readings, a step-by-step workflow figure, and Methods text. It also tracks cloning work (stages, attempts and lineage).
+- Protein Purification Bench is one HTML file, `protein-purification-bench.html`, that makes publication figures from protein purification data: HPLC and ÄKTA chromatograms, SDS-PAGE gels with densitometry, SEC calibration, NanoDrop readings, a step-by-step workflow figure, and Methods text. It also tracks cloning work (stages, attempts and lineage).
 - The owner, Patrick, is a biochemistry graduate student who uses it for real lab data. Scientific correctness matters more than new features.
 - All JavaScript sits in one strict-mode function, split into sections marked `/* ---------- name ---------- */`. There are no modules, no build step and no framework. A file path like `src/...` does not exist here.
 - Settings live in `opt` with defaults in `DEF`. A project's upstream and cloning record lives in `prep`. Chromatograms are `runs` and `traces`, gel images are `gels`.

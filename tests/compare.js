@@ -9,8 +9,10 @@ const NEW = path.resolve(arg || APPF), filt = process.argv.slice(arg ? 3 : 2);
 if (!fs.existsSync(NEW)) { console.error('No app file at ' + NEW); process.exit(2); }
 /* the baseline: BASE=/path/old.html, or BASE=<git ref> (default origin/main), read from git without touching the working tree */
 let BASE = process.env.BASE || 'origin/main';
-if (!fs.existsSync(BASE)) { const ref = BASE, repo = path.resolve(__dirname, '..'), rel = path.relative(repo, APPF).split(path.sep).join('/');
-  const r = spawnSync('git', ['-C', repo, 'show', `${ref}:${rel}`], {maxBuffer: 1 << 28}); if (r.status !== 0) { console.error(`Could not read ${rel} at ${ref}: ${String(r.stderr).trim()}`); process.exit(2); }
+if (!fs.existsSync(BASE)) { const ref = BASE, repo = path.resolve(__dirname, '..'); let rel = path.relative(repo, APPF).split(path.sep).join('/');
+  let r = spawnSync('git', ['-C', repo, 'show', `${ref}:${rel}`], {maxBuffer: 1 << 28});
+  if (r.status !== 0) { const ls = spawnSync('git', ['-C', repo, 'ls-tree', '--name-only', ref], {encoding: 'utf8'}); const alt = (ls.stdout || '').split('\n').find(f => /^(?:protein-purification-bench|hplc-figure-bench).*\.html$/.test(f)); if (alt) { rel = alt; r = spawnSync('git', ['-C', repo, 'show', `${ref}:${rel}`], {maxBuffer: 1 << 28}); } }
+  if (r.status !== 0) { console.error(`Could not read ${rel} at ${ref}: ${String(r.stderr).trim()}`); process.exit(2); }
   fs.mkdirSync(path.join(__dirname, 'results'), {recursive: true}); BASE = path.join(__dirname, 'results', 'base.html'); fs.writeFileSync(BASE, r.stdout); console.log(`Baseline: ${rel} at ${ref}`); }
 else BASE = path.resolve(BASE);
 /* 1. the elements the harness and suites drive: a rewrite that renames them breaks tests, not necessarily the app */

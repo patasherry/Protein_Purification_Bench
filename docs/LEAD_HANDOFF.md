@@ -30,7 +30,7 @@ The things that wait for a lead:
 Apply this to every PR that changes a reported number.
 
 1. **Read the issue and Patrick's OK.** Find what he approved. Check that the PR does that and nothing more.
-2. **Read the app diff in `hplc-figure-bench(WF1.13).html`.** Check:
+2. **Read the app diff in `protein-purification-bench.html`.** Check:
    - units (mAU vs AU, mL vs min, mg/mL vs µg/mL)
    - factors of 1000
    - the right volume or denominator

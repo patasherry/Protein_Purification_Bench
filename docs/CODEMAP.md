@@ -1,4 +1,4 @@
-# Protein Purification Bench Code Map (`hplc-figure-bench(WF1.13).html`)
+# Protein Purification Bench Code Map (`protein-purification-bench.html`)
 
 > **Note:** The line ranges in **Sections** and symbol line numbers in **Key Functions** and **Where to Change X** are rewritten automatically after every merge that changes the app (`node tests/tools/codemap.js --write`, run by the Code map workflow), so they match `main`. On a branch of your own they drift as you edit: run `node tests/tools/codemap.js --plain` for section ranges in your working copy, or `node tests/tools/codemap.js --check` to verify `docs/CODEMAP.md` is current.
 

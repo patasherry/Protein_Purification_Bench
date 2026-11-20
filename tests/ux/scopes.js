@@ -2,7 +2,7 @@ const {DATA, path, fs} = require('../lib/harness');
 
 // Test scopes for the usability check: one use case each, walked through the UI like a person would.
 // Each step is a small action. A step that throws is itself a finding (a control a user could not reach or use).
-// Synthetic data only: the runner clears HFB_PRIVATE_DATA, so src() always gives the stand-ins in tests/data.
+// Synthetic data only: the runner clears PPB_PRIVATE_DATA / HFB_PRIVATE_DATA, so src() always gives the stand-ins in tests/data.
 
 /* click the first visible button, tab, link or label whose visible text matches re; a miss is a finding */
 async function clickText(p, re, what){
