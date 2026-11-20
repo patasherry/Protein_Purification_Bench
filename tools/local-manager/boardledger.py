@@ -2,9 +2,9 @@
 the Polishing Board (#222) and the Creative Direction Board.
 
 Stops duplicate/redundant proposals BEFORE ideation or worker dispatch by:
-1. Extracting a live Capability Digest directly from hplc-figure-bench(WF1.13).html + docs/CODEMAP.md so advisers see
+1. Extracting a live Capability Digest directly from protein-purification-bench.html + docs/CODEMAP.md so advisers see
    what `main` already supports (constants, palettes, warnings, parsers, data structures).
-2. Merging committed `docs/BOARD_LEDGER.json` with runtime `~/.hfb-board-ledger.json` (keeping the git checkout clean
+2. Merging committed `docs/BOARD_LEDGER.json` with runtime `~/.ppb-board-ledger.json` (or legacy `~/.hfb-board-ledger.json`, keeping the git checkout clean
    during background manager runs while remembering rejected-on-main ideas and owner-declined pitches forever).
 """
 import json
@@ -14,7 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REPO_LEDGER = ROOT / 'docs' / 'BOARD_LEDGER.json'
-LOCAL_LEDGER = Path.home() / '.hfb-board-ledger.json'
+_LEDGER_NEW, _LEDGER_OLD = Path.home() / '.ppb-board-ledger.json', Path.home() / '.hfb-board-ledger.json'
+LOCAL_LEDGER = _LEDGER_NEW if _LEDGER_NEW.exists() or not _LEDGER_OLD.exists() else _LEDGER_OLD
 
 
 def _read_entries(path):
@@ -96,7 +97,7 @@ def ledger_prompt_block(entries=None, focus_secs=(), cap=2200):
 
 
 def capability_digest(app_text, codemap_text='', include_data_model=False, cap=2800):
-    """Live machine-extracted summary of capabilities and data models already in `hplc-figure-bench(WF1.13).html`."""
+    """Live machine-extracted summary of capabilities and data models already in `protein-purification-bench.html`."""
     out = ['Capabilities already built in `main` (verified from source; build BEYOND these rather than reinventing them):']
     if app_text:
         m_def = re.search(r'\bconst\s+DEF\s*=\s*\{([^}]{20,2500})\}', app_text, re.S)

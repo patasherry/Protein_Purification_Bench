@@ -3,7 +3,7 @@
 is_light was mirrored from the Jules leader's LIGHT regex. Jules was removed on 2026-11-12, so nothing mirrors it now."""
 import re
 
-LIGHT_RE = re.compile(r'^(tests?|audit|docs?)\b|^add (a |one )?(failing |ui[- ]level )?(tests?|checks?)\b|^(prove|verify|confirm)\b|\b(\d+|test)_[a-z0-9_]+\b|\b(window\.__HFB|test (suite|report)|compare\.js|failures\.js)\b', re.I)
+LIGHT_RE = re.compile(r'^(tests?|audit|docs?)\b|^add (a |one )?(failing |ui[- ]level )?(tests?|checks?)\b|^(prove|verify|confirm)\b|\b(\d+|test)_[a-z0-9_]+\b|\b(window\.__(?:HFB|PPB)|test (suite|report)|compare\.js|failures\.js)\b', re.I)
 MAX_TRIES = 2  # Antigravity attempts per issue before it returns to the queue
 
 

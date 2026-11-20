@@ -144,7 +144,7 @@ module.exports = async ({github, context, core}) => {
           if (!exists) {
             filedPrefixes.add(prefix);
             const suite = parts[0];
-            const hint = `Target test suite: tests/suites/${suite}.js\nReproduce command: node tests/suites/${suite}.js\nGoal: Investigate and resolve this check failure. If the test check timed out or has an incorrect expectation, fix tests/suites/${suite}.js. If it revealed a bug in the application, fix hplc-figure-bench(WF1.13).html. Ensure 'node tests/suites/${suite}.js' passes without regressions.`;
+            const hint = `Target test suite: tests/suites/${suite}.js\nReproduce command: node tests/suites/${suite}.js\nGoal: Investigate and resolve this check failure. If the test check timed out or has an incorrect expectation, fix tests/suites/${suite}.js. If it revealed a bug in the application, fix protein-purification-bench.html. Ensure 'node tests/suites/${suite}.js' passes without regressions.`;
             await github.rest.issues.create({owner, repo, title: `Bug found by ${id}`, labels: [L.parked], body: `The check \`${id}\`, added in #${p.number}, fails on main:\n\n> ${detail}\n\nThe PR description in #${p.number} may say more about the cause.\n\n${hint}`}); say(`follow-up issue for ${id}`); routedAg = true; } } } }
     for (const f of files.filter(f => /^docs\/.*audit.*\.md$/.test(f))) { const raw = await github.rest.repos.getContent({owner, repo, path: f, ref: 'main'}).catch(() => null); if (!raw) continue;
       const md = Buffer.from(raw.data.content, 'base64').toString('utf8'), part = md.split(/^##\s+Ready-to-file issues\s*$/m)[1]; if (!part) continue;

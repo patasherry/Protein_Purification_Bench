@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * codemap.js - Scan hplc-figure-bench(WF1.13).html for section markers and symbol definitions.
+ * codemap.js - Scan protein-purification-bench.html for section markers and symbol definitions.
  *
  * Usage:
  *   node tests/tools/codemap.js [--plain] [--write] [--check] [path/to/app.html]
@@ -13,6 +13,9 @@ const path = require('path');
 
 // Locate the HTML file
 const defaultPaths = [
+  path.resolve(__dirname, '../../protein-purification-bench.html'),
+  path.resolve(process.cwd(), 'protein-purification-bench.html'),
+  path.resolve(__dirname, '../protein-purification-bench.html'),
   path.resolve(__dirname, '../../hplc-figure-bench(WF1.13).html'),
   path.resolve(process.cwd(), 'hplc-figure-bench(WF1.13).html'),
   path.resolve(__dirname, '../hplc-figure-bench(WF1.13).html')
@@ -24,7 +27,7 @@ if (!appPath) {
 }
 
 if (!appPath || !fs.existsSync(appPath)) {
-  console.error('Error: Could not find hplc-figure-bench(WF1.13).html');
+  console.error('Error: Could not find protein-purification-bench.html');
   process.exit(1);
 }
 

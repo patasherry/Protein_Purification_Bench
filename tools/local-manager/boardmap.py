@@ -190,7 +190,7 @@ def wikipedia(terms, n=3, timeout=20):
         return []
     try:
         q = urllib.parse.urlencode({'action': 'query', 'list': 'search', 'srsearch': terms, 'srlimit': n, 'format': 'json'})
-        req = urllib.request.Request('https://en.wikipedia.org/w/api.php?' + q, headers={'User-Agent': 'ProteinPurificationBench-board/1.0 (github.com/patasherry/hplc-figure-bench)'})
+        req = urllib.request.Request('https://en.wikipedia.org/w/api.php?' + q, headers={'User-Agent': 'ProteinPurificationBench-board/1.0 (github.com/patasherry/protein-purification-bench)'})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             hits = json.loads(r.read())['query']['search']
         return [{'title': h['title'], 'snippet': re.sub(r'<[^>]+>', '', h.get('snippet', '')), 'url': 'https://en.wikipedia.org/wiki/' + urllib.parse.quote(h['title'].replace(' ', '_'))} for h in hits]

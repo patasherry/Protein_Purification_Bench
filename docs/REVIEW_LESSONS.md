@@ -2,7 +2,7 @@
 
 One line per thing a review missed or got wrong, newest at the bottom. The local AI is sent the newest 20 bullet lines with every job, together with `docs/LOCAL_AI_BRIEF.md`, so a lesson written here changes its next review. Write each one as something to look for, in one line starting with `- `. Remove a line once it stops being useful.
 
-The manager keeps a second list on the PC by itself (`.hfb-lessons.txt` in the user folder): one line for each pull request the automatic gate sends back, with the reason. That list needs no upkeep.
+The manager keeps a second list on the PC by itself (`.ppb-lessons.txt` or `.hfb-lessons.txt` in the user folder): one line for each pull request the automatic gate sends back, with the reason. That list needs no upkeep.
 
 - A project can hold plain HPLC traces with no ÄKTA run. Check that a change to loading or to the step list still gives those traces a place to appear (#1415).
 - The same test can be counted under two suite names. Count failing checks by their id, not by suite (#1419).

@@ -26,7 +26,7 @@ State lives in hidden markers in the issue's comments, so both manager copies ag
 === HFB-RELAY REQUEST v1 ===
 id: <issue>-<4 hex>
 base: <10-char sha of main when the excerpt was cut>
-app: hplc-figure-bench(WF1.13).html
+app: protein-purification-bench.html
 app-digest: <first 16 hex of sha256 of the app file>
 issue: <number>
 expires: <ISO 8601 Z>
@@ -194,8 +194,8 @@ changes-a-reported-number: yes
 
 patch:
 ```diff
---- a/hplc-figure-bench(WF1.13).html
-+++ b/hplc-figure-bench(WF1.13).html
+--- a/protein-purification-bench.html
++++ b/protein-purification-bench.html
 @@ -1,6 +1,6 @@
  function alphaSum(a, b){
    const t = a + b;

@@ -5,7 +5,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import gatecheck as gk
-APP = 'hplc-figure-bench(WF1.13).html'
+APP = 'protein-purification-bench.html'
 bad = []
 def check(name, ok, info=''):
     print(('ok   ' if ok else 'FAIL ') + name + (f'  ({info})' if not ok and info else ''))
@@ -47,7 +47,7 @@ check('a changed operator keeps the words it joins', 'a + b' in fr('x = a+b;', '
 check('an added line is kept whole', gk.changed_fragments(adiff([], ['const k = 1000;']), APP) == ['const k = 1000;'])
 
 import re
-ALLOW = re.compile(r'^(hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests/(suites|data|lib|ux)/|tests/README\.md|docs/|\.gitignore$|tests/\.gitignore$)')
+ALLOW = re.compile(r'^(protein-purification-bench\.html|hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests/(suites|data|lib|ux)/|tests/README\.md|docs/|\.gitignore$|tests/\.gitignore$)')
 keep, stray = gk.rebuild_paths([
     {'filename': '.gitignore'},
     {'filename': 'docs/archive/perf-audit.md', 'previous_filename': 'docs/perf-audit.md'},

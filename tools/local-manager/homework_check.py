@@ -14,7 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import boardmap as bm  # noqa: E402
 
 Q = 'How do size exclusion chromatography columns get calibrated with protein standards to estimate molecular weight?'
-conf = Path.home() / '.hfb-reviewer.json'
+conf = Path.home() / '.ppb-reviewer.json'
+if not conf.exists():
+    conf = Path.home() / '.hfb-reviewer.json'
 cfg = json.loads(conf.read_text(encoding='utf-8-sig')) if conf.exists() else {}
 key = cfg.get('gemini_key') or os.environ.get('GEMINI_API_KEY', '')  # the same two places the manager looks
 

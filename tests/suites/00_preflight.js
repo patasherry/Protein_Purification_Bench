@@ -17,7 +17,7 @@ const { suite } = require('../lib/harness');
     }
 
     const files = [...new Set([...untracked, ...changed])];
-    const ALLOWED = /^(hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests\/(suites|data|lib)\/|tests\/README\.md|docs\/)/;
+    const ALLOWED = /^(protein-purification-bench\.html|hplc-figure-bench\(WF1\.13\)\.html|README\.md|tests\/(suites|data|lib)\/|tests\/README\.md|docs\/)/;
     const SAFE = /^(tests\/|docs\/|\.github\/ISSUE_TEMPLATE\/)/;
 
     const badFiles = [];
@@ -31,7 +31,7 @@ const { suite } = require('../lib/harness');
     }
 
     if (badFiles.length > 0) {
-      const msg = `Stray files detected outside allowed scope: ${badFiles.join(', ')}\nRemediation: Remove scratch scripts, test logs, or patch files. Commit only hplc-figure-bench(WF1.13).html, README.md, docs/, or tests/ folders as permitted by AGENTS.md.`;
+      const msg = `Stray files detected outside allowed scope: ${badFiles.join(', ')}\nRemediation: Remove scratch scripts, test logs, or patch files. Commit only protein-purification-bench.html, README.md, docs/, or tests/ folders as permitted by AGENTS.md.`;
       T.check('files in allowlist', false, msg);
     } else {
       T.check('files in allowlist', true, '');
