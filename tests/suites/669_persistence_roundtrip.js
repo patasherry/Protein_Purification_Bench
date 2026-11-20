@@ -77,5 +77,92 @@ const {open, H, suite, src, fs, path, DATA} = require('../lib/harness');
     await close();
   });
 
+  await T.t('custom-tagseq-stashed-across-preset-switch', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    await p.click('#homeQuick');
+    await h.wait(400);
+    await p.setInputFiles('#gelFile', src('gel'));
+    await h.wait(900);
+    await p.$eval('details[data-sub="gcleave"]', d => { d.open = true; });
+    await p.selectOption('#o-tagPreset', 'custom');
+    await h.wait(150);
+    await p.fill('#tagSeq', 'WSHPQFEK');
+    await p.locator('#tagSeq').blur();
+    await h.wait(150);
+    await p.selectOption('#o-tagPreset', 'his');
+    await h.wait(150);
+    const onHis = await p.$eval('#tagSeq', e => e.value);
+    await p.selectOption('#o-tagPreset', 'custom');
+    await h.wait(150);
+    const restored = await p.$eval('#tagSeq', e => e.value);
+    T.check('custom-tagseq: restored on switching back to custom', onHis === '' && restored === 'WSHPQFEK', `onHis="${onHis}" restored="${restored}"`);
+    T.check('custom-tagseq: no page errors', !errs.length, errs.join(' | '));
+    await close();
+  });
+
+  await T.t('optreset-preserves-myquick-and-epsmode', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    await h.newProject('Reset Persistence');
+    await p.fill('#protSeq', 'MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEK');
+    await h.wait(150);
+    await p.selectOption('#o-epsMode', 'tagged');
+    await h.wait(150);
+
+    await h.step('expr');
+    await p.fill('#pr-medium', '2xYT');
+    await p.fill('#pr-temp', '20');
+    await h.wait(150);
+    await p.click('#ssQuick [data-qsave="1"]');
+    await h.wait(200);
+    const chipsBefore = await p.$$eval('#ssQuick .qchip.mine', els => els.map(e => e.textContent.trim()));
+
+    if (await p.isVisible('#moreBtn')) {
+      const exp = await p.getAttribute('#moreBtn', 'aria-expanded');
+      if (exp !== 'true') { await p.click('#moreBtn'); await h.wait(200); }
+    }
+    await p.click('#optReset');
+    await h.wait(300);
+
+    const chipsAfter = await p.$$eval('#ssQuick .qchip.mine', els => els.map(e => e.textContent.trim()));
+    await h.step('construct');
+    const epsAfter = await p.$eval('#o-epsMode', e => e.value);
+
+    T.check('optreset: custom quick-fill chip preserved', chipsBefore.length === 1 && JSON.stringify(chipsAfter) === JSON.stringify(chipsBefore), `before=${JSON.stringify(chipsBefore)} after=${JSON.stringify(chipsAfter)}`);
+    T.check('optreset: epsMode preserved', epsAfter === 'tagged', `got: "${epsAfter}"`);
+    T.check('optreset: no page errors', !errs.length, errs.join(' | '));
+    await close();
+  });
+
+  await T.t('companion-drop-loads-project-and-trace', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    await h.newProject('Companion Drop Project');
+    await h.addRun(src('his'));
+
+    const dl = p.waitForEvent('download');
+    await p.click('#projSave');
+    const projPath = await (await dl).path();
+    const projJson = fs.readFileSync(projPath, 'utf8');
+    const csvText = 'Time (min),Signal (mAU)\n0.0,1.2\n1.0,42.5\n2.0,3.4\n3.0,1.1\n';
+
+    await p.click('#homeBtn');
+    await h.wait(500);
+
+    await p.evaluate(([pText, cText]) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([pText], 'companion_bundle_project.json', {type: 'application/json'}));
+      dt.items.add(new File([cText], 'companion_trace.csv', {type: 'text/csv'}));
+      document.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true}));
+    }, [projJson, csvText]);
+    await h.wait(2500);
+
+    const projOpen = await p.$eval('#projBar', e => !e.hidden);
+    const runCards = await p.$$eval('#list .trace[data-kind="run"]', els => els.length);
+    const traceNames = await p.$$eval('#list .trace[data-kind="trace"] [data-k="name"]', els => els.map(e => e.value));
+
+    T.check('companion-drop: project opened with its run and companion csv trace added', projOpen && runCards === 1 && traceNames.includes('companion_trace'), `projOpen=${projOpen} runs=${runCards} traces=${JSON.stringify(traceNames)}`);
+    T.check('companion-drop: no page errors', !errs.length, errs.join(' | '));
+    await close();
+  });
+
   T.done();
 })();
