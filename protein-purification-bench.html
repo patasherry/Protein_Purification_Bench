@@ -6028,10 +6028,14 @@ function render(){
   paper.innerHTML = svg || '<div class="empty"><p>Load a CSV or ASCII export to start.</p><button type="button" class="btn primary" id="paperPick">Choose data files</button></div>';
   const kind = f ? f.kind : 'overlay';
   document.body.classList.toggle('stepfig', kind === 'step'); document.body.classList.toggle('onhplc', !!PROJ && kind === 'overlay');
-  { const g = curGel(), ls = $('#ladderStatus'), dh = $('#g-darkHint'); const isDark = !!(g && !g.invert && gelRawMedian(g) < 64);
+  { const g = curGel(), ls = $('#ladderStatus'), dh = $('#g-darkHint'), dc = document.querySelector('details[data-sub="gcrop"]'); const isDark = !!(g && !g.invert && gelRawMedian(g) < 64);
     if (ls) { let msg = g ? (g.ladderMsg || '') : ''; if (isDark) msg = (msg ? msg + ' ' : '') + 'Dark background: check Invert (#g-invert) under Crop and contrast.'; ls.textContent = msg; }
     if (dh) { dh.hidden = !isDark; }
-    if (g) stepStatus(g); }
+    if (g) stepStatus(g);
+    if (dc && !($('#panelSearch') && $('#panelSearch').value.trim())) { let sv = null; try { sv = localStorage.getItem('hfb-sub-gcrop'); } catch (e) {}
+      const setDc = want => { if (dc.open !== want) { if (!dc._prog) dc._sv = sv; dc._prog = 1; dc.open = want; } };
+      if (MODE === 'proj' && g) { dc._projAuto = 1; setDc(isDark ? true : (opt.gelAutoCrop && g.autoCropped && !g.trimTouched) ? sv === '1' : sv !== '0'); }
+      else if (MODE !== 'proj' && dc._projAuto) { dc._projAuto = 0; setDc(sv !== '0'); } } }
   document.querySelectorAll('[data-for]').forEach(el => { el.hidden = !el.dataset.for.split(' ').includes(kind); });
   /* in a project the panel shows only what the current step needs */
   if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
@@ -6040,8 +6044,12 @@ function render(){
     if (sk === 'btw') syncBtw(); if (sk === 'man') syncMan(); document.querySelectorAll('#prepPanel > p.hint, #prepPanel > details.tip').forEach(x => { x.hidden = true; }); }
   else { document.querySelectorAll('#panel > [data-step]:not([data-for])').forEach(el => { el.hidden = false; }); document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = d.dataset.sub === 'ptr' || d.dataset.sub === 'pbtw' || d.dataset.sub === 'pman'; }); }
   /* More options shows when this step has settings to offer */
-  { const mo = $('#moreOpts'), any = PROJ && [...document.querySelectorAll('#panel > .optsec')].some(x => !x.hidden); mo.hidden = !any; $('#moreBtn').textContent = document.body.classList.contains('moreopen') ? 'Fewer options' : 'More options'; $('#moreBtn').setAttribute('aria-expanded', document.body.classList.contains('moreopen')); $('#moreWhat').hidden = document.body.classList.contains('moreopen'); }
   renderSec(); renderProt(); renderPrep(); renderND(); syncAssayDerived(); renderAssays(); grpStatus(); moreSync(); renderNext(); renderWfTool();
+  { const mo = $('#moreOpts'), mw = $('#moreWhat'), secs = [...document.querySelectorAll('#panel > .optsec')], any = PROJ && secs.some(x => !x.hidden); mo.hidden = !any;
+    if (mw) { const bs = mw._bs || (mw._bs = [...mw.querySelectorAll('[data-more-sec]')]), on = bs.filter(b => secs.some(g => { const h = g.querySelector(':scope > h2'); return !g.hidden && h && h.firstChild && h.firstChild.textContent.trim() === b.dataset.moreSec; })), k = on.map(b => b.dataset.moreSec).join('|');
+      if (mw._k !== k) { mw._k = k; const ch = []; on.forEach((b, i) => { if (i) ch.push(i === on.length - 1 ? ' and ' : ', '); ch.push(b); }); mw.replaceChildren(...ch); }
+      mw.hidden = document.body.classList.contains('moreopen') || !on.length; }
+    $('#moreBtn').textContent = document.body.classList.contains('moreopen') ? 'Fewer options' : 'More options'; $('#moreBtn').setAttribute('aria-expanded', document.body.classList.contains('moreopen')); }
   { const gh = $('#wfGridHint'); if (gh) gh.hidden = opt.wfLayout !== 'grid'; }
   { const lab = id => { const e = $(id); return e && e.closest('label'); }, side = opt.gelPos === 'right', full = opt.gelView === 'full' || (kind === 'workflow' && opt.wfGelFull);
     [['#o-gelAlign', side], ['#o-gelSide', !side], ['#o-gelFocusKda', full], ['#o-gelSpan', full]].forEach(([id, hide]) => { const l = lab(id); if (l) l.hidden = hide; }); }
@@ -6061,7 +6069,7 @@ function render(){
   else if (kind === 'nd') s2 = `${ndSamples.filter(x => x.spec && !x.hide).length} spectra plotted, absorbance at 10 mm path`;
   else if (kind === 'conc') s2 = 'NanoDrop readings of the concentrated pool, 10 mm path';
   else if (kind === 'struct' && struct) s2 = [struct.method && struct.method.toLowerCase().replace(/^./, c => c.toUpperCase()), struct.res && `${struct.res} Å`, struct.title].filter(Boolean).join(', ').slice(0, 140);
-  else if (traces.length) s2 = 'Click a peak to label it'; else s2 = '';
+  else if (kind === 'overlay' && traces.length) s2 = 'Click a peak to label it'; else s2 = '';
   const lblOff = kind === 'overlay' && geo && geo.lblLeft || [];
   if (lblOff.length) s2 = `${lblOff.length} peak label${lblOff.length === 1 ? '' : 's'} left off for lack of room (${lblOff.slice(0, 4).join(', ')}${lblOff.length > 4 ? ', …' : ''}). Try a lower Max per trace, fewer decimals, a wider figure or a higher Y to`;
   if (kind === 'workflow' && PROJ) s2 += '. Click a panel to edit it; drag the selected panel to move it';
@@ -9534,18 +9542,23 @@ document.querySelectorAll('#panel > .grp').forEach(sec => { const h = sec.queryS
 const ADV = {'sub:rwin': ['o-fracEvery', 'o-runPad'], 'sub:rgel': ['o-gelAlign', 'o-gelGap', 'o-gelSide', 'o-linkFrom', 'o-laneMark', 'o-laneAlpha', 'gelSizeReset', 'gelOffReset'], 'sub:rpool': ['o-poolColor'],
   'Peak integration': ['o-intProm', 'o-path', 'o-eps', 'o-intFill'], 'Processing': ['o-baseline', 'o-smooth'], 'Peak labels': ['o-peakRot', 'o-peakDec', 'o-prom', 'o-peakColor', 'o-peakMax'],
   'Window': ['o-zoomInsetPos', 'o-zoomInsetSize'], 'Axes': ['o-ticksOut', 'o-y2grad', 'o-y2cond', 'o-sbValue', 'o-sbUnit'], 'Figure style': ['o-lw', 'o-font', 'o-bg'], 'Layout': ['o-stack'],
-  'sub:gcrop': ['o-gelAutoCrop', 'o-gelFrame'], 'sub:gbands': ['o-tagTol', 'o-bandSens', 'o-purBase', 'o-tagCounts'], 'sub:gknown': ['o-knownTol', 'o-knownMin', 'o-knownCount']};
+  'sub:gcrop': ['o-gelAutoCrop', 'o-gelFrame'], 'sub:gbands': ['o-targetArrow', 'o-tagShow', 'o-purRow', 'o-tagCounts', 'o-bandLabels', 'o-purBase', 'o-tagTol', 'o-bandSens'], 'sub:gknown': ['o-knownTol', 'o-knownMin', 'o-knownCount']};
 const moreBoxes = [];
 Object.entries(ADV).forEach(([key, ids]) => {
   const host = key.startsWith('sub:') ? document.querySelector(`#panel details.sub[data-sub="${key.slice(4)}"]`) : [...document.querySelectorAll('#panel > .grp')].find(g => { const h = g.querySelector(':scope > h2'); return h && h.firstChild && h.firstChild.textContent.trim() === key; });
   if (!host) return;
   const d = document.createElement('details'), body = document.createElement('div'); d.className = 'more'; d.dataset.more = key; body.className = 'morebody';
   const sm = document.createElement('summary'); sm.textContent = 'More options'; d.append(sm, body);
-  ids.forEach(id => { const e = document.getElementById(id), w = e && (e.tagName === 'BUTTON' ? e : e.closest('label')); if (w && host.contains(w)) body.appendChild(w); });
+  ids.forEach(id => { const e = document.getElementById(id), w = e && (e.tagName === 'BUTTON' ? e : e.closest('label')); if (w && host.contains(w)) { const p = w.parentElement; body.appendChild(w); if (p && p !== host && !p.id && p.matches('.row, .checks') && !p.children.length) p.remove(); } });
   if (!body.children.length) return;
   host.appendChild(d); moreBoxes.push(d);
   try { if (localStorage.getItem('hfb-more-' + key) === '1') d.open = true; } catch (e) {}
   d.addEventListener('toggle', () => { if (document.body.classList.contains('searching')) return; try { localStorage.setItem('hfb-more-' + key, d.open ? '1' : '0'); } catch (e) {} }); });
+{ const gcSub = document.querySelector('details.sub[data-sub="gcrop"]'), ps = $('#panelSearch'), sm = gcSub && gcSub.querySelector(':scope > summary'); let o0 = false, sv = null;
+  if (sm) { sm.addEventListener('click', () => { gcSub._prog = 0; }, true); sm.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') gcSub._prog = 0; }, true); }
+  if (gcSub && ps) { ps.addEventListener('input', () => { o0 = gcSub.open; sv = null; try { sv = localStorage.getItem('hfb-sub-gcrop'); } catch (e) {} }, true);
+    queueMicrotask(() => ps.addEventListener('input', () => { const o1 = gcSub.open; if (!ps.value.trim()) { const g = curGel(); if (MODE === 'proj' && g) { gcSub._projAuto = 1; gcSub.open = (!g.invert && gelRawMedian(g) < 64) ? true : (opt.gelAutoCrop && g.autoCropped && !g.trimTouched) ? sv === '1' : sv !== '0'; } else if (MODE !== 'proj' && gcSub._projAuto) { gcSub._projAuto = 0; gcSub.open = sv !== '0'; } } if (o1 !== o0 || gcSub.open !== o1) { if (!gcSub._prog) gcSub._sv = sv; gcSub._prog = 1; clearTimeout(gcSub._pt); gcSub._pt = setTimeout(() => { gcSub._prog = 0; }, 50); } })); }
+  if (gcSub) gcSub.addEventListener('toggle', () => { if (gcSub._prog) { gcSub._prog = 0; clearTimeout(gcSub._pt); try { if (gcSub._sv == null) localStorage.removeItem('hfb-sub-gcrop'); else localStorage.setItem('hfb-sub-gcrop', gcSub._sv); } catch (e) {} } }); }
 /* a setting changed from its default is never hidden: its More options opens (once, so closing it by hand sticks) */
 function moreSync(){
   moreBoxes.forEach(d => { const nd = [...d.querySelectorAll('[data-opt]')].some(e => { const k = e.dataset.opt; return k in DEF && JSON.stringify(opt[k]) !== JSON.stringify(DEF[k]); });
