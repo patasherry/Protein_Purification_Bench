@@ -448,6 +448,62 @@ async function uvPathCellSelector() {
   }
 }
 
+async function theoPeakMassTest() {
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    const H_val = (5000 / (1.0 * Math.sqrt(2 * Math.PI))) * (5000 / 4990.24);
+    const lines = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'min,mAU,min,Fraction'];
+    for (let i = 0; i <= 200; i++) {
+      const x = +(i / 10).toFixed(1);
+      const y = +(H_val * Math.exp(-0.5 * Math.pow((x - 10) / 1.0, 2))).toFixed(4);
+      lines.push(`${x},${y},${i % 10 === 0 ? x : ''},${i % 10 === 0 ? '"F' + (i / 10 + 1) + '"' : ''}`);
+    }
+
+    await h.newProject('Theoretical peak mass');
+    await p.click('#tl [data-addmenu]');
+    await p.click('#tl [data-addstep=run]');
+    await p.setInputFiles('#file', {name: 'theo_mass_synth.csv', mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n'))});
+    await h.wait(800);
+
+    const runStep = (await h.timeline()).find(x => /^run:/.test(x.k));
+    if (runStep) await h.step(runStep.k);
+    await h.wait(300);
+
+    const runCond = p.locator('.trace.run.sel details.runcond').first();
+    await runCond.evaluate(d => { d.open = true; });
+    const flowInput = runCond.locator('input[data-k="mFlow"]').first();
+    await flowInput.fill('1');
+    await flowInput.dispatchEvent('change');
+    await h.wait(300);
+
+    await setOpt(p, 'protSeq', 'MKWYYY');
+    await setOpt(p, 'o-intMethod', 'trap');
+    await setOpt(p, 'o-intBase', 'zero');
+    await detect(p);
+    await h.wait(300);
+
+    let pt = await h.peakTable();
+    let head = pt[0] || [];
+    let theoCol = head.findIndex(c => /^Theo\. mass/i.test(c));
+    T.check('theo_mass/column-present', theoCol >= 0, 'Theo. mass column present when sequence and flow are loaded');
+
+    let pRow = pt.slice(1).find(r => !/^pool/i.test(r[0]));
+    let theoVal = pRow && theoCol >= 0 ? pRow[theoCol] : '';
+    T.check('theo_mass/value-2.5ug', theoVal === '2.5 µg', `Peak theoretical mass cell reads '${theoVal}', expected '2.5 µg'`);
+
+    await setOpt(p, 'protSeq', '');
+    await h.wait(300);
+
+    pt = await h.peakTable();
+    head = pt[0] || [];
+    theoCol = head.findIndex(c => /^Theo\. mass/i.test(c));
+    T.check('theo_mass/column-hidden-without-seq', theoCol === -1, 'Theo. mass column disappears when sequence is toggled off');
+  } finally {
+    T.check('theo_mass/no-page-errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -458,5 +514,6 @@ async function uvPathCellSelector() {
   await T.t('zoom_to_peak_button', zoomToPeakButton);
   await T.t('peak_separator', peakSeparator);
   await T.t('uv_path_cell_selector', uvPathCellSelector);
+  await T.t('theo_peak_mass', theoPeakMassTest);
   T.done();
 })();
