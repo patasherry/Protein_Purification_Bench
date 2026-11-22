@@ -2170,7 +2170,14 @@ function integrateRegion(xs, ys, a, b, mode){
   for (let i=i0;i<=i1;i++){ const d = ys[i] - base(xs[i]); if (d > h) { h = d; apex = i; } }
   return {a: xa, b: xb, i0, i1, xs, ys, base, area, apex: xs[apex], apexY: ys[apex], height: h};
 }
-/* mass (mg) = (area in AU·mL) / (A280 of 1 mg/mL per cm × path in cm) */
+/* mass (mg) = (area in AU·mL) / (A280 of 1 mg/mL per cm × path in cm); theoPeakMass (µg) uses sequence Pace-1995 ε280 and MW: area (mAU·mL) × MW (Da) / (ε280 (M⁻¹cm⁻¹) × path (cm)) */
+function theoPeakMass(area, run){
+  if (area == null || !isFinite(area) || !run || massWhy(run)) return null;
+  const S = typeof seqTheoProps === 'function' ? seqTheoProps(run) : null, lCm = effPathMm(run)/10;
+  if (!S || !(S.eps > 0) || !(S.mw > 0) || !(lCm > 0)) return null;
+  const areaMl = xUnit(run) === 'min' ? area*uvFlow(run) : volMl(area, run);
+  return areaMl*S.mw/(S.eps*lCm);
+}
 /* ---------- size exclusion (SEC) ---------- */
 const xUnit = run => { const u = (typeof run === 'string' ? run : (run && (run.xUnit || run.xu))) || ''; if (/min/i.test(u)) return 'min'; if (/µl|ul/i.test(u)) return 'µL'; return 'mL'; };
 const volMl = (v, run) => v == null ? v : xUnit(run) === 'µL' ? v*1e-3 : v;
@@ -2373,7 +2380,7 @@ function integRows(run){
   const tot = rows.reduce((t, r) => t + Math.max(0, r.area), 0);
   const fit = isSec(run) ? secFit(secCalFor(run)) : null;
   const pr = run.shade ? poolRows(run) : null, bl = pr ? poolBlocks(run) : [], kk = pr && pr.k > 0 ? pr.k : 1;
-  rows.forEach((r, k) => { r.name = 'P' + (k+1); r.pct = tot > 0 ? 100*r.area/tot : null; const inP = bl.some(b => (r.apex >= b.a && r.apex <= b.b) || Math.min(r.b, b.b) - Math.max(r.a, b.a) > 1e-6), pk = inP ? kk : 1, m = massOf(r.area, run); r.mg = inP && m == null && pr && pr.measured && pr.area > 0 ? pr.mg*r.area/pr.area : m == null ? null : m*pk; r.scaled = pk !== 1 || (m == null && r.mg != null); if (fit) r.sec = secInfo(fit, r.apex); });
+  rows.forEach((r, k) => { r.name = 'P' + (k+1); r.pct = tot > 0 ? 100*r.area/tot : null; const inP = bl.some(b => (r.apex >= b.a && r.apex <= b.b) || Math.min(r.b, b.b) - Math.max(r.a, b.a) > 1e-6), pk = inP ? kk : 1, m = massOf(r.area, run); r.mg = inP && m == null && pr && pr.measured && pr.area > 0 ? pr.mg*r.area/pr.area : m == null ? null : m*pk; r.scaled = pk !== 1 || (m == null && r.mg != null); r.theoUg = theoPeakMass(r.area, run); if (fit) r.sec = secInfo(fit, r.apex); });
   return rows;
 }
 /* where a pool's measured concentration comes from: typed on the run card, the Concentrate step after the column, or NanoDrop readings marked Final */
@@ -6360,14 +6367,14 @@ $('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRow
     return [k + 1, q(x.r.name), q(x.p.label), x.vol == null ? '' : x.vol.toFixed(2), x.p.area == null ? '' : x.p.area.toFixed(2), x.p.mg == null ? '' : x.p.mg.toFixed(3), st ? st.m.toFixed(3) : '', st && st.sd != null ? st.sd.toFixed(3) : '', st ? st.n : '', st ? ((n.F ? n.fv : n.pv) || '') : '', n && n.mg != null ? n.mg.toFixed(3) : '', E ? E.e.toFixed(3) : '', x.yld == null ? '' : x.yld.toFixed(1), x.stepY == null ? '' : x.stepY.toFixed(1), rows.basis, x.pur == null ? '' : x.pur.toFixed(1), (cL => cL > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cL).toFixed(2) : '')(prep.on ? numOr(prep.cultureL, 0) : 0), (cG => cG > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cG).toFixed(3) : '')(prep.on ? numOr(prep.pellet, 0) : 0), ...(c => [c.mCol, c.mBufA, c.mBufB, c.mFlow, c.mTemp, c.mGrad, c.mLoad].map(q))(runCond(x.r)), E && cysNote(E.cys) ? q(cysNote(E.cys)) : '', ...fn(x.r, rows.mgOf(x))].join(','); })).join('\r\n')); });
 /* integration table */
 function renderIntTable(run){
-  const rows = integRows(run), pool = poolRows(run), hasMg = numOr(opt.eps, 0) > 0, gs = opt.intMethod === 'gauss', u = xUnit(run);
+  const rows = integRows(run), pool = poolRows(run), hasMg = numOr(opt.eps, 0) > 0, hasTheo = !!(run && !massWhy(run) && seqTheoProps(run)), gs = opt.intMethod === 'gauss', u = xUnit(run);
   const sec = isSec(run), fit = sec ? secFit(secCalFor(run)) : null, hasKav = !!(fit && fit.useKav), hasMw = !!(fit && fit.mw), hasOl = hasMw && secMono() > 0;
   /* A260/A280 at each peak when the run recorded both wavelengths */
   const c280 = run.uvs.find(u => /280/.test(u.name)), c260 = run.uvs.find(u => /260/.test(u.name)), rat = !!(c280 && c260);
   const baseAt = (c, x, a, b) => { if (opt.intBase === 'zero') return 0; const ia = nearestIdx(c.xs, a), ib = nearestIdx(c.xs, b); const xa = c.xs[ia], xb = c.xs[ib], ya = c.ys[ia], yb = c.ys[ib]; return ya + (yb - ya) * (x - xa) / ((xb - xa) || 1); };
   const ratAt = r => { if (!rat) return ''; const x = r.apex; const a = c260.ys[nearestIdx(c260.xs, x)] - baseAt(c260, x, r.a, r.b), b = c280.ys[nearestIdx(c280.xs, x)] - baseAt(c280, x, r.a, r.b); return b > 5 ? fmt(a/b, 2) : ''; };
-  const cols = 8 + (rat ? 1 : 0) + (hasMg ? 1 : 0) + (gs ? 2 : 0) + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0);
-  const head = `<tr><th>Region</th><th>Start (${u})</th><th>End (${u})</th><th>${sec ? (u === 'min' ? 'Elution time' : 'Ve') : gs ? 'Center' : 'Apex'} (${u})</th>${hasKav ? '<th title="(Ve − V0)/(Vt − V0)">Kav</th>' : ''}${hasMw ? '<th>Apparent mass (kDa)</th>' : ''}${hasOl ? '<th title="Apparent MW divided by the monomer mass. SEC sizes are typically good to 10 to 20%, and shape shifts them, so treat this as a guide to the oligomer state">× monomer</th>' : ''}<th>Height (mAU)</th>${gs ? `<th>FWHM (${u})</th>` : ''}<th>Area (mAU·${u})</th><th>% of regions</th>${hasMg ? '<th>Protein (mg)</th>' : ''}${rat ? '<th title="Ratio of absorbance at 260 and 280 nm at the peak. Around 0.57 for pure protein, higher when nucleic acid or bound nucleotide is present">A₂₆₀/A₂₈₀</th>' : ''}${gs ? '<th>Fit R²</th>' : ''}<th></th></tr>`;
+  const cols = 8 + (rat ? 1 : 0) + (hasMg ? 1 : 0) + (hasTheo ? 1 : 0) + (gs ? 2 : 0) + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0);
+  const head = `<tr><th>Region</th><th>Start (${u})</th><th>End (${u})</th><th>${sec ? (u === 'min' ? 'Elution time' : 'Ve') : gs ? 'Center' : 'Apex'} (${u})</th>${hasKav ? '<th title="(Ve − V0)/(Vt − V0)">Kav</th>' : ''}${hasMw ? '<th>Apparent mass (kDa)</th>' : ''}${hasOl ? '<th title="Apparent MW divided by the monomer mass. SEC sizes are typically good to 10 to 20%, and shape shifts them, so treat this as a guide to the oligomer state">× monomer</th>' : ''}<th>Height (mAU)</th>${gs ? `<th>FWHM (${u})</th>` : ''}<th>Area (mAU·${u})</th><th>% of regions</th>${hasMg ? '<th>Protein (mg)</th>' : ''}${hasTheo ? '<th title="First-principles Beer-Lambert mass from sequence Pace-1995 ε₂₈₀, MW and UV pathlength: area (mAU·mL) × MW / (ε₂₈₀ × pathlength)">Theo. mass</th>' : ''}${rat ? '<th title="Ratio of absorbance at 260 and 280 nm at the peak. Around 0.57 for pure protein, higher when nucleic acid or bound nucleotide is present">A₂₆₀/A₂₈₀</th>' : ''}${gs ? '<th>Fit R²</th>' : ''}<th></th></tr>`;
   const body = rows.map((r, k) => { const ri = run.integ.indexOf(r.reg), si = r.sec || {};
     const mwCell = si.void ? 'void' : si.mw == null ? '' : `${si.extrap ? '~' : ''}${kdaRound(si.mw)}`, olCell = si.void || si.ratio == null ? '' : si.olig ? `${fmt(si.ratio, 1)}×` : `${fmt(si.ratio, 1)}× (below monomer)`;
     const tiny = r.gauss && rows.reduce((t, q) => t + Math.max(0, q.area || 0), 0)*0.01 > (r.area || 0);
@@ -6375,9 +6382,9 @@ function renderIntTable(run){
       <td><input type="number" step="0.01" id="ia${k}" data-ri="${ri}" data-rk="a" value="${fmt(r.a, 2)}" aria-label="${r.name} start"></td>
       <td><input type="number" step="0.01" id="ib${k}" data-ri="${ri}" data-rk="b" value="${fmt(r.b, 2)}" aria-label="${r.name} end"></td>
       <td>${fmt(r.apex, 2)}</td>${hasKav ? `<td>${si.kav == null ? '' : fmt(si.kav, 3)}</td>` : ''}${hasMw ? `<td>${mwCell}</td>` : ''}${hasOl ? `<td>${olCell}</td>` : ''}<td>${fmtAuto(r.height)}</td>${gs ? `<td>${fmt(r.fwhm, 2)}</td>` : ''}<td>${fmtAuto(r.area)}</td><td>${r.pct == null ? '' : fmt(r.pct, 1)}</td>
-      ${hasMg ? `<td${r.scaled && r.mg != null ? ' title="Peak mass rescaled using the pool NanoDrop mass (concentration × measured volume)"' : ''}>${r.mg == null ? '' : (r.scaled ? '≈' : '') + fmt(r.mg, 2)}</td>` : ''}${rat ? `<td>${ratAt(r)}</td>` : ''}${gs ? `<td${r.r2 != null && r.r2 < 0.98 ? ' class="warnc" title="Below 0.98, so one Gaussian may not describe this peak. Split it, or use trapezoid areas"' : ''}>${r.r2 == null ? '' : fmt(r.r2, 3)}</td>` : ''}<td><button type="button" class="xbtn" data-rdel="${ri}" aria-label="Remove ${r.name}">×</button></td></tr>`; }).join('');
-  const blank = n => '<td></td>'.repeat(n);
-  const pr = pool ? `<tr class="pool" title="UV area across the pooled fractions, same baseline as the regions"><td><span class="sw" style="background:${esc(opt.poolColor)}"></span>Pool ${esc(pool.label)}</td><td>${fmt(pool.a, 2)}</td><td>${fmt(pool.b, 2)}</td>${blank(1 + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0) + 1)}${gs ? '<td></td>' : ''}<td>${fmtAuto(pool.area)}</td><td></td>${hasMg ? `<td>${pool.mg == null ? '' : fmt(pool.mg, 2)}</td>` : ''}${rat ? '<td></td>' : ''}${gs ? '<td></td>' : ''}<td></td></tr>` : '';
+      ${hasMg ? `<td${r.scaled && r.mg != null ? ' title="Peak mass rescaled using the pool NanoDrop mass (concentration × measured volume)"' : ''}>${r.mg == null ? '' : (r.scaled ? '≈' : '') + fmt(r.mg, 2)}</td>` : ''}${hasTheo ? `<td>${r.theoUg == null ? '' : fmt(r.theoUg, 1) + ' µg'}</td>` : ''}${rat ? `<td>${ratAt(r)}</td>` : ''}${gs ? `<td${r.r2 != null && r.r2 < 0.98 ? ' class="warnc" title="Below 0.98, so one Gaussian may not describe this peak. Split it, or use trapezoid areas"' : ''}>${r.r2 == null ? '' : fmt(r.r2, 3)}</td>` : ''}<td><button type="button" class="xbtn" data-rdel="${ri}" aria-label="Remove ${r.name}">×</button></td></tr>`; }).join('');
+  const blank = n => '<td></td>'.repeat(n), poolTheo = pool && hasTheo ? theoPeakMass(pool.area, run) : null;
+  const pr = pool ? `<tr class="pool" title="UV area across the pooled fractions, same baseline as the regions"><td><span class="sw" style="background:${esc(opt.poolColor)}"></span>Pool ${esc(pool.label)}</td><td>${fmt(pool.a, 2)}</td><td>${fmt(pool.b, 2)}</td>${blank(1 + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0) + 1)}${gs ? '<td></td>' : ''}<td>${fmtAuto(pool.area)}</td><td></td>${hasMg ? `<td>${pool.mg == null ? '' : fmt(pool.mg, 2)}</td>` : ''}${hasTheo ? `<td>${poolTheo == null ? '' : fmt(poolTheo, 1) + ' µg'}</td>` : ''}${rat ? '<td></td>' : ''}${gs ? '<td></td>' : ''}<td></td></tr>` : '';
   const note = sec && !hasMw && opt.secStds ? `<tr><td colspan="${cols}" class="empty-row">Add a column calibration under Size exclusion (SEC) to see apparent molecular weights and oligomer states.</td></tr>` : '';
   const mgWhy = hasMg ? massWhy(run) : '', mgNote = mgWhy ? `<tr><td colspan="${cols}" class="empty-row">No protein mg: ${esc(mgWhy)}.</td></tr>` : hasMg && pathAssumed(run) ? `<tr><td colspan="${cols}" class="empty-row">Protein mg use an assumed UV path of ${esc(fmtAuto(effPathMm()))} mm. Enter the real path on the run card.</td></tr>` : '';
   const scaleNote = hasMg && rows.some(r => r.scaled && r.mg != null) ? `<tr><td colspan="${cols}" class="empty-row">≈ Peak masses overlapping the pool are rescaled using the pool NanoDrop mass (concentration × measured volume), including any loss during concentration.</td></tr>` : '';
@@ -6723,7 +6730,8 @@ function seqMass(s){ if (!s) return 0; let m = 18.01524; for (const c of s) m +=
 const seqUnknowns = s => { let u = 0; for (const c of s) if (!(c in AA_MASS)) u++; return u; };
 const seqCys = s => { let n = 0; for (const c of s) if (c === 'C') n++; return n; };
 const cysNote = n => n >= 2 ? 'assuming reduced cysteines' : '';
-const seqA280 = s => { let w = 0, y = 0; for (const c of s) { if (c === 'W') w++; else if (c === 'Y') y++; } const m = seqMass(s); return m ? (5500*w + 1490*y)/m : null; };
+const seqEps280 = s => { let w = 0, y = 0; for (const c of s) { if (c === 'W') w++; else if (c === 'Y') y++; } return 5500*w + 1490*y; };
+const seqA280 = s => { const m = seqMass(s); return m ? seqEps280(s)/m : null; };
 /* isoelectric point with the Bjellqvist pK set (ExPASy), by bisection on the net charge */
 const PK_POS = {K: 10.0, R: 12.0, H: 5.98}, PK_NEG = {D: 4.05, E: 4.45, C: 9.0, Y: 10.0}, PK_NT = {A: 7.59, M: 7.0, S: 6.93, P: 8.36, T: 6.82, V: 7.44, E: 7.7}, PK_CT = {D: 4.55, E: 4.75};
 function seqPI(s){
@@ -6829,6 +6837,14 @@ function protForms(){
     {k: 'Tag only', t: name, seq: sp.tag}
   ];
   return out.map(x => Object.assign(x, {mass: seqMass(x.seq), pi: seqPI(x.seq), a280: seqA280(x.seq), unk: seqUnknowns(x.seq)}));
+}
+function seqTheoProps(run){
+  const p = cleanSeq(opt.protSeq), tg = cleanSeq(opt.tagSeq); if (!p && !tg) return null;
+  if (p) { const F = protForms(), form = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : ndForm(run);
+    const noTag = form === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset];
+    const f = F.length && !noTag ? (form === 'tagged' && F[1] ? F[1] : F[0]) : null; if (!f) return null;
+    const eps = seqEps280(f.seq); return eps > 0 && f.mass > 0 ? {eps, mw: f.mass, a280: f.a280, src: form === 'tagged' && F[1] ? 'tagged' : 'untagged'} : null; }
+  const eps = seqEps280(tg), mw = seqMass(tg); return eps > 0 && mw > 0 ? {eps, mw, a280: eps/mw, src: 'tag'} : null;
 }
 function renderProt(){
   const put = (sel, v) => { const e = $(sel); if (e && e !== document.activeElement && e.value !== v) e.value = v; };

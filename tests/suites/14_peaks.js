@@ -448,6 +448,153 @@ async function uvPathCellSelector() {
   }
 }
 
+// Issue #1635: Theoretical Peak Mass calculation (Beer-Lambert with sequence ε280 & MW) and 'Theo. mass' table column
+async function theoPeakMassColumn() {
+  const {p, errs, close} = await open(), h = H(p);
+  p.on('dialog', d => d.accept());
+  try {
+    // Synthetic polypeptide: 1 Trp + 3 Tyr -> Pace-1995 ε280 = 5500 + 3*1490 = 9970 M⁻¹cm⁻¹
+    const seq = 'M' + 'GA'.repeat(72) + 'WYYY';
+    const eps = 5500 + 3 * 1490;
+    const mw = 18.01524 + 131.1926 + 72 * (57.0519 + 71.0788) + 186.2132 + 3 * 163.1760;
+    // Raised-cosine peak on [c - 2, c + 2] has exact trapezoid integral = targetArea on a uniform grid
+    const areaFor500ug = 500.0 * 0.2 * eps / mw; // mAU·min at flow = 1 mL/min, path = 0.2 cm -> 500.0 µg
+    const buildCsv = (unit, peaksSpec) => {
+      const out = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', `${unit},mAU,${unit},Fraction`];
+      for (let i = 0; i <= 500; i++) {
+        const x = +(i * 0.05).toFixed(4);
+        let y = 0;
+        for (const pk of peaksSpec) {
+          if (Math.abs(x - pk.c) <= 2) y += (pk.area / 2) * 0.5 * (1 + Math.cos(Math.PI * (x - pk.c) / 2));
+        }
+        out.push(`${x},${y.toFixed(6)},${i % 20 === 0 ? x : ''},${i % 20 === 0 ? '"F' + (i / 20 + 1) + '"' : ''}`);
+      }
+      return out.join('\n');
+    };
+
+    await h.newProject('Theoretical peak mass');
+    await h.step('construct');
+    await p.locator('#protSeq').fill(seq);
+    await p.locator('#protSeq').dispatchEvent('input');
+    await p.locator('#protSeq').dispatchEvent('change');
+    await h.wait(300);
+
+    await p.click('#tl [data-addmenu]');
+    await p.click('#tl [data-addstep=run]');
+    const minCsv = buildCsv('min', [{c: 8, area: areaFor500ug}, {c: 18, area: 5000}]);
+    await p.setInputFiles('#file', {name: 'theo_mass_min.csv', mimeType: 'text/csv', buffer: Buffer.from(minCsv)});
+    await h.wait(800);
+
+    const runStep = (await h.timeline()).find(x => /^run:/.test(x.k));
+    if (runStep) await h.step(runStep.k);
+    await h.wait(300);
+
+    await setOpt(p, 'o-intMethod', 'trap');
+    await setOpt(p, 'o-intBase', 'zero');
+    await setOpt(p, 'o-intProm', '1');
+    await detect(p);
+    await setOpt(p, 'ia0', '6');
+    await setOpt(p, 'ib0', '10');
+    await setOpt(p, 'ia1', '16');
+    await setOpt(p, 'ib1', '20');
+    await h.wait(300);
+
+    // 1. On a min-axis run without flow rate, 'Theo. mass' column is hidden
+    let pt = await h.peakTable();
+    let theoCol = (pt[0] || []).findIndex(c => /^Theo\. mass$/i.test(c));
+    T.check('theo_mass/hidden-without-flow', theoCol === -1, `Expected Theo. mass hidden without flow on min axis, got header: ${JSON.stringify(pt[0])}`);
+
+    // 2. Enter flow = 1 mL/min -> 'Theo. mass' column appears; P1 reads '500.0 µg' and P2 (area 5000 mAU·min) matches Beer-Lambert
+    const runCond = p.locator('.trace.run.sel details.runcond').first();
+    await runCond.evaluate(d => { d.open = true; });
+    const flowInput = runCond.locator('input[data-k="mFlow"]').first();
+    await flowInput.fill('1');
+    await flowInput.dispatchEvent('input');
+    await flowInput.dispatchEvent('change');
+    await h.wait(300);
+
+    pt = await h.peakTable();
+    theoCol = (pt[0] || []).findIndex(c => /^Theo\. mass$/i.test(c));
+    T.check('theo_mass/column-present', theoCol >= 0, `Header: ${JSON.stringify(pt[0])}`);
+    const p1 = pt.slice(1).find(r => r[0] === 'P1');
+    const p2 = pt.slice(1).find(r => r[0] === 'P2');
+    const p1Cell = p1 && theoCol >= 0 ? p1[theoCol] : '';
+    const p2Cell = p2 && theoCol >= 0 ? p2[theoCol] : '';
+    const exp5000 = (1 * 5000 * mw / (eps * 0.2)).toFixed(1) + ' µg';
+    T.check('theo_mass/value-500ug', p1Cell === '500.0 µg', `P1 Theo. mass cell reads '${p1Cell}', expected '500.0 µg'`);
+    T.check('theo_mass/value-area-5000', p2Cell === exp5000, `P2 (5000 mAU·min) Theo. mass cell reads '${p2Cell}', expected '${exp5000}'`);
+
+    // 3. Switching optical cell to 1.0 cm (10 mm) divides theoretical mass by 5 ('100.0 µg')
+    const cellSel = runCond.locator('select[data-k="pathCell"]').first();
+    await cellSel.selectOption('10');
+    await h.wait(300);
+    pt = await h.peakTable();
+    theoCol = (pt[0] || []).findIndex(c => /^Theo\. mass$/i.test(c));
+    const p1Cell1cm = (pt.slice(1).find(r => r[0] === 'P1') || [])[theoCol] || '';
+    T.check('theo_mass/scales-with-1cm-cell', p1Cell1cm === '100.0 µg', `At 1.0 cm pathlength, P1 Theo. mass reads '${p1Cell1cm}', expected '100.0 µg'`);
+    await cellSel.selectOption('2');
+    await h.wait(300);
+
+    // 4. Toggling sequence off hides the 'Theo. mass' column, and opt.tagSeq alone re-enables it
+    await h.step('construct');
+    await p.locator('#protSeq').fill('');
+    await p.locator('#protSeq').dispatchEvent('input');
+    await p.locator('#protSeq').dispatchEvent('change');
+    await h.wait(300);
+    if (runStep) await h.step(runStep.k);
+    await h.wait(300);
+    pt = await h.peakTable();
+    theoCol = (pt[0] || []).findIndex(c => /^Theo\. mass$/i.test(c));
+    T.check('theo_mass/hidden-without-seq', theoCol === -1, `Expected Theo. mass hidden when sequence cleared, got header: ${JSON.stringify(pt[0])}`);
+
+    await h.step('construct');
+    await p.locator('#o-tagPreset2').selectOption('custom');
+    await p.locator('#tagSeq').fill(seq);
+    await p.locator('#tagSeq').dispatchEvent('input');
+    await p.locator('#tagSeq').dispatchEvent('change');
+    await h.wait(300);
+    if (runStep) await h.step(runStep.k);
+    await h.wait(300);
+    pt = await h.peakTable();
+    theoCol = (pt[0] || []).findIndex(c => /^Theo\. mass$/i.test(c));
+    const tagOnlyCell = (pt.slice(1).find(r => r[0] === 'P1') || [])[theoCol] || '';
+    T.check('theo_mass/tag-seq-only', theoCol >= 0 && tagOnlyCell === '500.0 µg', `With tagSeq only, P1 Theo. mass reads '${tagOnlyCell}', expected '500.0 µg'`);
+
+    // 5. Volume-axis (mL) ÄKTA run uses area in mAU·mL directly without multiplying by flow rate twice
+    await h.step('construct');
+    await p.locator('#o-tagPreset2').selectOption('');
+    await p.locator('#protSeq').fill(seq);
+    await p.locator('#protSeq').dispatchEvent('input');
+    await p.locator('#protSeq').dispatchEvent('change');
+    await h.wait(300);
+    await p.click('#tl [data-addmenu]');
+    await p.click('#tl [data-addstep=run]');
+    const mlCsv = buildCsv('mL', [{c: 8, area: areaFor500ug}]);
+    await p.setInputFiles('#file', {name: 'theo_mass_ml.csv', mimeType: 'text/csv', buffer: Buffer.from(mlCsv)});
+    await h.wait(800);
+    const mlStep = (await h.timeline()).filter(x => /^run:/.test(x.k)).pop();
+    if (mlStep) await h.step(mlStep.k);
+    await h.wait(300);
+    const mlCond = p.locator('.trace.run.sel details.runcond').first();
+    await mlCond.evaluate(d => { d.open = true; });
+    const mlFlow = mlCond.locator('input[data-k="mFlow"]').first();
+    await mlFlow.fill('2');
+    await mlFlow.dispatchEvent('input');
+    await mlFlow.dispatchEvent('change');
+    await detect(p);
+    await setOpt(p, 'ia0', '6');
+    await setOpt(p, 'ib0', '10');
+    await h.wait(300);
+    pt = await h.peakTable();
+    theoCol = (pt[0] || []).findIndex(c => /^Theo\. mass$/i.test(c));
+    const mlCell = (pt.slice(1).find(r => r[0] === 'P1') || [])[theoCol] || '';
+    T.check('theo_mass/volume-axis-no-double-flow', theoCol >= 0 && mlCell === '500.0 µg', `mL-axis run with flow=2 mL/min reads '${mlCell}', expected '500.0 µg'`);
+  } finally {
+    T.check('theo_mass/no-page-errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -458,5 +605,7 @@ async function uvPathCellSelector() {
   await T.t('zoom_to_peak_button', zoomToPeakButton);
   await T.t('peak_separator', peakSeparator);
   await T.t('uv_path_cell_selector', uvPathCellSelector);
+  await T.t('theo_peak_mass_column', theoPeakMassColumn);
   T.done();
 })();
+
