@@ -267,4 +267,6 @@ const os = require('os');
       await close();
     }
   });
+
+  T.done();
 })();
