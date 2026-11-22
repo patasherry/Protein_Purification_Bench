@@ -591,6 +591,60 @@ button,input,select,textarea{font-family:inherit}
 #panel .krow input[type=checkbox]:checked{background:transparent}
 #panel .krow input[type=checkbox]::after{content:none}
 #panel .check{min-height:32px;gap:10px}
+/* Project Directory / Windows File Explorer styles */
+.proj-dir-nav{display:inline-flex;align-items:center;gap:6px;margin:0 4px}
+.proj-dir-crumbs{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;cursor:pointer}
+.dir-bar-crumb{display:inline-flex;align-items:center;padding:2px 4px;border-radius:4px}
+.dir-bar-crumb:hover{background:var(--soft)}
+.dir-bar-crumb.active-prep{font-weight:600;color:var(--ink)}
+.proj-explorer-modal{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--bg);color:var(--ink);width:920px;max-width:95vw;height:650px;max-height:90vh;box-shadow:0 12px 36px rgba(0,0,0,0.3);overflow:hidden}
+.proj-explorer-modal::backdrop{background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)}
+.dir-window{display:flex;flex-direction:column;height:100%}
+.dir-titlebar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line);user-select:none}
+.dir-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+.dir-toolbar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--card);border-bottom:1px solid var(--line);gap:8px;flex-wrap:wrap}
+.dir-tools-left,.dir-tools-right{display:flex;align-items:center;gap:6px}
+.dir-sort-wrap{display:flex;align-items:center;gap:4px;font-size:12px}
+.dir-sort{font-size:12px;padding:2px 6px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.dir-view-seg{display:inline-flex;padding:2px;background:var(--soft);border-radius:6px;gap:2px}
+.dir-view-seg button{padding:2px 8px;font-size:12px;border:0;background:transparent;cursor:pointer;border-radius:4px}
+.dir-view-seg button[aria-pressed=true]{background:var(--bg);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,0.15)}
+.dir-address-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
+.dir-breadcrumbs{display:flex;align-items:center;gap:4px;flex:1;overflow-x:auto;white-space:nowrap;font-size:13px;padding:4px 8px;background:var(--card);border:1px solid var(--line);border-radius:6px}
+.dir-crumb{padding:2px 6px;font-size:12px;border-radius:4px}
+.crumb-sep{color:var(--muted);font-size:11px}
+.dir-search-wrap input{font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);width:180px}
+.dir-body{display:flex;flex:1;overflow:hidden}
+.dir-tree{width:220px;min-width:180px;border-right:1px solid var(--line);background:var(--card);overflow-y:auto;padding:8px}
+.dir-tree-node{display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:4px;cursor:pointer;font-size:12px;user-select:none;transition:background-color var(--ease)}
+.dir-tree-node:hover{background:var(--soft)}
+.dir-tree-node.active{background:var(--accent);color:var(--accent-ink)}
+.dir-tree-toggle{width:14px;text-align:center;font-size:10px;cursor:pointer}
+.dir-content{flex:1;overflow-y:auto;padding:12px;background:var(--bg)}
+.dir-list table{width:100%;border-collapse:collapse;font-size:12px}
+.dir-list th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:500}
+.dir-list td{padding:6px 8px;border-bottom:1px solid var(--line2)}
+.dir-row{cursor:pointer;user-select:none;transition:background-color var(--ease)}
+.dir-row:hover{background:var(--soft)}
+.dir-row.active-prep{font-weight:600;background:rgba(0,120,215,0.08)}
+.dir-name-cell{display:flex;align-items:center;gap:8px}
+.dir-acts-cell{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.dir-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.dir-card{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;user-select:none;transition:all var(--ease);position:relative}
+.dir-card:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.dir-card.active-prep{border-color:var(--accent);background:rgba(0,120,215,0.06)}
+.dir-card-icon{font-size:28px;margin-bottom:6px}
+.dir-card-name{font-size:12px;font-weight:500;word-break:break-word;max-width:100%}
+.dir-card-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.dir-card-acts{display:flex;gap:2px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.dir-drag-over{outline:2px dashed var(--accent)!important;background:var(--soft)!important}
+.dir-badge{font-size:10px;padding:1px 5px;border-radius:10px;background:var(--accent);color:var(--accent-ink);margin-left:4px}
+.dir-statusbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:var(--card);border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.dir-modal{border:1px solid var(--line);border-radius:8px;padding:0;background:var(--bg);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,0.25)}
+.dir-modal-box{padding:16px;min-width:300px;display:flex;flex-direction:column;gap:12px}
+.dir-modal-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.dir-input,.dir-select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font-size:13px}
+.mini.danger{color:var(--t-con)}
 @media (prefers-reduced-motion:reduce){*,*::after{transition:none!important}}
 </style>
 </head>
@@ -599,6 +653,11 @@ button,input,select,textarea{font-family:inherit}
 <header class="top">
   <h1><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M1.5 15.5h3.2c1.6 0 2-1.4 2.6-4.4C8 7.6 8.6 3 10 3s2 4.6 2.7 8.1c.6 3 1 4.4 2.6 4.4h5.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><rect x="5.5" y="18.2" width="11" height="2.3" rx="1.15" fill="currentColor" opacity=".55"/></svg>Protein Purification Bench</h1>
   <div class="projbar" id="projBar" hidden>
+    <span class="pb-sep" aria-hidden="true">/</span>
+    <div class="proj-dir-nav" id="projDirNav">
+      <button type="button" class="btn quiet proj-dir-btn" id="openDirBtn" title="Open Project Explorer (folders, preparations and files)">📁 Explorer</button>
+      <span class="proj-dir-crumbs" id="projDirCrumbs" title="Current location in project"></span>
+    </div>
     <span class="pb-sep" aria-hidden="true">/</span>
     <details class="proj-settings" id="projSettings">
       <summary id="projSettingsSum">Project settings</summary>
@@ -1450,6 +1509,73 @@ button,input,select,textarea{font-family:inherit}
     </div>
     <dialog class="figmodal" id="wfFullModal" aria-labelledby="wfFullModalTitle"><div class="figmodal-head"><strong id="wfFullModalTitle">Full chromatograms</strong><button class="btn quiet" id="wfFullModalClose" type="button">Close</button></div><div class="figmodal-body" id="wfFullModalFig"></div></dialog>
     <dialog class="cl-archive-dlg" id="cloneArchiveModal" aria-labelledby="cloneArchiveTitle"><div class="cl-archive-box"><strong id="cloneArchiveTitle">Remove cloning from this workflow?</strong><p id="cloneArchiveMsg">The cloning stage will be hidden, but all cloning data will be saved. You can restore the stage at any time from Project Settings.</p><div class="cl-archive-acts"><button type="button" class="btn primary" id="cloneArchiveConfirm">Remove and Save Data</button><button type="button" class="btn" id="cloneArchiveCancel">Cancel</button></div></div></dialog>
+    <dialog class="proj-explorer-modal" id="projExplorerModal" aria-labelledby="projExplorerTitle">
+      <div class="dir-window">
+        <div class="dir-titlebar">
+          <div class="dir-title"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 4H7.414l-1.707-1.707A1 1 0 0 0 5 2H1.5z"/></svg><span id="projExplorerTitle">Project Explorer</span></div>
+          <button type="button" class="btn quiet dir-close" id="projExplorerClose" aria-label="Close Project Explorer">✕</button>
+        </div>
+        <div class="dir-toolbar">
+          <div class="dir-tools-left">
+            <button type="button" class="btn quiet" id="dirNewFolder" title="Create new folder">📁+ New folder</button>
+            <button type="button" class="btn quiet" id="dirNewPrep" title="Create new protein preparation">🧪+ New prep</button>
+            <button type="button" class="btn quiet" id="dirUploadFile" title="Upload file attachment">📤 Upload file</button>
+            <input type="file" id="dirFileInput" multiple hidden>
+          </div>
+          <div class="dir-tools-right">
+            <span class="dir-sort-wrap"><label for="dirSort" class="dir-label">Sort</label>
+              <select id="dirSort" class="dir-sort">
+                <option value="name-asc">Name (A–Z)</option>
+                <option value="name-desc">Name (Z–A)</option>
+                <option value="date-desc">Modified (Newest)</option>
+                <option value="date-asc">Modified (Oldest)</option>
+                <option value="type">Type</option>
+              </select>
+            </span>
+            <div class="seg dir-view-seg" role="group" aria-label="View mode">
+              <button type="button" class="btn quiet" id="dirViewList" title="List view" aria-pressed="true">☰</button>
+              <button type="button" class="btn quiet" id="dirViewGrid" title="Grid view" aria-pressed="false">▦</button>
+            </div>
+            <button type="button" class="btn quiet" id="dirToggleArchive" title="Archive / Recycle Bin">🗑 Archive</button>
+          </div>
+        </div>
+        <div class="dir-address-bar">
+          <button type="button" class="btn quiet dir-up-btn" id="dirGoUp" title="Up to parent folder">↑ Up</button>
+          <div class="dir-breadcrumbs" id="dirBreadcrumbs" role="navigation" aria-label="Breadcrumb path"></div>
+          <div class="dir-search-wrap">
+            <input type="search" id="dirSearch" placeholder="Search in project…" aria-label="Search directory">
+          </div>
+        </div>
+        <div class="dir-body">
+          <aside class="dir-tree" id="dirTree" role="tree" aria-label="Folder tree"></aside>
+          <section class="dir-content dir-list" id="dirContent" role="region" aria-label="Folder contents"></section>
+        </div>
+        <div class="dir-statusbar">
+          <span id="dirStatusCount">0 items</span>
+          <span id="dirStatusActive"></span>
+        </div>
+      </div>
+    </dialog>
+    <dialog class="dir-modal" id="dirPromptModal" aria-labelledby="dirPromptTitle">
+      <form id="dirPromptForm" method="dialog" class="dir-modal-box">
+        <h3 id="dirPromptTitle">New Item</h3>
+        <input type="text" id="dirPromptInput" class="dir-input" required autocomplete="off" spellcheck="false">
+        <div class="dir-modal-acts">
+          <button type="submit" class="btn primary" id="dirPromptConfirm">OK</button>
+          <button type="button" class="btn" id="dirPromptCancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="dir-modal" id="dirMoveModal" aria-labelledby="dirMoveTitle">
+      <div class="dir-modal-box">
+        <h3 id="dirMoveTitle">Move to folder</h3>
+        <label class="f">Destination folder<select id="dirMoveSelect" class="dir-select"></select></label>
+        <div class="dir-modal-acts">
+          <button type="button" class="btn primary" id="dirMoveConfirm">Move</button>
+          <button type="button" class="btn" id="dirMoveCancel">Cancel</button>
+        </div>
+      </div>
+    </dialog>
     <div class="canvas-foot">
       <div class="spec"><span id="spec"></span><span id="spec2"></span></div>
       <div class="btns export">
@@ -7609,7 +7735,7 @@ function projectData(){
      change it and every project file saved before the rename fails to import, and every file saved after it fails to
      open in an older copy. The same goes for the 'hplc-fig-opt' settings key and the 'hfb-projects' database. */
   const pExp = JSON.parse(JSON.stringify(prep)); if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; delete s.gel.adjImage; } });
-  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep: pExp, srcDiag: Object.assign({}, srcDiag)};
+  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), prep: pExp, srcDiag: Object.assign({}, srcDiag), directory: cleanDirectoryForExport(PROJ ? PROJ.directory : null, true)};
 }
 let projUndo = null, failedGels = []; const isApp = a => a === 'HPLC Figure Bench' || a === 'Protein Purification Bench';
 /* a project file can be partial or damaged: keep what can be used and count what was skipped */
@@ -7617,6 +7743,7 @@ function cleanProject(d){
   const isO = o => o && typeof o === 'object' && !Array.isArray(o), hasXY = c => isO(c) && Array.isArray(c.xs) && Array.isArray(c.ys); let skipped = 0;
   if (d.schemaVersion == null) d.schemaVersion = 1;
   const keep = (list, ok) => { const a = Array.isArray(list) ? list : []; const out = a.filter(ok); skipped += a.length - out.length; return out; };
+  if (d.directory) d.directory = cleanDirectory(d.directory);
   d.runs = keep(d.runs, r => isO(r) && r.id && Array.isArray(r.uvs) && r.uvs.length && r.uvs.every(hasXY));
   d.runs.forEach(r => {
     if (!Object.prototype.hasOwnProperty.call(r, 'injX') && Object.prototype.hasOwnProperty.call(r, 'injShift')) {
@@ -7664,12 +7791,15 @@ async function openProject(data, name, noUndo){
   let mx = 0; [...runs, ...gels].forEach(x => { const m = String(x.id).match(/\d+/); if (m) mx = Math.max(mx, +m[0]); }); traces.forEach(t => { mx = Math.max(mx, +t.id || 0); }); uid = Math.max(mx + 1, numOr(prep.nextUid, 0));
   cur = data.cur || 'overlay'; marking = null; tagMode = ''; customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
   await agEnsureAdjImage();
+  if (PROJ) initProjectDirectory(PROJ, data.directory);
   renderList(); syncControls(); render(); saveOpt();
   toast(`Opened ${name || 'project'}: ${runs.length} run${runs.length === 1 ? '' : 's'}, ${traces.length} trace${traces.length === 1 ? '' : 's'}, ${gels.length} gel${gels.length === 1 ? '' : 's'}${skipped ? `. Skipped ${skipped} damaged or incomplete item${skipped === 1 ? '' : 's'} in the file` : ''}`);
   nextHidden.delete('undoOpen'); renderNext();
 }
-$('#projSave').addEventListener('click', () => { if (!runs.length && !gels.length && !struct && !traces.some(t => !t.ex) && !prep.gb && !cleanSeq(opt.protSeq) && !prep.name && !prep.parentConstructId && !(prep.constructs && prep.constructs.length) && !prep.cEnz && !prep.cOverlap && !prep.cRecomb && !CL().stages.length) { toast('Load some data first'); return; }
-  const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true; saveFile(`${safe(nm)}_project.json`, JSON.stringify(d)); });
+$('#projSave').addEventListener('click', () => {
+  const hasDir = PROJ && PROJ.directory && ((PROJ.directory.folders || []).length > 1 || (PROJ.directory.files || []).length > 0 || (PROJ.directory.preparations || []).length > 1 || (PROJ.directory.preparations || []).some(p => p && p.data && ((p.data.runs && p.data.runs.length) || (p.data.gels && p.data.gels.length) || p.data.struct || (p.data.traces && p.data.traces.some(t => !t.ex)) || (p.data.prep && (p.data.prep.name || p.data.prep.gb || p.data.prep.parentConstructId)))));
+  if (!hasDir && !runs.length && !gels.length && !struct && !traces.some(t => !t.ex) && !prep.gb && !cleanSeq(opt.protSeq) && !prep.name && !prep.parentConstructId && !(prep.constructs && prep.constructs.length) && !prep.cEnz && !prep.cOverlap && !prep.cRecomb && !CL().stages.length) { toast('Load some data first'); return; }
+  const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || (PROJ && PROJ.name) || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true; saveFile(`${safe(nm)}_project.json`, JSON.stringify(d)); });
 $('#projOpen').addEventListener('click', () => $('#projFile').click());
 $('#projFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; let data;
   try { data = JSON.parse(await f.text()); } catch (err) { toast(`Could not open ${f.name}`); return; }
@@ -7679,8 +7809,9 @@ $('#projFile').addEventListener('change', async e => { const f = e.target.files[
 /* from the home screen or a project, a project file opens as a project of its own and never replaces the open one */
 async function importAsProject(data, fname){
   if (!data || !isApp(data.app) || !Array.isArray(data.runs)) { toast(`${fname} is not a project saved by this tool`); return; }
-  await leaveWorkspace(); resetWorkspace(); try { await openProject(data, fname, true); } catch (e) { console.warn('import failed', e); toast(`Could not open ${fname}: the file is damaged`); showHome(); return; } stripBlobIds(); traces = traces.filter(t => !t.ex);
+  await leaveWorkspace(); resetWorkspace(); try { await openProject(data, fname, true); } catch (e) { console.warn('import failed', e); toast(`Could not open ${fname}: the file is damaged`); showHome(); return; } stripBlobIds(); stripDirBlobIds(data.directory); traces = traces.filter(t => !t.ex);
   PROJ = mkProj(newPid(), fname.replace(/(_project)?\.json$/i, '').replace(/_/g, ' '), Date.now());
+  initProjectDirectory(PROJ, data.directory);
   if (failedGels.length) PROJ.lost.gels = failedGels.map(g => Object.assign({}, g, {imageId: undefined}));
   prep.on = true; MODE = 'proj'; enterApp(); applyProjUI(); renderList();
   const defStep = stepList().some(s => s.k === data.step) ? data.step : (data.cur && stepList().some(s => s.k === 'run:' + data.cur)) ? 'run:' + data.cur : (data.cur && stepList().some(s => s.k === data.cur)) ? data.cur : (runs.some(r => r.inWf) ? 'run:' + runs.find(r => r.inWf).id : 'construct');
@@ -7736,20 +7867,24 @@ async function upPNG(canvas){
   const b = await new Promise(res => canvas.toBlob(res, 'image/png')); return (await STORE.assets.upload(b, {type: 'image/png'})).id;
 }
 /* each saved project carries its own upload list, revision and anything that failed to load, so saves never mix projects */
-const mkProj = (id, name, created) => ({id, name: String(name || '').trim() || 'Untitled project', created: created || Date.now(), refs: [], rev: 0, sig: '', blocked: '', lost: {runs: [], traces: [], gels: [], struct: null, nd: []}});
+const mkProj = (id, name, created) => ({id, name: String(name || '').trim() || 'Untitled project', created: created || Date.now(), refs: [], rev: 0, sig: '', blocked: '', directory: null, lost: {runs: [], traces: [], gels: [], struct: null, nd: []}});
 const lostCount = P => P.lost.runs.length + P.lost.traces.length + P.lost.gels.length + P.lost.nd.length + (P.lost.struct ? 1 : 0);
 /* everything a save needs, taken at once, before any wait, so a later switch of project cannot leak into it */
 function snapshot(){
   prep.nextUid = uid;
+  saveActivePrepState();
   const S = {meta: {kind: 'project', name: PROJ.name, protein: projProtein(), created: PROJ.created, dots: stepDots()}, step: curStep, cur};
   if (STORE.mode === 'cloud' || STORE.mode === 'local') Object.assign(S, {opt: plain(opt), prep: JSON.parse(JSON.stringify(prep)), srcDiag: Object.assign({}, srcDiag), runs: runs.map(r => ({obj: r, o: plain(r)})), traces: traces.filter(t => !t.ex).map(t => ({obj: t, o: plain(t)})),
     gels: gels.map(g => ({obj: g, o: plain(g)})), struct, nd: ndSamples.map(n => ({obj: n, o: Object.assign({}, n)})),
-    raw: rawFiles.map(r => ({obj: r, o: {id: r.id, name: r.name, size: r.size, type: r.type, mod: r.mod, time: r.time}}))});
+    raw: rawFiles.map(r => ({obj: r, o: {id: r.id, name: r.name, size: r.size, type: r.type, mod: r.mod, time: r.time}})),
+    dirFiles: (PROJ.directory && Array.isArray(PROJ.directory.files) ? PROJ.directory.files : []).map(fl => ({obj: fl, o: plain(fl)})),
+    inactivePreps: (PROJ.directory && Array.isArray(PROJ.directory.preparations) ? PROJ.directory.preparations : []).filter(p => p && p.id !== PROJ.directory.activePrepId && p.data),
+    directory: cleanDirectoryForExport(PROJ.directory, false)});
   return S;
 }
 /* the project as small JSON, with the heavy parts (run curves, gel images, the structure, spectra) uploaded once and referenced */
 async function packCloud(S, P){
-  const st = {app: 'HPLC Figure Bench', version: 2, cur: S.cur || cur, opt: S.opt, prep: S.prep, step: S.step, srcDiag: S.srcDiag || {}, runs: [], traces: [], gels: [], struct: null, nanodrop: [], rawFiles: []}, refs = [];
+  const st = {app: 'HPLC Figure Bench', version: 2, cur: S.cur || cur, opt: S.opt, prep: S.prep, step: S.step, srcDiag: S.srcDiag || {}, directory: S.directory || null, runs: [], traces: [], gels: [], struct: null, nanodrop: [], rawFiles: []}, refs = [];
   for (const {obj: r, o} of S.runs) { if (!r.blobId) { const h = {}; RUN_HEAVY.forEach(k => { if (k in r) h[k] = r[k]; }); r.blobId = await upJSON(h); } const c = Object.assign({}, o, {blobId: r.blobId}); RUN_HEAVY.forEach(k => delete c[k]); st.runs.push(c); refs.push(r.blobId); }
   for (const {obj: t, o} of S.traces) { if (!t.blobId) t.blobId = await upJSON({rows: t.rows}); const c = Object.assign({}, o, {blobId: t.blobId}); delete c.rows; st.traces.push(c); refs.push(t.blobId); }
   for (const {obj: g, o} of S.gels) { if (!g.imageId) g.imageId = await upPNG(g.src); const c = Object.assign({}, o, {imageId: g.imageId}); ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist', 'image'].forEach(k => delete c[k]); st.gels.push(c); refs.push(g.imageId); }
@@ -7773,6 +7908,50 @@ async function packCloud(S, P){
       g.origImage = '';
     }
     if (g.origImageId) refs.push(g.origImageId);
+  }
+  /* directory file attachments and inactive preparations keep their uploaded blobs across preparation switches */
+  if (st.directory) {
+    if (Array.isArray(S.dirFiles)) {
+      st.directory.files = [];
+      for (const {obj: fl, o} of S.dirFiles) {
+        if (!fl.blobId && (fl._f || fl._dataUrl || o.dataUrl)) {
+          const b = fl._f || dataUrlToBlob(fl._dataUrl || o.dataUrl);
+          fl.blobId = await upRaw(b); delete fl._f;
+        }
+        const cf = Object.assign({}, o); delete cf.dataUrl;
+        if (fl.blobId) { cf.blobId = fl.blobId; refs.push(fl.blobId); }
+        st.directory.files.push(cf);
+      }
+    }
+    for (const ip of (st.directory.preparations || [])) {
+      if (!ip || ip.id === st.directory.activePrepId || !ip.data) continue;
+      const lp = (S.inactivePreps || []).find(x => x.id === ip.id);
+      if (Array.isArray(ip.data.rawFiles)) {
+        const outR = [];
+        for (const ir of ip.data.rawFiles) {
+          const lr = lp && lp.data && (lp.data.rawFiles || []).find(x => x.id === ir.id);
+          if (lr && !lr.blobId && lr._f) { lr.blobId = await upRaw(lr._f); delete lr._f; ir.blobId = lr.blobId; }
+          if (ir.blobId) { outR.push(Object.assign({}, plain(ir), {blobId: ir.blobId})); refs.push(ir.blobId); }
+        }
+        ip.data.rawFiles = outR;
+      }
+      for (const sg of (ip.data.prep && ip.data.prep.cloning && ip.data.prep.cloning.stages) || []) {
+        const g = sg && sg.gel; if (!g) continue;
+        delete g.adjImage;
+        const lsg = lp && lp.data && lp.data.prep && lp.data.prep.cloning && (lp.data.prep.cloning.stages || []).find(x => x.id === sg.id);
+        if (typeof g.image === 'string' && g.image.startsWith('data:')) {
+          if (!g.imageId) { g.imageId = await upDataUrl(g.image); if (lsg && lsg.gel && lsg.gel.image === g.image) lsg.gel.imageId = g.imageId; }
+          if (g.origImage === g.image && !g.origImageId) { g.origImageId = g.imageId; if (lsg && lsg.gel && lsg.gel.origImage === g.image) lsg.gel.origImageId = g.imageId; }
+          g.image = '';
+        }
+        if (g.imageId) refs.push(g.imageId);
+        if (typeof g.origImage === 'string' && g.origImage.startsWith('data:')) {
+          if (!g.origImageId) { g.origImageId = await upDataUrl(g.origImage); if (lsg && lsg.gel && lsg.gel.origImage === g.origImage) lsg.gel.origImageId = g.origImageId; }
+          g.origImage = '';
+        }
+        if (g.origImageId) refs.push(g.origImageId);
+      }
+    }
   }
   /* items that did not load this time are kept as they were, so a brief network error never deletes them */
   const L = P.lost; L.runs.forEach(o => { st.runs.push(o); refs.push(o.blobId); }); L.traces.forEach(o => { st.traces.push(o); refs.push(o.blobId); });
@@ -7813,13 +7992,22 @@ async function unpackLocal(st){
     if (!b) throw new Error('missing nd blob');
     return Object.assign({}, o, {spec: b, specId: o.specId});
   }) : o))).filter(Boolean);
-  if (st.prep && st.prep.cloning && Array.isArray(st.prep.cloning.stages)) await Promise.all(st.prep.cloning.stages.map(async sg => {
+  const unpackAgStages = stages => Promise.all((stages || []).map(async sg => {
     const g = sg && sg.gel; if (!g) return;
     if (!g.image && g.imageId) { try { const b = await getLocalBlob(g.imageId); if (!b) throw new Error('missing'); g.image = await blobToDataUrl(b); } catch (e) { names.push(g.name || 'agarose gel'); } }
     if (!g.origImage && g.origImageId) { if (g.origImageId === g.imageId && g.image) g.origImage = g.image; else { try { const b = await getLocalBlob(g.origImageId); if (!b) throw new Error('missing'); g.origImage = await blobToDataUrl(b); } catch (e) { names.push(g.origName || 'agarose gel'); } } }
   }));
+  if (st.prep && st.prep.cloning && Array.isArray(st.prep.cloning.stages)) await unpackAgStages(st.prep.cloning.stages);
+  if (st.directory) {
+    if (Array.isArray(st.directory.files)) await Promise.all(st.directory.files.map(async fl => {
+      if (fl && fl.blobId && !fl.dataUrl && (fl.size || 0) <= 5242880) { try { const b = await getLocalBlob(fl.blobId); if (b) fl.dataUrl = await blobToDataUrl(b); } catch (e) {} }
+    }));
+    if (Array.isArray(st.directory.preparations)) await Promise.all(st.directory.preparations.map(async ip => {
+      if (ip && ip.data && ip.data.prep && ip.data.prep.cloning && Array.isArray(ip.data.prep.cloning.stages)) await unpackAgStages(ip.data.prep.cloning.stages);
+    }));
+  }
   if (names.length) toast(`Could not load ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and more' : ''}. They are kept and will load next time.`);
-  return {app: 'HPLC Figure Bench', version: 2, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
+  return {app: 'HPLC Figure Bench', version: 2, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, directory: st.directory || null, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
 }
 async function unpackCloud(st){
   const get = id => fetch('/_blob/' + id).then(r => { if (!r.ok) throw new Error('missing'); return r.json(); }), names = [], lost = {runs: [], traces: [], gels: [], struct: null, nd: []};
@@ -7829,14 +8017,23 @@ async function unpackCloud(st){
   const gels2 = (st.gels || []).map(o => o.imageId ? Object.assign({}, o, {image: '/_blob/' + o.imageId}) : o);
   const s2 = st.struct && st.struct.blobId ? await one(st.struct, 'struct', async () => Object.assign(await get(st.struct.blobId), {ent: st.struct.ent, blobId: st.struct.blobId})) : st.struct;
   const nd2 = (await Promise.all((st.nanodrop || []).map(async o => o.specId ? await one(o, 'nd', async () => Object.assign({}, o, {spec: await get(o.specId)})) : o))).filter(Boolean);
-  if (st.prep && st.prep.cloning && Array.isArray(st.prep.cloning.stages)) await Promise.all(st.prep.cloning.stages.map(async sg => {
+  const loadImg = id => fetch('/_blob/' + id).then(r => { if (!r.ok) throw new Error('missing'); return r.blob(); }).then(blobToDataUrl);
+  const unpackAgStagesCloud = stages => Promise.all((stages || []).map(async sg => {
     const g = sg && sg.gel; if (!g) return;
-    const loadImg = id => fetch('/_blob/' + id).then(r => { if (!r.ok) throw new Error('missing'); return r.blob(); }).then(blobToDataUrl);
     if (!g.image && g.imageId) { try { g.image = await loadImg(g.imageId); } catch (e) { names.push(g.name || 'agarose gel'); } }
     if (!g.origImage && g.origImageId) { if (g.origImageId === g.imageId && g.image) g.origImage = g.image; else { try { g.origImage = await loadImg(g.origImageId); } catch (e) { names.push(g.origName || 'agarose gel'); } } }
   }));
+  if (st.prep && st.prep.cloning && Array.isArray(st.prep.cloning.stages)) await unpackAgStagesCloud(st.prep.cloning.stages);
+  if (st.directory) {
+    if (Array.isArray(st.directory.files)) await Promise.all(st.directory.files.map(async fl => {
+      if (fl && fl.blobId && !fl.dataUrl && (fl.size || 0) <= 5242880) { try { fl.dataUrl = await loadImg(fl.blobId); } catch (e) {} }
+    }));
+    if (Array.isArray(st.directory.preparations)) await Promise.all(st.directory.preparations.map(async ip => {
+      if (ip && ip.data && ip.data.prep && ip.data.prep.cloning && Array.isArray(ip.data.prep.cloning.stages)) await unpackAgStagesCloud(ip.data.prep.cloning.stages);
+    }));
+  }
   if (names.length) toast(`Could not load ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and more' : ''}. They are kept and will load next time.`);
-  return {app: 'HPLC Figure Bench', version: 2, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
+  return {app: 'HPLC Figure Bench', version: 2, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, directory: st.directory || null, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
 }
 function projProtein(){ const m = cleanSeq(opt.protSeq) || prep.gb ? constructModel() : null; return String(opt.targetName || '').trim() || (m && m.pn !== 'protein' ? m.pn : ''); }
 function stepDots(){ return stepList().filter(s => !s.add).map(s => s.warn ? 2 : s.done ? 1 : 0); }
@@ -7935,6 +8132,7 @@ async function storeDelete(id){
 }
 /* upload ids belong to the project they were uploaded for: a file or quick work uploads again */
 function stripBlobIds(){ runs.forEach(r => delete r.blobId); traces.forEach(t => delete t.blobId); gels.forEach(g => delete g.imageId); if (struct) delete struct.blobId; ndSamples.forEach(n => delete n.specId); if (prep && prep.cloning && Array.isArray(prep.cloning.stages)) prep.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; } }); }
+function stripDirBlobIds(dir){ if (!dir || typeof dir !== 'object') return; (dir.files || []).forEach(f => { if (f) delete f.blobId; }); (dir.preparations || []).forEach(p => { const d = p && p.data; if (!d) return; (d.runs || []).forEach(r => { if (r) delete r.blobId; }); (d.traces || []).forEach(t => { if (t) delete t.blobId; }); (d.gels || []).forEach(g => { if (g) delete g.imageId; }); if (d.struct) delete d.struct.blobId; (d.ndSamples || []).forEach(n => { if (n) delete n.specId; }); if (d.prep && d.prep.cloning && Array.isArray(d.prep.cloning.stages)) d.prep.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; } }); }); }
 
 /* the raw files uploaded into this project: kept in the browser database (or the page's asset store), listed here, and downloadable as they were */
 function keepRaw(fs){
@@ -7984,7 +8182,7 @@ $('#projList').addEventListener('keydown', e => { const c = e.target.closest('[d
 const QKEYS = ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'targetName', 'taggedName', 'protKda', 'tagKda', 'eps', 'epsMode', 'secMono'];
 let QUICK = null;
 function leaveWorkspace(){
-  const clm = $('#cloneArchiveModal'); if (clm && clm.open) clm.close();
+  ['#cloneArchiveModal', '#projExplorerModal', '#dirPromptModal', '#dirMoveModal'].forEach(sel => { const m = $(sel); if (m && m.open) m.close(); });
   if (MODE === 'quick' && (runs.length || gels.length || struct || traces.some(t => !t.ex))) { QUICK = {runs, traces, gels, struct, ndSamples, prep, cur, customTagSeq, o: {}}; QKEYS.forEach(k => { QUICK.o[k] = opt[k]; }); }
   const p = PROJ ? flushSave() : saveChain; PROJ = null; MODE = 'home'; return p;
 }
@@ -7995,6 +8193,7 @@ function resetWorkspace(){ rawFiles = []; runs = []; traces = []; gels = []; str
 const newPid = () => 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function newProject(name, protein, include){
   await leaveWorkspace(); resetWorkspace(); opt.targetName = String(protein || '').trim(); PROJ = mkProj(newPid(), name, Date.now());
+  initProjectDirectory(PROJ);
   prep.includeCloning = include === true || include === 'cloning'; CL();
   MODE = 'proj'; enterApp(); applyProjUI(); renderList(); selectStep(CL().type === 'cloning' ? 'clone:setup' : 'construct'); await flushSave(true);
 }
@@ -8007,6 +8206,7 @@ async function openStoredProject(id){
     if (data._lost) Object.assign(P.lost, data._lost);
     if (failedGels.length) P.lost.gels = failedGels.map(g => { const c = Object.assign({}, g); if (c.imageId) delete c.image; return c; });
     PROJ = P; prep.on = true; MODE = 'proj'; enterApp(); applyProjUI(); renderList();
+    initProjectDirectory(PROJ, data.directory);
     const ks = stepList().map(s => s.k); selectStep(ks.includes(data.step) ? data.step : (stepList().find(s => !s.done && !s.add && s.k !== 'figure') || {k: 'figure'}).k);
     await setBaseline(P);
     if (applyPending(P, meta)) { applyProjUI(); renderList(); syncControls(); render(); flushSave(true); toast('Recovered the edits made just before the page closed'); }
@@ -8025,16 +8225,1027 @@ $('#homeQuick').addEventListener('click', async () => { await leaveWorkspace(); 
 $('#homeImport').addEventListener('click', () => $('#projFile').click());
 $('#homeBtn').addEventListener('click', showHome);
 $('#quickSave').addEventListener('click', async () => { stripBlobIds(); traces = traces.filter(t => !t.ex); QUICK = null;
-  const nm = (runs[0] && shortRunName(runs[0])) || (gels[0] && gels[0].name) || 'Untitled project'; PROJ = mkProj(newPid(), nm, Date.now()); prep.on = true; MODE = 'proj';
+  const nm = (runs[0] && shortRunName(runs[0])) || (gels[0] && gels[0].name) || 'Untitled project'; PROJ = mkProj(newPid(), nm, Date.now()); initProjectDirectory(PROJ); prep.on = true; MODE = 'proj';
   applyProjUI(); renderList(); selectStep(runs.length ? 'run:' + runs[0].id : 'construct'); await flushSave(true); toast('Saved as a project. Rename it at the top.'); });
-$('#projName').addEventListener('input', e => { if (!PROJ) return; PROJ.name = e.target.value; queueSave(); });
+$('#projName').addEventListener('input', e => { if (!PROJ) return; PROJ.name = e.target.value; if (PROJ.directory && Array.isArray(PROJ.directory.folders)) { const rf = PROJ.directory.folders.find(f => f.id === 'root'); if (rf) rf.name = PROJ.name || 'Project'; } queueSave(); });
 function applyProjUI(){
   const inP = !!PROJ; $('#projBar').hidden = !inP; $('#homeBtn').hidden = MODE === 'home'; $('#quickSave').hidden = MODE !== 'quick';
   $('#projOpen').hidden = MODE === 'home'; $('#projSave').hidden = MODE === 'home';
   $('#stepsPanel').hidden = !inP; $('#stepSheet').hidden = !inP; $('#stepFoot').hidden = !inP;
-  if (inP) { const n = $('#projName'); if (n !== document.activeElement) n.value = PROJ.name; syncCloneType(); clHtml = ''; clPickTpl = false; } document.body.classList.toggle('proj', inP); renderRaw();
+  if (inP) { const n = $('#projName'); if (n !== document.activeElement) n.value = PROJ.name; syncCloneType(); clHtml = ''; clPickTpl = false; renderProjDirBar(); } document.body.classList.toggle('proj', inP); renderRaw();
 }
 addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && PROJ) { writePending(); flushSave(); } });
+
+/* ---------- projects: directory, folders, preparations, explorer and file attachments ---------- */
+let dirCurrentFolder = 'root';
+let dirShowArchive = false;
+let dirViewMode = 'list';
+let dirSortBy = 'name-asc';
+let dirSearchTerm = '';
+let dirPromptAction = null;
+let dirMoveTarget = null;
+let dirTreeExpanded = new Set(['root']);
+
+function cleanDirectory(d){
+  if (!d || typeof d !== 'object') return null;
+  const isO = o => o && typeof o === 'object' && !Array.isArray(o), hasXY = c => isO(c) && Array.isArray(c.xs) && Array.isArray(c.ys);
+  const folders = Array.isArray(d.folders) ? d.folders.filter(isO) : [];
+  const preparations = Array.isArray(d.preparations) ? d.preparations.filter(isO).map(p => {
+    if (p.data && isO(p.data)) {
+      const pd = p.data;
+      pd.runs = Array.isArray(pd.runs) ? pd.runs.filter(r => isO(r) && r.id && Array.isArray(r.uvs) && pd.runs && r.uvs.length && r.uvs.every(hasXY)) : [];
+      pd.traces = Array.isArray(pd.traces) ? pd.traces.filter(t => isO(t) && Array.isArray(t.rows)) : [];
+      pd.gels = Array.isArray(pd.gels) ? pd.gels.filter(isO) : [];
+      pd.ndSamples = Array.isArray(pd.ndSamples) ? pd.ndSamples.filter(isO) : [];
+      pd.rawFiles = Array.isArray(pd.rawFiles) ? pd.rawFiles.filter(isO) : [];
+      if (!isO(pd.struct)) pd.struct = null;
+      if (!isO(pd.opt)) pd.opt = null;
+      if (isO(pd.prep)) { canonClones(pd.prep); canonCloning(pd.prep); }
+    }
+    return p;
+  }) : [];
+  const files = Array.isArray(d.files) ? d.files.filter(isO) : [];
+  return {
+    folders,
+    preparations,
+    files,
+    activePrepId: typeof d.activePrepId === 'string' ? d.activePrepId : (preparations[0] ? preparations[0].id : 'prep-1'),
+    currentFolderId: typeof d.currentFolderId === 'string' ? d.currentFolderId : 'root'
+  };
+}
+
+function packDirGel(g){
+  const og = plain(g);
+  ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist', 'imageId'].forEach(k => delete og[k]);
+  let img = g._img || g.image || '';
+  if (!img && g.src) { try { img = g.src.toDataURL('image/png'); if (img.length < 100) img = g.src.toDataURL('image/jpeg', 0.95); g._img = img; } catch (e) {} }
+  if (img) og.image = img;
+  return og;
+}
+
+function cleanDirectoryForExport(dir, forFileExport){
+  if (!dir) return null;
+  saveActivePrepState();
+  const isO = o => o && typeof o === 'object';
+  const noId = (o, k) => { const c = plain(o); delete c[k]; return c; };
+  const c = {
+    folders: (dir.folders || []).filter(isO).map(f => plain(f)),
+    preparations: (dir.preparations || []).filter(isO).map(p => {
+      const o = plain(p);
+      if (p.id === dir.activePrepId) {
+        o.data = null;
+      } else if (p.data && typeof p.data === 'object') {
+        const d = p.data;
+        const pExp = d.prep ? JSON.parse(JSON.stringify(d.prep)) : null;
+        if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => {
+          if (s && s.gel) { delete s.gel.adjImage; if (forFileExport) { delete s.gel.imageId; delete s.gel.origImageId; } }
+        });
+        o.data = {
+          runs: (d.runs || []).map(r => noId(r, 'blobId')),
+          traces: (d.traces || []).filter(t => !t.ex).map(t => noId(t, 'blobId')),
+          gels: (d.gels || []).map(packDirGel),
+          struct: d.struct ? noId(d.struct, 'blobId') : null,
+          ndSamples: (d.ndSamples || []).map(n => noId(n, 'specId')),
+          rawFiles: forFileExport ? [] : (d.rawFiles || []).map(r => plain(r)),
+          srcDiag: d.srcDiag ? Object.assign({}, d.srcDiag) : {},
+          prep: pExp,
+          curStep: d.curStep || 'construct',
+          cur: d.cur || 'overlay',
+          opt: d.opt ? plain(d.opt) : null
+        };
+      }
+      return o;
+    }),
+    files: (dir.files || []).filter(isO).map(f => {
+      const cf = plain(f);
+      if (forFileExport) { delete cf.blobId; if (f._dataUrl || f.dataUrl) cf.dataUrl = f._dataUrl || f.dataUrl; }
+      else delete cf.dataUrl;
+      return cf;
+    }),
+    activePrepId: dir.activePrepId,
+    currentFolderId: dir.currentFolderId || 'root'
+  };
+  return c;
+}
+
+function initProjectDirectory(proj, savedDir){
+  if (!proj) return;
+  if (savedDir && Array.isArray(savedDir.folders) && Array.isArray(savedDir.preparations)) {
+    proj.directory = {
+      folders: savedDir.folders.map(f => Object.assign({}, f)),
+      preparations: savedDir.preparations.map(p => Object.assign({}, p)),
+      files: Array.isArray(savedDir.files) ? savedDir.files.map(f => {
+        const cf = Object.assign({}, f);
+        if (f._dataUrl || f.dataUrl) cf._dataUrl = f._dataUrl || f.dataUrl;
+        delete cf.dataUrl;
+        return cf;
+      }) : [],
+      activePrepId: typeof savedDir.activePrepId === 'string' ? savedDir.activePrepId : ((savedDir.preparations[0] && savedDir.preparations[0].id) || 'prep-1'),
+      currentFolderId: savedDir.currentFolderId || 'root'
+    };
+    const rootF = proj.directory.folders.find(f => f.id === 'root');
+    if (!rootF) {
+      proj.directory.folders.unshift({ id: 'root', name: proj.name || 'Project', parentId: null, created: proj.created || Date.now(), updated: Date.now(), archived: false });
+    } else if (proj.name) {
+      rootF.name = proj.name;
+    }
+  } else {
+    const rootF = { id: 'root', name: proj.name || 'Project', parentId: null, created: proj.created || Date.now(), updated: Date.now(), archived: false };
+    const initP = {
+      id: 'prep-' + newBlobId().slice(2),
+      name: (prep && prep.name) || opt.targetName || 'Prep 001',
+      folderId: 'root',
+      created: Date.now(),
+      updated: Date.now(),
+      archived: false,
+      data: null
+    };
+    proj.directory = {
+      folders: [rootF],
+      preparations: [initP],
+      files: [],
+      activePrepId: initP.id,
+      currentFolderId: 'root'
+    };
+  }
+  dirCurrentFolder = proj.directory.currentFolderId || 'root';
+  renderProjDirBar();
+}
+
+function saveActivePrepState(){
+  if (!PROJ || !PROJ.directory) return;
+  const p = PROJ.directory.preparations.find(x => x.id === PROJ.directory.activePrepId);
+  if (!p) return;
+  prep.nextUid = uid;
+  p.data = {
+    runs: runs.slice(),
+    traces: traces.slice(),
+    gels: gels.slice(),
+    struct: struct,
+    ndSamples: ndSamples.slice(),
+    rawFiles: rawFiles.slice(),
+    srcDiag: Object.assign({}, srcDiag),
+    prep: JSON.parse(JSON.stringify(prep)),
+    curStep: curStep,
+    cur: cur,
+    opt: plain(opt)
+  };
+  p.updated = Date.now();
+}
+
+async function switchActivePrep(prepId){
+  if (!PROJ || !PROJ.directory) return;
+  if (PROJ.directory.activePrepId === prepId) return;
+  saveActivePrepState();
+  const target = PROJ.directory.preparations.find(x => x.id === prepId);
+  if (!target) return;
+  PROJ.directory.activePrepId = prepId;
+  wfSel = null; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null;
+  if (target.data) {
+    const d = target.data;
+    runs = (d.runs || []).map(r => { const rc = Object.assign({}, r); if (rc.fracs && !Array.isArray(rc.fracs)) rc.fracs = [rc.fracs]; else if (!Array.isArray(rc.fracs)) rc.fracs = []; return rc; });
+    traces = (d.traces || []).map((t, i, a) => Object.assign({}, t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)}));
+    const ng = [];
+    for (const sg of (d.gels || [])) {
+      if (sg && sg.src) { const gc = Object.assign({}, sg); gc._prepA = null; gc._auto = null; ng.push(gc); }
+      else if (sg && sg.image) {
+        try {
+          const img = new Image();
+          await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = sg.image; });
+          const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+          const g = Object.assign(makeGel(sg.name, c), sg); delete g.image;
+          Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false});
+          processGel(g); g._prepA = null; g._auto = null; ng.push(g);
+        } catch (e) {}
+      }
+    }
+    gels = ng;
+    struct = d.struct ? Object.assign({}, d.struct) : null;
+    ndSamples = (d.ndSamples || []).map(n => Object.assign({}, n));
+    ndMigrate();
+    rawFiles = (d.rawFiles || []).map(r => Object.assign({}, r));
+    srcDiag = d.srcDiag ? Object.assign({}, d.srcDiag) : {};
+    prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), d.prep ? JSON.parse(JSON.stringify(d.prep)) : {});
+    prep.on = true;
+    ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; });
+    if (!Array.isArray(prep.manual)) prep.manual = [];
+    if (!Array.isArray(prep.constructs)) prep.constructs = [];
+    if (!Array.isArray(prep.primers)) prep.primers = [];
+    if (!('parentConstructId' in prep)) prep.parentConstructId = null;
+    if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = [];
+    if (!prep.cMethod) prep.cMethod = 'plasmid';
+    if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} };
+    canonClones(prep); canonCloning(prep);
+    if (d.opt) {
+      const dopt = d.opt, myCals = secCals().slice(), myKnown = Array.isArray(opt.known) ? opt.known.slice() : null, myQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : [], myQDel = Array.isArray(opt.myQuickDel) ? opt.myQuickDel.slice() : [];
+      Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);
+      { const pq = Array.isArray(opt.myQuick) ? opt.myQuick : [], del = new Set([...(myQDel || []), ...(Array.isArray(opt.myQuickDel) ? opt.myQuickDel : [])]); opt.myQuickDel = [...del]; opt.myQuick = myQ.concat(pq.filter(q => !myQ.some(m => m.id === q.id))).filter(q => !del.has(q.id)); }
+      const pc = secCals(); opt.secCals = pc.concat(myCals.filter(c => !pc.some(x => x.id === c.id)));
+      if (myKnown) { const pk = tidyKnown(dopt.known); opt.known = myKnown.concat(pk.filter(k => !myKnown.some(m => m.name === k.name && +m.kda === +k.kda))); }
+      tidyLists(); tidyOpt(dopt);
+    } else {
+      QKEYS.forEach(k => { opt[k] = DEF[k]; });
+    }
+    customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
+    let mx = 0; [...runs, ...gels].forEach(x => { const m = String(x.id).match(/\d+/); if (m) mx = Math.max(mx, +m[0]); }); traces.forEach(t => { mx = Math.max(mx, +t.id || 0); }); uid = Math.max(mx + 1, numOr(prep.nextUid, 0));
+    ndUid = ndSamples.length + 1 + Date.now() % 1000;
+    curStep = d.curStep || 'construct';
+    cur = d.cur || 'overlay';
+    await agEnsureAdjImage();
+  } else {
+    resetWorkspace();
+    curStep = 'construct';
+    cur = 'overlay';
+  }
+  clHtml = ''; clPickTpl = false;
+  const ks = stepList().map(s => s.k); if (!ks.includes(curStep)) curStep = (stepList().find(s => !s.done && !s.add && s.k !== 'figure') || {k: 'construct'}).k;
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderList();
+  syncControls();
+  render();
+  selectStep(curStep);
+  applyProjUI();
+  renderProjDirBar();
+  renderExplorer();
+  saveOpt();
+  toast(`Active preparation: ${target.name}`);
+  queueSave();
+}
+
+function isFolderDescendant(folderId, potentialAncestorId){
+  if (!PROJ || !PROJ.directory) return false;
+  let curF = PROJ.directory.folders.find(f => f.id === folderId);
+  const visited = new Set();
+  while (curF && curF.parentId && !visited.has(curF.id)) {
+    visited.add(curF.id);
+    if (curF.parentId === potentialAncestorId) return true;
+    curF = PROJ.directory.folders.find(f => f.id === curF.parentId);
+  }
+  return false;
+}
+
+function createDirFolder(name, parentId){
+  if (!PROJ || !PROJ.directory) return;
+  const nm = String(name || '').trim() || 'New Folder';
+  const pid = parentId || dirCurrentFolder || 'root';
+  const f = {
+    id: 'f-' + newBlobId().slice(2),
+    name: nm,
+    parentId: pid,
+    created: Date.now(),
+    updated: Date.now(),
+    archived: false
+  };
+  PROJ.directory.folders.push(f);
+  dirTreeExpanded.add(pid);
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  toast(`Created folder "${nm}"`);
+}
+
+async function createDirPrep(name, folderId){
+  if (!PROJ || !PROJ.directory) return;
+  const nm = String(name || '').trim() || 'New Prep';
+  const fid = folderId || dirCurrentFolder || 'root';
+  const freshOpt = plain(opt);
+  QKEYS.forEach(k => { freshOpt[k] = DEF[k]; });
+  const freshPrep = JSON.parse(JSON.stringify(PREP_DEF));
+  freshPrep.on = true;
+  canonClones(freshPrep); canonCloning(freshPrep);
+  const p = {
+    id: 'prep-' + newBlobId().slice(2),
+    name: nm,
+    folderId: fid,
+    created: Date.now(),
+    updated: Date.now(),
+    archived: false,
+    data: {
+      runs: [],
+      traces: [],
+      gels: [],
+      struct: null,
+      ndSamples: [],
+      rawFiles: [],
+      srcDiag: {},
+      prep: freshPrep,
+      curStep: 'construct',
+      cur: 'overlay',
+      opt: freshOpt
+    }
+  };
+  PROJ.directory.preparations.push(p);
+  dirTreeExpanded.add(fid);
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  const curAct = PROJ.directory.preparations.find(x => x.id === PROJ.directory.activePrepId && !x.archived);
+  if (!curAct) await switchActivePrep(p.id);
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  toast(`Created preparation "${nm}"`);
+}
+
+function moveDirItem(type, id, targetFolderId){
+  if (!PROJ || !PROJ.directory) return false;
+  const targetF = PROJ.directory.folders.find(f => f.id === targetFolderId);
+  if (!targetF) return false;
+  if (type === 'folder') {
+    if (id === targetFolderId || id === 'root') return false;
+    if (isFolderDescendant(targetFolderId, id)) {
+      toast('Cannot move a folder into itself or one of its subfolders');
+      return false;
+    }
+    const f = PROJ.directory.folders.find(x => x.id === id);
+    if (!f) return false;
+    f.parentId = targetFolderId;
+    f.updated = Date.now();
+  } else if (type === 'prep') {
+    const p = PROJ.directory.preparations.find(x => x.id === id);
+    if (!p) return false;
+    p.folderId = targetFolderId;
+    p.updated = Date.now();
+  } else if (type === 'file') {
+    const fl = PROJ.directory.files.find(x => x.id === id);
+    if (!fl) return false;
+    fl.folderId = targetFolderId;
+    fl.updated = Date.now();
+  }
+  dirTreeExpanded.add(targetFolderId);
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderProjDirBar();
+  renderExplorer();
+  queueSave();
+  toast(`Moved to ${targetF.name}`);
+  return true;
+}
+
+function duplicatePrep(prepId){
+  if (!PROJ || !PROJ.directory) return;
+  saveActivePrepState();
+  const orig = PROJ.directory.preparations.find(x => x.id === prepId);
+  if (!orig) return;
+  const newId = 'prep-' + newBlobId().slice(2);
+  const srcD = orig.data || { runs, traces, gels, struct, ndSamples, rawFiles, srcDiag, prep, curStep, cur, opt: plain(opt) };
+  const noId = (o, k) => { const c = plain(o); delete c[k]; return c; };
+  const copyPrepObj = srcD.prep ? JSON.parse(JSON.stringify(srcD.prep)) : JSON.parse(JSON.stringify(PREP_DEF));
+  if (copyPrepObj && copyPrepObj.cloning && Array.isArray(copyPrepObj.cloning.stages)) copyPrepObj.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; delete s.gel.adjImage; } });
+  const copyData = {
+    runs: JSON.parse(JSON.stringify((srcD.runs || []).map(r => noId(r, 'blobId')))),
+    traces: JSON.parse(JSON.stringify((srcD.traces || []).filter(t => !t.ex).map(t => noId(t, 'blobId')))),
+    gels: JSON.parse(JSON.stringify((srcD.gels || []).map(packDirGel))),
+    struct: srcD.struct ? JSON.parse(JSON.stringify(noId(srcD.struct, 'blobId'))) : null,
+    ndSamples: JSON.parse(JSON.stringify((srcD.ndSamples || []).map(n => noId(n, 'specId')))),
+    rawFiles: (srcD.rawFiles || []).map(r => Object.assign({}, r)),
+    srcDiag: srcD.srcDiag ? JSON.parse(JSON.stringify(srcD.srcDiag)) : {},
+    prep: copyPrepObj,
+    curStep: srcD.curStep || 'construct',
+    cur: srcD.cur || 'overlay',
+    opt: srcD.opt ? JSON.parse(JSON.stringify(plain(srcD.opt))) : plain(opt)
+  };
+  const copyPrep = {
+    id: newId,
+    name: `${orig.name} (Copy)`,
+    folderId: orig.folderId,
+    created: Date.now(),
+    updated: Date.now(),
+    archived: false,
+    data: copyData
+  };
+  PROJ.directory.preparations.push(copyPrep);
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  toast(`Duplicated ${orig.name}`);
+}
+
+function renameDirItem(type, id, newName){
+  if (!PROJ || !PROJ.directory) return;
+  const nm = String(newName || '').trim();
+  if (!nm) return;
+  let it;
+  if (type === 'folder') {
+    it = PROJ.directory.folders.find(x => x.id === id);
+    if (it && id === 'root') { PROJ.name = nm; const pn = $('#projName'); if (pn && pn !== document.activeElement) pn.value = nm; }
+  } else if (type === 'prep') {
+    it = PROJ.directory.preparations.find(x => x.id === id);
+  } else if (type === 'file') {
+    it = PROJ.directory.files.find(x => x.id === id);
+  }
+  if (!it) return;
+  it.name = nm;
+  it.updated = Date.now();
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  toast(`Renamed to "${nm}"`);
+}
+
+async function archiveDirItem(type, id){
+  if (!PROJ || !PROJ.directory) return;
+  let it;
+  const now = Date.now();
+  if (type === 'folder') {
+    if (id === 'root') return;
+    it = PROJ.directory.folders.find(x => x.id === id);
+    if (it) {
+      saveActivePrepState();
+      it.archived = true;
+      it.archivedAt = now;
+      delete it.archivedWith;
+      const archiveKids = pId => {
+        PROJ.directory.folders.filter(f => f.parentId === pId).forEach(f => {
+          if (!f.archived) { f.archived = true; f.archivedAt = now; f.archivedWith = id; }
+          archiveKids(f.id);
+        });
+        PROJ.directory.preparations.filter(p => p.folderId === pId).forEach(p => {
+          if (!p.archived) { p.archived = true; p.archivedAt = now; p.archivedWith = id; }
+        });
+        PROJ.directory.files.filter(f => f.folderId === pId).forEach(f => {
+          if (!f.archived) { f.archived = true; f.archivedAt = now; f.archivedWith = id; }
+        });
+      };
+      archiveKids(id);
+      if (dirCurrentFolder === id || isFolderDescendant(dirCurrentFolder, id)) dirCurrentFolder = 'root';
+      const curP = PROJ.directory.preparations.find(p => p.id === PROJ.directory.activePrepId);
+      if (curP && curP.archived) {
+        const alt = PROJ.directory.preparations.find(p => !p.archived);
+        if (alt) await switchActivePrep(alt.id);
+        else { PROJ.directory.activePrepId = ''; wfSel = null; resetWorkspace(); renderList(); syncControls(); render(); applyProjUI(); }
+      }
+    }
+  } else if (type === 'prep') {
+    it = PROJ.directory.preparations.find(x => x.id === id);
+    if (it) {
+      if (PROJ.directory.activePrepId === id) saveActivePrepState();
+      it.archived = true;
+      it.archivedAt = now;
+      delete it.archivedWith;
+    }
+    if (PROJ.directory.activePrepId === id) {
+      const alt = PROJ.directory.preparations.find(p => !p.archived);
+      if (alt) await switchActivePrep(alt.id);
+      else { PROJ.directory.activePrepId = ''; wfSel = null; resetWorkspace(); renderList(); syncControls(); render(); applyProjUI(); }
+    }
+  } else if (type === 'file') {
+    it = PROJ.directory.files.find(x => x.id === id);
+    if (it) {
+      it.archived = true;
+      it.archivedAt = now;
+      delete it.archivedWith;
+    }
+  }
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  if (it) toast(`Archived "${it.name}"`);
+}
+
+async function restoreDirItem(type, id){
+  if (!PROJ || !PROJ.directory) return;
+  let it;
+  if (type === 'folder') {
+    it = PROJ.directory.folders.find(x => x.id === id);
+    if (it) {
+      it.archived = false;
+      delete it.archivedWith;
+      const par = PROJ.directory.folders.find(f => f.id === it.parentId);
+      if (!par || par.archived) it.parentId = 'root';
+      PROJ.directory.folders.filter(f => f.archivedWith === id).forEach(f => { f.archived = false; delete f.archivedWith; });
+      PROJ.directory.preparations.filter(p => p.archivedWith === id).forEach(p => { p.archived = false; delete p.archivedWith; });
+      PROJ.directory.files.filter(f => f.archivedWith === id).forEach(f => { f.archived = false; delete f.archivedWith; });
+      if (!PROJ.directory.activePrepId || !PROJ.directory.preparations.some(p => p.id === PROJ.directory.activePrepId && !p.archived)) {
+        const firstRestored = PROJ.directory.preparations.find(p => !p.archived);
+        if (firstRestored) await switchActivePrep(firstRestored.id);
+      }
+    }
+  } else if (type === 'prep') {
+    it = PROJ.directory.preparations.find(x => x.id === id);
+    if (it) {
+      it.archived = false;
+      delete it.archivedWith;
+      const par = PROJ.directory.folders.find(f => f.id === it.folderId);
+      if (!par || par.archived) it.folderId = 'root';
+      if (!PROJ.directory.activePrepId || !PROJ.directory.preparations.some(p => p.id === PROJ.directory.activePrepId && !p.archived)) {
+        await switchActivePrep(it.id);
+      }
+    }
+  } else if (type === 'file') {
+    it = PROJ.directory.files.find(x => x.id === id);
+    if (it) {
+      it.archived = false;
+      delete it.archivedWith;
+      const par = PROJ.directory.folders.find(f => f.id === it.folderId);
+      if (!par || par.archived) it.folderId = 'root';
+    }
+  }
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  if (it) toast(`Restored "${it.name}"`);
+}
+
+function deleteDirItemPerm(type, id){
+  if (!PROJ || !PROJ.directory) return;
+  if (type === 'folder') {
+    if (id === 'root') return;
+    const f = PROJ.directory.folders.find(x => x.id === id);
+    if (!f || !f.archived) return;
+    const ids = new Set([id]);
+    const collect = pId => { PROJ.directory.folders.filter(x => x.parentId === pId).forEach(x => { if (!ids.has(x.id)) { ids.add(x.id); collect(x.id); } }); };
+    collect(id);
+    PROJ.directory.folders = PROJ.directory.folders.filter(x => !ids.has(x.id));
+    PROJ.directory.preparations = PROJ.directory.preparations.filter(p => !ids.has(p.folderId));
+    PROJ.directory.files = PROJ.directory.files.filter(fl => !ids.has(fl.folderId));
+  } else if (type === 'prep') {
+    const p = PROJ.directory.preparations.find(x => x.id === id);
+    if (!p || !p.archived) return;
+    PROJ.directory.preparations = PROJ.directory.preparations.filter(x => x.id !== id);
+  } else if (type === 'file') {
+    const fl = PROJ.directory.files.find(x => x.id === id);
+    if (!fl || !fl.archived) return;
+    PROJ.directory.files = PROJ.directory.files.filter(x => x.id !== id);
+  }
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  renderProjDirBar();
+  queueSave();
+  toast('Item deleted permanently');
+}
+
+function renderProjDirBar(){
+  const el = $('#projDirCrumbs');
+  if (!el) return;
+  if (!PROJ || !PROJ.directory) { el.innerHTML = ''; return; }
+  const curP = PROJ.directory.preparations.find(p => p.id === PROJ.directory.activePrepId && !p.archived);
+  const pName = curP ? curP.name : 'No active prep';
+  const fPath = [];
+  if (curP && curP.folderId && curP.folderId !== 'root') {
+    let cf = PROJ.directory.folders.find(x => x.id === curP.folderId);
+    const seen = new Set();
+    while (cf && cf.id !== 'root' && !seen.has(cf.id)) {
+      seen.add(cf.id);
+      fPath.unshift(cf);
+      cf = PROJ.directory.folders.find(x => x.id === cf.parentId);
+    }
+  }
+  const fCrumbs = fPath.length
+    ? fPath.map((f, idx) => `<span class="dir-bar-crumb" data-dir-jump="${esc(f.id)}">${idx === 0 ? '📁 ' : ''}${esc(f.name)}</span>`).join(' <span class="crumb-sep">/</span> ')
+    : `<span class="dir-bar-crumb" data-dir-jump="root">📁 Root</span>`;
+  el.innerHTML = `${fCrumbs} <span class="crumb-sep">/</span> <span class="dir-bar-crumb active-prep">🧪 ${esc(pName)}</span>`;
+}
+
+function renderExplorer(){
+  if (!PROJ || !PROJ.directory) return;
+  const dir = PROJ.directory;
+  dir.currentFolderId = dirCurrentFolder;
+
+  // Breadcrumbs
+  const bcEl = $('#dirBreadcrumbs');
+  if (dirShowArchive) {
+    bcEl.innerHTML = '<span class="crumb-sep">🗑</span> <strong>Archive / Recycle Bin</strong>';
+  } else {
+    const pathList = [];
+    let curF = dir.folders.find(f => f.id === dirCurrentFolder);
+    const seen = new Set();
+    while (curF && !seen.has(curF.id)) {
+      seen.add(curF.id);
+      pathList.unshift(curF);
+      curF = dir.folders.find(f => f.id === curF.parentId);
+    }
+    if (!pathList.length || pathList[0].id !== 'root') {
+      const rootF = dir.folders.find(f => f.id === 'root');
+      if (rootF && !pathList.some(p => p.id === 'root')) pathList.unshift(rootF);
+    }
+    bcEl.innerHTML = pathList.map((f, i) => `<button type="button" class="btn quiet dir-crumb" data-crumb-id="${esc(f.id)}">${esc(f.name)}</button>${i < pathList.length - 1 ? '<span class="crumb-sep">/</span>' : ''}`).join(' ');
+  }
+
+  // Tree Navigation
+  const treeEl = $('#dirTree');
+  const buildTree = (pId, depth) => {
+    const subFs = dir.folders.filter(f => !f.archived && (f.parentId === pId || (pId === 'root' && !f.parentId && f.id !== 'root')));
+    const subPreps = dir.preparations.filter(p => !p.archived && p.folderId === pId);
+    let html = '';
+    subFs.forEach(f => {
+      const isExpanded = dirTreeExpanded.has(f.id);
+      const isCur = f.id === dirCurrentFolder && !dirShowArchive;
+      const hasKids = dir.folders.some(x => !x.archived && x.parentId === f.id) || dir.preparations.some(x => !x.archived && x.folderId === f.id);
+      html += `<div class="dir-tree-node ${isCur ? 'active' : ''}" style="padding-left:${depth * 14 + 6}px" data-folder-id="${esc(f.id)}" data-dir-type="folder" data-dir-id="${esc(f.id)}" draggable="${f.id !== 'root'}">`;
+      html += `<span class="dir-tree-toggle" data-tree-toggle="${esc(f.id)}">${hasKids ? (isExpanded ? '▾' : '▸') : '•'}</span>`;
+      html += `<span>📁</span> <span class="dir-tree-name">${esc(f.name)}</span>`;
+      html += `</div>`;
+      if (isExpanded) {
+        html += buildTree(f.id, depth + 1);
+      }
+    });
+    subPreps.forEach(p => {
+      const isCurPrep = p.id === dir.activePrepId;
+      html += `<div class="dir-tree-node ${isCurPrep ? 'active-prep' : ''}" style="padding-left:${depth * 14 + 18}px" data-dir-type="prep" data-dir-id="${esc(p.id)}" draggable="true">`;
+      html += `<span>🧪</span> <span class="dir-tree-name">${esc(p.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}`;
+      html += `</div>`;
+    });
+    return html;
+  };
+  const rootFolder = dir.folders.find(f => f.id === 'root') || { id: 'root', name: PROJ.name || 'Project' };
+  let treeHtml = `<div class="dir-tree-node ${dirCurrentFolder === 'root' && !dirShowArchive ? 'active' : ''}" data-folder-id="root" data-dir-type="folder" data-dir-id="root">`;
+  treeHtml += `<span class="dir-tree-toggle" data-tree-toggle="root">${dirTreeExpanded.has('root') ? '▾' : '▸'}</span><span>📁</span> <span class="dir-tree-name">${esc(rootFolder.name)}</span></div>`;
+  if (dirTreeExpanded.has('root')) {
+    treeHtml += buildTree('root', 1);
+  }
+  treeEl.innerHTML = treeHtml;
+
+  // Folder Contents
+  let items = [];
+  if (dirShowArchive) {
+    const archFs = dir.folders.filter(f => f.archived && f.id !== 'root').map(f => Object.assign({}, f, { itemType: 'folder' }));
+    const archPs = dir.preparations.filter(p => p.archived).map(p => Object.assign({}, p, { itemType: 'prep' }));
+    const archFls = dir.files.filter(f => f.archived).map(f => Object.assign({}, f, { itemType: 'file' }));
+    items = [...archFs, ...archPs, ...archFls];
+  } else {
+    let rawFs = dir.folders.filter(f => !f.archived && f.parentId === dirCurrentFolder && f.id !== 'root').map(f => Object.assign({}, f, { itemType: 'folder' }));
+    let rawPs = dir.preparations.filter(p => !p.archived && p.folderId === dirCurrentFolder).map(p => Object.assign({}, p, { itemType: 'prep' }));
+    let rawFls = dir.files.filter(f => !f.archived && f.folderId === dirCurrentFolder).map(f => Object.assign({}, f, { itemType: 'file' }));
+    if (dirSearchTerm) {
+      const q = dirSearchTerm.toLowerCase();
+      rawFs = dir.folders.filter(f => !f.archived && f.id !== 'root' && f.name.toLowerCase().includes(q)).map(f => Object.assign({}, f, { itemType: 'folder' }));
+      rawPs = dir.preparations.filter(p => !p.archived && p.name.toLowerCase().includes(q)).map(p => Object.assign({}, p, { itemType: 'prep' }));
+      rawFls = dir.files.filter(f => !f.archived && f.name.toLowerCase().includes(q)).map(f => Object.assign({}, f, { itemType: 'file' }));
+    }
+    items = [...rawFs, ...rawPs, ...rawFls];
+  }
+
+  // Sorting
+  items.sort((a, b) => {
+    if (dirSortBy === 'type') {
+      const rank = { folder: 1, prep: 2, file: 3 };
+      if (rank[a.itemType] !== rank[b.itemType]) return rank[a.itemType] - rank[b.itemType];
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    }
+    if (dirSortBy === 'name-asc') return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    if (dirSortBy === 'name-desc') return b.name.localeCompare(a.name, undefined, { sensitivity: 'base' });
+    if (dirSortBy === 'date-desc') return (b.updated || b.created || 0) - (a.updated || a.created || 0);
+    if (dirSortBy === 'date-asc') return (a.updated || a.created || 0) - (b.updated || b.created || 0);
+    return 0;
+  });
+
+  const contentEl = $('#dirContent');
+  contentEl.className = `dir-content dir-${dirViewMode}`;
+
+  if (!items.length) {
+    contentEl.innerHTML = `<p class="empty-p" style="padding:24px;text-align:center">${dirShowArchive ? 'No archived items in this project.' : dirSearchTerm ? 'No items match your search.' : 'This folder is empty. Create a folder, preparation, or upload a file above.'}</p>`;
+  } else if (dirViewMode === 'grid') {
+    contentEl.innerHTML = items.map(item => {
+      const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
+      const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
+      const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
+      return `<div class="dir-card ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
+        <div class="dir-card-icon">${icon}</div>
+        <div class="dir-card-name" title="${esc(item.name)}">${esc(item.name)}${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}</div>
+        <div class="dir-card-meta">${typeLabel}</div>
+        <div class="dir-card-acts">
+          <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Open</button>
+          ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
+          ${!dirShowArchive ? `
+            <button type="button" class="mini" data-dir-rename="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Rename</button>
+            <button type="button" class="mini" data-dir-move="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Move</button>
+            <button type="button" class="mini danger" data-dir-archive="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Archive</button>
+          ` : `
+            <button type="button" class="mini" data-dir-restore="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Restore</button>
+            <button type="button" class="mini danger" data-dir-del-perm="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Delete</button>
+          `}
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    // List view table
+    contentEl.innerHTML = `<table>
+      <thead>
+        <tr><th>Name</th><th>Type</th><th>Modified</th><th style="text-align:right">Actions</th></tr>
+      </thead>
+      <tbody>
+        ${items.map(item => {
+          const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
+          const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
+          const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
+          return `<tr class="dir-row ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
+            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}</div></td>
+            <td>${typeLabel}</td>
+            <td>${fmtWhen(item.updated || item.created)}</td>
+            <td>
+              <div class="dir-acts-cell">
+                <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Open</button>
+                ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
+                ${!dirShowArchive ? `
+                  <button type="button" class="mini" data-dir-rename="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Rename</button>
+                  <button type="button" class="mini" data-dir-move="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Move</button>
+                  <button type="button" class="mini danger" data-dir-archive="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Archive</button>
+                ` : `
+                  <button type="button" class="mini" data-dir-restore="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Restore</button>
+                  <button type="button" class="mini danger" data-dir-del-perm="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Delete</button>
+                `}
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  // Status bar
+  $('#dirStatusCount').textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+  const curP = dir.preparations.find(p => p.id === dir.activePrepId);
+  $('#dirStatusActive').textContent = curP ? `Active: ${curP.name}` : '';
+
+  // Drag-and-drop setup
+  contentEl.querySelectorAll('[draggable="true"]').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('application/json', JSON.stringify({
+        type: el.dataset.dirType,
+        id: el.dataset.dirId
+      }));
+    });
+  });
+  treeEl.querySelectorAll('[draggable="true"]').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('application/json', JSON.stringify({
+        type: el.dataset.dirType,
+        id: el.dataset.dirId
+      }));
+    });
+  });
+  const dropTargets = [...contentEl.querySelectorAll('[data-folder-id]'), ...treeEl.querySelectorAll('[data-folder-id]')];
+  dropTargets.forEach(el => {
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      el.classList.add('dir-drag-over');
+    });
+    el.addEventListener('dragleave', () => {
+      el.classList.remove('dir-drag-over');
+    });
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      el.classList.remove('dir-drag-over');
+      try {
+        const d = JSON.parse(e.dataTransfer.getData('application/json'));
+        if (d && d.type && d.id) {
+          moveDirItem(d.type, d.id, el.dataset.folderId);
+        }
+      } catch (err) {}
+    });
+  });
+}
+
+$('#openDirBtn').addEventListener('click', () => {
+  if (!PROJ) return;
+  if (!PROJ.directory) initProjectDirectory(PROJ);
+  const curP = PROJ.directory.preparations.find(p => p.id === PROJ.directory.activePrepId);
+  dirCurrentFolder = (curP && curP.folderId) ? curP.folderId : 'root';
+  dirShowArchive = false;
+  dirSearchTerm = '';
+  $('#dirSearch').value = '';
+  renderExplorer();
+  $('#projExplorerModal').showModal();
+});
+$('#projDirCrumbs').addEventListener('click', e => {
+  if (!PROJ) return;
+  if (!PROJ.directory) initProjectDirectory(PROJ);
+  const jmp = e.target.closest('[data-dir-jump]');
+  if (jmp) {
+    dirCurrentFolder = jmp.dataset.dirJump || 'root';
+  } else {
+    const curP = PROJ.directory.preparations.find(p => p.id === PROJ.directory.activePrepId);
+    dirCurrentFolder = (curP && curP.folderId) ? curP.folderId : 'root';
+  }
+  dirShowArchive = false;
+  dirSearchTerm = '';
+  $('#dirSearch').value = '';
+  renderExplorer();
+  $('#projExplorerModal').showModal();
+});
+$('#projExplorerClose').addEventListener('click', () => $('#projExplorerModal').close());
+
+$('#dirGoUp').addEventListener('click', () => {
+  if (!PROJ || !PROJ.directory || dirCurrentFolder === 'root') return;
+  const f = PROJ.directory.folders.find(x => x.id === dirCurrentFolder);
+  dirCurrentFolder = (f && f.parentId) || 'root';
+  renderExplorer();
+});
+
+$('#dirBreadcrumbs').addEventListener('click', e => {
+  const btn = e.target.closest('[data-crumb-id]');
+  if (btn) {
+    dirCurrentFolder = btn.dataset.crumbId;
+    dirShowArchive = false;
+    renderExplorer();
+  }
+});
+
+$('#dirTree').addEventListener('click', async e => {
+  const toggle = e.target.closest('[data-tree-toggle]');
+  if (toggle) {
+    e.stopPropagation();
+    const id = toggle.dataset.treeToggle;
+    if (dirTreeExpanded.has(id)) dirTreeExpanded.delete(id);
+    else dirTreeExpanded.add(id);
+    renderExplorer();
+    return;
+  }
+  const node = e.target.closest('.dir-tree-node');
+  if (node) {
+    if (node.dataset.dirType === 'folder') {
+      dirCurrentFolder = node.dataset.folderId;
+      dirShowArchive = false;
+      renderExplorer();
+    } else if (node.dataset.dirType === 'prep') {
+      await switchActivePrep(node.dataset.dirId);
+      $('#projExplorerModal').close();
+    }
+  }
+});
+
+$('#dirContent').addEventListener('click', async e => {
+  const op = e.target.closest('[data-dir-open]');
+  if (op) {
+    const id = op.dataset.dirOpen, typ = op.dataset.dirType;
+    if (typ === 'folder') {
+      dirCurrentFolder = id;
+      dirShowArchive = false;
+      renderExplorer();
+    } else if (typ === 'prep') {
+      await switchActivePrep(id);
+      $('#projExplorerModal').close();
+    } else if (typ === 'file') {
+      const fl = (PROJ.directory.files || []).find(f => f.id === id);
+      if (fl) {
+        try {
+          let b = fl._f instanceof Blob ? fl._f : null;
+          if (!b && fl.blobId) {
+            if (STORE.mode === 'local') b = await getLocalBlob(fl.blobId);
+            else if (STORE.mode === 'cloud') { const rs = await fetch('/_blob/' + fl.blobId); if (rs.ok) b = await rs.blob(); }
+          }
+          if (!b && (fl._dataUrl || fl.dataUrl)) b = dataUrlToBlob(fl._dataUrl || fl.dataUrl);
+          if (!b) throw new Error('missing');
+          const url = URL.createObjectURL(b), a = document.createElement('a');
+          a.href = url; a.download = fl.name; document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+        } catch (err) { toast(`Could not read ${fl.name}`); }
+      }
+    }
+    return;
+  }
+  const dup = e.target.closest('[data-dir-dup]');
+  if (dup) {
+    duplicatePrep(dup.dataset.dirDup);
+    return;
+  }
+  const ren = e.target.closest('[data-dir-rename]');
+  if (ren) {
+    const id = ren.dataset.dirRename, typ = ren.dataset.dirType;
+    const it = typ === 'folder' ? PROJ.directory.folders.find(x => x.id === id) : typ === 'prep' ? PROJ.directory.preparations.find(x => x.id === id) : PROJ.directory.files.find(x => x.id === id);
+    if (!it) return;
+    dirPromptAction = { action: 'rename', type: typ, id };
+    $('#dirPromptTitle').textContent = `Rename ${typ === 'folder' ? 'Folder' : typ === 'prep' ? 'Preparation' : 'File'}`;
+    $('#dirPromptInput').value = it.name;
+    $('#dirPromptModal').showModal();
+    $('#dirPromptInput').select();
+    return;
+  }
+  const mv = e.target.closest('[data-dir-move]');
+  if (mv) {
+    const id = mv.dataset.dirMove, typ = mv.dataset.dirType;
+    const it = typ === 'folder' ? PROJ.directory.folders.find(x => x.id === id) : typ === 'prep' ? PROJ.directory.preparations.find(x => x.id === id) : PROJ.directory.files.find(x => x.id === id);
+    if (!it) return;
+    dirMoveTarget = { type: typ, id };
+    $('#dirMoveTitle').textContent = `Move "${it.name}" to folder`;
+    const sel = $('#dirMoveSelect');
+    sel.innerHTML = '';
+    const validFs = (PROJ.directory.folders || []).filter(f => !f.archived && !(typ === 'folder' && (f.id === id || isFolderDescendant(f.id, id))));
+    validFs.forEach(f => {
+      const optEl = document.createElement('option');
+      optEl.value = f.id;
+      optEl.textContent = f.name;
+      sel.appendChild(optEl);
+    });
+    $('#dirMoveModal').showModal();
+    return;
+  }
+  const arch = e.target.closest('[data-dir-archive]');
+  if (arch) {
+    await archiveDirItem(arch.dataset.dirType, arch.dataset.dirArchive);
+    return;
+  }
+  const rest = e.target.closest('[data-dir-restore]');
+  if (rest) {
+    await restoreDirItem(rest.dataset.dirType, rest.dataset.dirRestore);
+    return;
+  }
+  const delP = e.target.closest('[data-dir-del-perm]');
+  if (delP) {
+    deleteDirItemPerm(delP.dataset.dirType, delP.dataset.dirDelPerm);
+    return;
+  }
+});
+
+$('#dirNewFolder').addEventListener('click', () => {
+  dirPromptAction = { action: 'new-folder' };
+  $('#dirPromptTitle').textContent = 'New folder';
+  $('#dirPromptInput').value = 'New Folder';
+  $('#dirPromptModal').showModal();
+  $('#dirPromptInput').select();
+});
+
+$('#dirNewPrep').addEventListener('click', () => {
+  dirPromptAction = { action: 'new-prep' };
+  $('#dirPromptTitle').textContent = 'New protein preparation';
+  $('#dirPromptInput').value = 'New Prep';
+  $('#dirPromptModal').showModal();
+  $('#dirPromptInput').select();
+});
+
+$('#dirUploadFile').addEventListener('click', () => $('#dirFileInput').click());
+$('#dirFileInput').addEventListener('change', async e => {
+  const fs = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (!fs.length || !PROJ || !PROJ.directory) return;
+  for (const f of fs) {
+    let dUrl = '';
+    if ((f.size || 0) <= 5242880) { try { dUrl = await blobToDataUrl(f); } catch (err) {} }
+    PROJ.directory.files.push({
+      id: 'file-' + newBlobId().slice(2),
+      name: f.name,
+      size: f.size,
+      type: f.type || '',
+      mod: f.lastModified || 0,
+      time: Date.now(),
+      folderId: dirCurrentFolder,
+      archived: false,
+      _f: f,
+      _dataUrl: dUrl
+    });
+  }
+  PROJ.editSeq = (PROJ.editSeq || 0) + 1;
+  renderExplorer();
+  queueSave();
+  toast(`Added ${fs.length} file attachment${fs.length === 1 ? '' : 's'}`);
+});
+
+$('#dirViewList').addEventListener('click', () => {
+  dirViewMode = 'list';
+  $('#dirViewList').setAttribute('aria-pressed', 'true');
+  $('#dirViewGrid').setAttribute('aria-pressed', 'false');
+  renderExplorer();
+});
+
+$('#dirViewGrid').addEventListener('click', () => {
+  dirViewMode = 'grid';
+  $('#dirViewList').setAttribute('aria-pressed', 'false');
+  $('#dirViewGrid').setAttribute('aria-pressed', 'true');
+  renderExplorer();
+});
+
+$('#dirSort').addEventListener('change', e => {
+  dirSortBy = e.target.value;
+  renderExplorer();
+});
+
+$('#dirToggleArchive').addEventListener('click', () => {
+  dirShowArchive = !dirShowArchive;
+  $('#dirToggleArchive').textContent = dirShowArchive ? '📁 Folders' : '🗑 Archive';
+  $('#dirToggleArchive').classList.toggle('primary', dirShowArchive);
+  renderExplorer();
+});
+
+$('#dirSearch').addEventListener('input', e => {
+  dirSearchTerm = e.target.value.trim();
+  renderExplorer();
+});
+
+$('#dirPromptForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const val = $('#dirPromptInput').value.trim();
+  $('#dirPromptModal').close();
+  if (!dirPromptAction) return;
+  if (dirPromptAction.action === 'new-folder') {
+    createDirFolder(val, dirCurrentFolder);
+  } else if (dirPromptAction.action === 'new-prep') {
+    await createDirPrep(val, dirCurrentFolder);
+  } else if (dirPromptAction.action === 'rename') {
+    renameDirItem(dirPromptAction.type, dirPromptAction.id, val);
+  }
+});
+$('#dirPromptCancel').addEventListener('click', () => $('#dirPromptModal').close());
+
+$('#dirMoveConfirm').addEventListener('click', () => {
+  const destId = $('#dirMoveSelect').value;
+  $('#dirMoveModal').close();
+  if (!dirMoveTarget) return;
+  moveDirItem(dirMoveTarget.type, dirMoveTarget.id, destId);
+});
+$('#dirMoveCancel').addEventListener('click', () => $('#dirMoveModal').close());
 
 /* ---------- cloning workflow: stages, attempts and lineage ---------- */
 /* One engine draws every cloning stage (Patrick's request on #222, issue #1402). A stage kind is data: a title, the stage
