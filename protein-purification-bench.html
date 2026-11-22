@@ -1671,6 +1671,38 @@ function cleanXY(xs, ys){
   }
   return {xs: ox, ys: oy, dupX, dupDiff, sorted};
 }
+/* Identify a UV-Vis absorption wavelength (190-900 nm) from a column header while rejecting non-UV channels and numeric annotation columns. */
+function uvWavelengthOf(h){
+  const s = String(h || '').trim();
+  if (!s) return null;
+  if (/\b(time|min|sec|vol(?:ume)?|retention|cond(?:uctivity)?|temp(?:erature)?|pres(?:sure)?|flow|grad(?:ient)?|conc(?:entration)?|ph|index|idx|row|point|scan|frac(?:tion)?|tube|well|vial|peak|count|flag|status|note|annot(?:ation)?|path|cut_temp|pore|particle|diameter)\b|%\s*b\b|ms\/cm|°\s*c\b|\bbar\b|\bmpa\b|\bpsi\b|\bkda\b/i.test(s)) return null;
+  const cleaned = s.replace(/\bref(?:erence)?\s*[:=]?\s*\d{3}(?:\s*,\s*\d+)?(?:\s*nm)?/ig, '');
+  const valid = w => w >= 190 && w <= 900 ? w : null;
+  let m = cleaned.match(/(?:^|[^0-9])(\d{3})\s*nm(?![a-z0-9])/i);
+  if (m) return valid(+m[1]);
+  m = cleaned.match(/(?:\b(?:uv|abs(?:orb(?:ance)?)?|dad\w*)\s*(?:\d\s*[_:-]\s*|[,_:-]\s*)?|\bsig(?:nal)?\s*=\s*|\ba_?)(\d{3})(?!\d)/i);
+  if (m) {
+    const after = cleaned.slice(m.index + m[0].length);
+    if (!/^\s*(?:mm|µm|um|cm|ml|µl|ul|mg|µg|ug|kda|da|min|sec|hz|bar|mpa|psi|ms|°c)\b/i.test(after)) return valid(+m[1]);
+  }
+  return null;
+}
+function findUvCols(cols, rows, xc){
+  const out = [];
+  for (let c = 0; c < cols.length; c++) {
+    if (c === xc) continue;
+    const wl = uvWavelengthOf(cols[c]);
+    if (wl == null) continue;
+    let finiteCount = 0;
+    for (const r of rows) { if (r[xc] != null && r[c] != null && isFinite(r[xc]) && isFinite(r[c])) finiteCount++; }
+    if (finiteCount >= 2) out.push({col: c, wl, name: cols[c]});
+  }
+  if (out.length > 1) {
+    const p280 = out.findIndex(u => u.wl === 280);
+    if (p280 > 0) out.unshift(out.splice(p280, 1)[0]);
+  }
+  return out;
+}
 function parseEZStart(text){
   const lines = text.split(/\r\n|\n|\r/), rate = lines.map(L => /^\s*Sampling Rate\s*:\s*([-+]?\d*\.?\d+)\s*Hz\b/i.exec(L)).find(Boolean), points = lines.map(L => /^\s*Total Data Points\s*:\s*(\d+)\s*Pts\b/i.exec(L)).find(Boolean);
   if (!rate || !points || !(+rate[1] > 0) || !(+points[1] > 1)) return null;
@@ -1731,7 +1763,7 @@ function parseText(text){
   let xc = 0, yc = 1;
   let bestScore = -1, bestX = -1, bestY = -1;
   const isTime = s => /\b(time|min|sec|vol(?:ume)?|ml|retention)\b/i.test(s);
-  const isSig = s => /\b(uv|absorb(?:ance)?|sig(?:nal)?|mau|au|od|fluor(?:escence)?|intensity|resp(?:onse)?|\d{3}\s*nm)\b/i.test(s);
+  const isSig = s => /\b(uv|absorb(?:ance)?|sig(?:nal)?|mau|au|od|fluor(?:escence)?|intensity|resp(?:onse)?|\d{3}\s*nm)\b/i.test(s) || uvWavelengthOf(s) != null;
   for (let i = 0; i < ncol - 1; i++) {
     for (let j = i + 1; j < ncol; j++) {
       let finiteCount = 0;
@@ -1765,11 +1797,13 @@ function parseText(text){
     xc = bestX;
     yc = bestY;
   }
+  const uvCols = findUvCols(cols, run.rows, xc);
+  if (uvCols.length > 1) yc = uvCols[0].col;
   const satByCol = Array.from({length: ncol}, (_, c) => run.sats.reduce((s, sr) => s + (sr[c] ? 1 : 0), 0));
   let satMax = -Infinity;
   run.rows.forEach((r, idx) => { const sr = run.sats[idx]; if (sr[yc] && isFinite(r[yc])) satMax = Math.max(satMax, Math.abs(r[yc])); });
   const cl = cleanXY(run.rows.map(r => r[xc]), run.rows.map(r => r[yc]));
-  return {rows: run.rows, cols, xc, yc, skipped, retained, discarded, saturated: (satByCol[yc] || 0) + (satByCol[xc] || 0), satByCol, satMax: isFinite(satMax) ? satMax : NaN, dupX: cl.dupX, dupDiff: cl.dupDiff};
+  return {rows: run.rows, cols, xc, yc, uvCols, skipped, retained, discarded, saturated: (satByCol[yc] || 0) + (satByCol[xc] || 0), satByCol, satMax: isFinite(satMax) ? satMax : NaN, dupX: cl.dupX, dupDiff: cl.dupDiff};
 }
 
 /* ---------- parsing: ÄKTA / UNICORN ---------- */
@@ -2536,7 +2570,13 @@ function placeLabel(boxes, x1, x2, bot, h, top){
 function yLabelText(){
   if (opt.normalize && opt.ylabel === DEF.ylabel) return 'Normalized absorbance';
   if (opt.ylabel === DEF.ylabel) {
-    const vis = traces.find(t => t.visible);
+    const visList = traces.filter(t => t.visible);
+    const wls = new Set(visList.map(t => t.cols && uvWavelengthOf(t.cols[t.yc])).filter(Boolean));
+    if (wls.size > 1) {
+      const yus = new Set(visList.map(t => t.yu || '').filter(Boolean));
+      return yus.size === 1 ? `Absorbance (${[...yus][0]})` : opt.ylabel;
+    }
+    const vis = visList[0];
     if (vis && vis.cols && vis.cols[vis.yc]) return vis.cols[vis.yc];
   }
   return opt.ylabel;
@@ -6703,7 +6743,15 @@ async function loadFiles(files){
         const parsed = parseText(text);
         const diag = genericDiag(f.name, nm, parsed);
         if (diag) setSourceDiag(f.name, diag); else clearSourceDiag(f.name);
-        added.push({name: nm, parsed, source: f.name});
+        if (parsed.uvCols && parsed.uvCols.length > 1) {
+          const wlCounts = {}; parsed.uvCols.forEach(u => { wlCounts[u.wl] = (wlCounts[u.wl] || 0) + 1; });
+          parsed.uvCols.forEach((u, idx) => {
+            const chLabel = wlCounts[u.wl] > 1 ? u.name : `${u.wl} nm`;
+            added.push({name: `${nm} (${chLabel})`, parsed: Object.assign({}, parsed, {yc: u.col, skipped: idx ? 0 : parsed.skipped, discarded: idx ? [] : parsed.discarded}), source: f.name});
+          });
+        } else {
+          added.push({name: nm, parsed, source: f.name});
+        }
       }
     } catch (err) { bad.push(f.size === 0 ? `${f.name} (the file is empty)` : err.message === 'has no data points' ? `${f.name} (a chromatogram file, but has no data points: check that data was exported)` : `${f.name} (no columns of numbers found)`); }
   }

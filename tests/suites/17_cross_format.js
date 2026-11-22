@@ -90,5 +90,67 @@ async function testFormat(filename, desc) {
       T.check('cross_format_invariant/dot_peaks', JSON.stringify(dot.runs[0].peaks) === JSON.stringify(synth.runs[0].peaks), 'Dot and Synth peaks identical');
       T.check('cross_format_invariant/comma_peaks', JSON.stringify(comma.runs[0].peaks) === JSON.stringify(synth.runs[0].peaks), 'Comma and Synth peaks identical');
   }
+
+  // #1632: Multi-wavelength diode-array tabular CSV maps primary 280 nm + secondary UV wavelength columns (214 nm, 254 nm, custom nm)
+  // as parallel overlay traces while excluding non-chromatogram numeric annotation columns (Peak Index, Temp).
+  await T.t('multi_wavelength_dad_csv', async () => {
+    const {p, errs, close} = await open();
+    const h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      await h.newProject('multi-wavelength DAD');
+      const lines = ['Time (min),UV 214 nm (mAU),UV 254 nm (mAU),UV 280 nm (mAU),320nm (mAU),Peak Index,Temp (C)'];
+      for (let i = 0; i <= 100; i++) {
+        const t = i * 0.1;
+        const g = (mu, amp) => amp * Math.exp(-0.5 * ((t - mu) / 0.25) ** 2);
+        lines.push([
+          t.toFixed(2),
+          (2 + g(4.0, 250)).toFixed(3),
+          (1 + g(5.0, 60)).toFixed(3),
+          (1 + g(4.0, 100)).toFixed(3),
+          (0.5 + g(6.0, 30)).toFixed(3),
+          String(i + 1),
+          '25.0'
+        ].join(','));
+      }
+      await p.setInputFiles('#file', {
+        name: 'dad_multi.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(lines.join('\n') + '\n')
+      });
+      await p.waitForTimeout(800);
+
+      const tl = await h.timeline();
+      const cards = p.locator('#list .trace:not(.run)');
+      const nCards = await cards.count();
+      const selectedY = await p.$$eval('#list .trace:not(.run) select[data-k="yc"]', sels => sels.map(s => s.options[s.selectedIndex].textContent));
+      const d = await saved(p);
+      const trs = d.traces || [];
+
+      T.check('multi_wl/trace-count', nCards === 4 && trs.length === 4 && (d.runs || []).length === 0 && !tl.some(x => /^run:/.test(x.k)),
+        `cards=${nCards}, traces=${trs.length}, runs=${(d.runs || []).length}, tl=${tl.map(x => x.k).join(',')}`);
+      T.check('multi_wl/primary-280-and-channels',
+        selectedY[0] === 'UV 280 nm (mAU)' &&
+        JSON.stringify(selectedY) === JSON.stringify(['UV 280 nm (mAU)', 'UV 214 nm (mAU)', 'UV 254 nm (mAU)', '320nm (mAU)']) &&
+        trs.every(t => t.yc !== 5 && t.yc !== 6),
+        `selectedY=${JSON.stringify(selectedY)}, ycs=${JSON.stringify(trs.map(t => t.yc))}`);
+
+      const svg = await h.exportSvg();
+      const boxes = await h.svgBoxes(svg);
+      const allText = boxes.texts.map(t => t.t).join(' | ');
+      const tracePaths = await p.evaluate(markup => {
+        const doc = new DOMParser().parseFromString(markup, 'image/svg+xml');
+        return [...doc.querySelectorAll('g[clip-path*="plot-area"] path')].map(el => el.getAttribute('stroke')).filter(Boolean);
+      }, svg);
+      T.check('multi_wl/exported-svg',
+        tracePaths.length === 4 && new Set(tracePaths).size === 4 &&
+        /280 nm/.test(allText) && /214 nm/.test(allText) && /254 nm/.test(allText) && /320 nm/.test(allText) &&
+        !/Peak Index|Temp/.test(allText) && boxes.clipped.length === 0,
+        `paths=${tracePaths.length} (${[...new Set(tracePaths)].join(',')}), clipped=${JSON.stringify(boxes.clipped)}, texts=${allText}`);
+      T.check('multi_wl/no-errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
   T.done();
 })();
