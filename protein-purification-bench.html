@@ -277,7 +277,9 @@ body.proj:not(.onhplc) #list .trace:not(.sel){display:none}
 body.proj.onhplc #list .trace:not([data-kind="trace"]){display:none} /* the HPLC traces step lists every plain trace, and only those */
 body.proj #dataPanel > h2, body.proj #dataPanel .paste, body.proj #exNote{display:none}
 body.proj #dataPanel .drop{display:none}
-body.proj #prOnWrap{display:none}
+body.proj #prOnWrap, body.proj label:has(#pr-cleave){display:none}
+body.proj #panel:has(> #clonePanel.cl-after:not([hidden])) > :is(#stepsPanel,#stepSheet,#prepPanel){order:-1}
+#prepPanel .subhead,#ndPanel .subhead{margin:6px 0 -2px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);grid-column:1/-1} #prepPanel label:has(#pr-trCol){order:1}
 body.proj #prepPanel > h2, body.proj #prepPanel details.sub > summary{display:none}
 body.proj #prepPanel details.sub{border:0;padding-top:0;margin-top:0} body.proj #prepPanel{padding:10px 16px 12px} body.proj #prepPanel details.sub[data-sub="pbtw"] > *:not(summary){margin-top:3px}
 .tl{max-height:min(54vh,600px);overflow:auto;overscroll-behavior:contain;padding-right:2px}
@@ -1050,6 +1052,7 @@ button,input,select,textarea{font-family:inherit}
         <div class="row">
           <label class="f">Colonies<input type="text" id="pr-trCol" data-prep="trCol" placeholder="e.g. about 200"></label>
           <label class="f">Glycerol stock<input type="text" id="pr-trStock" data-prep="trStock" placeholder="e.g. box 3, A4"></label>
+          <p class="subhead">Colonies &amp; clone tracking (optional)</p>
         </div>
         <div id="prClones" aria-label="Clones"></div>
         <div class="row"><button type="button" class="linkbtn" id="prCloneAdd">Add clone</button></div>
@@ -1062,7 +1065,6 @@ button,input,select,textarea{font-family:inherit}
         </div>
         <div class="row">
           <label class="f">Culture (L)<input type="number" id="pr-cultureL" data-prep="cultureL" min="0" step="0.5"></label>
-          <label class="f">OD₆₀₀ at induction<input type="text" id="pr-od" data-prep="od" placeholder="e.g. 0.8"></label>
         </div>
         <div class="row">
           <label class="f">Induction<select id="pr-indKind" data-prep="indKind"><option value="IPTG">IPTG (mM)</option><option value="arabinose">L-arabinose (%)</option><option value="rhamnose">L-rhamnose (%)</option><option value="auto">Autoinduction</option><option value="other">Other (type it)</option></select></label>
@@ -1073,13 +1075,16 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Time (h)<input type="text" id="pr-time" data-prep="time" placeholder="e.g. 16"></label>
           <label class="f">Cells (g, wet)<input type="number" id="pr-pellet" data-prep="pellet" min="0" step="0.1"></label>
         </div>
-        <label class="f">Starter culture<input type="text" id="pr-exStarter" data-prep="exStarter" placeholder="e.g. 50 mL LB with kanamycin, 37 °C overnight"></label>
-        <div class="row">
-          <label class="f">Harvest<input type="text" id="pr-exHarvest" data-prep="exHarvest" placeholder="e.g. 4,000 × g, 20 min, 4 °C"></label>
-          <label class="f">Cells kept<input type="text" id="pr-exStore" data-prep="exStore" list="dl-exstore" placeholder="e.g. frozen at −80 °C"></label>
-        </div>
+        <details class="cardtext" id="expMore"><summary>Starter, harvest and figure details (optional)</summary>
+          <div class="row"><label class="f">OD₆₀₀ at induction<input type="text" id="pr-od" data-prep="od" placeholder="e.g. 0.8"></label></div>
+          <label class="f">Starter culture<input type="text" id="pr-exStarter" data-prep="exStarter" placeholder="e.g. 50 mL LB with kanamycin, 37 °C overnight"></label>
+          <div class="row">
+            <label class="f">Harvest<input type="text" id="pr-exHarvest" data-prep="exHarvest" placeholder="e.g. 4,000 × g, 20 min, 4 °C"></label>
+            <label class="f">Cells kept<input type="text" id="pr-exStore" data-prep="exStore" list="dl-exstore" placeholder="e.g. frozen at −80 °C"></label>
+          </div>
+          <label class="check"><input type="checkbox" id="pr-expr" data-prep="expr">Expression panel</label>
+        </details>
         <datalist id="dl-exstore"><option value="frozen at −80 °C"><option value="lysed the same day"></datalist>
-        <label class="check"><input type="checkbox" id="pr-expr" data-prep="expr">Expression panel</label>
       </details>
       <details class="sub" data-sub="plys" open><summary>Lysis and clarification</summary>
         <div class="row">
@@ -1087,11 +1092,13 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Clarified volume (mL)<input type="number" id="pr-lysVol" data-prep="lysVol" min="0" step="1"></label>
         </div>
         <label class="f">Lysis buffer<input type="text" id="pr-lysBuffer" data-prep="lysBuffer" placeholder="e.g. 50 mM Tris pH 8.0, 300 mM NaCl, 20 mM imidazole"></label>
-        <label class="f">Additives<input type="text" id="pr-lysAdd" data-prep="lysAdd" placeholder="e.g. protease inhibitor tablet, 10 µg/mL DNase I, 2 mM MgCl2, 1 mg/mL lysozyme"></label>
-        <label class="f">Sonication or press settings<input type="text" id="pr-lysSet" data-prep="lysSet" placeholder="e.g. 40% amplitude, 5 s on, 10 s off, 6 min total, on ice"></label>
-        <label class="f">Clarification<input type="text" id="pr-clarify" data-prep="clarify" placeholder="e.g. 30,000 × g, 45 min, 4 °C"></label>
-        <label class="check"><input type="checkbox" id="pr-lysLanes" data-prep="lysLanes">Show lysate, pellet and clarified lanes under Lysis</label>
-        <label class="check"><input type="checkbox" id="pr-lysis" data-prep="lysis">Lysis panel</label>
+        <details class="cardtext" id="lysMore"><summary>Protocol and figure details (optional)</summary>
+          <label class="f">Additives<input type="text" id="pr-lysAdd" data-prep="lysAdd" placeholder="e.g. protease inhibitor tablet, 10 µg/mL DNase I, 2 mM MgCl2, 1 mg/mL lysozyme"></label>
+          <label class="f">Sonication or press settings<input type="text" id="pr-lysSet" data-prep="lysSet" placeholder="e.g. 40% amplitude, 5 s on, 10 s off, 6 min total, on ice"></label>
+          <label class="f">Clarification<input type="text" id="pr-clarify" data-prep="clarify" placeholder="e.g. 30,000 × g, 45 min, 4 °C"></label>
+          <label class="check"><input type="checkbox" id="pr-lysLanes" data-prep="lysLanes">Show lysate, pellet and clarified lanes under Lysis</label>
+          <label class="check"><input type="checkbox" id="pr-lysis" data-prep="lysis">Lysis panel</label>
+        </details>
       </details>
       <details class="sub" data-sub="pclv" open><summary>Dialysis and protease cleavage</summary>
         <label class="check"><input type="checkbox" id="pr-cleave" data-prep="cleave">Add a dialysis and cleavage step</label>
@@ -1104,12 +1111,14 @@ button,input,select,textarea{font-family:inherit}
         <div class="row">
           <label class="f">Temperature (°C)<input type="text" id="pr-clvTemp" data-prep="clvTemp" placeholder="e.g. 4"></label>
           <label class="f">Time (h)<input type="text" id="pr-clvTime" data-prep="clvTime" placeholder="e.g. 16"></label>
-          <label class="f">MWCO (kDa)<input type="text" id="pr-mwco" data-prep="mwco" placeholder="e.g. 10"></label>
         </div>
-        <div class="row">
-          <label class="f">Buffer volume (L)<input type="number" id="pr-dialVol" data-prep="dialVol" min="0" step="0.5"></label>
-          <label class="f">Buffer changes<input type="text" id="pr-dialChanges" data-prep="dialChanges" placeholder="e.g. 1"></label>
-        </div>
+        <details class="cardtext" id="clvMore"><summary>Dialysis setup (optional)</summary>
+          <div class="row">
+            <label class="f">MWCO (kDa)<input type="text" id="pr-mwco" data-prep="mwco" placeholder="e.g. 10"></label>
+            <label class="f">Buffer volume (L)<input type="number" id="pr-dialVol" data-prep="dialVol" min="0" step="0.5"></label>
+            <label class="f">Buffer changes<input type="text" id="pr-dialChanges" data-prep="dialChanges" placeholder="e.g. 1"></label>
+          </div>
+        </details>
       </details>
       <details class="sub" data-sub="pman" open hidden><summary>Step without a chromatogram</summary>
           <label class="f">Kind of step<select id="man-kind" data-man="kind"><option value="column">Column without a chromatogram</option><option value="batch">Batch binding</option><option value="precip">Precipitation</option><option value="dialysis">Dialysis or buffer exchange</option><option value="conc">Concentration</option><option value="other">Other step</option></select></label>
@@ -1123,13 +1132,16 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Volume after (mL)<input type="number" id="man-vol" data-man="vol" min="0" step="any"></label>
           <label class="f" title="A NanoDrop or A280 reading after this step. With the volume it gives the mg, and the next column's step yield counts from it">Conc. after (mg/mL)<input type="number" id="man-conc" data-man="conc" min="0" step="any"></label>
         </div>
-        <label class="f">Notes for the methods<input type="text" id="man-note" data-man="note" placeholder="e.g. Fractions with protein by Bradford were pooled"></label>
-        <label class="f" title="Printed on the arrow to the next step">Arrow label<input type="text" id="man-arrow" data-man="arrow" placeholder="e.g. Eluate"></label>
+        <details class="cardtext" id="manMore"><summary>Figure and methods notes (optional)</summary>
+          <label class="f">Notes for the methods<input type="text" id="man-note" data-man="note" placeholder="e.g. Fractions with protein by Bradford were pooled"></label>
+          <label class="f" title="Printed on the arrow to the next step">Arrow label<input type="text" id="man-arrow" data-man="arrow" placeholder="e.g. Eluate"></label>
+        </details>
       </details>
       <details class="sub" data-sub="pbtw" open hidden><summary>Concentrated and NanoDrop</summary>
         <div class="btwnd">
           <div class="btns"><button type="button" class="btn primary" id="btwNdAdd">Load NanoDrop export</button><input type="file" id="btwNdFile" hidden></div>
           <div id="btwNdList"></div>
+          <label class="f" id="btwTypeBox" title="Used only when no NanoDrop export is loaded for this step">No export? Type the reading (mg/mL)<input type="number" id="btw-conc" data-btw="conc" min="0" step="any"></label>
           <label class="f" title="The volume left in the concentrator, the one your NanoDrop readings were taken in">Volume after concentrating (mL)<input type="number" id="btw-vOut" data-btw="vOut" min="0" step="any" placeholder="e.g. 0.25"></label>
           <details class="cardtext" id="btwSplitBox"><summary>Only part went on to the next step (optional)</summary>
           <div class="row">
@@ -1151,7 +1163,6 @@ button,input,select,textarea{font-family:inherit}
             <label class="f">Volume in (mL)<input type="number" id="btw-vIn" data-btw="vIn" min="0" step="any"></label>
           </div>
           <label class="f">Buffer or detail<input type="text" id="btw-note" data-btw="note" placeholder="e.g. into 20 mM Tris pH 8.0, 50 mM NaCl"></label>
-          <label class="f" id="btwTypeBox" title="Used only when no NanoDrop export is loaded for this step">No export? Type the reading (mg/mL)<input type="number" id="btw-conc" data-btw="conc" min="0" step="any"></label>
         </details>
         <datalist id="dl-device"><option value="Amicon Ultra-15"><option value="Amicon Ultra-4"><option value="Amicon Ultra-0.5"><option value="Vivaspin 20"><option value="PD-10 desalting column"><option value="0.22 µm syringe filter"></datalist>
       </details>
@@ -1163,9 +1174,11 @@ button,input,select,textarea{font-family:inherit}
         </div>
         <label class="f">Storage buffer<input type="text" id="pr-finBuffer" data-prep="finBuffer" placeholder="e.g. 20 mM HEPES pH 7.5, 150 mM NaCl, 10% glycerol, 1 mM TCEP"></label>
         <label class="f" id="prStoreWrap" title="How the final protein was concentrated and stored. Goes in the methods text">Storage<input type="text" id="pr-store" data-prep="store" placeholder="e.g. 50 µL aliquots flash-frozen in liquid nitrogen, stored at −80 °C"></label>
-        <label class="f" title="Backed by a gel of the last column's fractions, so the figure can print it">Purity<input type="text" id="pr-qcPurity" data-prep="qcPurity" placeholder="e.g. over 95% by SDS-PAGE"></label>
-        <label class="f">Intact mass<input type="text" id="pr-qcMass" data-prep="qcMass" placeholder="e.g. 49,213 Da (expected 49,215)"></label>
-        <label class="f">Activity or other checks<input type="text" id="pr-qcActivity" data-prep="qcActivity" placeholder="e.g. kcat 12 s⁻¹ with NAD+, monodisperse by DLS"></label>
+        <details class="cardtext" id="finQcMore"><summary>Quality and characterization checks (optional)</summary>
+          <label class="f" title="Backed by a gel of the last column's fractions, so the figure can print it">Purity<input type="text" id="pr-qcPurity" data-prep="qcPurity" placeholder="e.g. over 95% by SDS-PAGE"></label>
+          <label class="f">Intact mass<input type="text" id="pr-qcMass" data-prep="qcMass" placeholder="e.g. 49,213 Da (expected 49,215)"></label>
+          <label class="f">Activity or other checks<input type="text" id="pr-qcActivity" data-prep="qcActivity" placeholder="e.g. kcat 12 s⁻¹ with NAD+, monodisperse by DLS"></label>
+        </details>
       </details>
       <datalist id="dl-protease"><option value="Ulp1"><option value="SUMO protease"><option value="TEV"><option value="3C (PreScission)"><option value="thrombin"><option value="enterokinase"><option value="factor Xa"></datalist>
       <datalist id="dl-strain"><option value="BL21(DE3)"><option value="Rosetta 2(DE3)"><option value="BL21(DE3) pLysS"><option value="C41(DE3)"><option value="Lemo21(DE3)"><option value="ArcticExpress(DE3)"><option value="SHuffle T7"></datalist>
@@ -1182,6 +1195,7 @@ button,input,select,textarea{font-family:inherit}
       <div class="btns"><button type="button" class="btn" id="ndAdd">Add NanoDrop export</button><button type="button" class="btn quiet" id="ndManual">Type a reading</button><button type="button" class="btn quiet" id="assayOpenBtn">Add activity assay</button>
         <input type="file" id="ndFile" accept=".csv,.tsv,.txt,text/*" hidden></div>
       <div id="ndWrap" hidden><div class="ndlist" id="ndList"></div></div>
+      <p class="subhead">Display &amp; quality checks</p>
       <div class="row" data-for="workflow run">
         <label class="f">On the figure<select id="o-ndFig" data-opt="ndFig"><option value="none">Nothing</option><option value="conc">Concentration</option><option value="mg">Concentration and total</option><option value="full">Concentration, total and 260/280</option></select></label>
         <label class="check" style="align-self:end;min-height:32px" title="The NanoDrop One reports a protein value corrected for nucleic acid when it detects some. Use it when the export has it"><input type="checkbox" id="o-ndCorr" data-opt="ndCorr">Use corrected values</label>
@@ -7891,6 +7905,16 @@ function renderPrep(){
   else if (m) h = `Drawn from the Protein section${m.tagParts.length ? ` with the ${esc(m.tagParts.join('-'))} tag` : ''}. Load the plasmid's GenBank file to draw its own parts.`;
   else h = '<button type="button" class="linkbtn" id="gbGoProt">Enter protein sequence</button>, or load a GenBank file.';
   if (st._h !== h) { st._h = h; st.innerHTML = h; }
+  { const cp = $('#clonePanel'); if (cp) cp.classList.toggle('cl-after', !!(PROJ && curStep === 'transform' && !prep.includeCloning));
+    const rst = pn._prep !== prep || pn._proj !== PROJ, srch = !!($('#panelSearch') && $('#panelSearch').value.trim()); pn._prep = prep; pn._proj = PROJ;
+    const fold = (id, nd, k, b) => { const d = $('#' + id); if (!d) return; if (rst || d._k !== k || d._b !== b) { d._prep = prep; d._proj = PROJ; d._k = k; d._b = b; d._nd = nd; if (!srch) d.open = nd; } else { if (nd && !d._nd) d.open = true; d._nd = nd; } };
+    fold('expMore', hasTxt(prep.od) || hasTxt(prep.exStarter) || hasTxt(prep.exHarvest) || hasTxt(prep.exStore) || prep.expr === false, '');
+    fold('lysMore', hasTxt(prep.lysAdd) || hasTxt(prep.lysSet) || hasTxt(prep.clarify) || !!prep.lysLanes || prep.lysis === false, '');
+    fold('clvMore', hasTxt(prep.mwco) || hasTxt(prep.dialVol) || hasTxt(prep.dialChanges), prep.cleave ? '1' : '0');
+    const mid = curStep.startsWith('man:') ? curStep.slice(4) : '', mm = (prep.manual || []).find(x => x.id === mid);
+    fold('manMore', !!(mm && (hasTxt(mm.note) || hasTxt(mm.arrow))), mid, mm);
+    fold('finQcMore', hasTxt(prep.qcPurity) || hasTxt(prep.qcMass) || hasTxt(prep.qcActivity), '');
+    if (!curStep.startsWith('btw:')) ['btwMore', 'btwSplitBox'].forEach(id => { const d = $('#' + id); if (d && (rst || d._k !== '')) { d._prep = prep; d._proj = PROJ; d._k = ''; d._b = null; d._nd = false; if (!srch) d.open = false; } }); }
 }
 let prepT = 0;
 function onPrepInput(e){ const el = e.target, k = el.dataset.prep; if (!k) return;
@@ -7920,6 +7944,12 @@ $('#prepPanel').addEventListener('change', onCloneInput);
 $('#prepPanel').addEventListener('click', e => { const b = e.target.closest('#prCloneAdd, #prClones [data-cl=rm]'); if (!b) return;
   if (b.id === 'prCloneAdd') { const n = Math.max(0, ...(prep.clones || []).map(c => { const m = /^cl(\d+)$/.exec(c.id); return m ? +m[1] : 0; })) + 1; prep.clones = (prep.clones || []).concat({id: 'cl' + n, name: '', status: 'pending', stock: ''}); render(); const L = $('#prClones').querySelectorAll('[data-cl=name]'); if (L.length) L[L.length - 1].focus(); return; }
   const id = b.closest('[data-clone]').dataset.clone; prep.clones = (prep.clones || []).filter(c => c.id !== id); if (prep.selectedCloneId === id) prep.selectedCloneId = null; render(); });
+{ let ps = null; const si = $('#panelSearch'); if (si) si.addEventListener('input', () => { const q = si.value.trim(), pn = $('#prepPanel');
+  if (q) { if (!ps) ps = {prep, proj: PROJ, list: [...document.querySelectorAll('#prepPanel details.cardtext')].map(d => [d, d.open, !!d._nd, d._k, d._b])};
+    else ps.list.forEach(([d, st, nd0, k0, b0]) => { d.open = (ps.prep === prep && ps.proj === PROJ && d._k === k0 && d._b === b0) ? (st || (!!d._nd && !nd0)) : !!d._nd; }); }
+  else if (ps) { if (pn && (ps.prep !== prep || ps.proj !== PROJ)) pn._prep = null;
+    ps.list.forEach(([d, st, nd0, k0, b0]) => { if (ps.prep === prep && ps.proj === PROJ && d._k === k0 && d._b === b0) { d.open = st; d._nd = nd0; } else { d._prep = null; d._k = null; d._b = undefined; } });
+    ps = null; renderPrep(); if (curStep.startsWith('btw:')) btwCarry(); } }); if (si) queueMicrotask(() => si.addEventListener('input', () => { if (PROJ && !si.value.trim()) { const pn = $('#prepPanel'); if (pn) pn.classList.remove('collapsed'); document.querySelectorAll('#prepPanel details.sub:not([hidden])').forEach(d => { d.open = true; }); } })); }
 $('#gbPick').addEventListener('click', () => $('#gbFile').click());
 $('#gbFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadGenBank(f); });
 $('#gbPaste').addEventListener('click', () => { const b = $('#gbPasteBox'); b.hidden = !b.hidden; if (!b.hidden) $('#gbText').focus(); });
@@ -13919,13 +13949,15 @@ function syncBtw(){ const rid = curStep.startsWith('btw:') ? curStep.slice(4) : 
   document.querySelectorAll('#prepPanel [data-btw]').forEach(el => { if (el === document.activeElement) return; const v = b[el.dataset.btw] ?? (el.dataset.btw === 'how' ? 'conc' : ''); if (el.value !== String(v)) el.value = v; }); btwCarry(); }
 /* what the reading does to the column run before it */
 function btwCarry(){ const el = $('#btwCarry'), rid = curStep.startsWith('btw:') ? curStep.slice(4) : '', r = runs.find(x => x.id === rid), p = r ? poolRows(r) : null, u = runVolUnit(r); if (!el) return;
-  const nm = r ? shortRunName(r) : 'the run', F = r ? ndFinalOf(r) : [], ms = r ? poolMeas(r) : {}, b = (prep.btw || {})[rid] || {}, card = r && numOr(r.poolConc, 0) > 0;
+  const nm = r ? shortRunName(r) : 'the run', F = r ? ndFinalOf(r) : [], ms = r ? poolMeas(r) : {}, rawB = (prep.btw || {})[rid], b = rawB || {}, card = r && numOr(r.poolConc, 0) > 0;
   /* the readings loaded for this step, each with its own concentration, and the mean that is used */
   const li = $('#btwNdList'), lh = !F.length ? '' : `<div class="btwnd-r"><b>${ms.nd ? `${fmt(ms.nd.m, 2)}${ms.nd.sd != null ? ` ± ${fmt(ms.nd.sd, 2)}` : ''} mg/mL` : ''}</b><span class="muted">${ms.nd ? (ms.nd.n > 1 ? `mean of ${ms.nd.n} readings` : '1 reading') : (F.length > 1 ? `${F.length} readings` : '1 reading')}</span></div>`
     + F.map(s => (c => `<div class="btwnd-r"><span>${esc(s.name || 'Reading')}</span><span class="muted">${c.v != null ? `${fmt(c.v, 2)} mg/mL` : ''}${s.r280 != null ? `, 260/280 ${fmt(s.r280, 2)}` : ''}</span><button type="button" class="btwnd-x" data-btwndx="${esc(s.id)}" aria-label="Remove ${esc(s.name || 'reading')}" title="Remove this reading">×</button></div>`)(ndConc(s))).join('');
   if (li._h !== lh) { li._h = lh; li.innerHTML = lh; }
   $('#btwNdAdd').textContent = F.length ? 'Load another NanoDrop export' : 'Load NanoDrop export'; $('#btwNdAdd').classList.toggle('primary', !F.length);
-  const tb = $('#btwTypeBox'); tb.hidden = F.length > 0; if (numOr(b.conc, 0) > 0 && !F.length) $('#btwMore').open = true;
+  const tb = $('#btwTypeBox'), srch = !!($('#panelSearch') && $('#panelSearch').value.trim()); tb.hidden = F.length > 0;
+  { const bm = $('#btwMore'), nd = (hasTxt(b.how) && b.how !== 'conc') || hasTxt(b.device) || hasTxt(b.mwco) || hasTxt(b.vIn) || hasTxt(b.note);
+    if (bm) { if (bm._prep !== prep || bm._proj !== PROJ || bm._k !== rid || bm._b !== rawB) { bm._prep = prep; bm._proj = PROJ; bm._k = rid; bm._b = rawB; bm._nd = nd; if (!srch) bm.open = nd; } else { if (nd && !bm._nd) bm.open = true; bm._nd = nd; } } }
   el.textContent = !r ? '' : card ? `${stepTitle(r)} has a reading typed on its run card, which is used instead.`
     : !p ? `Pool the fractions on ${stepTitle(r)} first.`
     : p.measured && p.src === 'btw' ? `${sig2(p.mg)} mg (${fmt(p.conc, 2)} mg/mL × ${fmtAuto(numOr(b.vOut, p.measVol))} ${u})${p.mgArea > 0 ? `. The UV area of ${stepTitle(r)} estimated ${sig2(p.mgArea)} mg` : ''}.`
@@ -13935,19 +13967,20 @@ function btwCarry(){ const el = $('#btwCarry'), rid = curStep.startsWith('btw:')
   se.textContent = sp.bad === 'over' ? `Loaded plus kept back is ${fmtAuto((sp.vl || 0) + (sp.vk || 0))} ${u}, more than the ${fmtAuto(sp.vo)} ${u} after concentrating. Until that is fixed, all of it counts as loaded on the next step.`
     : sp.bad === 'novol' ? 'Enter the volume after concentrating too. Until then, all of it counts as loaded on the next step.' : sp.bad === 'zero' ? `A load of 0 ${u} leaves no amount to count the next step’s yield from. Until that is fixed, all of it counts as loaded on the next step.` : sp.bad === 'neg' ? 'A volume can’t be below 0. Until that is fixed, all of it counts as loaded on the next step.'
     : sp.set && sm > 0 ? `${sig2(sm*sp.f)} mg (${fmtAuto(sp.vl)} of ${fmtAuto(sp.vo)} ${u}) went on to the next step${sp.vk > 0 ? `, ${fmtAuto(sp.vk)} ${u} kept back` : ''}.` : '';
-  if (numOr(b.vLoad, null) != null || numOr(b.vKeep, null) != null || String(b.keepAs || '').trim()) $('#btwSplitBox').open = true;
+  { const sb = $('#btwSplitBox'), snd = numOr(b.vLoad, null) != null || numOr(b.vKeep, null) != null || hasTxt(b.keepAs);
+    if (sb) { if (sb._prep !== prep || sb._proj !== PROJ || sb._k !== rid || sb._b !== rawB) { sb._prep = prep; sb._proj = PROJ; sb._k = rid; sb._b = rawB; sb._nd = snd; if (!srch) sb.open = snd; } else { if (snd && !sb._nd) sb.open = true; sb._nd = snd; } } }
   se.hidden = !se.textContent; se.classList.toggle('warnc', !!sp.bad); }
 /* a NanoDrop export loaded on the Concentrated step: every protein reading in it is the concentrated sample of the column before */
 $('#btwNdAdd').addEventListener('click', () => $('#btwNdFile').click());
 $('#btwNdFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f || !curStep.startsWith('btw:')) return; const rid = curStep.slice(4), r = runs.find(x => x.id === rid);
   if (/^image\/|\.pdf$/i.test(f.type || '') || /\.(png|jpe?g|gif|tiff?|bmp|heic|pdf)$/i.test(f.name)) { toast('That is a picture of the readings. On the NanoDrop, export the measurements as a .csv or .tsv file and load that'); return; }
   const list = parseNanoDrop(decode(await f.arrayBuffer())); if (!list.some(s => s.kind !== 'nucleic')) { toast(list.length ? `${f.name} has only nucleic acid readings` : `No readings found in ${f.name}`); return; }
-  prep.btw = prep.btw || {}; prep.btw[rid] = Object.assign({how: 'conc'}, prep.btw[rid]); delete prep.btw[rid].conc;
+  prep.btw = prep.btw || {}; { const ob = prep.btw[rid] || (prep.btw[rid] = {how: 'conc'}); if (ob.how === undefined) ob.how = 'conc'; delete ob.conc; }
   if (r) { if (numOr(r.poolFinalVol, 0) > 0 && !(numOr(prep.btw[rid].vOut, 0) > 0)) prep.btw[rid].vOut = xUnit(r) === 'µL' ? String(+(numOr(r.poolFinalVol, 0)*1000).toPrecision(12)) : r.poolFinalVol; delete r.poolConc; delete r.poolFinalVol; }
   addNanoDrop(list, f.name, rid); syncBtw(); renderList(); render(); if (!(numOr(prep.btw[rid].vOut, 0) > 0)) $('#btw-vOut').focus(); });
 $('#btwNdList').addEventListener('click', e => { const b = e.target.closest('[data-btwndx]'); if (!b) return; ndSamples = ndSamples.filter(x => x.id !== b.dataset.btwndx); $('#ndList')._n = -1; renderND(); btwCarry(); renderList(); render(); });
 const btwEdit = e => { const el = e.target.closest('[data-btw]'); if (!el || !curStep.startsWith('btw:')) return; const rid = curStep.slice(4); prep.btw = prep.btw || {};
-  prep.btw[rid] = Object.assign({how: 'conc'}, prep.btw[rid], {[el.dataset.btw]: el.value}); const r = runs.find(x => x.id === rid);
+  { const ob = prep.btw[rid] || (prep.btw[rid] = {how: 'conc'}); if (ob.how === undefined) ob.how = 'conc'; ob[el.dataset.btw] = el.value; } const r = runs.find(x => x.id === rid);
   /* one reading per pool: a value typed here replaces one left on the run card */
   if (r && ['conc', 'vOut'].includes(el.dataset.btw) && (r.poolConc != null || r.poolFinalVol != null)) { if (r.poolConc != null && prep.btw[rid].conc === '' && el.dataset.btw !== 'conc') prep.btw[rid].conc = r.poolConc; delete r.poolConc; delete r.poolFinalVol; }
   btwCarry(); render(); if (e.type === 'change' && ['conc', 'vOut', 'vLoad', 'vKeep'].includes(el.dataset.btw)) setTimeout(() => { renderList(); render(); }, 0); };
