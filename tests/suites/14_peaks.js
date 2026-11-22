@@ -342,6 +342,112 @@ async function peakSeparator() {
   }
 }
 
+// Issue #1634: default UV pathlength is 0.2 cm (2 mm) with an ÄKTA optical cell selector in Run conditions
+async function uvPathCellSelector() {
+  const {p, errs, close} = await open(), h = H(p);
+  p.on('dialog', d => d.accept());
+  try {
+    const lines = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'mL,mAU,mL,Fraction'];
+    const xs = [], ys = [];
+    for (let i = 0; i <= 200; i++) {
+      const x = +(i / 10).toFixed(1);
+      const y = +(100 * Math.exp(-0.5 * Math.pow((x - 10) / 1.0, 2))).toFixed(4);
+      xs.push(x); ys.push(y);
+      lines.push(`${x},${y},${i % 10 === 0 ? x : ''},${i % 10 === 0 ? '"F' + (i / 10 + 1) + '"' : ''}`);
+    }
+    const readPeakMg = async () => {
+      const t = await h.peakTable();
+      if (!t.length) return null;
+      const head = t[0];
+      const ia = head.findIndex(c => /^Area/i.test(c));
+      const im = head.findIndex(c => /^Protein \(mg\)/i.test(c));
+      const row = t.slice(1).find(r => r.length === head.length && !/^pool/i.test(r[0]) && num(r[ia]) > 0);
+      if (!row || ia < 0 || im < 0) return null;
+      const area = num(row[ia]), mg = num(row[im]);
+      return {area, mg, effCm: area > 0 && mg > 0 ? (area / 1000) / (1.0 * mg) : NaN};
+    };
+
+    await h.newProject('UV path cell selector');
+    await p.click('#tl [data-addmenu]');
+    await p.click('#tl [data-addstep=run]');
+    await p.setInputFiles('#file', {name: 'akta_no_path.csv', mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n'))});
+    await h.wait(800);
+
+    const runStep = (await h.timeline()).find(x => /^run:/.test(x.k));
+    if (runStep) await h.step(runStep.k);
+    await h.wait(300);
+
+    await setOpt(p, 'o-eps', '1.0');
+    await detect(p);
+
+    // 1. Run with no explicit pathlength defaults to effective pathlength 0.2 cm (2 mm)
+    const defPeak = await readPeakMg();
+    T.check('path_default/effective-0.2cm', defPeak != null && Math.abs(defPeak.effCm - 0.2) <= 0.01, `Default path peak: ${JSON.stringify(defPeak)}, expected effCm ≈ 0.2`);
+
+    // 2. Optical cell selector in Run conditions updates the run's pathlength to 1.0 cm (10 mm)
+    const runCond = p.locator('.trace.run.sel details.runcond').first();
+    await runCond.evaluate(d => { d.open = true; });
+    const cellSel = runCond.locator('select[data-k="pathCell"]').first();
+    const hasSel = (await cellSel.count()) > 0;
+    T.check('path_cell/selector-in-runcond', hasSel, 'UV optical cell selector present inside Run conditions');
+
+    if (hasSel) {
+      await cellSel.selectOption('10');
+      await h.wait(400);
+      const pathVal10 = await p.locator('.trace.run.sel input[data-k="path"]').first().inputValue();
+      const peak10 = await readPeakMg();
+      T.check('path_cell/1cm-sets-path-10mm', Math.abs(num(pathVal10) / 10 - 1.0) < 0.001, `Path input="${pathVal10}" mm (${num(pathVal10)/10} cm), expected 1.0 cm`);
+      T.check('path_cell/1cm-effective-1.0cm', peak10 != null && Math.abs(peak10.effCm - 1.0) <= 0.03 && defPeak != null && Math.abs(defPeak.mg / peak10.mg - 5.0) <= 0.25, `1 cm peak: ${JSON.stringify(peak10)}, 0.2 cm mg: ${defPeak && defPeak.mg}`);
+
+      await cellSel.selectOption('2');
+      await h.wait(400);
+      const pathVal2 = await p.locator('.trace.run.sel input[data-k="path"]').first().inputValue();
+      const peak2 = await readPeakMg();
+      T.check('path_cell/2mm-sets-path-2mm', Math.abs(num(pathVal2) / 10 - 0.2) < 0.001 && peak2 != null && Math.abs(peak2.effCm - 0.2) <= 0.01, `Path input="${pathVal2}" mm, peak: ${JSON.stringify(peak2)}`);
+    } else {
+      T.check('path_cell/1cm-sets-path-10mm', false, 'Optical cell selector missing');
+      T.check('path_cell/1cm-effective-1.0cm', false, 'Optical cell selector missing');
+      T.check('path_cell/2mm-sets-path-2mm', false, 'Optical cell selector missing');
+    }
+
+    // 3. Saved project with no pathlength value defaults to 0.2 cm even if session had 10 mm
+    await setOpt(p, 'o-path', '10');
+    await h.wait(200);
+    const savedNoPath = {
+      app: 'HPLC Figure Bench',
+      version: 1,
+      runs: [{
+        id: 'r1',
+        name: 'Saved No Path',
+        inWf: true,
+        uvi: 0,
+        uvs: [{name: 'UV 1_280', xu: 'mL', yu: 'mAU', xs, ys}],
+        fracs: [],
+        integ: []
+      }],
+      traces: []
+    };
+    await p.click('#homeBtn');
+    await h.wait(500);
+    await p.setInputFiles('#projFile', {
+      name: 'saved_no_path.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(savedNoPath))
+    });
+    await h.wait(1000);
+    const savedStep = (await h.timeline()).find(x => /^run:/.test(x.k));
+    if (savedStep) await h.step(savedStep.k);
+    await h.wait(300);
+    await setOpt(p, 'o-eps', '1.0');
+    await detect(p);
+    const savedPeak = await readPeakMg();
+    T.check('path_saved/defaults-to-0.2cm', savedPeak != null && Math.abs(savedPeak.effCm - 0.2) <= 0.01, `Saved project (no path) peak: ${JSON.stringify(savedPeak)}, expected effCm ≈ 0.2`);
+  } finally {
+    T.check('path_cell/no-page-errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -351,5 +457,6 @@ async function peakSeparator() {
   }
   await T.t('zoom_to_peak_button', zoomToPeakButton);
   await T.t('peak_separator', peakSeparator);
+  await T.t('uv_path_cell_selector', uvPathCellSelector);
   T.done();
 })();
