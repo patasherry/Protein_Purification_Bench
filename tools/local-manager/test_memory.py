@@ -52,5 +52,24 @@ def fake(req, timeout=0):
 rv.urllib.request.urlopen = fake
 out = rv.ask_model('You review.', 'the diff', diff)
 check('ask_model puts the notes in the system message and still answers', out == 'fine' and 'Project notes' in sent['messages'][0]['content'] and sent['messages'][1]['content'] == 'the diff')
+check('ask_model sets num_predict headroom in prose mode too', sent.get('options', {}).get('num_predict') == 12288)
+
+calls = []
+class RSeq:
+    def __init__(self, payload): self.payload = payload
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def read(self): return self.payload
+def fake_trunc(req, timeout=0):
+    import json
+    p = json.loads(req.data)
+    calls.append(p)
+    if len(calls) == 1:
+        return RSeq(b'{"message": {"content": "<think>exhausted budget without closing tag"}}')
+    return RSeq(b'{"message": {"content": "- Looks clean.\\nBlocking: no"}}')
+rv.urllib.request.urlopen = fake_trunc
+out2 = rv.ask_model('You review.', 'big diff')
+check('ask_model retries with think=False when unclosed <think> leaves empty prose',
+      len(calls) == 2 and calls[1].get('think') is False and 'Blocking: no' in out2)
 
 sys.exit(1 if bad else 0)

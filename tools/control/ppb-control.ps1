@@ -30,7 +30,7 @@ function Start-Ollama {
 }
 function Start-Manager {
   if (-not (Test-Path $Startup)) { [System.Windows.Forms.MessageBox]::Show("Can't find $Startup", 'PPB Control') | Out-Null; return }
-  if ((Get-Loops).Count -eq 0) { Start-Process $Startup -WindowStyle Minimized }
+  if ((Get-Loops).Count -eq 0 -and (Get-Manager).Count -eq 0) { Start-Process $Startup -WindowStyle Minimized }
 }
 
 # ---------- window ----------

@@ -208,6 +208,7 @@ def ask_gemini(q, models=None, json_mode=False, temp=None):
     if gen:
         payload['generationConfig'] = gen
     body = json.dumps(payload).encode()
+    last_reason = 'free-tier rate limit'
     for model in (models or GEMINI_MODELS):
         if _gem['rest_until'].get(model, 0) > time.time():
             continue
@@ -224,20 +225,24 @@ def ask_gemini(q, models=None, json_mode=False, temp=None):
         except (TimeoutError, urllib.error.URLError) as e:
             if isinstance(e, urllib.error.HTTPError) and e.code in (400, 403, 404) and (models or GEMINI_MODELS)[-1] != model:
                 _gem['rest_until'][model] = time.time() + 24 * 3600
+                last_reason = f'HTTP {e.code}'
                 log(f'Gemini {model}: not available on this key ({e.code}), using the next model')
                 continue
             if isinstance(e, urllib.error.HTTPError) and e.code not in (429, 500, 502, 503, 504):
                 raise
             if not isinstance(e, urllib.error.HTTPError) or e.code != 429:  # Google busy (5xx) or no answer in time: try the next model, and this one again after a minute
                 _gem['rest_until'][model] = time.time() + 60
-                log(f'Gemini {model}: {getattr(e, "code", "timeout")}, trying the next model')
+                code = getattr(e, 'code', 'timeout')
+                last_reason = f'server busy ({code})'
+                log(f'Gemini {model}: {code}, trying the next model')
                 continue
             k = _gem['strikes'][model] = _gem['strikes'].get(model, 0) + 1
             now = dt.datetime.now()
             rest = 120 if k == 1 else 900 if k == 2 else (dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(0, 30)) - now).total_seconds()
             _gem['rest_until'][model] = time.time() + rest
+            last_reason = 'free-tier rate limit (429)'
             log(f'Gemini {model}: rate limit (429), resting {int(rest / 60)} min')
-    raise RuntimeError('Gemini is resting after its free-tier rate limit')
+    raise RuntimeError(f'Gemini unavailable ({last_reason})')
 
 
 def call_local_model(system, user, json_mode=False, temp=None):
@@ -1855,8 +1860,10 @@ def antigravity(s):
             if 'environment storage quota' in str(e).lower() and s.get('ag_swept_at', 0) < time.time() - 3600:
                 s['ag_swept_at'] = time.time()
                 try:
-                    gone, total = ag_sweep_envs()
-                    return log(f'Antigravity: the project was full of old sandboxes, deleted {gone} of {total}, retrying next pass')
+                    gone, total = ag_sweep_envs(has_active_jobs=bool(a or s.get('ag_reviews')))
+                    if gone > 0:
+                        return log(f'Antigravity: the project was full of old sandboxes, deleted {gone} of {total}, retrying next pass')
+                    log(f'Antigravity: sandbox sweep deleted 0 of {total} environments; counting refusal so it backs off cleanly')
                 except Exception as ex:
                     log(f'Antigravity: could not list or clear the sandboxes ({str(ex)[:120]})')
             # Otherwise: back off hard after AG_REFUSALS in a row and say so once, instead of a 6-hour cycle that never ends.
@@ -1867,13 +1874,12 @@ def antigravity(s):
                 s['ag_said_dead'] = True
                 post(TRACK, f'**The Antigravity API is refusing every call.** {s["ag_refused"]} attempts in a row have come back `{str(e)[:120]}`, '
                             'each on the first call of the day with no usage behind it.\n\n'
-                            'If the message names the **environment storage quota**, that is our own doing and the manager clears it itself: every call '
-                            'creates a sandbox and the API keeps each one for 7 days, so they pile up. Any other message points at the key or the tier.\n\n'
+                            'If the message names the **environment storage quota**, old remote sandboxes in the project are still holding quota '
+                            '(the API keeps each sandbox up to 7 days unless deleted). Any other message points at the key or the tier.\n\n'
                             f'The API route is paused for {AG_DEAD_HOURS} hours at a time now rather than 6, so it stops filling the log. '
-                            'Antigravity still gets the app-changing jobs through the desktop app (`paste-to-antigravity`, see `docs/ANTIGRAVITY.md`), which is the only route that has ever '
-                            'landed a PR here (#759, #765). Everything the app route cannot hold returns to the queue within '
-                            f'{AG_STALL_MIN} minutes.\n\nTo bring the API route back, the Gemini key needs a tier with quota for `{AG_AGENT}`. '
-                            'Once it has one, the next successful call clears this by itself.' + SIGN.format(rv.MODEL))
+                            'Antigravity still gets the app-changing jobs through the `agy` CLI on the PC (and the desktop app). '
+                            'Everything the cloud route cannot hold returns to the queue within '
+                            f'{AG_STALL_MIN} minutes.\n\nOnce quota is free again, the next successful call clears this by itself.' + SIGN.format(rv.MODEL))
             return log(f'Antigravity not available ({str(e)[:200]}), refusal {s["ag_refused"]}, paused for {AG_DEAD_HOURS if dead else 6} hours')
         s['ag_refused'], s['ag_said_dead'] = 0, False  # it answered, so whatever was wrong with the quota is fixed
         kind = rt.kind(i['title'])
@@ -1888,20 +1894,34 @@ AG_REFUSALS = cfg.get('antigravity_refusals_before_dead', 3)  # consecutive API 
 AG_ENV_KEEP_H = cfg.get('antigravity_env_keep_hours', 6)      # leave a sandbox alone this long: a job is capped at 3 hours, so 6 cannot hit a live one
 
 
-def ag_sweep_envs(keep_hours=None):
+def _env_timestamp(e):
+    """Parse an environment's last-activity or creation timestamp into epoch seconds, or None if missing."""
+    if not isinstance(e, dict):
+        return None
+    for k in ('updateTime', 'update_time', 'lastActivityTime', 'last_activity_time', 'lastUsedTime', 'last_used_time', 'createTime', 'create_time'):
+        raw = e.get(k)
+        if not raw or not isinstance(raw, str):
+            continue
+        norm = re.sub(r'(\.\d{6})\d+(?=[Z+-])', r'\1', raw.strip()).replace('Z', '+00:00')
+        try:
+            return dt.datetime.fromisoformat(norm).timestamp()
+        except ValueError:
+            continue
+    return None
+
+
+def ag_sweep_envs(keep_hours=None, has_active_jobs=True):
     """Delete the sandboxes left behind by finished interactions. Returns (deleted, total).
 
     Every call asks for `environment: 'remote'`, which creates a fresh sandbox, and the API keeps a sandbox for 7 days
     after its last activity whether or not anything still needs it. At up to max_antigravity_jobs (40) a day they pile
     up until the project's environment storage is full, and then every call comes back 429 "Project environment storage
-    quota exceeded" on the first attempt of the day with no usage behind it. From Nov 1 to Nov 5 that was read here as
-    the agent having no quota on this key's tier, which was wrong: the body only started saying so once gem_api began
-    reporting it. Nothing was wrong with the tier, the project was simply full of our own old sandboxes.
+    quota exceeded" on the first attempt of the day with no usage behind it.
 
     A sandbox touched inside keep_hours is left alone, since a running job could still be using it and an interaction
-    is capped at 3 hours."""
+    is capped at 3 hours. When list stubs omit timestamps, we check GET environments/{id}, and if no timestamp exists
+    at all while no Antigravity jobs are active in this manager, the idle sandbox is safe to delete."""
     cutoff = time.time() - (AG_ENV_KEEP_H if keep_hours is None else keep_hours) * 3600
-    # every page: the first 100 alone left a project with more old sandboxes than that full after each sweep
     envs, tok = [], ''
     for _ in range(50):
         r = gem_api('environments?pageSize=100' + (f'&pageToken={tok}' if tok else '')) or {}
@@ -1912,12 +1932,16 @@ def ag_sweep_envs(keep_hours=None):
     gone = 0
     for e in envs:
         eid = (e.get('name') or '').rsplit('/', 1)[-1] or e.get('id') or ''
-        touched = e.get('updateTime') or e.get('createTime') or ''
-        try:
-            age_ok = dt.datetime.fromisoformat(touched.replace('Z', '+00:00')).timestamp() < cutoff if touched else False
-        except ValueError:
-            age_ok = False
-        if not eid or not age_ok:
+        if not eid:
+            continue
+        ts = _env_timestamp(e)
+        if ts is None:
+            try:
+                ts = _env_timestamp(gem_api(f'environments/{eid}') or {})
+            except Exception:
+                ts = None
+        age_ok = (ts < cutoff) if ts is not None else (not has_active_jobs)
+        if not age_ok:
             continue
         try:
             gem_api(f'environments/{eid}', 'DELETE')
@@ -2224,6 +2248,11 @@ def bg_worker(s, key):
                 log(f'#{n}: {W["name"]} verified already fixed on main, closed without a PR')
                 handled.add(n)
                 continue
+            if gh(f'repos/{REPO}/issues/{n}').get('state') == 'closed':
+                label(n, remove=[f'{key}-running', 'for-antigravity', QUEUE, QUEUE_OLD])
+                log(f'#{n}: issue was closed while {W["name"]} ran, skipping PR')
+                handled.add(n)
+                continue
             pr = ship_worktree(wt, n, j['title'], desc, f'{key}/issue-{n}', W['who'](), W['mark'])
             label(n, add=[f'{key}-done'], remove=[f'{key}-running'])
             post(n, f'{W["name"]} opened #{pr}. It goes through the Test suite and the automatic review like any PR.' + SIGN.format(rv.MODEL))
@@ -2423,7 +2452,9 @@ def act_on_review(s, pr, issue, who, r):
         label(issue, add=[QUEUE], remove=list(ALL_DONE | ALL_RUNNING | {'for-coordinator', 'needs-coordinator'}))
         log(f'PR #{n} sent back by the lead review ({who})')
     else:
-        post(n, f'{head}: left for Claude (the lead).\n\n{summ}\n\n{notes}' + SIGN.format(rv.MODEL))
+        fallback = summ or ('The AI reviewer returned no structured verdict, so this pull request was routed to the lead.' if not notes else '')
+        body_tail = '\n\n'.join(x for x in (fallback, notes) if x)
+        post(n, f'{head}: left for Claude (the lead).' + (f'\n\n{body_tail}' if body_tail else '') + SIGN.format(rv.MODEL))
         label(n, add=['for-coordinator'])
         log(f'PR #{n}: {who} left it for the lead')
 
@@ -2489,12 +2520,14 @@ def lead_review(s):
         q = LEAD_REVIEW.format(approval=approval, issue=issue, ititle=iss.get('title', ''), ibody=(iss.get('body') or '')[:6000], n=n, title=pr['title'],
                                body=(pr.get('body') or '')[:6000], report=rep_[:3000], first=gk.first_pass_notes(comments(n), sha) or '(none)', diff=diff[:60000] + ('\n[diff truncated]' if len(diff) > 60000 else ''))
         try:
-            r = helper_json(ask_gemini(q, REVIEW_MODELS))
-            r['_model'] = _gem.get('used', '')
+            vnames = getattr(getattr(ask_gemini, '__code__', None), 'co_varnames', ())
+            raw = ask_gemini(q, REVIEW_MODELS, json_mode=True) if 'json_mode' in vnames else ask_gemini(q, REVIEW_MODELS)
+            r = helper_json(raw)
+            used_model = _gem.get('used', '')
         except Exception as e:
             log(f'PR #{n}: Gemini review failed: {str(e)[:150]}')
             continue
-        act_on_review(s, pr, issue, f'Gemini ({r.get("_model") or "?"})', r or {'decision': 'lead', 'summary': 'Gemini gave no verdict.'})
+        act_on_review(s, pr, issue, f'Gemini ({used_model or "?"})', r or {'decision': 'lead', 'summary': 'Gemini gave no structured verdict, so this pull request was left for the lead.'})
         if str(r.get('decision', '')).lower() == 'merge':
             return  # one merge per pass, so the next one lands on a fresh main
 
@@ -2780,7 +2813,7 @@ def codex_research(s, items):
 def ask_board_prose(adv, prompt):
     """Plain-prose adviser call for homework reports (avoids json_mode=True wrapping prose in JSON, and spares REVIEW_MODELS quota)."""
     if adv[2] == 'gemini' and GEMINI_KEY:
-        return ask_gemini(prompt, ['gemini-flash-lite-latest', 'gemini-flash-latest'], json_mode=False)
+        return ask_gemini(prompt, ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite'], json_mode=False)
     if adv[0] == 'the local AI':
         return call_local_model('You are a concise scientific researcher. Answer in plain prose paragraphs, not JSON.', prompt, json_mode=False)
     return adv[1](prompt)
@@ -2797,11 +2830,22 @@ def board_do_homework(s, who, ask, state_key='board'):
         if gpt.get(str(i + 1)):
             web, ok = (web + '\n\n' if web else '') + 'ChatGPT web research:\n' + str(gpt[str(i + 1)])[:2500], True
         adv = next((w for w in who if w[0] == h['to']), who[0])
+        rep_prompt = bm.REPORT.format(who=adv[0], by=h.get('by', ''), question=h['question'], domain=h.get('domain', ''), sources=bm.sources_text(papers, web, wiki))
+        synth_note = ''
         try:
-            ans = ask_board_prose(adv, bm.REPORT.format(who=adv[0], by=h.get('by', ''), question=h['question'], domain=h.get('domain', ''), sources=bm.sources_text(papers, web, wiki)))
+            ans = ask_board_prose(adv, rep_prompt)
         except Exception as e:
-            ans = f'(no answer: {str(e)[:100]})'
-        log(f'board homework for {adv[0]}: {len(papers)} PubMed papers, {len(wiki)} Wikipedia articles, web search {"answered" if ok else "not available"}')
+            if not CLOUD and adv[0] != 'the local AI' and LOCAL_ROLE == 'manager':
+                try:
+                    ans = call_local_model('You are a concise scientific researcher. Answer in plain prose paragraphs, not JSON.', rep_prompt, json_mode=False)
+                    synth_note = f' (synthesized by the local AI after {adv[0]} failed: {str(e)[:60]})'
+                except Exception as e2:
+                    ans = f'(no answer: {str(e2)[:100]})'
+                    synth_note = f' (synthesis failed: {str(e)[:60]})'
+            else:
+                ans = f'(no answer: {str(e)[:100]})'
+                synth_note = f' (synthesis failed: {str(e)[:60]})'
+        log(f'board homework for {adv[0]}: {len(papers)} PubMed papers, {len(wiki)} Wikipedia articles, web search {"answered" if ok else "not available"}{synth_note}')
         out.append((dict(h, to=adv[0]), bm.clean_report_text(ans)[:1500]))
         b.setdefault('hw_done', []).append(h['question'])
     b['hw_done'] = b.get('hw_done', [])[-40:]
@@ -3422,6 +3466,17 @@ def file_patrick_request(text, src_url='', plan=False):
     return iss['number'], big
 
 
+def discuss_already_handled(cs, cid):
+    """True when a later comment on #222 already routed or answered this Discuss:/Creative: comment."""
+    mark = f'<!-- discuss-src {cid} -->'
+    idx = next((k for k, c in enumerate(cs) if c.get('id') == cid), -1)
+    later = cs[idx + 1:] if idx >= 0 else []
+    return any(mark in (c.get('body') or '')
+               or 'filed it directly in your own words as **#' in (c.get('body') or '')
+               or 'Routed your creative topic to the **Creative Direction Board**' in (c.get('body') or '')
+               for c in later)
+
+
 def board(s):
     """Polishing Board (#222): code-grounded incremental bugs, units, parsers, and SVG geometry."""
     b = s.setdefault('board', {})
@@ -3465,24 +3520,24 @@ def board(s):
             log(f'board: Patrick picked {nums} from round {round_label}')
     # `Creative: <topic>` on #222 routes straight to the Creative Direction Board
     cask = next((c for c in reversed(cs) if c['id'] > last_round and by_owner(c) and re.match(r'^\W*creative\s*:', c['body'], re.I)), None)
-    if cask and str(cask['id']) != b.get('creative_asked'):
+    if cask and str(cask['id']) != b.get('creative_asked') and not discuss_already_handled(cs, cask['id']):
         b['creative_asked'] = str(cask['id'])
         ctopic = re.sub(r'^\W*creative\s*:\s*', '', cask['body'], flags=re.I).strip()[:4000]
         cnum = ensure_creative_board(s)
         if cnum:
-            post(BOARD, f'Routed your creative topic to the **Creative Direction Board** (#{cnum}).' + SIGN.format(rv.MODEL))
+            post(BOARD, f'<!-- discuss-src {cask["id"]} -->\nRouted your creative topic to the **Creative Direction Board** (#{cnum}).' + SIGN.format(rv.MODEL))
             creative_round(s, ctopic, board_num=cnum)
         return
     # a polishing round on request ("Discuss: ..."), or automatic when BOARD_AUTO is on
     ask = next((c for c in reversed(cs) if c['id'] > last_round and by_owner(c) and re.match(r'^\W*discuss\s*:', c['body'], re.I)), None)
     now = dt.datetime.now()
-    if ask and str(ask['id']) != b.get('asked'):
+    if ask and str(ask['id']) != b.get('asked') and not discuss_already_handled(cs, ask['id']):
         b['asked'] = str(ask['id']); b['at'] = time.time()
-        topic_text = re.sub(r'^\W*discuss\s*:\s*', '', ask['body'], flags=re.I).strip()[:4000]
+        topic_text = re.sub(r'^\W*discuss\s*:', '', ask['body'], flags=re.I).strip()[:4000]
         if rt.is_request_spec(topic_text):
             n, big = file_patrick_request(topic_text, ask.get('html_url', ''))
             if n:
-                post(BOARD, f'This `Discuss:` message is written as a concrete specification, so I filed it directly in your own words as **#{n}** (`from-patrick`, `{"needs-plan" if big else "queued, owner-approved"}`) instead of splitting or debating it on the board.' + SIGN.format(rv.MODEL))
+                post(BOARD, f'<!-- discuss-src {ask["id"]} -->\nThis `Discuss:` message is written as a concrete specification, so I filed it directly in your own words as **#{n}** (`from-patrick`, `{"needs-plan" if big else "queued, owner-approved"}`) instead of splitting or debating it on the board.' + SIGN.format(rv.MODEL))
                 log(f'board: Discuss comment routed to request intake as #{n}')
         else:
             board_round(s, topic_text)  # an open question or topic for the advisers to debate
@@ -4099,7 +4154,7 @@ def self_update(s):
             sys.exit(0)
 
 
-PC_ONLY = {'review', 'claude jobs', 'codex jobs', 'agy jobs', 'openclaw', 'ux', 'creative board', 'update'}  # need the local model, local CLIs or this PC's checkout
+PC_ONLY = {'review', 'claude jobs', 'codex jobs', 'agy jobs', 'openclaw', 'ux', 'board', 'creative board', 'update'}  # need the local model, local CLIs or this PC's checkout
 
 
 def reclaim_pc_jobs(s, pc_age):
@@ -4289,6 +4344,34 @@ def selftest():
     sys.exit(1 if bad else 0)
 
 
+_LOCK_FH = None
+LOCK_PATH = rv._pick_home('.ppb-manager.lock', '.hfb-manager.lock')
+
+
+def acquire_instance_lock(path=None):
+    """Acquire an OS-level non-blocking lock for the persistent PC manager. Released automatically by the OS when the process exits."""
+    global _LOCK_FH
+    p = Path(path or LOCK_PATH)
+    fh = open(p, 'a+b')
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            fh.seek(0, os.SEEK_END)
+            if fh.tell() == 0:
+                fh.write(b'0')
+                fh.flush()
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return False
+    _LOCK_FH = fh
+    return True
+
+
 if __name__ == '__main__':
     if not rv.TOKEN:
         sys.exit(f'No GitHub token. Put {{"token": "..."}} in {rv.CONF}')
@@ -4304,6 +4387,9 @@ if __name__ == '__main__':
         save(st)
         print(f"\n=== Decided by: {who}\n=== Path: {' -> '.join(trail)}\n\n{ans}", flush=True)
         sys.exit()
+    if not DRY and not CLOUD and '--once' not in sys.argv and not acquire_instance_lock():
+        log('manager already running on this PC (lock held), exiting duplicate instance')
+        sys.exit(0)
     rv.MODEL_LOCAL = rv.MODEL
     if CLOUD or (LOCAL_ROLE == 'coder' and GEMINI_KEY):  # no Ollama in the cloud, and in the coder role the local model only writes code: Gemini manages
         rv.ask_model = lambda system, user, diff=None, json_mode=False, temp=None: ask_gemini(system + '\n\n' + rv.memory(diff) + '\n\n' + user, json_mode=json_mode, temp=temp)
