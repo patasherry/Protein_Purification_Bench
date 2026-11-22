@@ -238,8 +238,10 @@ module.exports = async ({github, context, core}) => {
     const openNow = open.filter(i => i.state !== 'closed');
     const mine = openNow.filter(i => labels(i).includes(L.mine) && !labels(i).includes(L.status));
     const awaitingPrs = livePrs.filter(p => labels(p).includes('awaiting-owner'));
+    const claudePrs = livePrs.filter(p => !p.draft && labels(p).includes('for-coordinator') && !labels(p).includes('awaiting-owner') && !labels(p).includes(HAND));
+    const claudePrNums = new Set(claudePrs.map(p => p.number));
     const askYou = openNow.filter(i => !labels(i).includes(L.status) && stateOf(i)[0] === 'you').concat(awaitingPrs);
-    const askClaude = openNow.filter(i => stateOf(i)[0] === 'claude' && !TRACKERS.has(i.number) && !labels(i).includes(L.status) && !labels(i).includes('board-tracker'));
+    const askClaude = openNow.filter(i => stateOf(i)[0] === 'claude' && !TRACKERS.has(i.number) && !labels(i).includes(L.status) && !labels(i).includes('board-tracker')).concat(claudePrs);
     const working = mine.filter(i => stateOf(i)[0] === 'work'), stuck = working.filter(i => days(i.updated_at) >= STUCK_DAYS);
     const hours = t => (Date.now() - Date.parse(t)) / 36e5;
     const handStale = openNow.filter(i => labels(i).includes(HAND) && !prOf.get(i.number) && hours(i.updated_at) >= HAND_HOURS);
@@ -263,10 +265,10 @@ module.exports = async ({github, context, core}) => {
     const body = ['<!-- status-page -->', '# Where your requests stand', '',
       `Rebuilt by the queue leader whenever something changes. To ask for something, open a [new request](https://github.com/${owner}/${repo}/issues/new?template=request.yml) or tell Claude in a chat. A request is filed in your own words and stays on this page until it is done.`, '',
       `## Waiting on you (${askYou.length})`, list(askYou, i => `- ${link(i)}${labels(i).includes('awaiting-owner') ? ' (board PR ready: reply OK or No on the PR)' : labels(i).includes('pitches-ready') ? ' (creative pitches ready: reply OK 1 or No all)' : ''}`), '',
-      `## Waiting on Claude (${askClaude.length})`, askClaude.length ? 'Open a chat with Claude and say "work through my status page".\n' + list(askClaude, i => `- ${link(i)}: ${stateOf(i)[1].toLowerCase()}`) : '_Nothing._', '',
+      `## Waiting on Claude (${askClaude.length})`, askClaude.length ? 'Open a chat with Claude and say "work through my status page".\n' + list(askClaude, i => `- ${link(i)}: ${i.head ? 'pull request waiting on the lead' : stateOf(i)[1].toLowerCase()}`) : '_Nothing._', '',
       ...(handStale.length ? [`## Started by hand, no pull request (${handStale.length})`, `Started in Antigravity ${HAND_HOURS} or more hours ago with no pull request. Open that session in Antigravity: it probably stopped before pushing. Remove \`${HAND}\` and add \`queued\` to let the PC do it instead.\n` + list(handStale, i => `- ${link(i)}: ${Math.round(hours(i.updated_at))} hours`), ''] : []),
       `## Stuck (${stuck.length})`, stuck.length ? `No movement for ${STUCK_DAYS} days or more.\n` + list(stuck, i => `- ${link(i)}: ${stateOf(i)[1].toLowerCase()}, ${days(i.updated_at)} days`) : '_Nothing._', '',
-      `## Your requests in progress (${working.length})`, working.length ? '| Request | State | Days since it moved |\n|---|---|---|\n' + working.map(i => `| ${link(i)} | ${stateOf(i)[1]} | ${days(i.updated_at)} |`).join('\n') : '_Nothing._', '',
+      `## Your requests in progress (${working.length})`, working.length ? '| Request | State | Days since it moved |\n|---|---|---|\n' + working.map(i => { const pr = prOf.get(i.number); return `| ${link(i)} | ${pr && claudePrNums.has(pr) ? `Pull request #${pr} open (waiting on the lead)` : stateOf(i)[1]} | ${days(i.updated_at)} |`; }).join('\n') : '_Nothing._', '',
       `## Done in the last ${DONE_DAYS} days (${done.length}, newest 10 shown)`, list(done.slice(0, 10), i => `- ${link(i)}${i.state_reason === 'not_planned' ? ' (closed without a change)' : ''}`), '',
       `## Workers, last ${SCORE_DAYS} days`, score, '', `- PC manager: ${pcLine}`, `- Antigravity cloud route: ${agLine || 'unknown'}`, `- Parked issues, found by the machine and not started: [${parkedN}](https://github.com/${owner}/${repo}/issues?q=is%3Aissue+is%3Aopen+label%3Aparked). When fewer than ${PARK_LOW} jobs are queued, the oldest one untouched for ${PARK_WAIT_DAYS} days is queued, at most ${PARK_PER_DAY} a day (${out.n} today). Add \`queued\` to start one now, \`${KEEP}\` to hold one, or close it.`].join('\n');
     let page = open.find(i => labels(i).includes(L.status));

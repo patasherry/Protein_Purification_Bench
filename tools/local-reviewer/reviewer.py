@@ -149,9 +149,9 @@ def ask_model(system, user, diff=None, json_mode=False, temp=None):
     mem = memory(diff)
     if mem:
         system = system + '\n\n===== Project notes (background you can rely on) =====\n' + mem
-    opts = {'temperature': float(temp) if temp is not None else 0.2, 'num_ctx': int(cfg.get('num_ctx', 65536))}
-    if json_mode:
-        opts['num_predict'] = int(cfg.get('num_predict', 12288))
+    opts = {'temperature': float(temp) if temp is not None else 0.2,
+            'num_ctx': int(cfg.get('num_ctx', 65536)),
+            'num_predict': int(cfg.get('num_predict', 12288))}
     body = {'model': MODEL, 'stream': False, 'options': opts,
             **({'format': 'json', 'think': bool(cfg.get('ollama_think_json', False))} if json_mode else {}),
             'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]}
@@ -160,21 +160,27 @@ def ask_model(system, user, diff=None, json_mode=False, temp=None):
                                      headers={'Content-Type': 'application/json'})
         with urllib.request.urlopen(req, timeout=600) as r:  # 10 minutes for one local answer, so one slow call can't hold up the loop
             return json.loads(r.read())['message']['content']
-    try:
-        out = _post(body)
-    except urllib.error.HTTPError as e:
-        if e.code == 400 and 'think' in body:
-            body.pop('think', None)
-            out = _post(body)
-        else:
+    def _call(payload):
+        try:
+            return _post(payload)
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and 'think' in payload:
+                payload.pop('think', None)
+                return _post(payload)
             raise
-    # reasoning models (Qwen3, gpt-oss and others) may put their working in <think> tags: keep only the answer
-    out = re.sub(r'<think>.*?</think>', '', out or '', flags=re.S)
-    if '<think>' in out:  # truncated before </think>: keep any JSON object emitted after <think>, else drop the unfinished trace
-        ti = out.find('<think>')
-        bi = out.find('{', ti)
-        out = (out[:ti] + (out[bi:] if bi != -1 and json_mode else ''))
-    return out.strip()
+    def _clean(raw):
+        # reasoning models (Qwen3, gpt-oss and others) may put their working in <think> tags: keep only the answer
+        txt = re.sub(r'<think>.*?</think>', '', raw or '', flags=re.S)
+        if '<think>' in txt:  # truncated before </think>: keep any JSON object emitted after <think>, else drop the unfinished trace
+            ti = txt.find('<think>')
+            bi = txt.find('{', ti)
+            txt = (txt[:ti] + (txt[bi:] if bi != -1 and json_mode else ''))
+        return txt.strip()
+    out = _clean(_call(body))
+    if not out and not json_mode and 'think' not in body:
+        body['think'] = False
+        out = _clean(_call(body))
+    return out
 
 
 DATA = re.compile(r'^(?!.*\.(py|js|mjs)$)(tests/data/|.*\.(csv|tsv|txt|json|zip|asc|dat|gb|dna|png|jpe?g|tiff?|xml)$)', re.I)
@@ -261,6 +267,8 @@ def review(pr):
     user = f"PR #{n}: {pr['title']}\n\nPR description:\n{(pr.get('body') or '')[:6000]}\n\n{issue}\n\nTest report:\n{report[:4000]}\n\nDiff:\n{short}"
     t0 = time.time()
     notes = ask_model(SYSTEM, user, diff)
+    if not notes.strip():
+        raise RuntimeError('local model returned empty review notes')
     f = flags(diff)
     body = (f"{MARK}\n### Local first-pass notes\n_From a local model ({MODEL}) on the owner's PC. Advisory only: it does not approve or merge. "
             f"Reviewed commit `{pr['head']['sha'][:7]}` in {int(time.time() - t0)} s._\n\n")

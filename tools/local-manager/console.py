@@ -8,7 +8,7 @@ It serves the Mission Control page (tools/dashboard/mission-control.html) and th
 Safety: it listens on 127.0.0.1 only, answers only pages it served itself (Host and Origin are checked),
 never calls Claude Code, Codex or Gemini except in check-agents, and changes nothing on GitHub.
 """
-import json, threading, time, urllib.request
+import json, os, socket, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -177,8 +177,16 @@ def start(m, port=8765):
                     return self.send(200, {'answer': f'The local model did not answer: {e}'})
             self.send(404, {'error': 'not found'})
 
+    class _ExclusiveServer(ThreadingHTTPServer):
+        allow_reuse_address = os.name != 'nt'
+
+        def server_bind(self):
+            if os.name == 'nt' and hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
+
     try:
-        srv = ThreadingHTTPServer(('127.0.0.1', port), H)
+        srv = _ExclusiveServer(('127.0.0.1', port), H)
     except OSError as e:
         m.log(f'console not started (port {port} busy: {e})')
         return None
