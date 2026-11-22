@@ -491,6 +491,13 @@ async function theoPeakMassTest() {
     let theoVal = pRow && theoCol >= 0 ? pRow[theoCol] : '';
     T.check('theo_mass/value-with-mw', theoVal === '2390.0 µg', `Peak theoretical mass cell reads '${theoVal}', expected '2390.0 µg' (area 5000 mAU·min, flow 1 mL/min, path 0.2 cm, MKWYYY MW 953.1 Da, ε 9970 M⁻¹cm⁻¹)`);
 
+    const [dlSeq] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#intCsv')]);
+    const csvSeq = fs.readFileSync(await dlSeq.path(), 'utf8').trim().split(/\r?\n/).map(r => r.split(','));
+    const csvTheoCol = csvSeq[0].indexOf('theo_mass_ug');
+    const csvP1 = csvSeq.find(r => r[1] === 'P1');
+    const theoCsvVal = csvP1 && csvTheoCol >= 0 ? csvP1[csvTheoCol] : '';
+    T.check('theo_mass/csv-with-seq', csvTheoCol >= 0 && theoCsvVal === '2390.0', `CSV export has theo_mass_ug column with value '${theoCsvVal}', expected '2390.0'`);
+
     await setOpt(p, 'protSeq', '');
     await h.wait(300);
 
@@ -498,6 +505,13 @@ async function theoPeakMassTest() {
     head = pt[0] || [];
     theoCol = head.findIndex(c => /^Theo\. mass/i.test(c));
     T.check('theo_mass/column-hidden-without-seq', theoCol === -1, 'Theo. mass column disappears when sequence is toggled off');
+
+    const [dlNoSeq] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#intCsv')]);
+    const csvNoSeq = fs.readFileSync(await dlNoSeq.path(), 'utf8').trim().split(/\r?\n/).map(r => r.split(','));
+    const csvTheoColNoSeq = csvNoSeq[0].indexOf('theo_mass_ug');
+    const csvP1NoSeq = csvNoSeq.find(r => r[1] === 'P1');
+    const noSeqTheoVal = csvP1NoSeq && csvTheoColNoSeq >= 0 ? csvP1NoSeq[csvTheoColNoSeq] : '';
+    T.check('theo_mass/csv-without-seq', csvTheoColNoSeq === -1 || noSeqTheoVal === '', `CSV export without sequence has no theo_mass_ug column or column is empty (colIdx=${csvTheoColNoSeq})`);
 
     await setOpt(p, 'protSeq', 'MKWYYY');
     await h.wait(300);
