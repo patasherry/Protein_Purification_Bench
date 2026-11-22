@@ -150,6 +150,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .clone .cl-gel-info{font-size:12px;color:var(--muted);margin:4px 0 2px}
 .clone .cl-gel-acts{display:flex;gap:8px;justify-content:center;margin-top:6px}
 .clone .cl-ag-section{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.clone .cl-ag-subhead{margin:8px 0 2px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);grid-column:1/-1}
 .clone .cl-ag-lanes .row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
 .clone .ag-lane-editor{position:relative;max-width:720px;margin:10px auto 2px;line-height:1}
 .clone .ag-lane-editor img{display:block;width:100%;max-height:280px;object-fit:contain;background:#111}
@@ -12784,11 +12785,12 @@ async function agAutoDetectLanes(s){ const g = s.gel = s.gel || {}, old = (g.lan
 }
 function clAgaroseHtml(s){
   if (!s || s.kind !== 'gel') return '';
-  const g = s.gel = s.gel || {};
+  const noGel = !s.gel, g = s.gel = s.gel || {};
   const hasImg = !!(g && g.image);
   const canRestore = !!(g && g.origImage && (g.image !== g.origImage || g.name !== g.origName || g.replaced));
   const a0 = s.at && s.at[0] ? s.at[0] : null;
   const f0 = a0 ? a0.f : {};
+  if (noGel && hasTxt(f0.expSize)) Object.defineProperty(g, '_legacyExp', {value: String(f0.expSize), configurable: true});
 
   if (!g.lanes || !g.lanes.length) {
     g.lanes = [
@@ -12849,41 +12851,9 @@ function clAgaroseHtml(s){
     </div>
 
     <div class="cl-ag-section cl-ag-meta">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px">
         <h4 style="margin:0;font-size:13px;font-weight:600">Gel Metadata &amp; Publication Figure</h4>
         <button type="button" class="btn primary" id="cl-gen-ag-fig" data-cl="gen-ag-fig">Generate figure</button>
-      </div>
-
-      <div class="cl-grid">
-        <label class="f">Gel date<input type="date" id="ag-date" data-ag="date" value="${esc(date)}"></label>
-        <label class="f">Operator<input type="text" id="ag-operator" data-ag="operator" value="${esc(operator)}" placeholder="Operator name or initials"></label>
-        <label class="f cl-wide">Experiment or PCR run<input type="text" id="ag-experiment" data-ag="experiment" value="${esc(exp)}" placeholder="Experiment or PCR run name"></label>
-        <label class="f">Agarose %<input type="text" inputmode="decimal" id="ag-pct" data-ag="pct" value="${esc(pct)}" placeholder="e.g. 1.5"></label>
-        <label class="f">Running buffer &amp; conc.<input type="text" id="ag-buffer" data-ag="buffer" value="${esc(buffer)}" placeholder="e.g. TAE 1x"></label>
-        <label class="f">DNA stain<input type="text" id="ag-stain" data-ag="stain" value="${esc(stain)}" placeholder="e.g. SYBR Safe"></label>
-        <label class="f">Saved ladder<select id="ag-ladder-preset" data-ag="ladderPreset">${Object.entries(AG_LADDERS).map(([k, v]) => `<option value="${k}"${g.ladderPreset === k ? ' selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
-        <label class="f">Ladder product<input type="text" id="ag-ladder-product" data-ag="ladderProduct" value="${esc(ladderProd)}" placeholder="e.g. 1 kb DNA ladder"></label>
-        <label class="f">Manufacturer<input type="text" id="ag-ladder-manufacturer" data-ag="ladderManufacturer" value="${esc(hasTxt(g.ladderManufacturer) ? String(g.ladderManufacturer) : '')}" placeholder="e.g. New England Biolabs"></label>
-        <label class="f">Ladder catalog #<input type="text" id="ag-ladder-cat" data-ag="ladderCat" value="${esc(ladderCat)}" placeholder="e.g. N3232S"></label>
-        <label class="f cl-wide">Selected ladder fragment sizes (bp or kb)<input type="text" id="ag-ladder-sizes" data-ag="ladderSizes" value="${esc(ladderSizes)}" placeholder="e.g. 100 bp, 0.2 kb, 300 bp"></label>
-        ${agCalibrationHtml(s)}
-        <label class="f">Voltage<input type="text" id="ag-voltage" data-ag="voltage" value="${esc(voltage)}" placeholder="e.g. 120 V"></label>
-        <label class="f">Run duration<input type="text" id="ag-duration" data-ag="duration" value="${esc(duration)}" placeholder="e.g. 45 min"></label>
-        <label class="f">Gel orientation<select id="ag-orientation" data-ag="orientation">
-          <option value="">Not specified</option>
-          <option value="top-to-bottom"${orient === 'top-to-bottom' ? ' selected' : ''}>Top-to-bottom (standard)</option>
-          <option value="bottom-to-top"${orient === 'bottom-to-top' ? ' selected' : ''}>Bottom-to-top</option>
-          <option value="horizontal-left"${orient === 'horizontal-left' ? ' selected' : ''}>Horizontal (left to right)</option>
-          <option value="horizontal-right"${orient === 'horizontal-right' ? ' selected' : ''}>Horizontal (right to left)</option>
-        </select></label>
-        <label class="f">Imaging instrument<input type="text" id="ag-instrument" data-ag="instrument" value="${esc(imager)}" placeholder="e.g. GelDoc, transilluminator"></label>
-        <label class="f">Exposure / acquisition<input type="text" id="ag-exposure" data-ag="exposure" value="${esc(exposure)}" placeholder="e.g. 500 ms, auto"></label>
-        <label class="f">Brightness adjustment<input type="number" id="ag-brightness" data-ag="brightness" data-ag-adj="brightness" value="${esc(brightness)}" placeholder="e.g. 100 or 120"></label>
-        <label class="check cl-wide"><input type="checkbox" id="ag-bottom-to-top" data-ag="bottomToTop"${g.bottomToTop ? ' checked' : ''}> Run bottom-to-top (shows migration-direction arrow)</label>
-        <label class="check cl-wide"><input type="checkbox" id="ag-show-migration" data-ag="showMigration"${g.showMigration ? ' checked' : ''}> Show migration-direction arrow</label>
-        <label class="check cl-wide"><input type="checkbox" id="ag-adj-brightness" data-ag="adjBrightnessContrast"${hasBrightnessAdj ? ' checked' : ''}> Brightness or contrast adjusted</label>
-        <label class="check cl-wide"><input type="checkbox" id="ag-lanes-adjusted" data-ag="lanesCroppedRearranged"${lanesAdj ? ' checked' : ''}> Lanes cropped or rearranged</label>
-        <label class="f cl-wide">Notes and deviations<textarea id="ag-notes" data-ag="notes" rows="2" placeholder="Notes, deviations or observations (e.g. slight smearing in lane 3)">${esc(notes)}</textarea></label>
       </div>
 
       ${(agNormalizeLanes(g), hasImg ? `<div class="ag-lane-editor${g.publicationView ? ' pub' : ''}" id="ag-lane-editor" aria-label="Agarose gel lane editor">
@@ -12899,10 +12869,10 @@ function clAgaroseHtml(s){
       <h4 style="margin:12px 0 6px;font-size:13px;font-weight:600">Lanes Setup</h4>
       <div class="cl-ag-lanes" id="ag-lane-list" style="display:grid;gap:6px">
         ${g.lanes.map((l, idx) => `
-          <div class="row" style="display:flex;gap:6px;align-items:center" data-lane-row="${idx}">
+          <div class="row" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center" data-lane-row="${idx}">
             <span style="font-size:12px;font-weight:600;min-width:24px">#${idx + 1}</span>
-            <input type="text" id="ag-lane-label-${idx}" class="ag-lane-label" data-lane-idx="${idx}" data-lane-k="label" value="${esc(l.label)}" placeholder="Label (e.g. M, PCR-1, NTC)" style="flex:1" aria-label="Lane ${idx + 1} label">
-            <select id="ag-lane-type-${idx}" class="ag-lane-type" data-lane-idx="${idx}" data-lane-k="type" style="flex:1.4" aria-label="Lane ${idx + 1} type">
+            <input type="text" id="ag-lane-label-${idx}" class="ag-lane-label" data-lane-idx="${idx}" data-lane-k="label" value="${esc(l.label)}" placeholder="Label (e.g. M, PCR-1, NTC)" style="flex:1;min-width:72px" aria-label="Lane ${idx + 1} label">
+            <select id="ag-lane-type-${idx}" class="ag-lane-type" data-lane-idx="${idx}" data-lane-k="type" style="flex:1.4;min-width:110px" aria-label="Lane ${idx + 1} type">
               <option value=""${!l.type ? ' selected' : ''}>Unassigned</option>
               <option value="DNA ladder"${l.type === 'DNA ladder' ? ' selected' : ''}>DNA ladder</option>
               <option value="Sample"${l.type === 'Sample' ? ' selected' : ''}>Sample</option>
@@ -12911,7 +12881,7 @@ function clAgaroseHtml(s){
               <option value="No-template control"${l.type === 'No-template control' ? ' selected' : ''}>No-template control</option>
               <option value="Empty"${l.type === 'Empty' ? ' selected' : ''}>Empty</option>
             </select>
-            <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2" aria-label="Lane ${idx + 1} expected size">
+            <input type="text" id="ag-lane-exp-${idx}" class="ag-lane-exp" data-lane-idx="${idx}" data-lane-k="expected" value="${esc(l.expected || '')}" placeholder="Expected size (e.g. 1200 bp)" style="flex:1.2;min-width:96px" aria-label="Lane ${idx + 1} expected size">
             <button type="button" class="mini" id="ag-add-band-${idx}" data-cl="add-ag-band" data-lane-idx="${idx}" title="Add band to lane ${idx + 1}">+ Band</button>
             <button type="button" class="mini" data-cl="split-ag-lane" data-lane-idx="${idx}" title="Split lane ${idx + 1}">Split</button>
             ${idx < g.lanes.length - 1 ? `<button type="button" class="mini" data-cl="merge-ag-lane" data-lane-idx="${idx}" title="Merge lane ${idx + 1} with lane ${idx + 2}">Merge</button>` : ''}
@@ -12922,7 +12892,46 @@ function clAgaroseHtml(s){
       <div style="margin-top:6px">
         <button type="button" class="btn quiet" id="ag-add-lane" data-cl="add-ag-lane">+ Add lane</button>
       </div>
+
+      <div class="cl-grid cl-ag-section">
+        <label class="f cl-wide">Saved ladder<select id="ag-ladder-preset" data-ag="ladderPreset">${Object.entries(AG_LADDERS).map(([k, v]) => `<option value="${k}"${g.ladderPreset === k ? ' selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+        <label class="f cl-wide">Selected ladder fragment sizes (bp or kb)<input type="text" id="ag-ladder-sizes" data-ag="ladderSizes" value="${esc(ladderSizes)}" placeholder="e.g. 100 bp, 0.2 kb, 300 bp"></label>
+        ${agCalibrationHtml(s)}
+      </div>
+
       ${agBandsHtml(s)}
+
+      <div class="cl-grid cl-ag-section">
+        <p class="cl-ag-subhead">Electrophoresis conditions</p>
+        <label class="f">Agarose %<input type="text" inputmode="decimal" id="ag-pct" data-ag="pct" value="${esc(pct)}" placeholder="e.g. 1.5"></label>
+        <label class="f">Running buffer &amp; conc.<input type="text" id="ag-buffer" data-ag="buffer" value="${esc(buffer)}" placeholder="e.g. TAE 1x"></label>
+        <label class="f">DNA stain<input type="text" id="ag-stain" data-ag="stain" value="${esc(stain)}" placeholder="e.g. SYBR Safe"></label>
+        <label class="f">Voltage<input type="text" id="ag-voltage" data-ag="voltage" value="${esc(voltage)}" placeholder="e.g. 120 V"></label>
+        <label class="f">Run duration<input type="text" id="ag-duration" data-ag="duration" value="${esc(duration)}" placeholder="e.g. 45 min"></label>
+        <label class="f">Gel orientation<select id="ag-orientation" data-ag="orientation">
+          <option value="">Not specified</option>
+          <option value="top-to-bottom"${orient === 'top-to-bottom' ? ' selected' : ''}>Top-to-bottom (standard)</option>
+          <option value="bottom-to-top"${orient === 'bottom-to-top' ? ' selected' : ''}>Bottom-to-top</option>
+          <option value="horizontal-left"${orient === 'horizontal-left' ? ' selected' : ''}>Horizontal (left to right)</option>
+          <option value="horizontal-right"${orient === 'horizontal-right' ? ' selected' : ''}>Horizontal (right to left)</option>
+        </select></label>
+        <p class="cl-ag-subhead">Provenance &amp; ladder catalog</p>
+        <label class="f">Gel date<input type="date" id="ag-date" data-ag="date" value="${esc(date)}"></label>
+        <label class="f">Operator<input type="text" id="ag-operator" data-ag="operator" value="${esc(operator)}" placeholder="Operator name or initials"></label>
+        <label class="f cl-wide">Experiment or PCR run<input type="text" id="ag-experiment" data-ag="experiment" value="${esc(exp)}" placeholder="Experiment or PCR run name"></label>
+        <label class="f">Ladder product<input type="text" id="ag-ladder-product" data-ag="ladderProduct" value="${esc(ladderProd)}" placeholder="e.g. 1 kb DNA ladder"></label>
+        <label class="f">Manufacturer<input type="text" id="ag-ladder-manufacturer" data-ag="ladderManufacturer" value="${esc(hasTxt(g.ladderManufacturer) ? String(g.ladderManufacturer) : '')}" placeholder="e.g. New England Biolabs"></label>
+        <label class="f">Ladder catalog #<input type="text" id="ag-ladder-cat" data-ag="ladderCat" value="${esc(ladderCat)}" placeholder="e.g. N3232S"></label>
+        <p class="cl-ag-subhead">Imaging &amp; figure disclosures</p>
+        <label class="f">Imaging instrument<input type="text" id="ag-instrument" data-ag="instrument" value="${esc(imager)}" placeholder="e.g. GelDoc, transilluminator"></label>
+        <label class="f">Exposure / acquisition<input type="text" id="ag-exposure" data-ag="exposure" value="${esc(exposure)}" placeholder="e.g. 500 ms, auto"></label>
+        <label class="f">Brightness adjustment<input type="number" id="ag-brightness" data-ag="brightness" data-ag-adj="brightness" value="${esc(brightness)}" placeholder="e.g. 100 or 120"></label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-bottom-to-top" data-ag="bottomToTop"${g.bottomToTop ? ' checked' : ''}> Run bottom-to-top (shows migration-direction arrow)</label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-show-migration" data-ag="showMigration"${g.showMigration ? ' checked' : ''}> Show migration-direction arrow</label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-adj-brightness" data-ag="adjBrightnessContrast"${hasBrightnessAdj ? ' checked' : ''}> Brightness or contrast adjusted</label>
+        <label class="check cl-wide"><input type="checkbox" id="ag-lanes-adjusted" data-ag="lanesCroppedRearranged"${lanesAdj ? ' checked' : ''}> Lanes cropped or rearranged</label>
+        <label class="f cl-wide">Notes and deviations<textarea id="ag-notes" data-ag="notes" rows="2" placeholder="Notes, deviations or observations (e.g. slight smearing in lane 3)">${esc(notes)}</textarea></label>
+      </div>
     </div>
   </div>`;
 }
@@ -12983,6 +12992,7 @@ async function handleAgaroseGelUpload(file, s){
     keepRaw([file]);
     const rf = rawFiles.find(r => r.name === file.name && r.size === file.size);
     const rawId = rf ? rf.id : '';
+    const prevName = s.gel ? s.gel.name : '';
     if (!s.gel || !s.gel.origImage) {
       s.gel = Object.assign({}, s.gel, {
         name: file.name,
@@ -13008,7 +13018,7 @@ async function handleAgaroseGelUpload(file, s){
     }
     s.gel.adj = null; agCropMode = false; agDrag = null;
     if (s.at && s.at.length) {
-      s.at.forEach(a => { if (a.f && (!a.f.gel || a.f.gel === s.gel.origName)) a.f.gel = s.gel.name; });
+      s.at.forEach(a => { if (a.f && (!a.f.gel || a.f.gel === prevName || a.f.gel === s.gel.origName)) a.f.gel = s.gel.name; });
     }
     if (PROJ) PROJ.editSeq = (PROJ.editSeq || 0) + 1;
     clChanged(true);
@@ -13048,12 +13058,19 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
   const body = (() => {
     if (s.skip) return '<p class="hint">Skipped. Its records are kept.</p>';
     if (s.at.length === 1) {
-      const a = s.at[0], hasMore = hasTxt(a.f._d) || hasTxt(a.f._op) || hasTxt(a.f._dev) || hasTxt(a.f._n);
+      const a = s.at[0], hasMore = hasTxt(a.f._d) || hasTxt(a.f._op) || hasTxt(a.f._dev) || hasTxt(a.f._n), g0 = s.gel;
+      const hasLeg = ['lanes', 'obsSize', 'band', 'bands', 'yield'].some(k => hasTxt(a.f[k]));
+      const fds = s.kind === 'gel' ? clFields(d).filter(fd => hasTxt(a.f[fd.k]) && !(g0 && (
+        (fd.k === 'gel' && (hasTxt(g0.image) || hasTxt(g0.imageId) || a.f.gel === g0.name || a.f.gel === g0.origName)) ||
+        (fd.k === 'pct' && hasTxt(g0.pct) && String(a.f.pct) === String(g0.pct)) ||
+        (fd.k === 'ladder' && (hasTxt(g0.ladderProduct) || hasTxt(g0.ladderPreset)) && (!hasLeg || String(a.f.ladder) === String(g0.ladderProduct))) ||
+        (fd.k === 'expSize' && !hasLeg && g0._legacyExp !== String(a.f.expSize))
+      ))) : clFields(d);
       const ck = (d.ck || []).length ? `<div class="cl-wide cl-ck">${d.ck.map((t, j) => `<label class="check"><input type="checkbox" data-cck="${j}" data-at="${esc(a.id)}"${a.ck[j] ? ' checked' : ''}> ${esc(t)}</label>`).join('')}</div>` : '';
       return `<div class="cl-single"><div class="cl-top"><label class="f">Status<select data-cst="${esc(a.id)}">${Object.keys(CL_ST).map(k => `<option value="${k}"${k === a.st ? ' selected' : ''}>${esc(CL_ST[k])}</option>`).join('')}</select></label>
         ${d.from ? `<label class="f">Comes from<select data-cfrom="${esc(a.id)}"><option value="">${src.length ? 'Not linked' : 'Nothing to link to yet'}</option>${src.map(x => `<option value="${esc(x.a.id)}"${x.a.id === a.from ? ' selected' : ''}>${esc(x.lab)}</option>`).join('')}</select></label>` : ''}</div>
         ${(d.ref || []).map(r => `<p class="hint cl-ref">${esc(r)}</p>`).join('')}${fl.map(f => `<p class="cl-flag">${esc(f)}</p>`).join('')}${agHtml}
-        <div class="cl-grid">${ck}${clFields(d).map(fd => clField(a, fd)).join('')}</div>
+        ${ck || fds.length ? `<div class="cl-grid">${ck}${fds.map(fd => clField(a, fd)).join('')}</div>` : ''}
         <details class="more"${hasMore ? ' open' : ''}><summary>Date, operator and notes</summary><div class="morebody">${clField(a, {k: '_d', l: 'Date', ty: 'd'})}${clField(a, {k: '_op', l: 'Operator', ty: 't'})}${clField(a, {k: '_dev', l: 'Deviations', ty: 'a'})}${clField(a, {k: '_n', l: 'Result and notes', ty: 'a'})}</div></details></div>`;
     }
     return `${(d.ref || []).map(r => `<p class="hint cl-ref">${esc(r)}</p>`).join('')}${fl.map(f => `<p class="cl-flag">${esc(f)}</p>`).join('')}${agHtml}${s.at.map((a, j) => clAttemptHtml(s, a, j)).join('')}`;
