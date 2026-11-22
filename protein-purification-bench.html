@@ -318,7 +318,15 @@ details.paste[open]{display:grid;gap:8px}
 #list.focus .trace.run:not(.sel) > :not(.thead),#list.focus .trace.gelc:not(.sel) > :not(.thead){display:none}
 #list.focus .trace.run:not(.sel),#list.focus .trace.gelc:not(.sel){padding-block:6px;background:transparent}
 #panel[data-sec="1"] > #secPanel{order:-1}
-body:not(.proj) #panel:not([data-kind="struct"]) > #protPanel,body.proj #panel > #protPanel{order:5}
+body:not(.proj) #panel:not([data-kind="struct"]) > #protPanel{order:5}
+body.proj #panel > #protPanel{order:1}
+body.proj #panel > #assayPanel{order:2}
+body.proj #panel > #moreOpts{order:4}
+body.proj #panel[data-sec="1"] > #secPanel{order:5}
+body.proj #panel > .optsec{order:6}
+#protPanel .subhead,[data-sub="pcon"] .subhead{margin:6px 0 -2px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);grid-column:1/-1}
+[data-sub="pcon"] > .subhead + *{margin-top:4px}
+body:not(.searching) #protPanel.notag .tagf,#protPanel .tablewrap:has(> :empty),body.searching #protUse + .subhead:not(:has(+ .row > label:not(.srchmiss))),body.searching #protPanel > .row + .subhead:not(:has(~ label:not(.srchmiss):not([hidden]))),body.searching [data-sub="pcon"] .subhead:not(:has(~ .row:not([style*="none"]) label:not(.srchmiss))){display:none}
 body:not(.proj) #panel[data-kind="struct"] > #protPanel,body:not(.proj) #panel[data-kind="nd"] > #ndPanel{order:-1}
 #panel > .grp:first-child{order:-2}
 #stepSheet{padding-bottom:6px;gap:8px} #stepFoot{padding-block:10px 12px;gap:8px}
@@ -751,34 +759,36 @@ button,input,select,textarea{font-family:inherit}
     <section class="grp clone" id="clonePanel" data-for="none" data-step="clone transform"></section>
     <section class="grp" id="protPanel" data-step="construct">
       <h2>Protein</h2>
-      <label class="f">PDB entry<span class="joined"><input type="text" id="pdbCode" maxlength="4" placeholder="e.g. 3PFN" autocomplete="off" spellcheck="false" aria-label="PDB code"><button type="button" class="btn" id="pdbGet">Load</button></span></label>
-      <p class="hint" id="pdbStatus"></p>
-      <div class="tagseg" id="protView" style="grid-template-columns:1fr 1fr" role="group" aria-label="Figure view" hidden><button type="button" class="tagbtn" data-pview="construct" aria-pressed="false">Construct diagram</button><button type="button" class="tagbtn" data-pview="struct" aria-pressed="true">3D structure</button></div>
-      <input type="file" id="pdbFile" accept=".cif,.mmcif,.pdb,.ent" hidden>
-      <label class="f" id="protEntWrap" hidden>Chain to use for the sequence<select id="protEnt"></select></label>
       <label class="f">Protein sequence, untagged<textarea id="protSeq" data-opt="protSeq" rows="3" spellcheck="false" placeholder="Paste the sequence, or load a PDB entry"></textarea></label>
       <div class="row">
         <label class="f">Tag<select id="o-tagPreset2" data-opt="tagPreset">
           <option value="">No tag</option><option value="sumo">His-SUMO</option><option value="his">His-tag (thrombin site)</option><option value="gst">GST</option><option value="hisgst">His-GST</option><option value="mbp">MBP</option>
           <option value="hismbp">His-MBP</option><option value="trx">His-Trx</option><option value="gfp">GFP</option><option value="custom">Other</option></select></label>
-        <label class="f">Tag end<select id="o-tagPos" data-opt="tagPos"><option value="N">N-terminal</option><option value="C">C-terminal</option></select></label>
+        <label class="f tagf">Tag end<select id="o-tagPos" data-opt="tagPos"><option value="N">N-terminal</option><option value="C">C-terminal</option></select></label>
       </div>
-      <label class="f">Tag sequence<textarea id="tagSeq" data-opt="tagSeq" rows="2" spellcheck="false"></textarea></label>
+      <label class="f tagf">Tag sequence<textarea id="tagSeq" data-opt="tagSeq" rows="2" spellcheck="false"></textarea></label>
       <p class="hint warnc" id="protNote" hidden></p>
       <div class="tablewrap"><table class="itab" id="protTable"></table></div>
       <p class="hint" id="protEps"></p>
-      <p class="hint" id="auInfo"></p>
-      <div class="btns">
-        <button type="button" class="btn" id="protUse" title="Sets the protein and tag sizes for gel matching and the SEC monomer mass">Use for gel and SEC</button>
-        <label class="f">Mass coefficient
+      <button type="button" class="btn" id="protUse" style="justify-self:start" title="Sets the protein and tag sizes for gel matching and the SEC monomer mass">Use for gel and SEC</button>
+      <p class="subhead">Extinction &amp; mass overrides</p>
+      <div class="row">
+        <label class="f" title="Extinction &amp; mass overrides: choose auto, untagged, or tagged mass extinction coefficient">Mass coefficient
           <select id="o-epsMode" data-opt="epsMode">
             <option value="auto">Auto (by step)</option>
             <option value="untagged">Untagged</option>
             <option value="tagged">Tagged</option>
           </select>
         </label>
-        <label class="f">Custom A280 (1 mg/mL)<input type="number" step="any" min="0" id="o-eps" data-opt="eps" placeholder="optional"></label>
+        <label class="f" title="Extinction &amp; mass overrides: custom A280 (1 mg/mL) extinction coefficient">Custom A280 (1 mg/mL)<input type="number" step="any" min="0" id="o-eps" data-opt="eps" placeholder="optional"></label>
       </div>
+      <p class="subhead">3D structure (optional)</p>
+      <label class="f" title="3D structure (optional): load a PDB entry or .cif/.pdb file">PDB entry<span class="joined"><input type="text" id="pdbCode" maxlength="4" placeholder="e.g. 3PFN" autocomplete="off" spellcheck="false" aria-label="PDB code"><button type="button" class="btn" id="pdbGet">Load</button></span></label>
+      <input type="file" id="pdbFile" accept=".cif,.mmcif,.pdb,.ent" hidden>
+      <p class="hint" id="pdbStatus"></p>
+      <div class="tagseg" id="protView" style="grid-template-columns:1fr 1fr" role="group" aria-label="Figure view" hidden><button type="button" class="tagbtn" data-pview="construct" aria-pressed="false">Construct diagram</button><button type="button" class="tagbtn" data-pview="struct" aria-pressed="true">3D structure</button></div>
+      <label class="f" id="protEntWrap" hidden>Chain to use for the sequence<select id="protEnt"></select></label>
+      <p class="hint" id="auInfo"></p>
       <p class="hint">Mass is the average mass of the chain. pI uses the Bjellqvist pK values, the same as ExPASy ProtParam. A280 of a 1 mg/mL solution assumes all cysteines reduced (5500 per Trp, 1490 per Tyr). The asymmetric unit mass adds every entity in the deposited model except water.</p>
       <p class="hint">If this view cannot reach the PDB, download the entry's .cif file from rcsb.org and drop it here or anywhere on the page.</p>
     </section>
@@ -833,9 +843,9 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Promoter<select id="pr-promoter" data-prep="promoter"><option value="T7">T7</option><option value="T7lac">T7lac</option><option value="tac">tac</option><option value="trc">trc</option><option value="araBAD">araBAD</option><option value="rhaBAD">rhaBAD</option></select></label>
           <label class="f">Resistance<select id="pr-resist" data-prep="resist"><option value="">Not shown</option><option value="Kan">Kanamycin</option><option value="Amp">Ampicillin</option><option value="Cm">Chloramphenicol</option><option value="Spec">Spectinomycin</option><option value="Tet">Tetracycline</option></select></label>
         </div>
-        <div class="row" id="prLineage">
-          <label class="f">Parent construct<input type="text" id="pr-parentConstructId" data-prep="parentConstructId" placeholder="e.g. c1 (empty if root)" spellcheck="false"></label>
-          <label class="f">Derived constructs<input type="text" id="pr-derivedConstructIds" data-prep="derivedConstructIds" placeholder="e.g. c2, c3" spellcheck="false"></label>
+        <p class="subhead">Lineage &amp; cloning record (optional)</p><div class="row" id="prLineage">
+          <label class="f" title="Lineage &amp; cloning record (optional)">Parent construct<input type="text" id="pr-parentConstructId" data-prep="parentConstructId" placeholder="e.g. c1 (empty if root)" spellcheck="false"></label>
+          <label class="f" title="Lineage &amp; cloning record (optional)">Derived constructs<input type="text" id="pr-derivedConstructIds" data-prep="derivedConstructIds" placeholder="e.g. c2, c3" spellcheck="false"></label>
         </div>
         <div class="row" style="margin-top:6px">
           <label class="f">Cloning method record template<select id="pr-cMethod" data-prep="cMethod" title="Construct provenance record template (not scientific validation)"><option value="plasmid">Plasmid / Custom (Record)</option><option value="digest">Restriction digest (Record)</option><option value="overlap">Overlap extension / Gibson (Record)</option><option value="recomb">Recombination (Gateway, etc.) (Record)</option></select></label>
@@ -7566,7 +7576,7 @@ function renderProt(){
   const put = (sel, v) => { const e = $(sel); if (e && e !== document.activeElement && e.value !== v) e.value = v; };
   put('#pdbCode', opt.pdbCode || ''); put('#protSeq', opt.protSeq || ''); put('#tagSeq', opt.tagSeq || '');
   $('#tagSeq').placeholder = TAG_SEQ[opt.tagPreset] || "Paste the tag's sequence, including any linker and protease site";
-
+  $('#protPanel').classList.toggle('notag', !opt.tagPreset && !cleanSeq(opt.tagSeq) && !($('#tagSeq').value || '').trim());
   const epsSel = $('#o-epsMode');
   if (epsSel) {
     const F = protForms();
@@ -12717,7 +12727,7 @@ function stepList(){
   return L;
 }
 const STEP_LANE = k => k === 'expr' || k === 'lysis' || k === 'cleave' ? k : k.startsWith('run:') || k.startsWith('man:') ? k.slice(4) : null;
-const STEP_WHAT = {construct: 'Construct records (design and provenance records rather than scientific validation). Paste the protein sequence, or load the plasmid\'s GenBank file to draw the construct.',
+const STEP_WHAT = {construct: 'Paste the protein sequence, or load the plasmid\'s GenBank file to draw the construct.',
   clone: 'Record each attempt as you go. A failed attempt stays in the record, and a stage can be skipped or repeated.',
   transform: 'Plasmid, strain and selection, or the glycerol stock you started from.',
   expr: 'Starter culture, induction and harvest. An expression gel (U, I, S, P) is optional.',
