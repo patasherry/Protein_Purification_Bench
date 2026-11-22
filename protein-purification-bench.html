@@ -1505,7 +1505,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   secStds:false, targetName:'', taggedName:'', targetArrow:false, tagCounts:true, gelPos:'below', gelAlign:'center', gelScale:100, laneMark:'fill', gelView:'focus', ndNorm:'raw', ndFrom:240, ndCorr:true, ndFig:'conc', ndA340Warn:0.1, gelSpan:2.5, gelFocusKda:'', gelGap:0, gelSide:60, runGel:true, connectors:true, linkFrom:'axis', laneColors:true, laneAlpha:0.55,
   rxlabel:'Volume (mL)', rylabel:'Absorbance (mAU)', y2grad:'Buffer B (%)', y2cond:'Conductivity (mS/cm)',
   secCals: null, secMono:'', secLabel:'mw', secMarks:'void', ovPeakText:'x', ovSecCal:'',
-  intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', epsMode:'auto', path:2,
+  intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', epsMode:'auto', path:2, pathlength:0.2,
   wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
   preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600};
@@ -1944,6 +1944,7 @@ function makeTrace(name, p, ex){
     xc, yc, offset: 0, scale: 1, xshift: 0, peaks: [], ex: !!ex, xu: mx ? mx[1] : null, yu: my ? my[1] : null, source: p.source || null};
 }
 function makeRun(p){ const r = Object.assign({id: 'r' + (uid++), color: RUN_COLORS.uv, uvi: 0, xmin:'', xmax:'', ymin:'', ymax:'', shade:'', inWf: true, integ: [], secMode: 'auto'}, p);
+  if (r.pathlength == null) r.pathlength = (r.path != null && r.path !== '') ? numOr(r.path, 2) / 10 : numOr(opt.pathlength, 0.2);
   r.secAuto = secGuess(r); applyInjShift(r);
   /* size exclusion opens on the fractions around its peaks */
   if (r.secAuto && r.crop === undefined) r.crop = 'peaks';
@@ -2292,8 +2293,9 @@ function secLabel(info, kind){
 /* mg from a UV area needs the 280 nm curve and volume on the x axis (minutes are turned into mL with the flow). massWhy says what is missing, '' when nothing. A path not in the file is assumed (opt.path, 2 mm) and flagged by pathAssumed */
 const uvFlow = run => numOr(run && run.mFlow, numOr(run && run.flowAuto, 0));
 const massWhy = run => { if (!run || !run.uvs) return 'no UV trace'; const w = uvWl(uvOf(run)); return w && w !== '280' ? `the selected UV curve is ${w} nm, not 280 nm` : xUnit(run) === 'min' && !(uvFlow(run) > 0) ? 'the x axis is in minutes and the flow rate is not known (enter it under Flow)' : ''; };
-const pathAssumed = run => !!run && !(numOr(run.path, 0) > 0);
-const massOf = (area, run) => { if (run && massWhy(run)) return null; const E = run && typeof ndEpsFor === 'function' ? ndEpsFor(run.id) : null, e = E ? E.e : numOr(opt.eps, 0), p = numOr(run && run.path, numOr(opt.path, 2)), a = run && xUnit(run) === 'min' ? area*uvFlow(run) : volMl(area, run); return e > 0 && p > 0 ? (a/1000)/(e*p/10) : null; };
+const runPathlength = r => numOr(r && r.pathlength, numOr(r && r.path ? numOr(r.path, 0)/10 : null, numOr(opt.pathlength, 0.2)));
+const pathAssumed = run => !!run && !(numOr(run.path, 0) > 0) && !(numOr(run.pathlength, 0) > 0);
+const massOf = (area, run) => { if (run && massWhy(run)) return null; const E = run && typeof ndEpsFor === 'function' ? ndEpsFor(run.id) : null, e = E ? E.e : numOr(opt.eps, 0), pl = runPathlength(run), a = run && xUnit(run) === 'min' ? area*uvFlow(run) : volMl(area, run); return e > 0 && pl > 0 ? (a/1000)/(e*pl) : null; };
 /* least-squares fit of a sum of Gaussians (Levenberg-Marquardt). p = [H1, mu1, s1, H2, mu2, s2, ...] */
 function fitGaussians(xs, ys, p, lo, hi, smin){
   p = p.slice(); const n = p.length, m = xs.length, smax = Math.max(smin*2, hi - lo);
@@ -5540,7 +5542,7 @@ function renderList(){
     const uvSel = r.uvs.length > 1 ? `<label class="f">UV curve<select data-k="uvi" id="uvi${r.id}">${r.uvs.map((u,i)=>`<option value="${i}" ${r.uvi===i?'selected':''}>${esc(u.name)}</option>`).join('')}</select></label>` : '';
     const nGel = gels.filter(g => lanesFor(g, r.id).length).length;
     const cardType = `<label class="eye"><input type="checkbox" id="wf${r.id}" data-k="inWf" ${r.inWf ? 'checked' : ''}>In workflow</label><label class="eye" title="Treat this run as size exclusion: peaks are found and labelled by elution volume"><input type="checkbox" id="sec${r.id}" data-k="secOn" ${isSec(r) ? 'checked' : ''}>Size exclusion</label>`;
-    return `<div class="trace run" data-id="${r.id}" data-kind="run">
+    return `<div class="trace run" data-id="${r.id}" data-kind="run" data-pathlength="${runPathlength(r)}">
       <div class="thead r">
         <input type="color" id="c${r.id}" data-k="color" value="${r.color}" aria-label="UV trace color">
         <input type="text" id="n${r.id}" data-k="name" value="${esc(r.name)}" aria-label="Run name" title="${esc(r.name)}">
@@ -5570,7 +5572,7 @@ function renderList(){
         ${f('mLoad', 'Sample loaded', steps0(r) ? 'e.g. 80 mL clarified lysate' : isSec(r) ? 'e.g. 0.5 mL at 10 mg/mL' : 'e.g. the dialyzed pool, 30 mL')}
         ${isSec(r) ? '' : f('mWash', 'Wash', 'e.g. 10 CV buffer A with 40 mM imidazole')}
         ${f('mGrad', isSec(r) ? 'Elution' : 'Gradient or elution', isSec(r) ? 'e.g. isocratic, 1.2 CV' : 'e.g. linear 0 to 100% B over 20 CV')}
-        ${f('mInst', 'Instrument', 'e.g. ÄKTA pure 25')}
+        <div class="row">${f('mInst', 'Instrument', 'e.g. ÄKTA pure 25')}<label class="f">Optical cell<select id="cell${r.id}" data-k="pathlength"><option value="0.2"${Math.abs(runPathlength(r) - 0.2) < 0.05 ? ' selected' : ''}>2 mm (0.2 cm, ÄKTA standard)</option><option value="1.0"${Math.abs(runPathlength(r) - 1.0) < 0.05 ? ' selected' : ''}>1 cm (10 mm, HPLC / cuvette)</option>${Math.abs(runPathlength(r) - 0.2) >= 0.05 && Math.abs(runPathlength(r) - 1.0) >= 0.05 ? `<option value="${runPathlength(r)}" selected>${fmtAuto(runPathlength(r))} cm</option>` : ''}</select></label></div>
         ${f('mOther', 'Other details', 'e.g. 0.22 µm filtered')}</details>`; })()}
       ${r.inWf ? `<details class="cardtext"${r.poolCap || r.note ? ' open' : ''}><summary>Figure text</summary><label class="f">Title in figure<input type="text" id="sn${r.id}" data-k="stepName" value="${esc(r.stepName || '')}" placeholder="${esc(opt.wfTitle === 'name' ? r.name : guessStep(r) || r.name)}"></label>${r.grad && r.grad.xs && r.grad.xs.length ? `<label class="f">Right axis as concentration<input type="text" id="bb${r.id}" data-k="bufB" value="${esc(r.bufB || '')}" placeholder="${esc((a => a ? `auto: ${fmtAuto(a.a)} to ${fmtAuto(a.c)} ${a.u} ${a.name}` : 'e.g. 500 mM imidazole')(axisConc(Object.assign({}, r, {bufB: ''}))))}" title="Buffer B's strength, e.g. 500 mM imidazole. Left empty, it is read from the buffers under Run conditions"></label>` : ''}<label class="f">Pool caption<input type="text" id="pcap${r.id}" data-k="poolCap" value="${esc(r.poolCap || '')}" placeholder="${esc(poolCaption(Object.assign({}, r, {poolCap: ''})) || 'none')}" title="Printed over the pooled fractions. Leave empty for the automatic one, type - for none"></label>${runs.filter(x => x.inWf).slice(-1)[0] !== r ? `<label class="f">Note on the arrow to the next step<input type="text" id="nt${r.id}" data-k="note" value="${esc(r.note || '')}" placeholder="e.g. SUMO protease, 4 °C overnight"></label>` : ''}</details>` : ''}
       ${PROJ ? `<details class="cardtext"><summary>Layout</summary><div class="cardopts">${cardType}</div>${r.inWf ? `<div class="cardopts wfsize"><label class="eye" title="Width of this run's panel in the workflow figure, relative to the others">Width in figure ×<input type="number" step="0.1" min="0.2" id="pw${r.id}" data-k="wfW" value="${numOr(r.wfW, 1)}" class="tiny"></label>${gelsFor(r).length ? `<label class="eye" title="Size of this run's gel in the workflow figure. It keeps the photo's proportions, and widens the panel if it needs room">Gel scale ×<input type="number" step="0.1" min="0.3" max="3" id="gz${r.id}" data-k="gelZ" value="${numOr(r.gelZ, 1)}" class="tiny"></label>` : ''}</div>` : ''}</details>` : r.inWf ? `<div class="cardopts wfsize"><label class="eye" title="Width of this run's panel in the workflow figure, relative to the others">Width in figure ×<input type="number" step="0.1" min="0.2" id="pw${r.id}" data-k="wfW" value="${numOr(r.wfW, 1)}" class="tiny"></label>${gelsFor(r).length ? `<label class="eye" title="Size of this run's gel in the workflow figure. It keeps the photo's proportions, and widens the panel if it needs room">Gel scale ×<input type="number" step="0.1" min="0.3" max="3" id="gz${r.id}" data-k="gelZ" value="${numOr(r.gelZ, 1)}" class="tiny"></label>` : ''}</div>` : ''}
@@ -5629,6 +5631,8 @@ list.addEventListener('input', e => {
   else if (k === 'gelZ') t[k] = Math.min(3, Math.max(0.3, numOr(el.value, 1)));
   else if (k === 'scale') t[k] = numOr(el.value, 1);
   else if (k === 'runId' && t.src) { const asg = gelLabels(t).map((_, i) => laneAssign(t, i)); t.runId = el.value; t.assign = asg.map(a => a === 'marker' ? 'marker' : el.value); if (curGel() === t) renderLaneTable(); }
+  else if (k === 'pathlength') { t.pathlength = parseFloat(el.value); t.path = +(t.pathlength * 10).toFixed(4); const up = document.getElementById('up' + t.id); if (up) up.value = t.path; }
+  else if (k === 'path') { t.path = el.value; if (isFinite(+el.value) && +el.value > 0) { t.pathlength = +(+el.value / 10).toFixed(4); const sel = document.getElementById('cell' + t.id); if (sel) sel.value = String(t.pathlength); } }
   else t[k] = el.value;
   if (k === 'name' || COND_KEYS.includes(k)) syncImacCondWarnings(t, el.closest('.trace'));
   if (k === 'crop') { t.xmin = t.xmax = ''; }
@@ -5639,7 +5643,26 @@ list.addEventListener('input', e => {
 list.addEventListener('change', e => {
   if (e.target.dataset.k === 'peaks') { const t = itemOf(e.target); if (t) { const sh = +t.xshift || 0; t.peaks = parsePeaks(e.target.value).map(p => ({x: p.x - sh, label: p.label})); renderList(); render(); return; } }
   if (['poolConc', 'poolFinalVol'].includes(e.target.dataset.k)) { const t = itemOf(e.target); if (t) measToStep(t); }
-  if (['poolConc', 'poolFinalVol', 'path'].includes(e.target.dataset.k)) { setTimeout(() => { const f = document.activeElement && document.activeElement.id; renderList(); render(); const n = f && document.getElementById(f); if (n && n !== document.activeElement) n.focus(); }, 0); return; } if (e.target.dataset.k === 'xc' || e.target.dataset.k === 'yc') { const t = itemOf(e.target); if (t) { t.peaks = []; renderList(); render(); } } });
+  if (['poolConc', 'poolFinalVol', 'path', 'pathlength'].includes(e.target.dataset.k)) {
+    const t = itemOf(e.target);
+    if (t) {
+      if (e.target.dataset.k === 'path') {
+        if (isFinite(+e.target.value) && +e.target.value > 0) {
+          t.path = +e.target.value;
+          t.pathlength = +(+e.target.value / 10).toFixed(4);
+          const sel = document.getElementById('cell' + t.id);
+          if (sel) sel.value = String(t.pathlength);
+        }
+      } else if (e.target.dataset.k === 'pathlength') {
+        t.pathlength = parseFloat(e.target.value);
+        t.path = +(t.pathlength * 10).toFixed(4);
+        const up = document.getElementById('up' + t.id);
+        if (up) up.value = t.path;
+      }
+    }
+    setTimeout(() => { const f = document.activeElement && document.activeElement.id; renderList(); render(); const n = f && document.getElementById(f); if (n && n !== document.activeElement) n.focus(); }, 0);
+    return;
+  } if (e.target.dataset.k === 'xc' || e.target.dataset.k === 'yc') { const t = itemOf(e.target); if (t) { t.peaks = []; renderList(); render(); } } });
 list.addEventListener('click', e => {
   const c = e.target.closest('.trace'); if (!c) return;
   const b = e.target.closest('[data-act]');
@@ -7491,6 +7514,9 @@ function cleanProject(d){
   const keep = (list, ok) => { const a = Array.isArray(list) ? list : []; const out = a.filter(ok); skipped += a.length - out.length; return out; };
   d.runs = keep(d.runs, r => isO(r) && r.id && Array.isArray(r.uvs) && r.uvs.length && r.uvs.every(hasXY));
   d.runs.forEach(r => {
+    if (r.pathlength == null) {
+      r.pathlength = (r.path != null && r.path !== '') ? numOr(r.path, 2) / 10 : 0.2;
+    }
     if (!Object.prototype.hasOwnProperty.call(r, 'injX') && Object.prototype.hasOwnProperty.call(r, 'injShift')) {
       r.injX = r.injShift;
     }
@@ -7524,7 +7550,7 @@ async function openProject(data, name, noUndo){
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
       const g = Object.assign(makeGel(sg.name, c), sg); delete g.image;
       Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false}); processGel(g); ng.push(g); } catch (e) { failedGels.push(sg); toast(`Could not restore gel ${sg.name}`); } }
-  runs = data.runs.map(r => { if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return r; }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); if (!Array.isArray(prep.manual)) prep.manual = []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} }; canonClones(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = data.nanodrop || []; ndMigrate(); ndUid = ndSamples.length + 1 + Date.now() % 1000;
+  runs = data.runs.map(r => { if (r.pathlength == null) r.pathlength = (r.path != null && r.path !== '') ? numOr(r.path, 2) / 10 : 0.2; if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return r; }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); if (!Array.isArray(prep.manual)) prep.manual = []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} }; canonClones(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = data.nanodrop || []; ndMigrate(); ndUid = ndSamples.length + 1 + Date.now() % 1000;
   srcDiag = (data.srcDiag && typeof data.srcDiag === 'object' && !Array.isArray(data.srcDiag)) ? Object.assign({}, data.srcDiag) : {};
   /* the project's settings apply, but calibrations and known proteins kept in this browser are merged rather than replaced */
   if (data.opt) { const dopt = data.opt, myCals = secCals().slice(), myKnown = Array.isArray(opt.known) ? opt.known.slice() : null, myQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : [], myQDel = Array.isArray(opt.myQuickDel) ? opt.myQuickDel.slice() : []; Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);

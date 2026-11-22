@@ -342,6 +342,70 @@ async function peakSeparator() {
   }
 }
 
+// Issue #1634: Theoretical Peak Mass: pathlength default and selector
+async function opticalCellPathlength() {
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    await h.newProject('optical cell pathlength');
+    await h.addRun(path.join(CH, 'imac_HisTrap_FF_1mL_step_u7.csv'));
+    await p.waitForTimeout(400);
+
+    const card = p.locator('.trace.run').first();
+    await card.click();
+    await p.waitForTimeout(200);
+
+    await p.evaluate(() => {
+      const d = document.querySelector('.trace.run.sel details.runcond');
+      if (d) d.open = true;
+    });
+
+    const cellSel = p.locator('.trace.run.sel select[data-k="pathlength"]');
+    T.check('cell_path/selector_exists', (await cellSel.count()) > 0, 'optical cell selector exists');
+
+    // 1. Asserts effective pathlength used in calculations is 0.2 cm
+    const defaultVal = (await cellSel.count()) > 0 ? await cellSel.inputValue() : '';
+    const effPath = await p.evaluate(() => {
+      const el = document.querySelector('.trace.run.sel');
+      return el ? parseFloat(el.dataset.pathlength) : null;
+    });
+    T.check('cell_path/default_0.2cm', defaultVal === '0.2' && effPath === 0.2, `default cell selector is ${defaultVal}, effective pathlength is ${effPath} cm (expected 0.2)`);
+
+    // Verify calculation uses 0.2 cm: set extinction coefficient and check calculated mass
+    await setOpt(p, 'o-eps', '1.0');
+    await h.pool('T1-T3');
+    await p.waitForTimeout(300);
+
+    const pt0 = await h.peakTable();
+    const poolRow0 = pt0.find(r => /^pool/i.test(r[0]));
+    const mg0 = poolRow0 ? num(poolRow0[poolRow0.length - 2]) : null;
+
+    // 2. Select 1 cm cell option and assert run's pathlength updates to 1.0
+    if ((await cellSel.count()) > 0) {
+      await cellSel.selectOption('1.0');
+      await cellSel.dispatchEvent('input');
+      await cellSel.dispatchEvent('change');
+      await p.waitForTimeout(400);
+    }
+
+    const updatedVal = (await cellSel.count()) > 0 ? await cellSel.inputValue() : '';
+    const updatedEffPath = await p.evaluate(() => {
+      const el = document.querySelector('.trace.run.sel');
+      return el ? parseFloat(el.dataset.pathlength) : null;
+    });
+    T.check('cell_path/select_1cm_updates_1.0', updatedVal === '1.0' && updatedEffPath === 1.0, `updated cell selector is ${updatedVal}, run's pathlength is ${updatedEffPath} (expected 1.0)`);
+
+    const pt1 = await h.peakTable();
+    const poolRow1 = pt1.find(r => /^pool/i.test(r[0]));
+    const mg1 = poolRow1 ? num(poolRow1[poolRow1.length - 2]) : null;
+    if (mg0 != null && mg1 != null) {
+      T.check('cell_path/calculation_scaled_5x', Math.abs(mg0 / mg1 - 5.0) < 0.1, `mass with 0.2cm (${mg0} mg) is 5x mass with 1.0cm (${mg1} mg)`);
+    }
+  } finally {
+    T.check('cell_path/no_page_errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -351,5 +415,6 @@ async function peakSeparator() {
   }
   await T.t('zoom_to_peak_button', zoomToPeakButton);
   await T.t('peak_separator', peakSeparator);
+  await T.t('optical_cell_pathlength', opticalCellPathlength);
   T.done();
 })();
