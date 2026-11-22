@@ -509,6 +509,74 @@ async function theoPeakMassTest() {
     head = pt[0] || [];
     theoCol = head.findIndex(c => /^Theo\. mass/i.test(c));
     T.check('theo_mass/column-hidden-without-flow', theoCol === -1, 'Theo. mass column disappears when flow is cleared');
+
+    // Restore flow rate calibrated to 500.0 µg theoretical mass
+    const targetFlow = String(+((500 * 9970 * 0.2) / (5000 * 953.123)).toFixed(6));
+    await flowInput.fill(targetFlow);
+    await flowInput.dispatchEvent('change');
+    await h.wait(300);
+
+    pt = await h.peakTable();
+    head = pt[0] || [];
+    theoCol = head.findIndex(c => /^Theo\. mass/i.test(c));
+    pRow = pt.slice(1).find(r => !/^pool/i.test(r[0]));
+    let theo500 = pRow && theoCol >= 0 ? pRow[theoCol] : '';
+    T.check('theo_mass/target-500ug', theo500 === '500.0 µg', `Theoretical mass set to '${theo500}', expected '500.0 µg'`);
+
+    // Pool the peak and enter NanoDrop mass 400 µg (calibrated to 400.0 µg peak share) via Concentrate step
+    await h.pool('F1-F21');
+    await h.wait(300);
+    await p.click('#tl [data-addmenu]');
+    await p.click('#tl [data-addstep=conc]');
+    await h.wait(400);
+    const openFolds = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+    const concInp = p.locator('#btw-conc');
+    await openFolds(concInp);
+    await concInp.fill('0.40082');
+    await concInp.dispatchEvent('input');
+    await concInp.dispatchEvent('change');
+    const vOutInp = p.locator('#btw-vOut');
+    await openFolds(vOutInp);
+    await vOutInp.fill('1');
+    await vOutInp.dispatchEvent('input');
+    await vOutInp.dispatchEvent('change');
+    await h.wait(400);
+
+    await h.step(runStep.k);
+    await h.wait(400);
+
+    const badge = p.locator('#intTable .delta-badge').first();
+    const hasBadge = (await badge.count()) > 0;
+    const badgeText = hasBadge ? (await badge.innerText()).trim() : '';
+    const isAmber = hasBadge && (await badge.evaluate(el => {
+      const cs = getComputedStyle(el);
+      return el.classList.contains('amber') || cs.color.includes('138, 90') || cs.color.includes('226, 180');
+    }));
+    T.check('theo_mass/nanodrop-comparison-badge', badgeText === '−20 %' && isAmber, `Badge text '${badgeText}', amber=${isAmber}, expected '−20 %' in amber`);
+
+    pt = await h.peakTable();
+    head = pt[0] || [];
+    theoCol = head.findIndex(c => /^Theo\. mass/i.test(c));
+    pRow = pt.slice(1).find(r => !/^pool/i.test(r[0]));
+    const fullVal = pRow && theoCol >= 0 ? pRow[theoCol] : '';
+    T.check('theo_mass/side-by-side-values', fullVal.includes('500.0 µg') && fullVal.includes('400.0 µg'), `Cell text '${fullVal}', expected both 500.0 µg and 400.0 µg side by side`);
+
+    // Disagreement below 20% (450 µg, -10%) does not turn amber
+    const concStep = (await h.timeline()).find(x => /^btw:/.test(x.k));
+    if (concStep) await h.step(concStep.k);
+    await h.wait(300);
+    await concInp.fill('0.45');
+    await concInp.dispatchEvent('input');
+    await concInp.dispatchEvent('change');
+    await h.wait(400);
+
+    await h.step(runStep.k);
+    await h.wait(400);
+    const badge10 = p.locator('#intTable .delta-badge').first();
+    const badge10Has = (await badge10.count()) > 0;
+    const badge10Text = badge10Has ? (await badge10.innerText()).trim() : '';
+    const isAmber10 = badge10Has && (await badge10.evaluate(el => el.classList.contains('amber')));
+    T.check('theo_mass/badge-below-20pct-not-amber', badge10Text === '−10 %' && !isAmber10, `Badge text '${badge10Text}', amber=${isAmber10}, expected '−10 %' without amber`);
   } finally {
     T.check('theo_mass/no-page-errors', !errs.length, errs.join(' | '));
     await close();
