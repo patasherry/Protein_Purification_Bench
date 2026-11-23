@@ -5847,6 +5847,8 @@ function methodsText(){
     P.push(t); });
   if (prep.on && (hasTxt(prep.store) || hasTxt(prep.finBuffer))) { const fb = v(prep.finBuffer), stx = v(prep.store);
     P.push(fb ? `The final sample was in ${fb.replace(/\.$/, '')}.${stx ? ` Storage: ${lc(stx).replace(/\.$/, '')}.` : ''}` : `Final sample and storage: ${lc(stx).replace(/\.$/, '')}.`); }
+  const actMR = assays.length ? assayMethodsParts(lc, v) : null;
+  if (actMR && actMR.P.length) P.push(...actMR.P);
   /* results, kept apart from the methods, with how each number was measured */
   const R = [], q = prep.on ? exprQuant() : {}, cq = prep.cleave ? cleaveQuant() : null, ys = finalYields();
   if (q.level || q.sol) R.push(`By SDS-PAGE, the tagged protein was about ${q.level ? `${fmt(q.level.pct, 0)}% of total cell protein` : ''}${q.level && q.sol ? ' and about ' : ''}${q.sol ? `${fmt(q.sol.pct, 0)}% soluble` : ''}.`);
@@ -5864,8 +5866,69 @@ function methodsText(){
     if (fc !== null && fc >= 0 && fv !== null && fv >= 0) R.push(`The final sample was ${fmtAuto(fc)} mg/mL in ${fmtAuto(fv)} mL, ${sig2(fc*fv)} mg${cL > 0 ? ` or ${sig2(fc*fv/cL)} mg per L of culture` : ''}${cG > 0 ? (cL > 0 ? ` (${sig2(fc*fv/cG)} mg per g of wet cell pellet)` : ` or ${sig2(fc*fv/cG)} mg per g of wet cell pellet`) : ''}${ra ? `, with an A260/A280 of ${ra}` : ''}.`);
     else if (ra) R.push(`The final sample had an A260/A280 of ${ra}.`);
     const yy = finalYield(); if (yy && yy.meas && yy.loaded && yy.mg > yy.loaded.mg*1.05) R.push(`The final sample (${sig2(yy.mg)} mg) is more than the ${sig2(yy.loaded.mg)} mg loaded onto ${lc(stepTitle(yy.loaded.r))} [check the UV path and the concentration readings].`);
-    [['qcPurity', 'Purity'], ['qcMass', 'Intact mass'], ['qcActivity', 'Activity and other checks']].forEach(([k, l]) => { if (hasTxt(prep[k])) R.push(`${l}: ${v(prep[k]).replace(/\.$/, '')}${k === 'qcPurity' && yy && yy.purTyped ? ' [no gel of the last pool attached, check]' : ''}.`); }); }
+    [['qcPurity', 'Purity'], ['qcMass', 'Intact mass']].concat(assays.length ? [] : [['qcActivity', 'Activity and other checks']]).forEach(([k, l]) => { if (hasTxt(prep[k])) R.push(`${l}: ${v(prep[k]).replace(/\.$/, '')}${k === 'qcPurity' && yy && yy.purTyped ? ' [no gel of the last pool attached, check]' : ''}.`); }); }
+  if (actMR && actMR.R.length) R.push(...actMR.R);
   return (P.join('\n\n') + (R.length ? '\n\nResults: ' + R.join(' ') : '')).replace(/\(, /g, '(').replace(/[ \t]+/g, ' ').replace(/\.\./g, '.').replace(/ /g, ' ');
+}
+function assayMethodsParts(lc, v){
+  const P = [], R = [];
+  assays.forEach(a => {
+    if (!a || typeof a !== 'object') return;
+    const p = a.protocol || {}, nm = v(a.name), mode = a.mode || 'steps', B = assayBlankStats(a);
+    const entries = Array.isArray(a.entries) ? a.entries : [];
+    const maxRep = Math.max(0, ...(entries.length ? entries.map(e => Array.isArray(e && e.rawVals) ? e.rawVals.length : 0) : [Array.isArray(a.replicates) ? a.replicates.length : 0]));
+    const usesDa = entries.length ? entries.some(e => (e && e.rawUnit || 'dA/min') === 'dA/min') : (Array.isArray(a.replicates) && a.replicates.length && (!a.rawUnit || a.rawUnit === 'dA/min'));
+    const cUnit = (entries[0] && entries[0].concUnit) || 'mM';
+    let subPart = '';
+    if (mode === 'kinetics') {
+      const concs = entries.map(e => assayNum(e && (e.conc ?? e.x))).filter(x => x != null && x >= 0).sort((x, y) => x - y);
+      const cSpan = concs.length >= 2 ? ` (${fmtAuto(concs[0])}–${fmtAuto(concs[concs.length - 1])} ${cUnit})` : hasTxt(p.substrateConc) ? ` (${v(p.substrateConc)})` : '';
+      subPart = `varying ${hasTxt(p.substrate) ? v(p.substrate) : '[substrate not entered]'}${cSpan}`;
+    } else {
+      subPart = hasTxt(p.substrate) ? (hasTxt(p.substrateConc) ? `${v(p.substrateConc)} ${v(p.substrate)}` : v(p.substrate)) : '[substrate not entered]';
+    }
+    const bufTxt = hasTxt(p.buffer) ? v(p.buffer).replace(/\.$/, '') : '[assay buffer not entered]';
+    const phTxt = assayNum(p.pH) != null ? `, pH ${fmtAuto(+p.pH)}` : (/pH\s*\d/i.test(bufTxt) || /^\[/.test(bufTxt) ? '' : ', [assay pH not entered]');
+    const tempTxt = assayNum(p.tempC) != null ? ` at ${fmtAuto(+p.tempC)} °C` : ' at [assay temperature not entered]';
+    const rxnV = assayNum(p.rxnVolMl), enzV = assayNum(p.enzVolMl);
+    const volTxt = rxnV > 0 || enzV > 0 ? ` in a ${rxnV > 0 ? `${fmtAuto(rxnV)} mL` : '[reaction volume not entered]'} reaction${enzV > 0 ? ` initiated with ${fmtAuto(enzV)} mL of enzyme` : ''}` : '';
+    const wl = assayNum(p.wavelengthNm), eps = assayNum(p.eps_mM), pathCm = assayNum(p.pathCm) ?? 1;
+    const optTxt = wl > 0 || eps > 0 || usesDa ? `, monitored at ${wl > 0 ? `${+wl.toPrecision(6)} nm` : '[wavelength not entered]'}${eps > 0 ? ` (ε = ${+eps.toPrecision(6)} mM⁻¹ cm⁻¹${pathCm > 0 ? `, ${fmtAuto(pathCm)} cm path` : ''})` : (usesDa ? ' ([extinction coefficient not entered])' : '')}` : '';
+    const unitTxt = hasTxt(p.unitDef) ? ` One unit (U) was defined as ${lc(v(p.unitDef)).replace(/\.$/, '')} (1 U = 16.67 nkat).` : ' One unit (U) was defined as 1 µmol of product formed per min (16.67 nkat).';
+    const repTxt = maxRep >= 2 || B.n > 0 ? ` Assays were performed${maxRep >= 2 ? ` in ${maxRep === 3 ? 'triplicate' : maxRep === 2 ? 'duplicate' : `n = ${maxRep} replicates`}` : ''}${B.n > 0 ? `${maxRep >= 2 ? ' and' : ''} corrected against ${B.n > 1 ? `reagent blanks (n = ${B.n})` : 'a reagent blank'}` : ''}.` : '';
+    const fit = mode === 'kinetics' ? fitAssayKinetics(a) : null;
+    const fitMeth = fit ? ` Steady-state kinetic data were fitted to ${fit.model === 'hill' ? 'the Hill equation' : fit.model === 'subInhib' ? 'the Haldane substrate-inhibition model' : 'the Michaelis-Menten equation'} by ${a.fit && a.fit.weight === 'sd' ? '1/SD²-weighted ' : ''}nonlinear least-squares (Levenberg-Marquardt) regression.` : '';
+    P.push(`Enzyme activity assay${nm ? ` (${nm})` : ''}: activity was measured with ${subPart} in ${bufTxt}${phTxt}${tempTxt}${volTxt}${optTxt}.${unitTxt}${repTxt}${fitMeth}`);
+
+    if (mode === 'kinetics' && fit) {
+      const isBeerOrNkat = entries.some(e => { const ru = String((e && e.rawUnit) || 'dA/min').trim(); return (ru === 'dA/min' && eps > 0 && rxnV > 0 && enzV > 0) || /^nkat\/mL$/i.test(ru); });
+      const vUnitTxt = isBeerOrNkat ? 'U/mL' : String((entries[0] && entries[0].rawUnit) || 'U/mL');
+      R.push(`Steady-state kinetics${nm ? ` (${nm})` : ''}: Km = ${sig2(fit.Km)}${fit.seKm != null ? ` ± ${sig2(fit.seKm)}` : ''} ${cUnit}, Vmax = ${sig2(fit.Vmax)}${fit.seVmax != null ? ` ± ${sig2(fit.seVmax)}` : ''} ${vUnitTxt}${fit.hillN != null ? `, nH = ${fmt(fit.hillN, 2)}${fit.seHillN != null ? ` ± ${fmt(fit.seHillN, 2)}` : ''}` : ''}${fit.Ki != null ? `, Ki = ${sig2(fit.Ki)}${fit.seKi != null ? ` ± ${sig2(fit.seKi)}` : ''} ${cUnit}` : ''}${fit.kcat != null ? `, kcat = ${sig2(fit.kcat)}${fit.seKcat != null ? ` ± ${sig2(fit.seKcat)}` : ''} s⁻¹` : ''} (R² = ${fmt(fit.r2, 4)}${fit.aicc != null ? `, AICc = ${fmt(fit.aicc, 2)}` : ''}).`);
+    } else if (mode === 'fractions') {
+      const scored = entries.filter(e => e && !e.excluded).map(e => ({e, r: assayRate(e, a)})).filter(x => x.r && (x.r.uPerMl != null || x.r.rate != null));
+      if (scored.length) {
+        const pk = scored.reduce((m, x) => ((x.r.uPerMl ?? x.r.rate) > (m.r.uPerMl ?? m.r.rate) ? x : m), scored[0]);
+        R.push(`Peak fraction activity${nm ? ` (${nm})` : ''} was ${fmt(pk.r.uPerMl ?? pk.r.rate, 2)} ${pk.r.uPerMl != null ? `U/mL (${fmt(pk.r.nkatPerMl, 2)} nkat/mL)` : pk.r.rawUnit} in fraction ${pk.e.fracLabel || '1'}.`);
+      }
+    } else if (mode === 'profile') {
+      const scored = entries.filter(e => e && !e.excluded).map(e => ({e, r: assayRate(e, a)})).filter(x => x.r && (x.r.uPerMl != null || x.r.rate != null));
+      if (scored.length) {
+        const pk = scored.reduce((m, x) => ((x.r.uPerMl ?? x.r.rate) > (m.r.uPerMl ?? m.r.rate) ? x : m), scored[0]);
+        R.push(`Optimal activity${nm ? ` (${nm})` : ''} was observed at ${pk.e.xLabel || pk.e.xNum || 'condition 1'} (${fmt(pk.r.uPerMl ?? pk.r.rate, 2)} ${pk.r.uPerMl != null ? 'U/mL' : pk.r.rawUnit}).`);
+      }
+    } else {
+      const sRows = enrichAssayStepsWithWorkflow(a).filter(r => r.totalU != null || r.sa != null || r.uPerMl != null);
+      if (sRows.length >= 2) {
+        const f0 = sRows[0], fn = sRows[sRows.length - 1];
+        R.push(`Specific activity${nm ? ` (${nm})` : ''} increased from ${f0.sa != null ? `${fmt(f0.sa, 2)} U/mg` : `${fmt(f0.uPerMl ?? 0, 2)} U/mL`}${f0.totalU != null ? ` (${fmt(f0.totalU, 2)} U total)` : ''} in ${lc(f0.label)} to ${fn.sa != null ? `${fmt(fn.sa, 2)} U/mg` : `${fmt(fn.uPerMl ?? 0, 2)} U/mL`}${fn.totalU != null ? ` (${fmt(fn.totalU, 2)} U total${fn.uPerMl != null ? `, ${fmt(fn.uPerMl, 2)} U/mL, ${fmt(fn.nkatPerMl, 2)} nkat/mL` : ''})` : ''} in ${lc(fn.label)}${fn.fold != null ? `, a ${fmt(fn.fold, 2)}-fold purification` : ''}${fn.yieldPct != null ? ` with ${fmt(fn.yieldPct, 1)}% activity yield` : ''}${fn.kcat != null ? ` (apparent kcat = ${fmt(fn.kcat, 2)} s⁻¹)` : ''}.`);
+      } else if (sRows.length === 1) {
+        const r0 = sRows[0];
+        const parts = [r0.uPerMl != null ? `${fmt(r0.uPerMl, 2)} U/mL (${fmt(r0.nkatPerMl, 2)} nkat/mL)` : '', r0.totalU != null ? `${fmt(r0.totalU, 2)} U total` : '', r0.sa != null ? `specific activity ${fmt(r0.sa, 2)} U/mg` : '', r0.kcat != null ? `apparent kcat = ${fmt(r0.kcat, 2)} s⁻¹` : ''].filter(Boolean);
+        if (parts.length) R.push(`Activity${nm ? ` (${nm})` : ''}: ${parts.join(', ')}.`);
+      }
+    }
+  });
+  return {P, R};
 }
 
 /* ---------- figures ---------- */
@@ -6027,7 +6090,7 @@ function render(){
   else { $('#o-xmin').placeholder = 'auto'; $('#o-xmax').placeholder = 'auto'; }
   if (kind === 'gel' && f) { const cp = cleavePlan(f.gel), el = $('#cleaveInfo'); $('#o-tagKda').placeholder = (TAG_PRESETS[opt.tagPreset] || [])[1] ? String(TAG_PRESETS[opt.tagPreset][1]) : 'kDa';
     el.textContent = cp ? `Looking for cleaved ${fmt(cp.P, 1)} kDa, uncleaved ${fmt(cp.P + cp.T, 1)} kDa and free ${cp.tagName} ${fmt(cp.T, 1)} kDa (±${numOr(opt.knownTol, 7)}%). Tags often run off their calculated size, so adjust the tag size to what you see on your gels.` : 'Enter the protein size, or mark its band as the target, and the expected sizes appear here.'; }
-  $('#sumPanel').hidden = kind !== 'workflow' || !runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))); if (kind === 'workflow') renderSumTable();
+  $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData()); if (kind === 'workflow') renderSumTable();
   const ip = $('#intPanel'); ip.hidden = kind !== 'run'; if (kind === 'run' && f) renderIntTable(f.run);
   $('#bandPanel').hidden = kind !== 'gel'; if (kind === 'gel' && f) renderBandTable(f.gel);
   updatePrompt();
@@ -6836,13 +6899,113 @@ function sumDisplay(rows){
     if (prep.on && btwOf(x.r)) { const b = prep.btw[x.r.id] || {}, ms = poolMeas(x.r); list.push({conc: x, name: ncObj(x.r).name, mg: bw ? bw.mg : null, vol: volMl(numOr(b.vOut, 0), x.r) || null, mgml: ms.c || null, sd: ms.nd ? ms.nd.sd : null, n: ms.nd ? ms.nd.n : null, yld: kp > 0 && rows.base > 0 ? 100*kp/rows.base : null, stepY: kp > 0 && a > 0 ? 100*kp/a : null}); }
     if (kp > 0) amtAt[i] = kp; else if (a > 0) amtAt[i] = a; });
   return list; }
+function enrichAssayStepsWithWorkflow(a){
+  if (!a || typeof a !== 'object') return [];
+  const rawList = Array.isArray(a.entries) && a.entries.length ? a.entries : [];
+  if (!rawList.length) return assayStepSummary(a).map(s => Object.assign({}, s, {protSrc: assayStepProt(s.stepRef).src || ''}));
+  const wfRuns = runs.filter(r => r.inWf), allRuns = wfRuns.concat(runs.filter(r => !r.inWf)), mans = manSteps(), usedRefs = new Set();
+  const norm = s => String(s || '').trim().toLowerCase();
+  rawList.forEach(e => { const rf = String(e && (e.stepRef || e.stepId || e.runId) || '').trim(); if (rf) usedRefs.add(runs.some(r => r.id === rf) ? 'run:' + rf : rf); });
+  const inferRef = e => {
+    const rf = String(e && (e.stepRef || e.stepId || e.runId) || '').trim();
+    if (rf) return runs.some(r => r.id === rf) ? 'run:' + rf : mans.some(m => m.id === rf) ? 'man:' + rf : rf;
+    const nm = norm(e && (e.name || e.stepName || e.label)); if (!nm) return '';
+    if (!usedRefs.has('lysis') && /^(?:clarified\s+|crude\s+)?(?:lysate|cell\s+extract|homogenate|supernatant|soluble\s+fraction)$/i.test(nm)) { usedRefs.add('lysis'); return 'lysis'; }
+    if (!usedRefs.has('final') && /^final(?:\s+(?:sample|pool|prep|protein))?$/i.test(nm)) { usedRefs.add('final'); return 'final'; }
+    for (const r of allRuns) {
+      const k = 'run:' + r.id; if (usedRefs.has(k)) continue;
+      const cand = [r.name, stepTitle(r), shortRunName(r), String(r.stepName || '').trim() || guessStep(r)].map(norm);
+      if (cand.includes(nm)) { usedRefs.add(k); return k; }
+      if (prep.on && btwOf(r) && !usedRefs.has('btw:' + r.id) && norm(ncObj(r).name) === nm) { usedRefs.add('btw:' + r.id); return 'btw:' + r.id; }
+    }
+    for (const m of mans) { const k = 'man:' + m.id; if (!usedRefs.has(k) && norm(m.name) === nm) { usedRefs.add(k); return k; } }
+    return '';
+  };
+  const clonedEntries = rawList.map(e => { if (!e || typeof e !== 'object') return e; const ref = inferRef(e); return ref && ref !== e.stepRef ? Object.assign({}, e, {stepRef: ref}) : e; });
+  return assayStepSummary(Object.assign({}, a, {entries: clonedEntries})).map((s, i) => {
+    const e = clonedEntries[i] || {};
+    const pSrc = assayNum(e.protMgMl) != null || assayNum(e.protTotalMg) != null ? 'assay entry' : ((e.protSource || 'auto') !== 'none' ? (assayStepProt(s.stepRef).src || '') : '');
+    return Object.assign({}, s, {protSrc: pSrc});
+  });
+}
+function assaySummaryInfo(rows, disp){
+  if (!assays.length) return null;
+  const byDispIdx = new Map(), preRows = [], postRows = [], ordered = [];
+  const matchDisp = ref => {
+    if (!ref) return -1;
+    for (let i = 0; i < disp.length; i++) {
+      const d = disp[i];
+      if (d.run && (ref === 'run:' + d.run.r.id || ref === d.run.r.id)) return i;
+      if (d.man && (ref === 'man:' + d.man.id || ref === d.man.id)) return i;
+      if (d.conc && (ref === 'btw:' + d.conc.r.id || ref === 'nc:' + d.conc.r.id)) return i;
+    }
+    return -1;
+  };
+  assays.filter(a => a && (!a.mode || a.mode === 'steps')).forEach(a => {
+    enrichAssayStepsWithWorkflow(a).forEach(s => {
+      if (s.unassayed || (s.totalU == null && s.sa == null && s.uPerMl == null)) return;
+      const di = matchDisp(s.stepRef);
+      if (di >= 0 && !byDispIdx.has(di)) byDispIdx.set(di, s);
+      else if (di < 0) (byDispIdx.size === 0 ? preRows : postRows).push(s);
+      ordered.push(s);
+    });
+  });
+  const fracSynth = [];
+  disp.forEach((d, di) => {
+    if (!d.run || byDispIdx.has(di)) return;
+    const r = d.run.r, fa = assays.find(a => a && a.mode === 'fractions' && a.runId === r.id);
+    if (!fa) return;
+    const bl = poolBlocks(r); if (!bl.length) return;
+    const hits = (fa.entries || []).filter(e => e && !e.excluded).map(e => ({e, fm: assayFracMatch(r, e), rc: assayRate(e, fa)}))
+      .filter(h => h.rc && h.rc.uPerMl != null && h.fm.matched && h.fm.x != null && bl.some(b => h.fm.x >= b.a - 1e-6 && h.fm.x <= b.b + 1e-6));
+    if (!hits.length) return;
+    const meanU = hits.reduce((t, h) => t + h.rc.uPerMl, 0)/hits.length;
+    const sdPool = hits.some(h => h.rc.sdUPerMl != null) ? Math.sqrt(hits.reduce((t, h) => t + (h.rc.sdUPerMl || 0)**2, 0))/hits.length : null;
+    fracSynth.push({di, entry: {stepRef: 'run:' + r.id, name: stepTitle(r), rawVals: [meanU], rawSd: sdPool, rawUnit: 'U/mL'}, prot: fa.protocol});
+  });
+  if (fracSynth.length) {
+    const baseSynth = ordered.length ? ordered.map(s => ({stepRef: s.stepRef, name: s.label, rawVals: s.uPerMl != null ? [s.uPerMl] : [s.totalU], rawUnit: s.uPerMl != null ? 'U/mL' : 'U', volMl: s.volMl, protMgMl: s.protMgMl, protTotalMg: s.protMg})) : [];
+    const comb = assayStepSummary({mode: 'steps', protocol: fracSynth[0].prot || {}, entries: baseSynth.concat(fracSynth.map(x => x.entry))});
+    fracSynth.forEach((x, k) => {
+      const s = Object.assign({}, comb[baseSynth.length + k], {protSrc: assayStepProt(x.entry.stepRef).src || ''});
+      byDispIdx.set(x.di, s); ordered.push(s);
+    });
+  }
+  if (!ordered.length) return null;
+  const hasKcat = ordered.some(s => s.kcat != null);
+  const baseRow = ordered.find(s => (s.totalU != null && s.totalU > 0) || (s.sa != null && s.sa > 0));
+  const srcName = k => ({nd: 'NanoDrop mg', measured: 'NanoDrop mg', btw: 'NanoDrop mg', area: 'A280 area', 'assay entry': 'assay protein entries', manual: 'step protein mg', final: 'final sample mg'})[k] || '';
+  const srcs = [...new Set(ordered.map(s => srcName(s.protSrc)).filter(Boolean))];
+  const splitApplied = ordered.some(s => s.splitFactor != null && s.splitFactor < 1 - 1e-9);
+  return {byDispIdx, preRows, postRows, hasKcat, baseLabel: baseRow ? baseRow.label : 'step 1', protSrcLabel: srcs.join(' / '), splitApplied};
+}
+function hasAssaySummaryData(){
+  if (!assays.length) return false;
+  const rows = sumRows();
+  return !!assaySummaryInfo(rows, sumDisplay(rows));
+}
 function renderSumTable(){
   const rows = sumRows(), molB = ['mgmol', 'ndmol'].includes(rows.basis), mg = rows.some(x => x.p.mg != null), nd = rows.some(x => x.nd), cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0, perL = cL > 0 && rows.some(x => rows.mgOf(x) > 0), perG = cG > 0 && rows.some(x => rows.mgOf(x) > 0);
-  const disp = sumDisplay(rows), mans = disp.filter(d => d.man || d.conc), mgAny = mg || mans.some(d => d.mg > 0), anyMeas = rows.some(x => x.p.measured) || mans.some(d => d.mg > 0);
-  $('#sumBasis').textContent = !rows.length ? '' : `Yield relative to ${rows.baseMan ? `the ${rows.baseMan.name} step` : 'step 1'}, by ${({umol: 'NanoDrop amount in µmol', ndmol: 'NanoDrop amount in moles', nd: 'NanoDrop mg', mgmol: 'protein in moles from the A280 area', mg: 'protein from the A280 area', area: 'A280 area'})[rows.basis]}.${['area', 'mg', 'mgmol'].includes(rows.basis) && anyMeas ? ' ≈ marks an estimate from the UV area.' : ''}`;
-  $('#sumTable').innerHTML = `<tr><th>Step</th><th>Pool</th><th>Volume (mL)</th><th>A₂₈₀ area (mAU·mL)</th>${mgAny ? '<th>Protein (mg)</th>' : ''}${nd ? '<th class="ndc" title="Mean of the NanoDrop readings for this step (final stage when there is one)">NanoDrop mg/mL</th><th title="Mean concentration times the pool or final volume">NanoDrop mg</th>' : ''}${molB ? '<th title="Which form of the protein is in this step: tagged before the tag is cut, cleaved after">Form</th><th title="Protein in moles, so steps before and after the tag is cut compare directly">Protein (nmol)</th>' : ''}<th>Yield (%)</th><th title="Protein in this step's pool as a share of the step before">Step yield (%)</th>${perL ? `<th title="Protein in this step's pool per liter of the ${fmtAuto(cL)} L culture">mg per L</th>` : ''}${perG ? `<th title="Protein in this step's pool per gram of the ${fmtAuto(cG)} g of wet cells">mg per g cells</th>` : ''}<th>Purity (%)</th></tr>` +
-    disp.map(d => !d.man && d.conc ? `<tr class="manrow"><td>${esc(d.name)}</td><td><span class="muted">NanoDrop</span></td><td>${d.vol ? fmtAuto(d.vol) : ''}</td><td></td>${mgAny ? `<td title="${d.mgml ? `${fmt(d.mgml, 2)}${d.sd != null ? ` ± ${fmt(d.sd, 2)}` : ''} mg/mL by NanoDrop` : ''}">${d.mg > 0 ? fmt(d.mg, 2) : ''}</td>` : ''}${nd ? `<td class="ndc">${d.mgml ? fmt(d.mgml, 2) : ''}</td><td>${d.mg > 0 ? fmt(d.mg, 2) : ''}</td>` : ''}${molB ? '<td></td><td></td>' : ''}<td>${d.yld == null ? '' : fmt(d.yld, 0)}</td><td${d.stepY > 105 ? ' class="warnc"' : ''}>${d.stepY == null ? '' : fmt(d.stepY, 0)}</td>${perL ? `<td>${d.mg > 0 ? sig2(d.mg/cL) : ''}</td>` : ''}${perG ? `<td>${d.mg > 0 ? sig2(d.mg/cG) : ''}</td>` : ''}<td></td></tr>` : d.man ? (m => `<tr class="manrow"><td><span title="A step without a chromatogram">${esc(m.name)}</span></td><td><span class="muted">no chromatogram</span></td><td>${d.vol ? fmt(d.vol, 1) : ''}</td><td></td>${mgAny ? `<td>${d.mg > 0 ? fmt(d.mg, 2) : ''}</td>` : ''}${nd ? '<td class="ndc"></td><td></td>' : ''}${molB ? '<td></td><td></td>' : ''}<td${d.yld > 100 ? ' class="warnc"' : ''}>${d.yld == null ? '' : fmt(d.yld, 0)}</td><td${d.stepY > 105 ? ' class="warnc"' : ''}>${d.stepY == null ? '' : fmt(d.stepY, 0)}</td>${perL ? `<td>${d.mg > 0 ? sig2(d.mg/cL) : ''}</td>` : ''}${perG ? `<td>${d.mg > 0 ? sig2(d.mg/cG) : ''}</td>` : ''}<td></td></tr>`)(d.man) : (x => (k => `<tr><td><span title="${esc(x.r.name)}">${k + 1}. ${esc(stepTitle(x.r) !== x.r.name ? stepTitle(x.r) : shortRunName(x.r))}</span></td><td>${esc(x.p.label)}</td><td>${x.vol == null ? '' : fmt(x.vol, 1)}</td><td>${x.p.none ? '<span class="muted">no pool</span>' : x.p.area == null ? '' : x.p.area > 0 ? fmtAuto(x.p.area) : '<span title="The pool sits below the baseline drawn across it">below baseline</span>'}</td>${mgAny ? `<td${x.p.measured ? ` title="Measured: ${fmt(x.p.conc, 2)} mg/mL in ${fmt(x.p.measVol, 1)} mL"` : ' title="Estimated from the UV area of the pool"'}>${x.p.mg == null || !(x.p.mg > 0) ? '' : (!x.p.measured && anyMeas ? '≈' : '') + fmt(x.p.mg, 2)}</td>` : ''}${nd ? `<td class="ndc">${x.nd && x.nd.mgml != null ? fmt(x.nd.mgml, 2) : ''}</td><td${x.nd && x.nd.mg > 0 && x.p.mg > 0 && Math.max(x.nd.mg/x.p.mg, x.p.mg/x.nd.mg) > 2 ? ` class="warnc" title="NanoDrop and the A280 area disagree more than 2-fold (${fmt(x.p.mg, 2)} mg from the area). Check the pool volume, the dilution, or the extinction coefficient"` : ''}>${x.nd && x.nd.mg != null ? fmt(x.nd.mg, 2) : ''}</td>` : ''}${molB ? (E => `<td>${ndForm(x.r) === 'tagged' ? 'tagged' : 'cleaved'}</td><td>${E && E.kda > 0 && rows.mgOf(x) > 0 ? sig2(1000*rows.mgOf(x)/E.kda) : ''}</td>`)(ndEpsFor(x.r.id)) : ''}${(() => { const up = x.stepY > 105, low = x.stepY != null && x.stepY < 20, hi = x.yld > 100, t = [x.stepY != null && `${fmt(x.stepY, 0)}% of the step before`, hi && 'Above 100%. Check each run\'s UV path (mm) on its card first, then the basis and volumes', !hi && up && 'More protein than the step before. Check each run\'s UV path (mm) on its card first, then the pool volume and dilution'].filter(Boolean).join('. ');
-      return `<td${hi ? ' class="warnc"' : ''}${t ? ` title="${esc(t)}"` : ''}>${x.yld == null ? '' : fmt(x.yld, 0)}</td><td${up || low ? ' class="warnc"' : ''}${low ? ' title="Most protein was lost at this step"' : ''}>${x.stepY == null ? '' : fmt(x.stepY, 0)}</td>${perL ? `<td>${rows.mgOf(x) > 0 ? sig2(rows.mgOf(x)/cL) : ''}</td>` : ''}${perG ? `<td>${rows.mgOf(x) > 0 ? sig2(rows.mgOf(x)/cG) : ''}</td>` : ''}`; })()}<td title="${esc([x.purLab && `From gel lane ${x.purLab}`, x.purEst && 'Estimated: bands within 8% of the expected tagged and cleaved sizes, as a share of the lane. Mark the target band on the gel to confirm'].filter(Boolean).join('. '))}">${x.pur == null ? `<span class="muted">n.d.${x.satL.length ? '*' : ''}</span>` : x.purEst && x.pur < 15 ? '<span class="muted" title="Too little signal at the expected size to estimate purity">unclear</span>' : (x.purEst ? '≈' : '') + fmt(x.pur, 0)}</td></tr>`)(d.k))(d.run)).join('');
+  const disp = sumDisplay(rows), actInfo = assaySummaryInfo(rows, disp), mans = disp.filter(d => d.man || d.conc), mgAny = mg || mans.some(d => d.mg > 0) || (actInfo ? actInfo.preRows.concat(actInfo.postRows).some(s => s.protMg > 0) : false), anyMeas = rows.some(x => x.p.measured) || mans.some(d => d.mg > 0);
+  const protBasis = !rows.length ? '' : `Yield relative to ${rows.baseMan ? `the ${rows.baseMan.name} step` : 'step 1'}, by ${({umol: 'NanoDrop amount in µmol', ndmol: 'NanoDrop amount in moles', nd: 'NanoDrop mg', mgmol: 'protein in moles from the A280 area', mg: 'protein from the A280 area', area: 'A280 area'})[rows.basis]}.${['area', 'mg', 'mgmol'].includes(rows.basis) && anyMeas ? ' ≈ marks an estimate from the UV area.' : ''}`;
+  const actBasis = actInfo ? `${protBasis ? ' ' : ''}Activity fold and yield relative to ${actInfo.baseLabel} (1.00×, 100%)${actInfo.protSrcLabel ? `; specific activity uses ${actInfo.protSrcLabel}` : ''}${actInfo.splitApplied ? '; activity yield accounts for kept-back split volumes' : ''}.` : '';
+  $('#sumBasis').textContent = protBasis + actBasis;
+  const actHead = actInfo ? `<th>Total activity (U)</th><th>Specific activity (U/mg)</th><th>Purification fold</th><th>Activity yield (%)</th>${actInfo.hasKcat ? '<th>Apparent kcat (s⁻¹)</th>' : ''}` : '';
+  const actCells = s => {
+    if (!actInfo) return '';
+    if (!s || s.unassayed) return `<td></td><td></td><td></td><td></td>${actInfo.hasKcat ? '<td></td>' : ''}`;
+    const uTip = s.uPerMl != null ? `${fmt(s.uPerMl, 2)} U/mL (${fmt(s.nkatPerMl, 2)} nkat/mL)` : '';
+    const saTip = s.sdSa != null ? `${fmt(s.sa, 2)} ± ${fmt(s.sdSa, 2)} U/mg` : '';
+    const yTip = s.rawYieldPct != null && s.yieldPct != null && Math.abs(s.yieldPct - s.rawYieldPct) > 0.05 ? `Split-adjusted from ${fmt(s.rawYieldPct, 1)}% unadjusted` : '';
+    return `<td${uTip ? ` title="${esc(uTip)}"` : ''}>${s.totalU != null ? fmt(s.totalU, 2) : ''}</td><td${saTip ? ` title="${esc(saTip)}"` : ''}>${s.sa != null ? fmt(s.sa, 2) : ''}</td><td>${s.fold != null ? fmt(s.fold, 2) + '×' : ''}</td><td${s.yieldPct > 105 ? ' class="warnc"' : ''}${yTip ? ` title="${esc(yTip)}"` : ''}>${s.yieldPct != null ? fmt(s.yieldPct, 1) : ''}</td>${actInfo.hasKcat ? `<td>${s.kcat != null ? fmt(s.kcat, 2) : ''}</td>` : ''}`;
+  };
+  const standaloneActRow = s => `<tr class="manrow"><td>${esc(s.label)}</td><td><span class="muted">assay</span></td><td>${s.volMl != null ? fmtAuto(s.volMl) : ''}</td><td></td>${mgAny ? `<td>${s.protMg > 0 ? fmt(s.protMg, 2) : ''}</td>` : ''}${nd ? '<td class="ndc"></td><td></td>' : ''}${molB ? '<td></td><td></td>' : ''}<td></td><td></td>${perL ? `<td>${s.protMg > 0 ? sig2(s.protMg/cL) : ''}</td>` : ''}${perG ? `<td>${s.protMg > 0 ? sig2(s.protMg/cG) : ''}</td>` : ''}<td></td>${actCells(s)}</tr>`;
+  $('#sumTable').innerHTML = `<tr><th>Step</th><th>Pool</th><th>Volume (mL)</th><th>A₂₈₀ area (mAU·mL)</th>${mgAny ? '<th>Protein (mg)</th>' : ''}${nd ? '<th class="ndc" title="Mean of the NanoDrop readings for this step (final stage when there is one)">NanoDrop mg/mL</th><th title="Mean concentration times the pool or final volume">NanoDrop mg</th>' : ''}${molB ? '<th title="Which form of the protein is in this step: tagged before the tag is cut, cleaved after">Form</th><th title="Protein in moles, so steps before and after the tag is cut compare directly">Protein (nmol)</th>' : ''}<th>Yield (%)</th><th title="Protein in this step's pool as a share of the step before">Step yield (%)</th>${perL ? `<th title="Protein in this step's pool per liter of the ${fmtAuto(cL)} L culture">mg per L</th>` : ''}${perG ? `<th title="Protein in this step's pool per gram of the ${fmtAuto(cG)} g of wet cells">mg per g cells</th>` : ''}<th>Purity (%)</th>${actHead}</tr>` +
+    (actInfo ? actInfo.preRows.map(standaloneActRow).join('') : '') +
+    disp.map((d, di) => { const ac = actInfo ? actCells(actInfo.byDispIdx.get(di)) : '';
+      return !d.man && d.conc ? `<tr class="manrow"><td>${esc(d.name)}</td><td><span class="muted">NanoDrop</span></td><td>${d.vol ? fmtAuto(d.vol) : ''}</td><td></td>${mgAny ? `<td title="${d.mgml ? `${fmt(d.mgml, 2)}${d.sd != null ? ` ± ${fmt(d.sd, 2)}` : ''} mg/mL by NanoDrop` : ''}">${d.mg > 0 ? fmt(d.mg, 2) : ''}</td>` : ''}${nd ? `<td class="ndc">${d.mgml ? fmt(d.mgml, 2) : ''}</td><td>${d.mg > 0 ? fmt(d.mg, 2) : ''}</td>` : ''}${molB ? '<td></td><td></td>' : ''}<td>${d.yld == null ? '' : fmt(d.yld, 0)}</td><td${d.stepY > 105 ? ' class="warnc"' : ''}>${d.stepY == null ? '' : fmt(d.stepY, 0)}</td>${perL ? `<td>${d.mg > 0 ? sig2(d.mg/cL) : ''}</td>` : ''}${perG ? `<td>${d.mg > 0 ? sig2(d.mg/cG) : ''}</td>` : ''}<td></td>${ac}</tr>` : d.man ? (m => `<tr class="manrow"><td><span title="A step without a chromatogram">${esc(m.name)}</span></td><td><span class="muted">no chromatogram</span></td><td>${d.vol ? fmt(d.vol, 1) : ''}</td><td></td>${mgAny ? `<td>${d.mg > 0 ? fmt(d.mg, 2) : ''}</td>` : ''}${nd ? '<td class="ndc"></td><td></td>' : ''}${molB ? '<td></td><td></td>' : ''}<td${d.yld > 100 ? ' class="warnc"' : ''}>${d.yld == null ? '' : fmt(d.yld, 0)}</td><td${d.stepY > 105 ? ' class="warnc"' : ''}>${d.stepY == null ? '' : fmt(d.stepY, 0)}</td>${perL ? `<td>${d.mg > 0 ? sig2(d.mg/cL) : ''}</td>` : ''}${perG ? `<td>${d.mg > 0 ? sig2(d.mg/cG) : ''}</td>` : ''}<td></td>${ac}</tr>`)(d.man) : (x => (k => `<tr><td><span title="${esc(x.r.name)}">${k + 1}. ${esc(stepTitle(x.r) !== x.r.name ? stepTitle(x.r) : shortRunName(x.r))}</span></td><td>${esc(x.p.label)}</td><td>${x.vol == null ? '' : fmt(x.vol, 1)}</td><td>${x.p.none ? '<span class="muted">no pool</span>' : x.p.area == null ? '' : x.p.area > 0 ? fmtAuto(x.p.area) : '<span title="The pool sits below the baseline drawn across it">below baseline</span>'}</td>${mgAny ? `<td${x.p.measured ? ` title="Measured: ${fmt(x.p.conc, 2)} mg/mL in ${fmt(x.p.measVol, 1)} mL"` : ' title="Estimated from the UV area of the pool"'}>${x.p.mg == null || !(x.p.mg > 0) ? '' : (!x.p.measured && anyMeas ? '≈' : '') + fmt(x.p.mg, 2)}</td>` : ''}${nd ? `<td class="ndc">${x.nd && x.nd.mgml != null ? fmt(x.nd.mgml, 2) : ''}</td><td${x.nd && x.nd.mg > 0 && x.p.mg > 0 && Math.max(x.nd.mg/x.p.mg, x.p.mg/x.nd.mg) > 2 ? ` class="warnc" title="NanoDrop and the A280 area disagree more than 2-fold (${fmt(x.p.mg, 2)} mg from the area). Check the pool volume, the dilution, or the extinction coefficient"` : ''}>${x.nd && x.nd.mg != null ? fmt(x.nd.mg, 2) : ''}</td>` : ''}${molB ? (E => `<td>${ndForm(x.r) === 'tagged' ? 'tagged' : 'cleaved'}</td><td>${E && E.kda > 0 && rows.mgOf(x) > 0 ? sig2(1000*rows.mgOf(x)/E.kda) : ''}</td>`)(ndEpsFor(x.r.id)) : ''}${(() => { const up = x.stepY > 105, low = x.stepY != null && x.stepY < 20, hi = x.yld > 100, t = [x.stepY != null && `${fmt(x.stepY, 0)}% of the step before`, hi && 'Above 100%. Check each run\'s UV path (mm) on its card first, then the basis and volumes', !hi && up && 'More protein than the step before. Check each run\'s UV path (mm) on its card first, then the pool volume and dilution'].filter(Boolean).join('. ');
+      return `<td${hi ? ' class="warnc"' : ''}${t ? ` title="${esc(t)}"` : ''}>${x.yld == null ? '' : fmt(x.yld, 0)}</td><td${up || low ? ' class="warnc"' : ''}${low ? ' title="Most protein was lost at this step"' : ''}>${x.stepY == null ? '' : fmt(x.stepY, 0)}</td>${perL ? `<td>${rows.mgOf(x) > 0 ? sig2(rows.mgOf(x)/cL) : ''}</td>` : ''}${perG ? `<td>${rows.mgOf(x) > 0 ? sig2(rows.mgOf(x)/cG) : ''}</td>` : ''}`; })()}<td title="${esc([x.purLab && `From gel lane ${x.purLab}`, x.purEst && 'Estimated: bands within 8% of the expected tagged and cleaved sizes, as a share of the lane. Mark the target band on the gel to confirm'].filter(Boolean).join('. '))}">${x.pur == null ? `<span class="muted">n.d.${x.satL.length ? '*' : ''}</span>` : x.purEst && x.pur < 15 ? '<span class="muted" title="Too little signal at the expected size to estimate purity">unclear</span>' : (x.purEst ? '≈' : '') + fmt(x.pur, 0)}</td>${ac}</tr>`)(d.k))(d.run); }).join('') +
+    (actInfo ? actInfo.postRows.map(standaloneActRow).join('') : '');
   /* the reason for every flag, printed under the table so it travels with a screenshot */
   const notes = [];
   { const y = null; if (y && y.perL != null) notes.push(`Final pool (step ${y.k + 1}, ${stepTitle(y.fin.r) !== y.fin.r.name ? stepTitle(y.fin.r) : shortRunName(y.fin.r)}): ${sig2(y.poolMg)} mg from ${fmtAuto(y.cL)} L of culture, ${sig2(y.poolPerL)} mg per L${y.perG != null ? ` and ${y.perGTxt}` : ''}${['mg', 'mgmol', 'area'].includes(rows.basis) ? ', from the A280 area' : ''}${y.odd ? '. Unverified: a step yield above 100% means a basis or volume is off' : ''}.`);
@@ -6875,18 +7038,22 @@ function renderSumTable(){
     const mb = $('#sumMore'); mb.hidden = !extra.some(Boolean); mb.textContent = tb.classList.contains('all') ? 'Fewer columns' : `${extra.filter(Boolean).length} more columns`; }
   const nEl = $('#sumNotes'); if (nEl) { nEl.innerHTML = notes.map(t => `<li>${esc(t)}</li>`).join(''); nEl.hidden = !notes.length; }
 }
-$('#methodsBox').addEventListener('toggle', () => { if ($('#methodsBox').open) $('#methodsText').value = methodsText(); });
-$('#methodsGaps').addEventListener('click', e => { const b = e.target.closest('.gap-btn'); if (!b) return; const w = b.dataset.gap; if (!w) return; if (/transform/i.test(w)) { if (typeof selectStep === 'function') selectStep('transform'); const el = $('#pr-trPlasmid') || $('#pr-strain2'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else if (/expression/i.test(w)) { if (typeof selectStep === 'function') selectStep('expr'); const el = $('#pr-medium') || $('#pr-inducer'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else if (/lysis/i.test(w)) { if (typeof selectStep === 'function') selectStep('lysis'); const el = $('#pr-lysMethod') || $('#pr-lysBuffer'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else if (/cleav|dialysis|protease/i.test(w)) { if (typeof selectStep === 'function') selectStep('cleave'); const el = $('#pr-protease') || $('#pr-dialBuffer'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else { const wf = runs.filter(r => r.inWf); let targetRun = null, targetField = null; for (const r of wf) { const c = runCond(r); if (/col/i.test(w) && !c.mCol) { targetRun = r; targetField = '#mCol' + r.id; break; } if (/flow/i.test(w) && !c.mFlow) { targetRun = r; targetField = '#mFlow' + r.id; break; } if (/buf/i.test(w) && !c.mBufA) { targetRun = r; targetField = '#mBufA' + r.id; break; } if (/elut/i.test(w) && !c.mGrad && !c.mBufB) { targetRun = r; targetField = '#mGrad' + r.id; break; } } if (!targetRun && wf.length) targetRun = wf[0]; if (targetRun) { if (typeof selectStep === 'function') selectStep('run:' + targetRun.id); if (targetField) { const el = document.querySelector(targetField); if (el) { const rc = el.closest('details'); if (rc) rc.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } } } });
+$('#methodsBox').addEventListener('toggle', () => { if ($('#methodsBox').open) { const t = methodsText(); $('#methodsText').value = t; const gp = methodGapNames(t), ge = $('#methodsGaps'); if (ge) { ge.hidden = !gp.length; ge.innerHTML = gp.length ? `Still to fill in: ${gp.map(w => `<button type="button" class="linkbtn gap-btn" data-gap="${esc(w)}">${esc(w)}</button>`).join(', ')}. Each is marked in [brackets] below.` : ''; } } });
+$('#methodsGaps').addEventListener('click', e => { const b = e.target.closest('.gap-btn'); if (!b) return; const w = b.dataset.gap; if (!w) return; if (/^substrate$|^assay\b|reaction volume|wavelength|extinction coefficient/i.test(w)) { const pn = $('#assayPanel'); if (pn) { pn.hidden = false; const dt = pn.querySelector('details.assay-proto'); if (dt) dt.open = true; const k = /substrate/i.test(w) ? 'substrate' : /buffer/i.test(w) ? 'buffer' : /\bph\b/i.test(w) ? 'pH' : /temp/i.test(w) ? 'tempC' : /reaction/i.test(w) ? 'rxnVolMl' : /wavelength/i.test(w) ? 'wavelengthNm' : 'eps_mM'; const el = pn.querySelector(`[data-ap="${k}"]`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } } else if (/transform/i.test(w)) { if (typeof selectStep === 'function') selectStep('transform'); const el = $('#pr-trPlasmid') || $('#pr-strain2'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else if (/expression/i.test(w)) { if (typeof selectStep === 'function') selectStep('expr'); const el = $('#pr-medium') || $('#pr-inducer'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else if (/lysis/i.test(w)) { if (typeof selectStep === 'function') selectStep('lysis'); const el = $('#pr-lysMethod') || $('#pr-lysBuffer'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else if (/cleav|dialysis|protease/i.test(w)) { if (typeof selectStep === 'function') selectStep('cleave'); const el = $('#pr-protease') || $('#pr-dialBuffer'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } else { const wf = runs.filter(r => r.inWf); let targetRun = null, targetField = null; for (const r of wf) { const c = runCond(r); if (/col/i.test(w) && !c.mCol) { targetRun = r; targetField = '#mCol' + r.id; break; } if (/flow/i.test(w) && !c.mFlow) { targetRun = r; targetField = '#mFlow' + r.id; break; } if (/buf/i.test(w) && !c.mBufA) { targetRun = r; targetField = '#mBufA' + r.id; break; } if (/elut/i.test(w) && !c.mGrad && !c.mBufB) { targetRun = r; targetField = '#mGrad' + r.id; break; } } if (!targetRun && wf.length) targetRun = wf[0]; if (targetRun) { if (typeof selectStep === 'function') selectStep('run:' + targetRun.id); if (targetField) { const el = document.querySelector(targetField); if (el) { const rc = el.closest('details'); if (rc) rc.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } } } });
 $('#methodsCopy').addEventListener('click', () => { const ta = $('#methodsText'); ta.value = methodsText();
   const fb = () => { ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} toast(ok ? 'Methods copied' : 'Select the text and copy it'); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(() => { toast('Methods copied'); const b = $('#methodsCopy'); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy methods'; }, 1500); }, fb); else fb(); });
 $('#sumMore').addEventListener('click', () => { $('#sumTable').classList.toggle('all'); renderSumTable(); });
-$('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRows(); if (!rows.length) return toast('Set pooled fractions first');
+$('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRows(), disp = sumDisplay(rows), actInfo = assaySummaryInfo(rows, disp); if (!rows.length && !actInfo) return toast('Set pooled fractions first');
   const fn = (o, mg) => { if (o && o.prep === 'manual') { const clv = isCleavedStep(o), F = protForms(), fm = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : (clv ? 'untagged' : 'tagged'), noTag = fm === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset], f = F.length && !noTag ? (fm === 'tagged' && F[1] ? F[1] : F[0]) : null, kda = numOr(opt.eps, 0) > 0 ? (numOr(opt.protKda, 0) || null) : (f && f.a280 ? f.mass/1000 : null); return [kda > 0 ? (clv ? 'cleaved' : 'tagged') : '', kda > 0 && mg > 0 ? sig2(1000*mg/kda) : '']; } const E = o && ndEpsFor(o.id); return [E && E.kda > 0 ? (ndForm(o) === 'tagged' ? 'tagged' : 'cleaved') : '', E && E.kda > 0 && mg > 0 ? sig2(1000*mg/E.kda) : '']; };
-  saveFile('purification_summary.csv', ['Step,Run,Pool,Pool volume from fractions (mL),A280 area (mAU*mL),Protein from area (mg),NanoDrop mg/mL,NanoDrop SD,NanoDrop n,NanoDrop volume used (mL),NanoDrop mg,A280 of 1 mg/mL used,Yield (%),Step yield (%),Yield basis,Purity (%),mg per L culture,mg per g cells,Column,Buffer A,Buffer B,Flow (mL/min),Temperature (C),Gradient,Sample loaded,Extinction basis,Form,Protein (nmol)'].concat(sumDisplay(rows).map(d => { if (!d.man && d.conc) { const cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0, E = ndEpsFor(d.conc.r.id); return ['', q(d.name), q('NanoDrop'), '', '', '', d.mgml ? d.mgml.toFixed(3) : '', d.sd != null ? d.sd.toFixed(3) : '', d.n || '', d.vol ? d.vol.toFixed(2) : '', d.mg > 0 ? d.mg.toFixed(3) : '', E ? E.e.toFixed(3) : '', d.yld == null ? '' : d.yld.toFixed(1), d.stepY == null ? '' : d.stepY.toFixed(1), rows.basis, '', cL > 0 && d.mg > 0 ? (d.mg/cL).toFixed(2) : '', cG > 0 && d.mg > 0 ? (d.mg/cG).toFixed(3) : '', '', '', '', '', '', '', '', E && cysNote(E.cys) ? q(cysNote(E.cys)) : '', ...fn(d.conc.r, d.mg)].join(','); } if (d.man) { const m = d.man.man, cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0;
-      return ['', q(d.man.name), q('no chromatogram'), d.vol ? d.vol.toFixed(2) : '', '', d.mg > 0 ? d.mg.toFixed(3) : '', '', '', '', '', '', '', d.yld == null ? '' : d.yld.toFixed(1), d.stepY == null ? '' : d.stepY.toFixed(1), rows.basis, '', cL > 0 && d.mg > 0 ? (d.mg/cL).toFixed(2) : '', cG > 0 && d.mg > 0 ? (d.mg/cG).toFixed(3) : '', q(m.resin || ''), q(m.buffer || ''), '', '', '', q(m.elution || ''), '', '', ...fn(d.man, d.mg)].join(','); }
+  const actCsv = s => !actInfo ? [] : !s || s.unassayed ? ['', '', '', '', '', ...(actInfo.hasKcat ? [''] : [])] : [s.totalU != null ? s.totalU.toFixed(3) : '', s.uPerMl != null ? s.uPerMl.toFixed(3) : '', s.nkatPerMl != null ? s.nkatPerMl.toFixed(2) : '', s.sa != null ? s.sa.toFixed(3) : '', s.fold != null ? s.fold.toFixed(2) : '', s.yieldPct != null ? s.yieldPct.toFixed(1) : '', ...(actInfo.hasKcat ? [s.kcat != null ? s.kcat.toFixed(2) : ''] : [])];
+  const standCsv = s => ['', q(s.label), q('assay'), s.volMl != null ? s.volMl.toFixed(2) : '', '', s.protMg > 0 ? s.protMg.toFixed(3) : '', '', '', '', '', '', '', '', '', rows.basis || '', '', '', '', '', '', '', '', '', '', '', '', '', '', ...actCsv(s)].join(',');
+  const hdr = 'Step,Run,Pool,Pool volume from fractions (mL),A280 area (mAU*mL),Protein from area (mg),NanoDrop mg/mL,NanoDrop SD,NanoDrop n,NanoDrop volume used (mL),NanoDrop mg,A280 of 1 mg/mL used,Yield (%),Step yield (%),Yield basis,Purity (%),mg per L culture,mg per g cells,Column,Buffer A,Buffer B,Flow (mL/min),Temperature (C),Gradient,Sample loaded,Extinction basis,Form,Protein (nmol)' + (actInfo ? ',Total activity (U),Activity (U/mL),Activity (nkat/mL),Specific activity (U/mg),Purification fold,Activity yield (%)' + (actInfo.hasKcat ? ',Apparent kcat (s^-1)' : '') : '');
+  const body = (actInfo ? actInfo.preRows.map(standCsv) : []).concat(disp.map((d, di) => { const ac = actInfo ? actCsv(actInfo.byDispIdx.get(di)) : []; if (!d.man && d.conc) { const cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0, E = ndEpsFor(d.conc.r.id); return ['', q(d.name), q('NanoDrop'), '', '', '', d.mgml ? d.mgml.toFixed(3) : '', d.sd != null ? d.sd.toFixed(3) : '', d.n || '', d.vol ? d.vol.toFixed(2) : '', d.mg > 0 ? d.mg.toFixed(3) : '', E ? E.e.toFixed(3) : '', d.yld == null ? '' : d.yld.toFixed(1), d.stepY == null ? '' : d.stepY.toFixed(1), rows.basis, '', cL > 0 && d.mg > 0 ? (d.mg/cL).toFixed(2) : '', cG > 0 && d.mg > 0 ? (d.mg/cG).toFixed(3) : '', '', '', '', '', '', '', '', E && cysNote(E.cys) ? q(cysNote(E.cys)) : '', ...fn(d.conc.r, d.mg), ...ac].join(','); } if (d.man) { const m = d.man.man, cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0;
+      return ['', q(d.man.name), q('no chromatogram'), d.vol ? d.vol.toFixed(2) : '', '', d.mg > 0 ? d.mg.toFixed(3) : '', '', '', '', '', '', '', d.yld == null ? '' : d.yld.toFixed(1), d.stepY == null ? '' : d.stepY.toFixed(1), rows.basis, '', cL > 0 && d.mg > 0 ? (d.mg/cL).toFixed(2) : '', cG > 0 && d.mg > 0 ? (d.mg/cG).toFixed(3) : '', q(m.resin || ''), q(m.buffer || ''), '', '', '', q(m.elution || ''), '', '', ...fn(d.man, d.mg), ...ac].join(','); }
     const x = d.run, k = d.k, n = x.nd, st = n && (n.F || n.P), E = ndEpsFor(x.r.id);
-    return [k + 1, q(x.r.name), q(x.p.label), x.vol == null ? '' : x.vol.toFixed(2), x.p.area == null ? '' : x.p.area.toFixed(2), x.p.mg == null ? '' : x.p.mg.toFixed(3), st ? st.m.toFixed(3) : '', st && st.sd != null ? st.sd.toFixed(3) : '', st ? st.n : '', st ? ((n.F ? n.fv : n.pv) || '') : '', n && n.mg != null ? n.mg.toFixed(3) : '', E ? E.e.toFixed(3) : '', x.yld == null ? '' : x.yld.toFixed(1), x.stepY == null ? '' : x.stepY.toFixed(1), rows.basis, x.pur == null ? '' : x.pur.toFixed(1), (cL => cL > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cL).toFixed(2) : '')(prep.on ? numOr(prep.cultureL, 0) : 0), (cG => cG > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cG).toFixed(3) : '')(prep.on ? numOr(prep.pellet, 0) : 0), ...(c => [c.mCol, c.mBufA, c.mBufB, c.mFlow, c.mTemp, c.mGrad, c.mLoad].map(q))(runCond(x.r)), E && cysNote(E.cys) ? q(cysNote(E.cys)) : '', ...fn(x.r, rows.mgOf(x))].join(','); })).join('\r\n')); });
+    return [k + 1, q(x.r.name), q(x.p.label), x.vol == null ? '' : x.vol.toFixed(2), x.p.area == null ? '' : x.p.area.toFixed(2), x.p.mg == null ? '' : x.p.mg.toFixed(3), st ? st.m.toFixed(3) : '', st && st.sd != null ? st.sd.toFixed(3) : '', st ? st.n : '', st ? ((n.F ? n.fv : n.pv) || '') : '', n && n.mg != null ? n.mg.toFixed(3) : '', E ? E.e.toFixed(3) : '', x.yld == null ? '' : x.yld.toFixed(1), x.stepY == null ? '' : x.stepY.toFixed(1), rows.basis, x.pur == null ? '' : x.pur.toFixed(1), (cL => cL > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cL).toFixed(2) : '')(prep.on ? numOr(prep.cultureL, 0) : 0), (cG => cG > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cG).toFixed(3) : '')(prep.on ? numOr(prep.pellet, 0) : 0), ...(c => [c.mCol, c.mBufA, c.mBufB, c.mFlow, c.mTemp, c.mGrad, c.mLoad].map(q))(runCond(x.r)), E && cysNote(E.cys) ? q(cysNote(E.cys)) : '', ...fn(x.r, rows.mgOf(x)), ...ac].join(','); }), actInfo ? actInfo.postRows.map(standCsv) : []);
+  saveFile('purification_summary.csv', [hdr].concat(body).join('\r\n')); });
 /* integration table */
 function renderIntTable(run){
   const rows = integRows(run), pool = poolRows(run), hasMg = numOr(opt.eps, 0) > 0, gs = opt.intMethod === 'gauss', u = xUnit(run);
@@ -8806,6 +8973,11 @@ function refreshPaperFig(){
   const tabName = x => { if (x.kind !== 'run') return x.name; if (!PROJ || !x.run.inWf) return shortRunName(x.run); const t = stepTitle(x.run), dup = runs.filter(r => r.inWf && stepTitle(r) === t).length > 1; return dup ? `${t} ${runs.filter(r => r.inWf && stepTitle(r) === t).indexOf(x.run) + 1}` : t; };
   const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
   if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
+  const kind = f ? f.kind : 'none';
+  $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData());
+  if (kind === 'workflow') renderSumTable();
+  const mt = $('#methodsText'); if (mt) { const t = methodsText(); if (mt.value !== t) mt.value = t; }
+  if (PROJ && typeof renderSteps === 'function') renderSteps();
 }
 function renderAssays(){
   syncAssayDerived();
