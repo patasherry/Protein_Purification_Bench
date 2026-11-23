@@ -39,7 +39,7 @@ From the home screen, enter a project name and click **"Start project"**. Use th
     *   *Tip:* This lets you keep focused peak windows and main-band gel views on individual run figures while displaying the complete purification run and full top-to-bottom gel lanes in the main workflow figure.
 *   **Margin under text panels:**
     *   *What it does:* In the **Stacked** workflow layout, a step without a chromatogram (expression, lysis, cleavage, a gravity or batch step) is drawn only as tall as its own text plus this margin, instead of being given a whole chromatogram's height. Its gel, and the step after it, then follow closely. Leave the field empty for the automatic margin of 0.8 x the figure font size. The margin is never allowed below 0.35 x the font size, so text cannot touch what comes next.
-    *   *Where to find it:* In the side panel under **Workflow figure layout**, **"Margin under text panels (pt)"** (`#o-wfPad`).
+    *   *Where to find it:* In the side panel under **Purification workflow** → **Figure options** → **Panel geometry and labels (optional)**, **"Margin under text panels (pt)"** (`#o-wfPad`).
     *   *Tip:* Raise it to open the figure up when a stacked workflow looks crowded. The same margin sets how much room is left under the text in the upstream band, so it has an effect in every layout; only the content-fitting above is specific to **Stacked**.
 *   **Dragging panels and Reset position:**
     *   *What it does:* Lets you interactively drag panels in the workflow figure to fine-tune layout and spacing. The connecting arrows between panels follow dynamically with angled heads, and the figure canvas expands so nothing is cut off. Moves are saved with the project file and applied to SVG/PNG exports.
