@@ -1601,6 +1601,7 @@ button,input,select,textarea{font-family:inherit}
         <div class="btns"><button type="button" class="mini" id="methodsCopy">Copy methods</button></div></details>
       <p class="hint noproj">Protein is the A₂₈₀ area of each pool divided by the A₂₈₀ of a 1 mg/mL solution (set under Peak integration) and the flow cell path. Yield is relative to the first step. Purity is the target's share of the stain in that step's Pool lane, when one is marked.</p>
     </div>
+    <script type="application/json" id="assayCalcData"></script>
     <div class="intp" id="bandPanel" hidden>
       <div class="intp-head"><strong>Bands and estimated sizes</strong>
         <div class="btns"><button type="button" class="mini" id="bandCsv">Save table (CSV)</button></div></div>
@@ -5666,7 +5667,7 @@ function render(){
   else { document.querySelectorAll('#panel > [data-step]:not([data-for])').forEach(el => { el.hidden = false; }); document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = d.dataset.sub === 'ptr' || d.dataset.sub === 'pbtw' || d.dataset.sub === 'pman'; }); }
   /* More options shows when this step has settings to offer */
   { const mo = $('#moreOpts'), any = PROJ && [...document.querySelectorAll('#panel > .optsec')].some(x => !x.hidden); mo.hidden = !any; $('#moreBtn').textContent = document.body.classList.contains('moreopen') ? 'Fewer options' : 'More options'; $('#moreBtn').setAttribute('aria-expanded', document.body.classList.contains('moreopen')); $('#moreWhat').hidden = document.body.classList.contains('moreopen'); }
-  renderSec(); renderProt(); renderPrep(); renderND(); grpStatus(); moreSync(); renderNext(); renderWfTool();
+  renderSec(); renderProt(); renderPrep(); renderND(); syncAssayDerived(); grpStatus(); moreSync(); renderNext(); renderWfTool();
   { const gh = $('#wfGridHint'); if (gh) gh.hidden = opt.wfLayout !== 'grid'; }
   { const lab = id => { const e = $(id); return e && e.closest('label'); }, side = opt.gelPos === 'right', full = opt.gelView === 'full' || (kind === 'workflow' && opt.wfGelFull);
     [['#o-gelAlign', side], ['#o-gelSide', !side], ['#o-gelFocusKda', full], ['#o-gelSpan', full]].forEach(([id, hide]) => { const l = lab(id); if (l) l.hidden = hide; }); }
@@ -7262,11 +7263,13 @@ let ndSamples = [], ndUid = 1;
 let assays = [];
 const ASSAY_DEF = {
   id: '', name: '', kind: 'continuous', stepId: '', runId: '', stage: 'pool',
+  rawUnit: '',
   replicates: [], blanks: [], dilution: 1,
   volumes: {assay: null, sample: null, unit: 'uL'},
   optics: {wavelength: null, epsilon: null, pathCm: 1, stoichiometry: 1},
   proteinOverride: {conc: null, mass: null, vol: null, unit: 'mg/mL'},
-  kinetics: {substrate: '', unit: 'mM', points: []},
+  kinetics: {substrate: '', unit: 'mM', vUnit: '', points: []},
+  fit: {model: 'mm', enzConc_uM: null, activeSitesPerMol: 1, weight: 'none'},
   conditions: {buffer: '', temp: '', ph: ''},
   notes: '', hide: false
 };
@@ -7293,6 +7296,7 @@ function makeAssay(obj){
   out.stepId = s.stepId == null ? '' : String(s.stepId);
   out.runId = s.runId == null ? '' : String(s.runId);
   out.stage = (s.stage == null || s.stage === '') ? ASSAY_DEF.stage : String(s.stage);
+  out.rawUnit = s.rawUnit == null ? '' : String(s.rawUnit);
   out.replicates = list(s.replicates);
   out.blanks = list(s.blanks);
   out.dilution = numOr(s.dilution, ASSAY_DEF.dilution);
@@ -7301,11 +7305,181 @@ function makeAssay(obj){
   out.proteinOverride = sub(ASSAY_DEF.proteinOverride, s.proteinOverride);
   out.kinetics = sub(ASSAY_DEF.kinetics, s.kinetics);
   out.kinetics.points = list(out.kinetics.points);
+  out.fit = sub(ASSAY_DEF.fit, s.fit || (s.kinetics && s.kinetics.fit));
   out.conditions = sub(ASSAY_DEF.conditions, s.conditions);
   out.notes = s.notes == null ? '' : String(s.notes);
   out.hide = !!s.hide;
   return out;
 }
+/* ---------- activity assays: calculation engine ---------- */
+/* 1 U = 1 umol/min; 1 kat = 1 mol/s, so 1 U = 1000/60 nkat. */
+const NKAT_PER_U = 1000 / 60;
+const ASSAY_CONC_M = {M: 1, mM: 1e-3, uM: 1e-6, nM: 1e-9, pM: 1e-12};
+function assayNormUnit(u){
+  const s = String(u || '').trim().replace(/[µμ]/g, 'u').replace(/\s+/g, '');
+  if (!s) return '';
+  if (/^(dA|AU|A)\/min$/i.test(s)) return 'dA/min';
+  if (/^(dA|AU|A)\/s(ec)?$/i.test(s)) return 'dA/s';
+  if (/^(mAU|mdA)\/min$/i.test(s)) return 'mAU/min';
+  if (/^(mAU|mdA)\/s(ec)?$/i.test(s)) return 'mAU/s';
+  if (/^(I?U|umol\/min)\/mL$/i.test(s)) return 'U/mL';
+  if (/^(mI?U|nmol\/min)\/mL$/i.test(s)) return 'mU/mL';
+  if (/^nkat\/mL$/i.test(s)) return 'nkat/mL';
+  if (/^kat\/L$/i.test(s)) return 'kat/L';
+  if (/^uM\/min$/i.test(s)) return 'uM/min';
+  if (/^uM\/s(ec)?$/i.test(s)) return 'uM/s';
+  if (/^nM\/s(ec)?$/i.test(s)) return 'nM/s';
+  if (/^(umol\/min|I?U)$/i.test(s)) return 'umol/min';
+  if (/^(nmol\/min|mI?U)$/i.test(s)) return 'nmol/min';
+  if (/^I?U\/mg$/i.test(s)) return 'U/mg';
+  if (/^(s\^-1|s-1|1\/s|\/s|s⁻¹)$/i.test(s)) return 's^-1';
+  return s;
+}
+function assayNormConcUnit(u){
+  const s = String(u || '').trim().replace(/[µμ]/g, 'u').replace(/\s+/g, '');
+  return /^M$/.test(s) ? 'M' : /^mM$/i.test(s) ? 'mM' : /^uM$/i.test(s) ? 'uM' : /^nM$/i.test(s) ? 'nM' : /^pM$/i.test(s) ? 'pM' : '';
+}
+function assayExtractNum(item, assay){
+  if (typeof item === 'number') return isFinite(item) ? item : null;
+  if (typeof item === 'string') return numOr(item, null);
+  if (!item || typeof item !== 'object') return null;
+  if (numOr(item.slope, null) !== null) return +item.slope;
+  if (numOr(item.rate, null) !== null) return +item.rate;
+  if (numOr(item.v, null) !== null) return +item.v;
+  const t = numOr(item.timeMin, numOr(assay && assay.timeMin, null));
+  if (numOr(item.deltaA, null) !== null && t > 0) return (+item.deltaA) / t;
+  if (numOr(item.abs, null) !== null && t > 0) return (+item.abs - numOr(item.abs0, 0)) / t;
+  if (numOr(item.product, null) !== null && t > 0) return (+item.product) / t;
+  if (numOr(item.value, null) !== null) return +item.value;
+  return null;
+}
+function assaySampleStats(arr){
+  const vs = arr.filter(x => typeof x === 'number' && isFinite(x)), n = vs.length;
+  if (!n) return {n: 0, mean: null, sd: null, sem: null};
+  const mean = vs.reduce((a, b) => a + b, 0) / n;
+  const sd = n > 1 ? Math.sqrt(vs.reduce((t, x) => t + (x - mean) * (x - mean), 0) / (n - 1)) : null;
+  return {n, mean, sd, sem: sd != null ? sd / Math.sqrt(n) : null};
+}
+function assayVolToMl(v, unit){
+  const n = numOr(v, null); if (n === null) return null;
+  const u = String(unit || 'uL').trim().replace(/[µμ]/g, 'u').toLowerCase();
+  return u === 'ml' ? n : u === 'l' ? n * 1000 : u === 'nl' ? n * 1e-6 : n / 1000;
+}
+function assayResolveProtein(assay, ctx){
+  const a = assay || {}, ov = a.proteinOverride && typeof a.proteinOverride === 'object' ? a.proteinOverride : {}, useLive = !ctx;
+  const rList = ctx && Array.isArray(ctx.runs) ? ctx.runs : runs, pObj = ctx && ctx.prep ? ctx.prep : prep;
+  const stepKey = String(a.stepId || '').trim(), runKey = String(a.runId || '').trim();
+  const r = (runKey ? rList.find(x => x && x.id === runKey) : null) || (stepKey ? rList.find(x => x && x.id === stepKey) : null);
+  let kda = numOr(ctx && ctx.kda, null), conc = null, concSrc = '', vol = null, volSrc = '', mass = null, massSrc = '';
+  if (kda === null && useLive) { const E = r ? ndEpsFor(r.id) : (protForms()[0] ? {kda: protForms()[0].mass / 1000} : null); if (E && E.kda > 0) kda = E.kda; else if (numOr(opt.protKda, 0) > 0) kda = +opt.protKda; }
+  if (r) {
+    const nd = useLive ? ndForRun(r) : null;
+    if (nd) { if (nd.mgml > 0) { conc = nd.mgml; concSrc = 'nanodrop'; } if (nd.vol > 0) { vol = nd.vol; volSrc = 'nanodrop'; } if (nd.mg > 0) { mass = nd.mg; massSrc = 'nanodrop'; } if (nd.kda > 0 && !(kda > 0)) kda = nd.kda; }
+    if (useLive) { const p = poolRows(r); if (p) { if (conc === null && p.conc > 0) { conc = p.conc; concSrc = 'pool'; } else if (conc === null && p.mg > 0 && p.volMl > 0) { conc = p.mg / p.volMl; concSrc = 'uv-area'; } if (vol === null && (p.measVol > 0 || p.volMl > 0)) { vol = p.measVol > 0 ? p.measVol : p.volMl; volSrc = 'pool'; } if (mass === null && p.mg > 0) { mass = p.mg; massSrc = 'pool'; } } }
+  } else if (/^(?:man:)?m\d+$/i.test(stepKey) && pObj && Array.isArray(pObj.manual)) {
+    const m = pObj.manual.find(x => x && x.id === stepKey.replace(/^man:/i, '')); if (m) { if (numOr(m.conc, 0) > 0) { conc = +m.conc; concSrc = 'manual'; } if (numOr(m.vol, 0) > 0) { vol = +m.vol; volSrc = 'manual'; } }
+  } else if (stepKey === 'final' && pObj) { if (numOr(pObj.finConc, 0) > 0) { conc = +pObj.finConc; concSrc = 'final'; } if (numOr(pObj.finVol, 0) > 0) { vol = +pObj.finVol; volSrc = 'final'; } }
+  else if (stepKey === 'lysis' && pObj && numOr(pObj.lysVol, 0) > 0) { vol = +pObj.lysVol; volSrc = 'lysis'; }
+  const ovConc = numOr(ov.conc, null), ovVol = numOr(ov.vol, null), ovMass = numOr(ov.mass, null);
+  if (ovVol > 0) { vol = ov.volUnit ? assayVolToMl(ovVol, ov.volUnit) : ovVol; volSrc = 'override'; }
+  if (ovMass > 0) { mass = ovMass; massSrc = 'override'; }
+  if (ovConc > 0) {
+    const cu = String(ov.unit || 'mg/mL').trim().replace(/[µμ]/g, 'u').replace(/\s+/g, '');
+    if (/^(mg\/mL|ug\/uL|g\/L)$/i.test(cu)) { conc = ovConc; concSrc = 'override'; }
+    else if (/^(ug\/mL|ng\/uL)$/i.test(cu)) { conc = ovConc / 1000; concSrc = 'override'; }
+    else if (/^uM$/i.test(cu) && kda > 0) { conc = ovConc * kda / 1000; concSrc = 'override'; }
+    else if (/^mM$/i.test(cu) && kda > 0) { conc = ovConc * kda; concSrc = 'override'; }
+  } else if (conc === null && ovMass > 0 && vol > 0) { conc = ovMass / vol; concSrc = 'override-mass-vol'; }
+  if (!(ovMass > 0) && conc > 0 && vol > 0 && (mass === null || ovConc > 0 || ovVol > 0)) { mass = conc * vol; massSrc = (ovConc > 0 || ovVol > 0) ? 'override' : (concSrc || volSrc); }
+  return {conc_mg_mL: conc, vol_mL: vol, proteinMg: mass, concSrc, volSrc, massSrc, kda};
+}
+function assayCalcRate(assay){
+  const a = assay || {}, warnings = [], reps = (Array.isArray(a.replicates) ? a.replicates : []).map(x => assayExtractNum(x, a)).filter(x => x !== null), blks = (Array.isArray(a.blanks) ? a.blanks : []).map(x => assayExtractNum(x, a)).filter(x => x !== null), sSt = assaySampleStats(reps), bSt = assaySampleStats(blks);
+  if (!sSt.n) return {ok: false, nSamples: 0, nBlanks: bSt.n, warnings: ['No numeric replicate rates'], rawUnit: assayNormUnit(a.rawUnit)};
+  const blankMean = bSt.n ? bSt.mean : 0, netRate = sSt.mean - blankMean, netSd = sSt.sd != null ? (bSt.sd != null ? Math.hypot(sSt.sd, bSt.sd) : sSt.sd) : null, netSem = sSt.sem != null ? (bSt.sem != null ? Math.hypot(sSt.sem, bSt.sem) : sSt.sem) : null, belowBlank = netRate <= 0;
+  if (belowBlank) warnings.push('Net rate is at or below blank');
+  const df = numOr(a.dilution, 1); if (!(df > 0)) { warnings.push('Dilution factor must be positive'); return {ok: false, nSamples: sSt.n, nBlanks: bSt.n, sampleMean: sSt.mean, sampleSd: sSt.sd, sampleSem: sSt.sem, blankMean, blankSd: bSt.sd, blankSem: bSt.sem, netRate, netSd, netSem, belowBlank, warnings}; }
+  const op = a.optics && typeof a.optics === 'object' ? a.optics : {}, eps = numOr(op.epsilon, null), pathCm = numOr(op.pathCm, 1), stoich = numOr(op.stoichiometry, 1), rawUnit = assayNormUnit(a.rawUnit) || (eps > 0 ? 'dA/min' : 'U/mL'), vl = a.volumes && typeof a.volumes === 'object' ? a.volumes : {}, vA = numOr(vl.assay, null), vS = numOr(vl.sample, null), vUnit = vl.unit || 'uL';
+  let volRatio = 1, hasVolRatio = false; if (vA !== null || vS !== null) { if (vA > 0 && vS > 0) { volRatio = vA / vS; hasVolRatio = true; if (vS > vA) warnings.push('Sample volume exceeds total assay volume'); } else { volRatio = null; warnings.push('Both assay and sample volumes must be positive when specified'); } }
+  const vSampleMl = vS > 0 ? assayVolToMl(vS, vUnit) : null; let rxnFactor = null, sampleFactor = null, directSpecific_U_mg = null;
+  if (['dA/min', 'dA/s', 'mAU/min', 'mAU/s'].includes(rawUnit)) {
+    if (!(eps > 0)) warnings.push('Molar extinction coefficient (epsilon) must be positive for absorbance rates'); if (!(pathCm > 0)) warnings.push('Optical path length must be positive'); if (!(stoich > 0)) warnings.push('Reaction stoichiometry must be positive');
+    if (eps > 0 && pathCm > 0 && stoich > 0) { const num = rawUnit === 'dA/min' ? 1000 : rawUnit === 'dA/s' ? 60000 : rawUnit === 'mAU/min' ? 1 : 60; rxnFactor = num / (eps * pathCm * stoich); if (volRatio !== null) sampleFactor = rxnFactor * volRatio * df; }
+  } else if (rawUnit === 'uM/min') { rxnFactor = 1e-3; if (volRatio !== null) sampleFactor = rxnFactor * volRatio * df; }
+  else if (rawUnit === 'uM/s') { rxnFactor = 0.06; if (volRatio !== null) sampleFactor = rxnFactor * volRatio * df; }
+  else if (rawUnit === 'nM/s') { rxnFactor = 6e-5; if (volRatio !== null) sampleFactor = rxnFactor * volRatio * df; }
+  else if (rawUnit === 'umol/min' || rawUnit === 'nmol/min') { const wellToU = rawUnit === 'umol/min' ? 1 : 1e-3; if (vSampleMl > 0) sampleFactor = wellToU * df / vSampleMl; else warnings.push('Sample volume is required to convert per-well activity to U/mL'); }
+  else if (rawUnit === 'U/mL') sampleFactor = df;
+  else if (rawUnit === 'mU/mL') sampleFactor = 1e-3 * df;
+  else if (rawUnit === 'nkat/mL') sampleFactor = df / NKAT_PER_U;
+  else if (rawUnit === 'kat/L') sampleFactor = 60000 * df;
+  else if (rawUnit === 'U/mg') directSpecific_U_mg = netRate * df;
+  else warnings.push(`Unrecognized rate unit: ${rawUnit}`);
+  const rxnRate_U_mL = rxnFactor != null ? netRate * rxnFactor : null, volActivity_U_mL = sampleFactor != null ? netRate * sampleFactor : null, volActivitySd_U_mL = sampleFactor != null && netSd != null ? netSd * sampleFactor : null, volActivitySem_U_mL = sampleFactor != null && netSem != null ? netSem * sampleFactor : null;
+  return {ok: volActivity_U_mL != null || directSpecific_U_mg != null, rawUnit, dilution: df, volRatio: hasVolRatio ? volRatio : (volRatio === 1 ? 1 : null), nSamples: sSt.n, nBlanks: bSt.n, sampleMean: sSt.mean, sampleSd: sSt.sd, sampleSem: sSt.sem, blankMean, blankSd: bSt.sd, blankSem: bSt.sem, netRate, netSd, netSem, belowBlank, rxnRate_U_mL, rxnRate_uM_min: rxnRate_U_mL != null ? rxnRate_U_mL * 1000 : null, rxnRate_uM_s: rxnRate_U_mL != null ? rxnRate_U_mL * 1000 / 60 : null, volActivity_U_mL, volActivitySd_U_mL, volActivitySem_U_mL, volActivity_nkat_mL: volActivity_U_mL != null ? volActivity_U_mL * NKAT_PER_U : null, directSpecific_U_mg, directSpecificSd_U_mg: directSpecific_U_mg != null && netSd != null ? netSd * df : null, directSpecificSem_U_mg: directSpecific_U_mg != null && netSem != null ? netSem * df : null, warnings};
+}
+function assayCalcSpecific(assay, ctx){
+  const rate = assayCalcRate(assay), protein = assayResolveProtein(assay, ctx), warnings = rate.warnings.slice(); let specificActivity_U_mg = null, specificActivitySd_U_mg = null, specificActivitySem_U_mg = null;
+  if (rate.directSpecific_U_mg != null) { specificActivity_U_mg = rate.directSpecific_U_mg; specificActivitySd_U_mg = rate.directSpecificSd_U_mg; specificActivitySem_U_mg = rate.directSpecificSem_U_mg; }
+  else if (rate.volActivity_U_mL != null && protein.conc_mg_mL > 0) { specificActivity_U_mg = rate.volActivity_U_mL / protein.conc_mg_mL; specificActivitySd_U_mg = rate.volActivitySd_U_mL != null ? rate.volActivitySd_U_mL / protein.conc_mg_mL : null; specificActivitySem_U_mg = rate.volActivitySem_U_mL != null ? rate.volActivitySem_U_mL / protein.conc_mg_mL : null; }
+  let totalActivity_U = null, totalActivitySd_U = null, totalActivitySem_U = null;
+  if (rate.volActivity_U_mL != null && protein.vol_mL > 0) { totalActivity_U = rate.volActivity_U_mL * protein.vol_mL; totalActivitySd_U = rate.volActivitySd_U_mL != null ? rate.volActivitySd_U_mL * protein.vol_mL : null; totalActivitySem_U = rate.volActivitySem_U_mL != null ? rate.volActivitySem_U_mL * protein.vol_mL : null; }
+  else if (specificActivity_U_mg != null && protein.proteinMg > 0) { totalActivity_U = specificActivity_U_mg * protein.proteinMg; totalActivitySd_U = specificActivitySd_U_mg != null ? specificActivitySd_U_mg * protein.proteinMg : null; totalActivitySem_U = specificActivitySem_U_mg != null ? specificActivitySem_U_mg * protein.proteinMg : null; }
+  return {ok: rate.ok, rate, protein, volActivity_U_mL: rate.volActivity_U_mL, volActivity_nkat_mL: rate.volActivity_nkat_mL, specificActivity_U_mg, specificActivitySd_U_mg, specificActivitySem_U_mg, specificActivity_nkat_mg: specificActivity_U_mg != null ? specificActivity_U_mg * NKAT_PER_U : null, totalActivity_U, totalActivitySd_U, totalActivitySem_U, totalActivity_nkat: totalActivity_U != null ? totalActivity_U * NKAT_PER_U : null, warnings};
+}
+function assayCalcTable(assayList, ctx){
+  const list = (Array.isArray(assayList) ? assayList : []).filter(a => a && !a.hide && (a.kind !== 'kinetics' || (Array.isArray(a.replicates) && a.replicates.length > 0)));
+  const rows = list.map(a => { const sp = assayCalcSpecific(a, ctx); return {id: a.id || '', name: a.name || '', stepId: a.stepId || '', runId: a.runId || '', stage: a.stage || 'pool', isBaseline: !!a.isBaseline, vol_mL: sp.protein.vol_mL, conc_mg_mL: sp.protein.conc_mg_mL, proteinMg: sp.protein.proteinMg, volActivity_U_mL: sp.volActivity_U_mL, specificActivity_U_mg: sp.specificActivity_U_mg, specificActivitySd_U_mg: sp.specificActivitySd_U_mg, totalActivity_U: sp.totalActivity_U, totalActivitySd_U: sp.totalActivitySd_U, fold: null, activityYieldPct: null, stepActivityYieldPct: null, proteinYieldPct: null, yieldOver100: false, warnings: sp.warnings.slice()}; });
+  const baseSaRow = rows.find(r => r.isBaseline && r.specificActivity_U_mg > 0) || rows.find(r => r.specificActivity_U_mg > 0) || null, baseTotRow = rows.find(r => r.isBaseline && r.totalActivity_U > 0) || rows.find(r => r.totalActivity_U > 0) || null, baseProtRow = rows.find(r => r.isBaseline && r.proteinMg > 0) || rows.find(r => r.proteinMg > 0) || null; let prevTot = null;
+  rows.forEach(r => { if (baseSaRow && r.specificActivity_U_mg != null) r.fold = r.specificActivity_U_mg / baseSaRow.specificActivity_U_mg; if (baseTotRow && r.totalActivity_U != null) { r.activityYieldPct = 100 * r.totalActivity_U / baseTotRow.totalActivity_U; if (r.activityYieldPct > 105) { r.yieldOver100 = true; r.warnings.push('Activity yield exceeds 105% (possible inhibitor removal or dilution/volume error)'); } } if (prevTot > 0 && r.totalActivity_U != null) r.stepActivityYieldPct = 100 * r.totalActivity_U / prevTot; if (r.totalActivity_U > 0) prevTot = r.totalActivity_U; if (baseProtRow && r.proteinMg != null) r.proteinYieldPct = 100 * r.proteinMg / baseProtRow.proteinMg; });
+  return {rows, baselineId: (baseTotRow && baseTotRow.id) || (baseSaRow && baseSaRow.id) || ''};
+}
+/* Dense Gaussian elimination for the small normal-equation matrices used by kinetic fits. */
+function lmSolve(A, b){
+  const n = b.length, M = A.map((r, i) => r.slice().concat([b[i]]));
+  for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r; if (!(Math.abs(M[p][c]) > 1e-18)) return null; [M[c], M[p]] = [M[p], M[c]]; const d = M[c][c]; for (let j = c; j <= n; j++) M[c][j] /= d; for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c]; for (let j = c; j <= n; j++) M[r][j] -= f * M[c][j]; } }
+  return M.map(r => r[n]);
+}
+function lmInvert(A){ const out = []; for (let j = 0; j < A.length; j++) { const e = new Array(A.length).fill(0); e[j] = 1; const x = lmSolve(A, e); if (!x) return null; out.push(x); } return A.map((_, i) => out.map(x => x[i])); }
+/* Convert velocity observations before fitting, keeping the velocity-unit label aligned with the conversion. */
+function assayKineticsScale(rawUnitIn, optics, dilution){
+  const df = numOr(dilution, 1), op = optics && typeof optics === 'object' ? optics : {}, eps = numOr(op.epsilon, null), pathCm = numOr(op.pathCm, 1), stoich = numOr(op.stoichiometry, 1), u = assayNormUnit(rawUnitIn) || (eps > 0 ? 'dA/min' : 'U/mL');
+  if (!(df > 0)) return {ok: false, error: 'Dilution factor must be positive'};
+  if (['dA/min', 'dA/s', 'mAU/min', 'mAU/s'].includes(u)) { if (!(eps > 0 && pathCm > 0 && stoich > 0)) return {ok: false, error: 'Positive epsilon, pathCm, and stoichiometry are required for absorbance kinetics'}; const num = u === 'dA/min' ? 1000 : u === 'dA/s' ? 60000 : u === 'mAU/min' ? 1 : 60; return {ok: true, factor: num * df / (eps * pathCm * stoich), vUnit: 'U/mL'}; }
+  if (u === 'nkat/mL') return {ok: true, factor: df / NKAT_PER_U, vUnit: 'U/mL'};
+  if (u === 'mU/mL') return {ok: true, factor: df / 1000, vUnit: 'U/mL'};
+  if (u === 'kat/L') return {ok: true, factor: 60000 * df, vUnit: 'U/mL'};
+  return {ok: true, factor: df, vUnit: u};
+}
+function assayKcatScale(vUnit, effEnz_uM, activeSites, mwKda){
+  const u = assayNormUnit(vUnit); if (u === 's^-1') return 1; if (u === 'U/mg') return mwKda > 0 && activeSites > 0 ? mwKda / (60 * activeSites) : null; if (!(effEnz_uM > 0)) return null;
+  if (u === 'U/mL') return 1000 / (60 * effEnz_uM); if (u === 'mU/mL' || u === 'uM/min') return 1 / (60 * effEnz_uM); if (u === 'uM/s') return 1 / effEnz_uM; if (u === 'nM/s') return 1 / (1000 * effEnz_uM); return null;
+}
+function fitKineticsLM(assayOrPoints, fitOpts){
+  const isArr = Array.isArray(assayOrPoints), a = isArr ? {} : (assayOrPoints && typeof assayOrPoints === 'object' ? assayOrPoints : {}), kin = a.kinetics && typeof a.kinetics === 'object' ? a.kinetics : {}, rawPts = isArr ? assayOrPoints : (Array.isArray(kin.points) ? kin.points : []), fOpt = Object.assign({model: 'mm', enzConc_uM: null, activeSitesPerMol: 1, weight: 'none'}, a.fit && typeof a.fit === 'object' ? a.fit : {}, kin.fit && typeof kin.fit === 'object' ? kin.fit : {}, fitOpts && typeof fitOpts === 'object' ? fitOpts : {}), model = ['mm', 'hill', 'subInhib'].includes(fOpt.model) ? fOpt.model : 'mm', weight = fOpt.weight === 'sd' ? 'sd' : 'none', pCount = model === 'mm' ? 2 : 3;
+  const blks = (Array.isArray(a.blanks) ? a.blanks : []).map(x => assayExtractNum(x, a)).filter(x => x !== null), blank = blks.length ? blks.reduce((x, y) => x + y, 0) / blks.length : 0, sc = assayKineticsScale(fOpt.vUnit || fOpt.rawUnit || kin.vUnit || a.rawUnit || '', fOpt.optics || a.optics, fOpt.dilution != null ? fOpt.dilution : a.dilution), sUnit = String(fOpt.sUnit || kin.unit || 'mM').trim();
+  if (!sc.ok) return {ok: false, model, weight, error: sc.error, warnings: [sc.error]};
+  const grouped = new Map(), obs = [];
+  rawPts.forEach(pt => { if (!pt || typeof pt !== 'object') return; const s = numOr(pt.s != null ? pt.s : pt.S, null); if (s === null || s < 0) return; const vals = Array.isArray(pt.replicates) && pt.replicates.length ? pt.replicates.map(x => assayExtractNum(x, a)) : [numOr(pt.v != null ? pt.v : (pt.rate != null ? pt.rate : pt.slope), null)]; vals.filter(x => x !== null).forEach(v => { const y = (v - blank) * sc.factor; if (weight === 'sd' && pt.sd == null && vals.length === 1) { const k = String(s); if (!grouped.has(k)) grouped.set(k, {s, ys: []}); grouped.get(k).ys.push(y); } else obs.push({s, y, sd: pt.sd != null ? Math.abs(numOr(pt.sd, 0) * sc.factor) : null}); }); });
+  grouped.forEach(g => { const st = assaySampleStats(g.ys); if (st.n) obs.push({s: g.s, y: st.mean, sd: st.sd}); });
+  if (obs.length < pCount || new Set(obs.map(o => o.s)).size < pCount) return {ok: false, model, weight, vUnit: sc.vUnit, sUnit, n: obs.length, p: pCount, error: `At least ${pCount} distinct substrate concentrations are required for ${model}`, warnings: [`Need at least ${pCount} distinct substrate concentrations`]};
+  let fallback = false; if (weight === 'sd') { const sds = obs.map(o => o.sd).filter(x => x > 0).sort((x, y) => x - y); if (!sds.length) { fallback = true; obs.forEach(o => o.w = 1); } else { const med = sds[sds.length >> 1]; obs.forEach(o => o.w = 1 / Math.pow(o.sd > 0 ? o.sd : med, 2)); } } else obs.forEach(o => o.w = 1);
+  const evalModel = (s, th) => { if (model === 'mm') { const d = th[1] + s; return [s ? th[0] * s / d : 0, s / d, -th[0] * s / (d*d)]; } if (model === 'hill') { if (!s) return [0, 0, 0, 0]; const sn = Math.pow(s, th[2]), kn = Math.pow(th[1], th[2]), d = sn + kn, dd = d*d; return [th[0] * sn / d, sn / d, -th[0] * sn * th[2] * kn / (th[1] * dd), th[0] * sn * kn * Math.log(s / th[1]) / dd]; } const d = th[1] + s + s*s/th[2], dd = d*d; return [s ? th[0]*s/d : 0, s/d, -th[0]*s/dd, th[0]*s*s*s/(th[2]*th[2]*dd)]; };
+  const valid = th => th.every(x => isFinite(x) && x > 1e-14 && x < 1e14) && !(model === 'hill' && (th[2] < .05 || th[2] > 20));
+  const ssr = th => obs.reduce((z, o) => { const v = evalModel(o.s, th)[0]; return z + (isFinite(v) ? o.w * Math.pow(o.y - v, 2) : Infinity); }, 0);
+  const run = init => { let th = init.slice(), best = ssr(th), lam = 1e-3, converged = false; for (let it = 0; it < 250; it++) { const H = Array.from({length: pCount}, () => new Array(pCount).fill(0)), g = new Array(pCount).fill(0); obs.forEach(o => { const e = evalModel(o.s, th), r = o.y - e[0]; for (let j = 0; j < pCount; j++) { g[j] += o.w * e[j+1] * r; for (let k = 0; k < pCount; k++) H[j][k] += o.w * e[j+1] * e[k+1]; } }); let accepted = false; for (let t = 0; t < 20; t++) { const q = lmSolve(H.map((r, j) => r.map((v, k) => j === k ? v + lam * Math.max(v, 1e-12) : v)), g); if (!q) { lam *= 10; continue; } const cand = th.map((v, j) => v + q[j]), next = valid(cand) ? ssr(cand) : Infinity; if (next < best) { const rel = Math.abs(best-next)/Math.max(best, 1e-18); th = cand; best = next; lam = Math.max(lam/3, 1e-12); accepted = true; if (rel < 1e-12) converged = true; break; } lam *= 5; } if (converged || (!accepted && lam > 1e11)) break; } return {th, ssr: best, converged}; };
+  const positive = obs.filter(o => o.s > 0).sort((a,b) => a.s-b.s), maxY = Math.max(...obs.map(o => o.y), 1e-12), medS = positive.length ? positive[positive.length >> 1].s : 1, half = positive.find(o => o.y >= maxY/2), km = half ? half.s : medS, peak = positive.reduce((a,o) => o.y > a.y ? o : a, positive[0]);
+  const starts = model === 'mm' ? [[maxY*1.1, km], [maxY*1.5, medS], [maxY, Math.max(km*.25, 1e-8)]] : model === 'hill' ? [0.6, 1, 1.4, 2, 3.5].map(n => [maxY*1.1, km, n]) : [1.5, 2, 5, 10, 25].map(q => { const k = Math.max(peak.s/q, 1e-8), ki = Math.max(peak.s*q, 1e-8); return [maxY*(1+2*Math.sqrt(k/ki)), k, ki]; });
+  let best = null; starts.forEach(st => { if (valid(st)) { const r = run(st); if (isFinite(r.ssr) && (!best || r.ssr < best.ssr)) best = r; } }); if (!best) return {ok: false, model, weight, vUnit: sc.vUnit, sUnit, error: 'Nonlinear fit failed to converge', warnings: ['Fit failed to converge']};
+  const th = best.th, df = obs.length-pCount, H = Array.from({length:pCount}, () => new Array(pCount).fill(0)); let ssrw = 0, ssru = 0, sw = 0, sy = 0;
+  const points = obs.map(o => { const e = evalModel(o.s, th), resid = o.y-e[0]; ssrw += o.w*resid*resid; ssru += resid*resid; sw += o.w; sy += o.w*o.y; for(let j=0;j<pCount;j++) for(let k=0;k<pCount;k++) H[j][k] += o.w*e[j+1]*e[k+1]; return {s:o.s,y:o.y,sd:o.sd,w:o.w,yHat:e[0],resid}; }); const ybar = sy/sw, sst = obs.reduce((z,o) => z+o.w*Math.pow(o.y-ybar,2),0), cov = df > 0 ? (lmInvert(H) || []).map(r => r.map(v => v*ssrw/df)) : null, seAt = j => cov && cov[j] && cov[j][j] >= 0 ? Math.sqrt(cov[j][j]) : null;
+  let params, se; if (model === 'mm') { params={Vmax:th[0],Km:th[1]}; se={Vmax:seAt(0),Km:seAt(1)}; } else if (model === 'hill') { params={Vmax:th[0],K05:th[1],nH:th[2]}; se={Vmax:seAt(0),K05:seAt(1),nH:seAt(2)}; } else { params={Vmax:th[0],Km:th[1],Ki:th[2],Sopt:Math.sqrt(th[1]*th[2]),Vpeak:th[0]/(1+2*Math.sqrt(th[1]/th[2]))}; se={Vmax:seAt(0),Km:seAt(1),Ki:seAt(2)}; }
+  const sites = numOr(fOpt.activeSitesPerMol, 1), enz = numOr(fOpt.enzConc_uM, null), effEnz_uM = enz > 0 && sites > 0 ? enz*sites : null, scale = assayKcatScale(sc.vUnit, effEnz_uM, sites, numOr(fOpt.mwKda, null) || assayResolveProtein(a).kda), kcat = scale != null ? params.Vmax*scale : null, seKcat = scale != null && se.Vmax != null ? se.Vmax*scale : null, sFactor = ASSAY_CONC_M[assayNormConcUnit(sUnit)] || null;
+  let kcatKm = null, seKcatKm = null; if (kcat != null && model !== 'hill' && sFactor && params.Km > 0) { kcatKm=kcat/(params.Km*sFactor); if (cov && se.Vmax != null && se.Km != null) seKcatKm=kcatKm*Math.sqrt(Math.max(0,Math.pow(se.Vmax/params.Vmax,2)+Math.pow(se.Km/params.Km,2)-2*cov[0][1]/(params.Vmax*params.Km))); }
+  return {ok:true,model,weight,weightFallback:fallback,n:obs.length,p:pCount,df,vUnit:sc.vUnit,sUnit,params,se,kcat,seKcat,kcatKm,seKcatKm,effEnz_uM,r2:sst>0?1-ssrw/sst:null,ssr:ssrw,ssrUnweighted:ssru,rmse:Math.sqrt(ssru/(df>0?df:obs.length)),converged:best.converged,points,warnings:fallback?['No positive SD values available; fell back to unweighted fit']:[]};
+}
+function assayComputeAll(assayList, ctx){ const list = Array.isArray(assayList) ? assayList : assays; return {assays:list.map(a => { const hasReps = Array.isArray(a.replicates) && a.replicates.length, hasKin = a.kinetics && Array.isArray(a.kinetics.points) && a.kinetics.points.length >= 2, specific = hasReps ? assayCalcSpecific(a, ctx) : null; return {id:a.id || '',name:a.name || '',kind:a.kind || 'continuous',stepId:a.stepId || '',runId:a.runId || '',stage:a.stage || 'pool',rate:specific ? specific.rate : null,specific,fit:hasKin ? fitKineticsLM(a) : null}; }),table:assayCalcTable(list,ctx)}; }
+function syncAssayDerived(){ const el = $('#assayCalcData'); if (!assays.length) { if (el) el.textContent = ''; return null; } const res = assayComputeAll(assays); if (el) el.textContent = JSON.stringify(res); return res; }
 function syncUid(){
   let mx = 0;
   [...runs, ...gels].forEach(x => { if (!x || x.id == null) return; const m = String(x.id).match(/\d+/); if (m) mx = Math.max(mx, +m[0]); });
@@ -11327,7 +11501,7 @@ function exampleTraces(){
   traces.forEach(detectPeaks);
 }
 
-if (location.hash === '#selftest') window.__PPB = window.__HFB = {DET, opt, gels, gelBands, detectBands, laneProfile, autoLadder, autoCrop, applyAutoCrop, laneTrack, gridTrack, fracIdx, shadeSet, laneTarget, suggestPool, runs: () => runs, calib, getG: () => G, tags: g => g.tags, tagOf, processGel, autoContrast, render, curGel: () => curGel(), LADDERS};
+if (location.hash === '#selftest') window.__PPB = window.__HFB = {DET, opt, gels, gelBands, detectBands, laneProfile, autoLadder, autoCrop, applyAutoCrop, laneTrack, gridTrack, fracIdx, shadeSet, laneTarget, suggestPool, runs: () => runs, calib, getG: () => G, tags: g => g.tags, tagOf, processGel, autoContrast, render, curGel: () => curGel(), LADDERS, NKAT_PER_U, assays: () => assays, assayResolveProtein, assayCalcRate, assayCalcSpecific, assayCalcTable, fitKineticsLM, assayComputeAll};
 exampleTraces();
 syncControls();
 renderList();
