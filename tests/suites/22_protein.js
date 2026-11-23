@@ -129,12 +129,12 @@ const getA280Cell = r => r['A₂₈₀'] || r['A280'] || '';
   };
 
   const clearTagSeq = async () => {
+    if (await p.isVisible('#o-tagPreset2')) await p.selectOption('#o-tagPreset2', 'custom').catch(() => {});
+    if (await p.isVisible('#o-tagPreset')) await p.selectOption('#o-tagPreset', 'custom').catch(() => {});
+    await p.dispatchEvent('#o-tagPreset2', 'change').catch(() => {});
     await p.fill('#tagSeq', '');
     await p.dispatchEvent('#tagSeq', 'input');
     await p.dispatchEvent('#tagSeq', 'change');
-    await p.selectOption('#o-tagPreset2', 'custom').catch(() => {});
-    await p.selectOption('#o-tagPreset', 'custom').catch(() => {});
-    await p.dispatchEvent('#o-tagPreset2', 'change').catch(() => {});
     await h.wait(300);
   };
 
