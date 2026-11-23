@@ -302,6 +302,15 @@ details.sub > summary .st{font-weight:400;color:var(--muted);font-size:12px;marg
 details.sub > *:not(summary){margin-top:10px}
 details.sub > summary + *{margin-top:10px}
 details.paste[open]{display:grid;gap:8px}
+.assay-card{border:1px solid var(--line);border-radius:var(--r);padding:10px;display:grid;gap:8px;background:var(--field);margin-top:8px}
+.assay-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
+.assay-proto > .row,.assay-blanks-body{margin-top:6px}
+.assay-blank-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto;gap:6px;align-items:center;margin-top:4px}
+.assay-tbl{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.assay-tbl th,.assay-tbl td{padding:3px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.assay-tbl input[type="text"],.assay-tbl input[type="number"],.assay-tbl select{width:100%;min-width:52px;padding:3px 5px;font-size:12px;box-sizing:border-box}
+.assay-fit{font-size:12px;line-height:1.45;padding:6px 8px;border-radius:6px;background:var(--soft);display:flex;flex-wrap:wrap;gap:4px 10px;font-variant-numeric:tabular-nums}
+.assay-warns{margin:4px 0 0;padding-left:18px;font-size:12px}
 /* data list cards: the only boxed objects in the column */
 .traces{display:grid;gap:8px;max-height:min(54vh,600px);overflow-y:auto;overscroll-behavior:contain;padding-right:2px}
 .trace{border:1px solid var(--line);border-radius:var(--r);padding:10px;display:grid;gap:8px;background:var(--field);transition:border-color .12s,box-shadow .12s}
@@ -984,7 +993,7 @@ button,input,select,textarea{font-family:inherit}
 
     <section class="grp" id="ndPanel" data-for="workflow run nd" data-step="final">
       <h2>NanoDrop</h2>
-      <div class="btns"><button type="button" class="btn" id="ndAdd">Add NanoDrop export</button><button type="button" class="btn quiet" id="ndManual">Type a reading</button>
+      <div class="btns"><button type="button" class="btn" id="ndAdd">Add NanoDrop export</button><button type="button" class="btn quiet" id="ndManual">Type a reading</button><button type="button" class="btn quiet" id="assayOpenBtn">Add activity assay</button>
         <input type="file" id="ndFile" accept=".csv,.tsv,.txt,text/*" hidden></div>
       <div id="ndWrap" hidden><div class="ndlist" id="ndList"></div></div>
       <div class="row" data-for="workflow run">
@@ -1001,6 +1010,21 @@ button,input,select,textarea{font-family:inherit}
       <p class="hint noproj">Protein A280, A205 and Proteins &amp; Labels exports from the NanoDrop One, 2000 or 8000 (.csv or .tsv) work, as do files dropped on the page. Nucleic acid readings stay in ng/µL and are left out of protein totals.</p>
       <p class="hint noproj">Readings named after a pool (T3-T6) or a step (HisTrap, Q, SEC) go with that step. Replicates of a stage are averaged (mean ± SD). Mark readings taken after concentration or dialysis as Final and give the final volume, and the step's protein then comes from those.</p>
       <p class="hint noproj">Concentration is A280 divided by the A280 of 1 mg/mL for the form in that step (tagged or untagged, from the Protein section), else the single A280 value set under Peak integration, else the instrument's value. Lysate, load and flowthrough readings keep their A280 only. 260/280 above 0.6 is marked, and above 0.8 points to nucleic acid, although NAD(P) binding proteins can reach 0.9 from bound nucleotide alone.</p>
+    </section>
+
+    <section class="grp" id="assayPanel" hidden>
+      <h2>Activity assays</h2>
+      <div class="btns">
+        <button type="button" class="btn" id="assayAdd">Add assay</button>
+        <button type="button" class="btn quiet" id="assayImportBtn">Import CSV/TSV</button>
+        <button type="button" class="btn quiet" id="assayPasteToggle">Paste CSV/TSV</button>
+        <input type="file" id="assayFile" accept=".csv,.tsv,.txt,text/*" hidden>
+      </div>
+      <div id="assayPasteBox" hidden>
+        <textarea id="assayPaste" rows="4" spellcheck="false" placeholder="Paste CSV or TSV rows (e.g. Step/Fraction/Conc, Rep1, Rep2, …)" style="width:100%"></textarea>
+        <div class="btns"><button type="button" class="btn" id="assayPasteGo">Import pasted data</button></div>
+      </div>
+      <div id="assayCalcList"></div>
     </section>
 
     <section class="grp moreopts" id="moreOpts" hidden><button type="button" class="btn quiet" id="moreBtn" aria-expanded="false">More options</button><span class="muted" id="moreWhat"><button type="button" class="linkbtn" data-more-sec="Window">Window</button>, <button type="button" class="linkbtn" data-more-sec="Peak integration">peaks</button>, <button type="button" class="linkbtn" data-more-sec="Size exclusion (SEC)">size exclusion</button>, <button type="button" class="linkbtn" data-more-sec="Axes">axes</button> and <button type="button" class="linkbtn" data-more-sec="Figure style">style</button></span></section>
@@ -5667,7 +5691,7 @@ function render(){
   else { document.querySelectorAll('#panel > [data-step]:not([data-for])').forEach(el => { el.hidden = false; }); document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = d.dataset.sub === 'ptr' || d.dataset.sub === 'pbtw' || d.dataset.sub === 'pman'; }); }
   /* More options shows when this step has settings to offer */
   { const mo = $('#moreOpts'), any = PROJ && [...document.querySelectorAll('#panel > .optsec')].some(x => !x.hidden); mo.hidden = !any; $('#moreBtn').textContent = document.body.classList.contains('moreopen') ? 'Fewer options' : 'More options'; $('#moreBtn').setAttribute('aria-expanded', document.body.classList.contains('moreopen')); $('#moreWhat').hidden = document.body.classList.contains('moreopen'); }
-  renderSec(); renderProt(); renderPrep(); renderND(); syncAssayDerived(); grpStatus(); moreSync(); renderNext(); renderWfTool();
+  renderSec(); renderProt(); renderPrep(); renderND(); syncAssayDerived(); renderAssays(); grpStatus(); moreSync(); renderNext(); renderWfTool();
   { const gh = $('#wfGridHint'); if (gh) gh.hidden = opt.wfLayout !== 'grid'; }
   { const lab = id => { const e = $(id); return e && e.closest('label'); }, side = opt.gelPos === 'right', full = opt.gelView === 'full' || (kind === 'workflow' && opt.wfGelFull);
     [['#o-gelAlign', side], ['#o-gelSide', !side], ['#o-gelFocusKda', full], ['#o-gelSpan', full]].forEach(([id, hide]) => { const l = lab(id); if (l) l.hidden = hide; }); }
@@ -7261,6 +7285,10 @@ function buildStructSVG(st){
 let ndSamples = [], ndUid = 1;
 /* ---------- activity assays: data model ---------- */
 let assays = [];
+const KAT_PER_U = 1000/60;
+const ASSAY_PROTOCOL_DEF = {substrate: '', substrateConc: '', buffer: '', pH: null, pHTemp: null, tempC: null, wavelengthNm: null, eps_mM: null, pathCm: 1, rxnVolMl: null, enzVolMl: null, unitDef: '', readoutKind: 'abs'};
+const ASSAY_FIT_DEF = {model: 'mm', enzConc_uM: null, activeSitesPerMol: 1, weight: 'none'};
+const ASSAY_DISPLAY_DEF = {visible: true, placement: 'track', color: '#D55E00', showErr: 'sd', yUnit: 'U/mL'};
 const ASSAY_DEF = {
   id: '', name: '', kind: 'continuous', stepId: '', runId: '', stage: 'pool',
   rawUnit: '',
@@ -7307,6 +7335,11 @@ function makeAssay(obj){
   out.kinetics.points = list(out.kinetics.points);
   out.fit = sub(ASSAY_DEF.fit, s.fit || (s.kinetics && s.kinetics.fit));
   out.conditions = sub(ASSAY_DEF.conditions, s.conditions);
+  const e0 = Array.isArray(s.entries) && s.entries[0] && typeof s.entries[0] === 'object' ? s.entries[0] : null;
+  out.mode = ['fractions', 'steps', 'kinetics', 'profile'].includes(s.mode) ? s.mode : e0 ? ('conc' in e0 ? 'kinetics' : 'fracLabel' in e0 ? 'fractions' : ('group' in e0 || 'xLabel' in e0) ? 'profile' : 'steps') : (Array.isArray(out.kinetics && out.kinetics.points) && out.kinetics.points.length ? 'kinetics' : 'steps');
+  out.protocol = sub(ASSAY_PROTOCOL_DEF, s.protocol);
+  out.entries = list(s.entries).filter(e => e && typeof e === 'object').map(e => Object.assign({}, e, Array.isArray(e.rawVals) ? {rawVals: e.rawVals.slice()} : {}));
+  out.display = sub(ASSAY_DISPLAY_DEF, s.display);
   out.notes = s.notes == null ? '' : String(s.notes);
   out.hide = !!s.hide;
   return out;
@@ -7958,6 +7991,685 @@ function syncUid(){
   uid = Math.max(mx + 1, numOr(prep && prep.nextUid, 0));
   return uid;
 }
+function assayNum(v){
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  const s = clean(String(v ?? '')); if (!s || /^[<>]|^(?:ovrflw|overflow|masked|nan|nd|n\.d\.|---)$/i.test(s)) return null;
+  const r = parseMeas(s); return r && !r.sat && isFinite(r.v) ? r.v : null;
+}
+function assayBlankStats(assay){
+  const bs = Array.isArray(assay && assay.blanks) ? assay.blanks.map(b => b && typeof b === 'object' ? (assayNum(b.val) ?? assayExtractNum(b, assay)) : assayNum(b)).filter(v => v != null) : [];
+  if (!bs.length) return {n: 0, mean: 0, sd: 0, sem: 0};
+  const n = bs.length, mean = bs.reduce((a, b) => a + b, 0)/n;
+  const sd = n > 1 ? Math.sqrt(bs.reduce((t, x) => t + (x - mean)**2, 0)/(n - 1)) : 0;
+  return {n, mean, sd, sem: n > 1 ? sd/Math.sqrt(n) : 0};
+}
+/* Beer-Lambert rate conversion & quadrature blank variance propagation (STRENDA Level 1A) */
+function assayRate(entryOrAssay, parentAssay){
+  const e = entryOrAssay && typeof entryOrAssay === 'object' ? entryOrAssay : null; if (!e || e.excluded) return null;
+  const a = parentAssay && typeof parentAssay === 'object' ? parentAssay : e;
+  const rawArr = Array.isArray(e.rawVals) ? e.rawVals : Array.isArray(e.replicates) ? e.replicates : e.val !== undefined ? [e.val] : [];
+  const vals = rawArr.map(v => v && typeof v === 'object' ? (assayNum(v.val) ?? assayExtractNum(v, a)) : assayNum(v)).filter(v => v != null);
+  if (!vals.length) return null;
+  const n = vals.length, meanRaw = vals.reduce((s, x) => s + x, 0)/n;
+  const expSd = assayNum(e.rawSd);
+  const sdRaw = n > 1 ? Math.sqrt(vals.reduce((t, x) => t + (x - meanRaw)**2, 0)/(n - 1)) : (expSd != null ? Math.abs(expSd) : null);
+  const repN = assayNum(e.n);
+  const semRaw = sdRaw != null ? (n > 1 ? sdRaw/Math.sqrt(n) : (repN && repN > 1 ? sdRaw/Math.sqrt(repN) : sdRaw)) : null;
+  const prot = (a && a.protocol) || {};
+  const rawUnit = String(e.rawUnit || (e === a && a.rawUnit) || prot.readoutUnit || 'dA/min').trim();
+  const B = a ? assayBlankStats(a) : {n: 0, mean: 0, sd: 0, sem: 0};
+  const useBlank = B.n > 0 && e.subtractBlank !== false && (rawUnit === 'dA/min' || e.subtractBlank === true || e === a);
+  const netRaw = useBlank ? meanRaw - B.mean : meanRaw;
+  const hasSd = sdRaw != null || (useBlank && B.n > 1);
+  const sdNet = hasSd ? Math.sqrt((sdRaw || 0)**2 + (useBlank ? B.sd**2 : 0)) : null;
+  const semNet = hasSd ? Math.sqrt((semRaw || 0)**2 + (useBlank ? B.sem**2 : 0)) : null;
+  const d0 = assayNum(e.dil) ?? (Array.isArray(a.dilutions) && a.dilutions.length ? assayNum(a.dilutions[0]) : null);
+  const df = d0 != null && d0 > 0 ? d0 : 1;
+  const epsRaw = assayNum(e.eps_mM) ?? assayNum(prot.eps_mM);
+  const extLegacy = assayNum(e.extCoeff) ?? assayNum(a.extCoeff) ?? assayNum(a.extinctionCoefficient);
+  const eps_mM = epsRaw != null && epsRaw > 0 ? epsRaw : (extLegacy != null && extLegacy > 0 ? (a.extCoeffUnit === 'mM' || extLegacy < 100 ? extLegacy : extLegacy/1000) : null);
+  const pathCm = (assayNum(e.pathCm) ?? assayNum(prot.pathCm) ?? 1) || 1;
+  const rxnVolMl = assayNum(e.rxnVolMl) ?? assayNum(prot.rxnVolMl) ?? (assayNum(a.assayVolumeMl) ?? (assayNum(a.assayVolume) != null ? (+a.assayVolume > 10 ? +a.assayVolume/1000 : +a.assayVolume) : null));
+  const enzVolMl = assayNum(e.enzVolMl) ?? assayNum(prot.enzVolMl) ?? assayNum(a.enzVolMl);
+  let uPerMl = null, sdUPerMl = null, semUPerMl = null, totalU = null, sdTotalU = null, sa = null, sdSa = null, semSa = null, fRate = df, rate = netRaw*df, sdRate = sdNet != null ? sdNet*df : null, semRate = semNet != null ? semNet*df : null;
+  if (rawUnit === 'dA/min') {
+    if (eps_mM > 0 && pathCm > 0 && rxnVolMl > 0 && enzVolMl > 0) {
+      const f = (rxnVolMl*df)/(eps_mM*pathCm*enzVolMl);
+      fRate = f; uPerMl = netRaw*f; sdUPerMl = sdNet != null ? sdNet*Math.abs(f) : null; semUPerMl = semNet != null ? semNet*Math.abs(f) : null;
+      rate = uPerMl; sdRate = sdUPerMl; semRate = semUPerMl;
+    }
+  } else if (rawUnit === 'U/mL') {
+    fRate = df; uPerMl = netRaw*df; sdUPerMl = sdNet != null ? sdNet*df : null; semUPerMl = semNet != null ? semNet*df : null;
+    rate = uPerMl; sdRate = sdUPerMl; semRate = semUPerMl;
+  } else if (/^nkat\/mL$/i.test(rawUnit)) {
+    const f = df/KAT_PER_U;
+    fRate = f; uPerMl = netRaw*f; sdUPerMl = sdNet != null ? sdNet*f : null; semUPerMl = semNet != null ? semNet*f : null;
+    rate = uPerMl; sdRate = sdUPerMl; semRate = semUPerMl;
+  } else if (rawUnit === 'U') {
+    totalU = netRaw*df; sdTotalU = sdNet != null ? sdNet*df : null;
+    const v = assayNum(e.volMl);
+    if (v > 0) { fRate = df/v; uPerMl = totalU/v; sdUPerMl = sdTotalU != null ? sdTotalU/v : null; semUPerMl = semNet != null ? (semNet*df)/v : null; }
+    rate = uPerMl != null ? uPerMl : totalU;
+  } else if (rawUnit === 'U/mg') {
+    fRate = df; sa = netRaw*df; sdSa = sdNet != null ? sdNet*df : null; semSa = semNet != null ? semNet*df : null;
+    rate = sa; sdRate = sdSa; semRate = semSa;
+  }
+  const volMl = assayNum(e.volMl);
+  if (totalU == null && uPerMl != null && volMl > 0) { totalU = uPerMl*volMl; sdTotalU = sdUPerMl != null ? sdUPerMl*volMl : null; }
+  const nkatPerMl = uPerMl != null ? uPerMl*KAT_PER_U : null;
+  const sdNkatPerMl = sdUPerMl != null ? sdUPerMl*KAT_PER_U : null;
+  return {n, vals, meanRaw, sdRaw, blankMean: useBlank ? B.mean : 0, blankSd: useBlank ? B.sd : 0, netRaw, sdNet, semNet, df, fRate, rawUnit,
+    uPerMl, sdUPerMl, semUPerMl, nkatPerMl, sdNkatPerMl, totalU, sdTotalU, sa, sdSa, semSa, rate, sdRate, semRate};
+}
+function assayStepMwKda(stepRef){
+  const ref = String(stepRef || '').trim(), rid = ref.startsWith('btw:') || ref.startsWith('nc:') ? ref.slice(ref.indexOf(':') + 1) : ref.startsWith('run:') ? ref.slice(4) : ref;
+  const r = rid ? runs.find(x => x.id === rid) : null;
+  if (r) { const E = ndEpsFor(r.id); if (E && E.kda > 0) return E.kda; }
+  if (numOr(opt.protKda, 0) > 0) return +opt.protKda;
+  const cm = cleanSeq(opt.protSeq) || prep.gb ? constructModel() : null;
+  if (cm) { const clv = ref === 'final' ? !!prep.cleave || cutAfterIndex() >= 0 : r ? isCleavedStep(r) : false; return clv && cm.mCut > 0 ? cm.mCut : cm.mTag || cm.mCut || null; }
+  return null;
+}
+function assayStepProt(stepRef){
+  const ref = String(stepRef || '').trim(); if (!ref) return {volMl: null, mgMl: null, mg: null, src: ''};
+  if (ref === 'lysis') return {volMl: numOr(prep.lysVol, 0) || null, mgMl: null, mg: null, src: 'lysis'};
+  if (ref === 'final') { const c = numOr(prep.finConc, null), v = numOr(prep.finVol, null); return {volMl: v > 0 ? v : null, mgMl: c > 0 ? c : null, mg: c > 0 && v > 0 ? c*v : null, src: 'final'}; }
+  if (ref.startsWith('btw:') || ref.startsWith('nc:')) {
+    const rid = ref.slice(ref.indexOf(':') + 1), r = runs.find(x => x.id === rid), b = r && btwOf(r);
+    if (!r || !b) return {volMl: null, mgMl: null, mg: null, src: ''};
+    const ms = poolMeas(r), bw = btwMg(r), vo = numOr(b.vOut, null);
+    return {volMl: vo > 0 ? volMl(vo, r) : null, mgMl: ms && ms.c > 0 ? ms.c : null, mg: bw && bw.mg > 0 ? bw.mg : null, src: 'btw'};
+  }
+  const mid = ref.startsWith('man:') ? ref.slice(4) : ref, man = (prep.manual || []).find(m => m.id === mid);
+  if (man) { const c = numOr(man.conc, null), v = numOr(man.vol, null), mg = manMg(man); return {volMl: v > 0 ? v : null, mgMl: c > 0 ? c : null, mg: mg > 0 ? mg : null, src: 'manual'}; }
+  const rid = ref.startsWith('run:') ? ref.slice(4) : ref, r = runs.find(x => x.id === rid);
+  if (r) {
+    const nd = ndForRun(r), p = poolRows(r);
+    if (nd && (nd.mgml > 0 || nd.mg > 0)) return {volMl: nd.vol > 0 ? nd.vol : (p && p.volMl > 0 ? p.volMl : null), mgMl: nd.mgml > 0 ? nd.mgml : null, mg: nd.mg > 0 ? nd.mg : null, src: 'nd'};
+    if (p) return {volMl: p.volMl > 0 ? p.volMl : null, mgMl: p.conc > 0 ? p.conc : (p.mg > 0 && p.volMl > 0 ? p.mg/p.volMl : null), mg: p.mg > 0 ? p.mg : null, src: p.measured ? 'measured' : 'area'};
+  }
+  return {volMl: null, mgMl: null, mg: null, src: ''};
+}
+/* Multi-step purification activity summary with full floating-point SA/Fold and btwSplit cumulative yield propagation */
+function assayStepSummary(assay){
+  const a = assay && typeof assay === 'object' ? assay : null; if (!a) return [];
+  const rawList = Array.isArray(a.entries) && a.entries.length ? a.entries
+    : (Array.isArray(a.replicates) && a.replicates.length ? [{stepRef: a.stepId || a.runId || '', rawVals: a.replicates, protMgMl: a.proteinOverride, volMl: a.poolVolMl ?? null}] : []);
+  let baseU = null, baseSa = null, cumSplit = 1, prevLoadedU = null;
+  return rawList.map((e, idx) => {
+    const ref = String(e.stepRef || e.stepId || e.runId || (rawList.length === 1 ? (a.stepId || a.runId || '') : '')).trim();
+    const label = String(e.name || e.stepName || e.label || ref || `Step ${idx + 1}`).trim();
+    const rc = assayRate(e, a);
+    const linked = (e.protSource || 'auto') !== 'none' ? assayStepProt(ref) : {volMl: null, mgMl: null, mg: null, src: ''};
+    const vMl = assayNum(e.volMl) ?? linked.volMl;
+    const eMgMl = assayNum(e.protMgMl) ?? (e.protSource !== 'none' && (a.proteinOverride && typeof a.proteinOverride === 'object' ? assayNum(a.proteinOverride.conc) : assayNum(a.proteinOverride)) != null && rawList.length === 1 ? assayNum(a.proteinOverride) : null);
+    const eTotMg = assayNum(e.protTotalMg);
+    let protMgMl = eMgMl != null ? eMgMl : linked.mgMl, protMg = null;
+    if (eMgMl != null && vMl > 0) protMg = eMgMl*vMl;
+    else if (eTotMg != null) { protMg = eTotMg; if (protMgMl == null && vMl > 0) protMgMl = eTotMg/vMl; }
+    else if (linked.mg != null) { protMg = linked.mg; if (protMgMl == null && vMl > 0) protMgMl = linked.mg/vMl; }
+    else if (protMgMl != null && vMl > 0) protMg = protMgMl*vMl;
+    if (!rc) return {index: idx, stepRef: ref, label, unassayed: true, volMl: vMl, protMgMl, protMg, uPerMl: null, nkatPerMl: null, totalU: null, sa: null, fold: null, yieldPct: null, rawYieldPct: null, stepYieldPct: null, kcat: null, splitFactor: cumSplit, warn: false, warnings: []};
+    const uPerMl = rc.uPerMl != null ? rc.uPerMl : (rc.totalU != null && vMl > 0 ? rc.totalU/vMl : null);
+    const totalU = rc.totalU != null ? rc.totalU : (uPerMl != null && vMl > 0 ? uPerMl*vMl : null);
+    /* Rule 2: full floating-point SA, preferring (U/mL)/(mg/mL) when concentrations are known */
+    const sa = rc.sa != null ? rc.sa : (uPerMl != null && protMgMl > 0 ? uPerMl/protMgMl : (totalU != null && protMg > 0 ? totalU/protMg : null));
+    const sdSa = rc.sdSa != null ? rc.sdSa : (rc.sdUPerMl != null && protMgMl > 0 ? rc.sdUPerMl/protMgMl : (rc.sdTotalU != null && protMg > 0 ? rc.sdTotalU/protMg : null));
+    const isBaseU = baseU == null && totalU != null && totalU > 0;
+    const isBaseSa = baseSa == null && sa != null && sa > 0;
+    if (isBaseU) baseU = totalU;
+    if (isBaseSa) baseSa = sa;
+    const fold = sa != null && baseSa > 0 ? sa/baseSa : null;
+    const rawYieldPct = totalU != null && baseU > 0 ? (100*totalU)/baseU : null;
+    const adjTotalU = totalU != null && cumSplit > 0 ? totalU/cumSplit : null;
+    const yieldPct = adjTotalU != null && baseU > 0 ? (100*adjTotalU)/baseU : null;
+    const stepYieldPct = isBaseU && prevLoadedU == null ? 100 : (totalU != null && prevLoadedU > 0 ? (100*totalU)/prevLoadedU : null);
+    const mwKda = assayNum(e.mwKda) ?? assayNum(a.protocol && a.protocol.mwKda) ?? assayStepMwKda(ref);
+    const kcat = sa != null && mwKda > 0 ? (sa*mwKda)/60 : null;
+    const warnings = [];
+    if (eMgMl != null && vMl > 0 && eTotMg != null && eTotMg > 0 && totalU != null && sa != null) {
+      const saPrinted = totalU/eTotMg, rel = saPrinted > 0 ? (sa - saPrinted)/saPrinted : 0;
+      if (Math.abs(rel) > 0.02) warnings.push(`Rounded protein mass (${eTotMg} mg) shifts SA by ${rel >= 0 ? '+' : ''}${fmt(rel*100, 2)}% (${fmt(saPrinted, 2)} vs ${fmt(sa, 2)} U/mg)`);
+    }
+    const rSa = assayNum(e.reportedSa);
+    if (rSa != null && sa != null && sa > 0) {
+      const rel = (rSa - sa)/sa;
+      if (Math.abs(rel) > 0.02) warnings.push(`Reported SA (${rSa} U/mg) differs from computed (${fmt(sa, 2)} U/mg) by ${rel >= 0 ? '+' : ''}${fmt(rel*100, 2)}%`);
+    }
+    const rFold = assayNum(e.reportedFold);
+    if (rFold != null && fold != null) {
+      if (isBaseSa && rFold === 0) warnings.push('Baseline purification fold reported as 0 instead of 1.00×');
+      else if (fold > 0 && Math.abs(rFold - fold)/fold > 0.02) warnings.push(`Reported fold (${rFold}×) differs from computed (${fmt(fold, 2)}×) by ${((rFold - fold)/fold >= 0 ? '+' : '') + fmt(((rFold - fold)/fold)*100, 2)}%`);
+    }
+    const rYld = assayNum(e.reportedYield);
+    if (rYld != null && yieldPct != null && yieldPct > 0 && Math.abs(rYld - yieldPct)/yieldPct > 0.02) {
+      warnings.push(`Reported yield (${rYld}%) differs from computed (${fmt(yieldPct, 2)}%) by ${((rYld - yieldPct)/yieldPct >= 0 ? '+' : '') + fmt(((rYld - yieldPct)/yieldPct)*100, 2)}%`);
+    }
+    const usedSplit = cumSplit;
+    /* Rule 3: propagate btwSplit factor leaving this step to downstream steps */
+    let fAfter = 1;
+    const eSp = btwSplit(e);
+    if (eSp.set && eSp.f > 0 && eSp.f < 1) fAfter = eSp.f;
+    else if (assayNum(e.splitFactor) != null && +e.splitFactor > 0 && +e.splitFactor < 1) fAfter = +e.splitFactor;
+    else if (ref) {
+      const nextRef = String((rawList[idx + 1] && (rawList[idx + 1].stepRef || rawList[idx + 1].stepId || rawList[idx + 1].runId)) || '').trim();
+      if (ref.startsWith('btw:') || ref.startsWith('nc:')) {
+        const rid = ref.slice(ref.indexOf(':') + 1), sp = btwSplit((prep.btw || {})[rid]);
+        if (sp.set && sp.f > 0 && sp.f < 1) fAfter = sp.f;
+      } else {
+        const rid = ref.startsWith('run:') ? ref.slice(4) : ref;
+        if (rid && nextRef !== 'btw:' + rid && nextRef !== 'nc:' + rid && prep.btw && prep.btw[rid]) {
+          const sp = btwSplit(prep.btw[rid]);
+          if (sp.set && sp.f > 0 && sp.f < 1) fAfter = sp.f;
+        }
+      }
+    }
+    if (totalU != null && totalU > 0) prevLoadedU = totalU*fAfter;
+    cumSplit *= fAfter;
+    return {index: idx, stepRef: ref, label, unassayed: false, volMl: vMl, protMgMl, protMg,
+      uPerMl, sdUPerMl: rc.sdUPerMl, semUPerMl: rc.semUPerMl, nkatPerMl: uPerMl != null ? uPerMl*KAT_PER_U : null,
+      totalU, sdTotalU: rc.sdTotalU, sa, sdSa, fold, yieldPct, rawYieldPct, stepYieldPct,
+      mwKda, kcat, splitFactor: usedSplit, loadedNextU: totalU != null && fAfter < 1 ? totalU*fAfter : null,
+      warn: warnings.length > 0, warnings};
+  });
+}
+function invertSmallMat(M){
+  const n = M.length, A = M.map((r, i) => { const row = new Float64Array(2*n); for (let j = 0; j < n; j++) row[j] = r[j]; row[n + i] = 1; return row; });
+  for (let c = 0; c < n; c++) {
+    let piv = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c]; if (!isFinite(d) || Math.abs(d) < 1e-15) return null;
+    for (let j = 0; j < 2*n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) if (r !== c) { const f = A[r][c]; if (f) for (let j = 0; j < 2*n; j++) A[r][j] -= f*A[c][j]; }
+  }
+  return A.map(r => Array.from(r.slice(n)));
+}
+function hanesWoolfInit(pts){
+  const pos = pts.filter(p => p.x > 0 && p.y > 0);
+  if (pos.length >= 2) {
+    const n = pos.length, mx = pos.reduce((s, p) => s + p.x, 0)/n, mz = pos.reduce((s, p) => s + p.x/p.y, 0)/n;
+    let sxx = 0, sxz = 0;
+    for (const p of pos) { const dx = p.x - mx; sxx += dx*dx; sxz += dx*(p.x/p.y - mz); }
+    const slope = sxx > 0 ? sxz/sxx : 0, icpt = mz - slope*mx;
+    if (slope > 1e-12 && icpt > 0) return [1/slope, icpt/slope];
+  }
+  const maxY = Math.max(1e-6, ...pts.map(p => p.y)), xs = pts.map(p => p.x).filter(x => x > 0).sort((a, b) => a - b);
+  return [maxY*1.2, xs.length ? xs[xs.length >> 1] : 1];
+}
+/* Nonlinear kinetics regression via Levenberg-Marquardt (MM, Hill, Substrate Inhibition) with Hanes-Woolf init, SE, R2, RMSE, AICc */
+function fitAssayKinetics(assayOrPoints, fitOpts){
+  let pts = [], cfg = Object.assign({}, ASSAY_FIT_DEF, fitOpts || {}), vUnit = String((fitOpts && fitOpts.vUnit) || '').trim();
+  if (Array.isArray(assayOrPoints)) {
+    pts = assayOrPoints.flatMap(p => {
+      if (Array.isArray(p)) { const x = assayNum(p[0]), y = assayNum(p[1]); return x != null && y != null ? [{x, y, sd: assayNum(p[2])}] : []; }
+      if (!p || typeof p !== 'object') return [];
+      const x = assayNum(p.conc ?? p.x); if (x == null) return [];
+      if (Array.isArray(p.rawVals)) {
+        const vs = p.rawVals.map(assayNum).filter(v => v != null), m = vs.length ? vs.reduce((a, b) => a + b, 0)/vs.length : 0;
+        const sd = vs.length > 1 ? Math.sqrt(vs.reduce((t, v) => t + (v - m)**2, 0)/(vs.length - 1)) : assayNum(p.sd);
+        const df = assayNum(p.dil) > 0 ? +p.dil : 1;
+        return vs.map(v => ({x, y: v*df, sd: sd != null ? sd*df : null, series: p.series || ''}));
+      }
+      const y = assayNum(p.rate ?? p.y ?? p.val);
+      return y != null ? [{x, y, sd: assayNum(p.sd ?? p.rawSd), series: p.series || ''}] : [];
+    });
+  } else if (assayOrPoints && typeof assayOrPoints === 'object') {
+    const a = assayOrPoints; cfg = Object.assign({}, ASSAY_FIT_DEF, a.fit || {}, fitOpts || {});
+    const seriesFilter = cfg.series ? String(cfg.series) : '';
+    const B = assayBlankStats(a), prot = a.protocol || {};
+    (a.entries || []).forEach(e => {
+      if (!e || e.excluded || (seriesFilter && String(e.series || '') !== seriesFilter)) return;
+      const x = assayNum(e.conc ?? e.x); if (x == null || x < 0) return;
+      const ru = String(e.rawUnit || prot.readoutUnit || '').trim();
+      if (!vUnit && ru) vUnit = ru;
+      const vs = (Array.isArray(e.rawVals) ? e.rawVals : e.val !== undefined ? [e.val] : []).map(assayNum).filter(v => v != null);
+      if (!vs.length) return;
+      const df = assayNum(e.dil) > 0 ? +e.dil : (Array.isArray(a.dilutions) && assayNum(a.dilutions[0]) > 0 ? +a.dilutions[0] : 1);
+      const useBlank = B.n > 0 && e.subtractBlank !== false && (ru === 'dA/min' || e.subtractBlank === true);
+      const eps = assayNum(e.eps_mM) ?? assayNum(prot.eps_mM), pathCm = (assayNum(e.pathCm) ?? assayNum(prot.pathCm) ?? 1) || 1;
+      const rxnV = assayNum(e.rxnVolMl) ?? assayNum(prot.rxnVolMl), enzV = assayNum(e.enzVolMl) ?? assayNum(prot.enzVolMl);
+      const scale = ru === 'dA/min' && eps > 0 && pathCm > 0 && rxnV > 0 && enzV > 0 ? (rxnV*df)/(eps*pathCm*enzV)
+        : /^nkat\/mL$/i.test(ru) ? df/KAT_PER_U : df;
+      if ((ru === 'dA/min' && eps > 0 && pathCm > 0 && rxnV > 0 && enzV > 0) || /^nkat\/mL$/i.test(ru)) vUnit = 'U/mL';
+      const conv = vs.map(v => (v - (useBlank ? B.mean : 0))*scale);
+      const m = conv.reduce((s, v) => s + v, 0)/conv.length;
+      const sdSample = conv.length > 1 ? Math.sqrt(conv.reduce((t, v) => t + (v - m)**2, 0)/(conv.length - 1)) : (assayNum(e.rawSd) != null ? Math.abs(assayNum(e.rawSd))*Math.abs(scale) : null);
+      const sd = sdSample != null || (useBlank && B.n > 1) ? Math.sqrt((sdSample || 0)**2 + (useBlank ? (B.sd*Math.abs(scale))**2 : 0)) : null;
+      conv.forEach(y => pts.push({x, y, sd}));
+    });
+  }
+  const cleanPts = pts.filter(p => p && isFinite(p.x) && isFinite(p.y) && p.x >= 0);
+  const modelName = cfg.model === 'hill' ? 'hill' : cfg.model === 'subInhib' ? 'subInhib' : 'mm';
+  const pDim = modelName === 'mm' ? 2 : 3, n = cleanPts.length;
+  if (n < pDim) return null;
+  let sdByX = null;
+  if (cfg.weight === 'sd') {
+    const grp = new Map();
+    cleanPts.forEach(p => { const k = String(p.x); if (!grp.has(k)) grp.set(k, []); grp.get(k).push(p.y); });
+    sdByX = new Map();
+    grp.forEach((ys, k) => { if (ys.length > 1) { const m = ys.reduce((a, b) => a + b, 0)/ys.length; sdByX.set(k, Math.sqrt(ys.reduce((t, v) => t + (v - m)**2, 0)/(ys.length - 1))); } });
+  }
+  const ws = cleanPts.map(p => {
+    if (cfg.weight !== 'sd') return 1;
+    const s = p.sd > 0 ? p.sd : (sdByX && sdByX.get(String(p.x)) > 0 ? sdByX.get(String(p.x)) : null);
+    return s > 0 ? 1/(s*s) : 1;
+  });
+  const evalF = (q, x) => {
+    if (modelName === 'mm') { const den = q[1] + x; return den > 0 ? q[0]*x/den : 0; }
+    if (modelName === 'hill') { if (x <= 0) return 0; const xh = Math.pow(x, q[2]), kh = Math.pow(q[1], q[2]), den = kh + xh; return den > 0 ? q[0]*xh/den : 0; }
+    const den = q[1] + x + (x*x)/q[2]; return den > 0 ? q[0]*x/den : 0;
+  };
+  const evalJ = (q, x) => {
+    if (modelName === 'mm') { const den = q[1] + x; return [x/den, -q[0]*x/(den*den)]; }
+    if (modelName === 'hill') { if (x <= 0) return [0, 0, 0]; const xh = Math.pow(x, q[2]), kh = Math.pow(q[1], q[2]), den = kh + xh, d2 = den*den;
+      return [xh/den, -q[0]*xh*q[2]*Math.pow(q[1], q[2] - 1)/d2, q[0]*xh*kh*Math.log(x/q[1])/d2]; }
+    const den = q[1] + x + (x*x)/q[2], d2 = den*den;
+    return [x/den, -q[0]*x/d2, q[0]*x*x*x/(q[2]*q[2]*d2)];
+  };
+  const clamp = q => {
+    const out = q.slice(); out[0] = Math.max(1e-12, out[0]); out[1] = Math.max(1e-12, out[1]);
+    if (modelName === 'hill') out[2] = Math.min(20, Math.max(0.05, out[2]));
+    else if (modelName === 'subInhib') out[2] = Math.max(1e-12, out[2]);
+    return out;
+  };
+  const wrss = q => { let s = 0; for (let i = 0; i < n; i++) { const r = cleanPts[i].y - evalF(q, cleanPts[i].x); s += ws[i]*r*r; } return s; };
+  const sorted = cleanPts.slice().sort((a, b) => a.x - b.x);
+  let peakIdx = 0; for (let i = 1; i < sorted.length; i++) if (sorted[i].y > sorted[peakIdx].y) peakIdx = i;
+  const rising = modelName === 'subInhib' && peakIdx >= 2 ? sorted.slice(0, peakIdx + 1) : sorted;
+  const [v0, k0] = hanesWoolfInit(rising), maxX = Math.max(1e-6, ...cleanPts.map(p => p.x)), maxY = Math.max(1e-6, ...cleanPts.map(p => p.y));
+  const starts = modelName === 'mm' ? [[v0, k0], [maxY*1.15, maxX*0.25]]
+    : modelName === 'hill' ? [[v0, k0, 1], [maxY*1.15, maxX*0.25, 1.5], [maxY*1.15, maxX*0.25, 0.8]]
+    : [[v0*1.3, k0, maxX*1.5], [maxY*2, sorted[peakIdx].x*0.5 || maxX*0.2, maxX], [maxY*1.5, maxX*0.1, maxX*3]];
+  let bestP = null, bestE = Infinity;
+  for (const st of starts) {
+    let q = clamp(st), cur = wrss(q), lam = 1e-3;
+    for (let it = 0; it < 200; it++) {
+      const A = Array.from({length: pDim}, () => new Float64Array(pDim)), g = new Float64Array(pDim);
+      for (let i = 0; i < n; i++) {
+        const x = cleanPts[i].x, r = cleanPts[i].y - evalF(q, x), J = evalJ(q, x), w = ws[i];
+        for (let a = 0; a < pDim; a++) { g[a] += w*J[a]*r; for (let b = a; b < pDim; b++) A[a][b] += w*J[a]*J[b]; }
+      }
+      for (let a = 0; a < pDim; a++) for (let b = 0; b < a; b++) A[a][b] = A[b][a];
+      let imp = false;
+      for (let tr = 0; tr < 10 && !imp; tr++) {
+        const M = A.map((row, a) => { const rr = Array.from(row); rr[a] += lam*(row[a] || 1e-9); rr.push(g[a]); return rr; });
+        for (let c = 0; c < pDim; c++) { let pv = c; for (let r = c + 1; r < pDim; r++) if (Math.abs(M[r][c]) > Math.abs(M[pv][c])) pv = r; [M[c], M[pv]] = [M[pv], M[c]];
+          const d = M[c][c] || 1e-15; for (let r = c + 1; r < pDim; r++) { const f = M[r][c]/d; for (let k = c; k <= pDim; k++) M[r][k] -= f*M[c][k]; } }
+        const dlt = new Float64Array(pDim);
+        for (let r = pDim - 1; r >= 0; r--) { let t = M[r][pDim]; for (let k = r + 1; k < pDim; k++) t -= M[r][k]*dlt[k]; dlt[r] = t/(M[r][r] || 1e-15); }
+        const qn = clamp(q.map((v, k) => v + dlt[k])), e = wrss(qn);
+        if (isFinite(e) && e < cur) { const rel = (cur - e)/(cur || 1); q = qn; cur = e; lam = Math.max(1e-11, lam/3); imp = true; if (rel < 1e-12) it = 1e9; }
+        else lam *= 4;
+      }
+      if (!imp) break;
+    }
+    if (cur < bestE) { bestE = cur; bestP = q; }
+  }
+  const H = Array.from({length: pDim}, () => new Float64Array(pDim));
+  let rss = 0;
+  for (let i = 0; i < n; i++) {
+    const f = evalF(bestP, cleanPts[i].x), r = cleanPts[i].y - f, J = evalJ(bestP, cleanPts[i].x), w = ws[i];
+    rss += r*r;
+    for (let a = 0; a < pDim; a++) for (let b = 0; b < pDim; b++) H[a][b] += w*J[a]*J[b];
+  }
+  const inv = n > pDim ? invertSmallMat(H) : null, s2 = n > pDim ? bestE/(n - pDim) : null;
+  const se = inv && s2 != null ? bestP.map((_, i) => inv[i][i] >= 0 ? Math.sqrt(s2*inv[i][i]) : null) : bestP.map(() => null);
+  const meanY = cleanPts.reduce((s, p) => s + p.y, 0)/n, sst = cleanPts.reduce((s, p) => s + (p.y - meanY)**2, 0);
+  const r2 = sst > 0 ? 1 - rss/sst : null, rmse = Math.sqrt(rss/n);
+  /* Burnham & Anderson (2002) small-sample AICc with k = p + 1 (parameters plus residual variance σ²) */
+  const k = pDim + 1, aic = rss > 0 ? n*Math.log(rss/n) + 2*k : null, aicc = aic != null && n > k + 1 ? aic + 2*k*(k + 1)/(n - k - 1) : null;
+  const enzU = assayNum(cfg.enzConc_uM), sites = assayNum(cfg.activeSitesPerMol) > 0 ? +cfg.activeSitesPerMol : 1, et = enzU > 0 ? enzU*sites : null;
+  const uNorm = vUnit.toLowerCase();
+  const kcatScale = et > 0 ? (uNorm === 'um/s' || uNorm === 'µm/s' || uNorm === 'nkat/ml' ? 1/et : uNorm === 'u/ml' ? 1000/(60*et) : 1/(60*et)) : null;
+  const kcat = kcatScale != null ? bestP[0]*kcatScale : null;
+  const seKcat = kcatScale != null && se[0] != null ? se[0]*kcatScale : null;
+  return {model: modelName, Vmax: bestP[0], Km: bestP[1], hillN: modelName === 'hill' ? bestP[2] : null, Ki: modelName === 'subInhib' ? bestP[2] : null,
+    seVmax: se[0], seKm: se[1], seHillN: modelName === 'hill' ? se[2] : null, seKi: modelName === 'subInhib' ? se[2] : null,
+    kcat, seKcat, n, p: pDim, rss, wrss: bestE, r2, rmse, aic, aicc, predict: x => evalF(bestP, x)};
+}
+function assayCalc(a){
+  if (!a || typeof a !== 'object') return null;
+  const mode = a.mode || 'steps';
+  if (mode === 'kinetics') return {mode, fit: fitAssayKinetics(a), entries: (a.entries || []).map(e => ({entry: e, rate: assayRate(e, a)}))};
+  if (mode === 'fractions' || mode === 'profile') return {mode, entries: (a.entries || []).map(e => ({entry: e, rate: assayRate(e, a)}))};
+  return {mode: 'steps', steps: assayStepSummary(a), rate: (!a.entries || !a.entries.length) && Array.isArray(a.replicates) && a.replicates.length ? assayRate(a, a) : null};
+}
+function assayFracMatch(run, e){
+  if (assayNum(e && e.xOverride) != null) return {matched: true, x: +e.xOverride, idx: -1};
+  const lbl = String((e && e.fracLabel) || '').trim();
+  if (!run || !Array.isArray(run.fracs) || !run.fracs.length) return {matched: true, x: null, idx: -1};
+  if (!lbl) return {matched: false, x: null, idx: -1};
+  const idx = fracIdx(run, lbl);
+  if (idx < 0) return {matched: false, x: null, idx: -1};
+  const uv = uvOf(run), segs = fracSegments(run, uv.xs.length ? uv.xs[uv.xs.length - 1] : 0), sg = segs.find(s => s.i === idx) || segs[idx];
+  return {matched: true, x: sg ? (sg.a + sg.b)/2 : run.fracs[idx].x, idx};
+}
+function parseAssayCell(v, dc){
+  const s = clean(String(v ?? '')); if (!s || /^[<>]|^(?:ovrflw|overflow|masked|nan|nd|n\.d\.|---)$/i.test(s)) return null;
+  let norm = s;
+  if (dc) norm = norm.replace(/^[-+]?\d+,\d+(?:[eE][-+]?\d+)?$/, m => m.replace(',', '.'));
+  else if (/^[-+]?\d+,\d+$/.test(norm) && !/^[1-9]\d{0,2},\d{3}$/.test(norm)) norm = norm.replace(',', '.');
+  if (/[*#]$/.test(norm)) return null;
+  return measurementNumber(norm);
+}
+function parseRawValsInput(str){
+  return String(str ?? '').split(/[,;\t]+|\s{2,}/).map(t => clean(t)).filter(Boolean).map(t => {
+    const n = parseAssayCell(t, false);
+    return n != null ? n : t;
+  });
+}
+/* CSV/TSV/plate-reader assay import reusing splitFields, parseText() and measurementNumber(), preserving 0 and scrubbing OVRFLW/Masked/>3.5 */
+function parseAssayText(text, modeHint){
+  const raw = String(text ?? '').replace(/^\uFEFF/, '');
+  const lines = raw.split(/\r\n|\n|\r/).map(l => l.trim()).filter(l => l && !l.startsWith('#') && !l.startsWith('//'));
+  if (!lines.length) return {mode: modeHint || 'steps', blanks: [], entries: []};
+  const l0 = lines[0], d = (l0.match(/\t/g) || []).length >= 1 ? '\t' : (l0.match(/;/g) || []).length > (l0.match(/,/g) || []).length ? ';' : (l0.includes(',') ? ',' : 'ws');
+  const dc = d === ';';
+  const rows = lines.map(l => splitFields(l, d).map(clean));
+  const head = rows[0], hasHeader = head.some(h => /[A-Za-z]/.test(h) && parseAssayCell(h, dc) == null && !/^(?:ovrflw|overflow|masked)$/i.test(h));
+  if (!hasHeader) {
+    const pt = parseText(raw);
+    if (pt && Array.isArray(pt.rows) && pt.rows.length) {
+      const m = modeHint || 'kinetics';
+      const entries = pt.rows.map((r, idx) => {
+        const vals = r.slice(1).map(v => v != null && isFinite(v) ? v : null).filter(v => v != null);
+        if (m === 'kinetics') return {conc: r[0], rawVals: vals, rawUnit: 'dA/min'};
+        if (m === 'fractions') return {fracLabel: String(r[0] ?? `F${idx + 1}`), rawVals: vals};
+        if (m === 'profile') return {group: 'pH', xLabel: String(r[0] ?? ''), xNum: r[0], rawVals: vals};
+        return {stepRef: '', name: `Step ${idx + 1}`, rawVals: vals.length ? vals : (r[0] != null ? [r[0]] : []), rawUnit: 'dA/min'};
+      });
+      return {mode: m, blanks: [], entries};
+    }
+  }
+  const hn = head.map(h => h.toLowerCase().replace(/\s+/g, ' ')), dataRows = hasHeader ? rows.slice(1) : rows;
+  const col = re => hn.findIndex(h => re.test(h));
+  const cSeries = hasHeader ? col(/^(series|state|condition|variant|mutant|enzyme)$/) : -1;
+  const cGroup = hasHeader ? col(/^(group|variable|factor)$/) : -1;
+  const cConc = hasHeader ? col(/^(conc|substrate|\[\s*s\s*\]|s\b|conc\s*\(|substrate\s*\()/i) : -1;
+  const cFrac = hasHeader ? col(/^(frac|fraction|well|tube|pos)/i) : -1;
+  const cStep = hasHeader ? col(/^(step|sample|pool|stage|name|label)/i) : -1;
+  const cDil = hasHeader ? col(/^(dil|dilution|\bdf\b)/i) : -1;
+  const cVol = hasHeader ? col(/^(vol|volume|v_?ml)/i) : -1;
+  const cProtC = hasHeader ? col(/^(prot.*conc|mg\s*\/\s*ml|protein\s*\(mg\/ml\)|conc.*mg)/i) : -1;
+  const cProtM = hasHeader ? col(/^(total\s*prot|prot.*mg|protein\s*\(mg\))/i) : -1;
+  const cSd = hasHeader ? col(/^(sd|std|stdev|se|sem)$/i) : -1;
+  const cUnit = hasHeader ? col(/^(unit|raw\s*unit|rate\s*unit)$/i) : -1;
+  const mode = modeHint || (cConc >= 0 ? 'kinetics' : cFrac >= 0 ? 'fractions' : cGroup >= 0 ? 'profile' : 'steps');
+  const cLabel = mode === 'fractions' ? (cFrac >= 0 ? cFrac : cStep >= 0 ? cStep : 0)
+    : mode === 'kinetics' ? (cConc >= 0 ? cConc : 0)
+    : (cStep >= 0 ? cStep : cFrac >= 0 ? cFrac : 0);
+  const metaCols = new Set([cSeries, cGroup, cConc, cFrac, cStep, cDil, cVol, cProtC, cProtM, cSd, cUnit, cLabel].filter(i => i >= 0));
+  const maxCols = Math.max(head.length, ...dataRows.map(r => r.length));
+  const repCols = [];
+  for (let c = 0; c < maxCols; c++) {
+    if (metaCols.has(c)) continue;
+    if (dataRows.some(r => parseAssayCell(r[c], dc) != null || /^(?:ovrflw|overflow|masked|[<>])/i.test(clean(String(r[c] ?? ''))))) repCols.push(c);
+  }
+  const blanks = [], entries = [], kinMap = new Map();
+  dataRows.forEach((r, idx) => {
+    const lab = String(r[cLabel] ?? '').trim();
+    const vals = repCols.map(c => parseAssayCell(r[c], dc)).filter(v => v != null);
+    if (/^(?:blank|blk|buffer\s*blank|no\s*enz(?:yme)?)$/i.test(lab)) {
+      vals.forEach(v => blanks.push({val: v, note: lab}));
+      return;
+    }
+    const dil = cDil >= 0 ? parseAssayCell(r[cDil], dc) : null;
+    const volMl = cVol >= 0 ? parseAssayCell(r[cVol], dc) : null;
+    const rawUnit = cUnit >= 0 && r[cUnit] ? String(r[cUnit]).trim() : 'dA/min';
+    if (mode === 'kinetics') {
+      const conc = parseAssayCell(r[cConc >= 0 ? cConc : cLabel], dc); if (conc == null) return;
+      const series = cSeries >= 0 ? String(r[cSeries] || '').trim() : '';
+      const key = `${conc}|${series}|${dil ?? ''}|${rawUnit}`;
+      if (kinMap.has(key)) { kinMap.get(key).rawVals.push(...vals); }
+      else { const e = {conc, concUnit: 'mM', rawVals: vals, rawUnit, dil: dil ?? 1, series}; kinMap.set(key, e); entries.push(e); }
+      return;
+    }
+    if (mode === 'fractions') {
+      if (!lab && !vals.length) return;
+      entries.push({fracLabel: lab || `F${idx + 1}`, rawVals: vals, dil: dil ?? 1, volMl, excluded: false});
+      return;
+    }
+    if (mode === 'profile') {
+      if (!lab && !vals.length) return;
+      entries.push({group: cGroup >= 0 && r[cGroup] ? r[cGroup] : 'pH', xLabel: lab, xNum: parseAssayCell(lab, dc), series: cSeries >= 0 ? String(r[cSeries] || '').trim() : '', rawVals: vals, rawSd: cSd >= 0 ? parseAssayCell(r[cSd], dc) : null});
+      return;
+    }
+    if (!lab && !vals.length) return;
+    const gRun = ndGuessRun(lab);
+    entries.push({
+      stepRef: gRun.id || (/^lysis|crude/i.test(lab) ? 'lysis' : /^final/i.test(lab) ? 'final' : ''),
+      name: lab || `Step ${idx + 1}`,
+      rawVals: vals,
+      rawUnit,
+      dil: dil ?? 1,
+      volMl,
+      protMgMl: cProtC >= 0 ? parseAssayCell(r[cProtC], dc) : null,
+      protTotalMg: cProtM >= 0 ? parseAssayCell(r[cProtM], dc) : null,
+      protSource: (cProtC >= 0 || cProtM >= 0) ? 'bradford' : 'auto'
+    });
+  });
+  return {mode, blanks, entries};
+}
+const assayProtoOpen = new Set(), assayBlankOpen = new Set();
+let activeAssayId = '';
+function fitSummaryHtml(f){
+  if (!f) return `<div class="assay-fit muted">Insufficient points for fit</div>`;
+  return `<div class="assay-fit" data-model="${esc(f.model)}"><span class="af-vmax">Vmax ${fmt(f.Vmax, 4)}${f.seVmax != null ? ` ± ${fmt(f.seVmax, 4)}` : ''}</span> <span class="af-km">Km ${fmt(f.Km, 6)}${f.seKm != null ? ` ± ${fmt(f.seKm, 6)}` : ''}</span>` +
+    (f.hillN != null ? ` <span class="af-hill">n ${fmt(f.hillN, 4)}${f.seHillN != null ? ` ± ${fmt(f.seHillN, 4)}` : ''}</span>` : '') +
+    (f.Ki != null ? ` <span class="af-ki">Ki ${fmt(f.Ki, 4)}${f.seKi != null ? ` ± ${fmt(f.seKi, 4)}` : ''}</span>` : '') +
+    (f.kcat != null ? ` <span class="af-kcat">kcat ${fmt(f.kcat, 2)} s⁻¹</span>` : '') +
+    ` <span class="af-r2">R² ${f.r2 != null ? fmt(f.r2, 5) : 'n.d.'}</span> <span class="af-rmse">RMSE ${fmt(f.rmse, 3)}</span>` +
+    (f.aicc != null ? ` <span class="af-aicc">AICc ${fmt(f.aicc, 2)}</span>` : '') + `</div>`;
+}
+function updateAssayLive(card, a){
+  syncAssayDerived();
+  if (!card || !a) return;
+  const c = assayCalc(a); if (!c) return;
+  if (c.mode === 'kinetics') {
+    const fb = card.querySelector('.assay-fit-wrap'); if (fb) fb.innerHTML = fitSummaryHtml(c.fit);
+    c.entries.forEach(({rate: r}, i) => {
+      const tr = card.querySelector(`tr[data-entry-idx="${i}"]`); if (!tr) return;
+      const vEl = tr.querySelector('.ar-val'), sEl = tr.querySelector('.ar-sd');
+      if (vEl) vEl.textContent = r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${r.rawUnit}`) : 'n.d.';
+      if (sEl) sEl.textContent = r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : '';
+    });
+    return;
+  }
+  if (c.mode === 'fractions' || c.mode === 'profile') {
+    const linkedRun = a.runId ? runs.find(r => r.id === a.runId) : null;
+    c.entries.forEach(({entry: e, rate: r}, i) => {
+      const tr = card.querySelector(`tr[data-entry-idx="${i}"]`); if (!tr) return;
+      tr.dataset.entryLabel = String(e.fracLabel ?? e.xLabel ?? '');
+      if (c.mode === 'fractions') {
+        const fm = assayFracMatch(linkedRun, e);
+        tr.classList.toggle('warnc', !!(linkedRun && Array.isArray(linkedRun.fracs) && linkedRun.fracs.length && !fm.matched));
+      }
+      const vEl = tr.querySelector('.ar-val'), sEl = tr.querySelector('.ar-sd');
+      if (vEl) vEl.textContent = r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${r.rawUnit}`) : 'n.d.';
+      if (sEl) sEl.textContent = r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : '';
+    });
+    return;
+  }
+  const rows = c.steps || [];
+  rows.forEach((r, i) => {
+    const tr = card.querySelector(`tr[data-entry-idx="${i}"]`); if (!tr) return;
+    tr.dataset.stepRef = r.stepRef;
+    tr.classList.toggle('warnc', !!r.warn);
+    tr.title = r.warnings.join('; ');
+    const set = (sel, v) => { const el = tr.querySelector(sel); if (el) el.textContent = v; };
+    set('.as-upml', r.uPerMl != null ? fmt(r.uPerMl, 2) : '');
+    set('.as-nkat', r.nkatPerMl != null ? fmt(r.nkatPerMl, 2) : '');
+    set('.as-totu', r.totalU != null ? fmt(r.totalU, 2) : '');
+    set('.as-sa', r.sa != null ? fmt(r.sa, 2) : '');
+    set('.as-fold', r.fold != null ? fmt(r.fold, 2) + '×' : '');
+    const yEl = tr.querySelector('.as-yld');
+    if (yEl) { yEl.dataset.rawYield = r.rawYieldPct != null ? fmt(r.rawYieldPct, 2) : ''; yEl.textContent = r.yieldPct != null ? fmt(r.yieldPct, 2) + '%' : ''; }
+    set('.as-stepy', r.stepYieldPct != null ? fmt(r.stepYieldPct, 2) + '%' : '');
+    set('.as-kcat', r.kcat != null ? fmt(r.kcat, 2) : '');
+  });
+  const wBox = card.querySelector('.assay-warns-wrap');
+  if (wBox) wBox.innerHTML = rows.some(r => r.warn) ? `<ul class="assay-warns">${rows.flatMap(r => r.warnings.map(w => `<li class="warnc">${esc(r.label)}: ${esc(w)}</li>`)).join('')}</ul>` : '';
+}
+function renderAssays(){
+  syncAssayDerived();
+  const panel = $('#assayPanel'), box = $('#assayCalcList'); if (!panel || !box) return;
+  panel.hidden = !assays.length;
+  if (!assays.length) { box.innerHTML = ''; return; }
+  if (!activeAssayId || !assays.some(a => a.id === activeAssayId)) activeAssayId = assays[assays.length - 1].id;
+  box.innerHTML = assays.map(a => {
+    const c = assayCalc(a); if (!c) return '';
+    const p = a.protocol || {}, fCfg = a.fit || {}, linkedRun = a.runId ? runs.find(r => r.id === a.runId) : null;
+    const rawStr = arr => Array.isArray(arr) ? arr.join(', ') : '';
+    const protoHtml = `<details class="cardtext assay-proto"${assayProtoOpen.has(a.id) ? ' open' : ''}><summary>STRENDA Assay Protocol</summary>` +
+      `<div class="row"><label class="f">Substrate<input type="text" data-ap="substrate" value="${esc(p.substrate ?? '')}"></label><label class="f">Substrate conc.<input type="text" data-ap="substrateConc" value="${esc(p.substrateConc ?? '')}"></label></div>` +
+      `<div class="row"><label class="f">Buffer<input type="text" data-ap="buffer" value="${esc(p.buffer ?? '')}"></label><label class="f">pH<input type="number" step="any" data-ap="pH" value="${p.pH ?? ''}"></label><label class="f">Temp (°C)<input type="number" step="any" data-ap="tempC" value="${p.tempC ?? ''}"></label></div>` +
+      `<div class="row"><label class="f">Wavelength (nm)<input type="number" step="any" data-ap="wavelengthNm" value="${p.wavelengthNm ?? ''}"></label><label class="f">ε (mM⁻¹cm⁻¹)<input type="number" step="any" min="0" data-ap="eps_mM" value="${p.eps_mM ?? ''}"></label><label class="f">Path (cm)<input type="number" step="any" min="0" data-ap="pathCm" value="${p.pathCm ?? 1}"></label></div>` +
+      `<div class="row"><label class="f">Rxn vol (mL)<input type="number" step="any" min="0" data-ap="rxnVolMl" value="${p.rxnVolMl ?? ''}"></label><label class="f">Enz vol (mL)<input type="number" step="any" min="0" data-ap="enzVolMl" value="${p.enzVolMl ?? ''}"></label><label class="f">Unit def.<input type="text" data-ap="unitDef" value="${esc(p.unitDef ?? '')}"></label></div>` +
+      `</details>`;
+    const blanksHtml = `<details class="cardtext assay-blanks"${assayBlankOpen.has(a.id) || (a.blanks && a.blanks.length) ? ' open' : ''}><summary>Blanks (${(a.blanks || []).length})</summary><div class="assay-blanks-body">` +
+      (a.blanks || []).map((b, bi) => { const bv = b && typeof b === 'object' ? (b.val ?? '') : (b ?? ''), bn = b && typeof b === 'object' ? (b.note ?? '') : '';
+        return `<div class="assay-blank-row" data-blank-idx="${bi}"><input type="number" step="any" data-bk="val" value="${esc(bv)}" placeholder="Blank reading" aria-label="Blank value"><input type="text" data-bk="note" value="${esc(bn)}" placeholder="Note" aria-label="Blank note"><button type="button" class="xbtn" data-blank-del="${bi}" aria-label="Remove blank">×</button></div>`; }).join('') +
+      `<div class="btns" style="margin-top:4px"><button type="button" class="btn mini quiet" data-blank-add="${esc(a.id)}">+ Add blank</button></div></div></details>`;
+    const headHtml = `<div class="assay-head"><input type="text" class="assay-title" data-ak="name" value="${esc(a.name || '')}" placeholder="Assay name" aria-label="Assay name">` +
+      `<select data-ak="mode" aria-label="Assay mode"><option value="steps"${c.mode === 'steps' ? ' selected' : ''}>Steps</option><option value="fractions"${c.mode === 'fractions' ? ' selected' : ''}>Fractions</option><option value="kinetics"${c.mode === 'kinetics' ? ' selected' : ''}>Kinetics</option><option value="profile"${c.mode === 'profile' ? ' selected' : ''}>Profile</option></select>` +
+      ((c.mode === 'fractions' || c.mode === 'steps') && runs.length ? `<select data-ak="runId" aria-label="Linked run"><option value="">No run</option>${runs.map(r => `<option value="${esc(r.id)}"${a.runId === r.id ? ' selected' : ''}>${esc(shortRunName(r))}</option>`).join('')}</select>` : `<span></span>`) +
+      `<button type="button" class="xbtn" data-assay-del="${esc(a.id)}" aria-label="Delete assay">×</button></div>`;
+    if (c.mode === 'kinetics') {
+      const fitCtrl = `<div class="row"><label class="f">Model<select data-af="model"><option value="mm"${fCfg.model === 'mm' ? ' selected' : ''}>Michaelis-Menten</option><option value="hill"${fCfg.model === 'hill' ? ' selected' : ''}>Hill</option><option value="subInhib"${fCfg.model === 'subInhib' ? ' selected' : ''}>Substrate inhibition</option></select></label>` +
+        `<label class="f">[E] (µM)<input type="number" step="any" min="0" data-af="enzConc_uM" value="${fCfg.enzConc_uM ?? ''}"></label><label class="f">Sites<input type="number" step="any" min="1" data-af="activeSitesPerMol" value="${fCfg.activeSitesPerMol ?? 1}"></label>` +
+        `<label class="f">Weight<select data-af="weight"><option value="none"${fCfg.weight !== 'sd' ? ' selected' : ''}>Unweighted</option><option value="sd"${fCfg.weight === 'sd' ? ' selected' : ''}>1/SD²</option></select></label></div>`;
+      const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>[S]</th><th>Replicates</th><th>Unit</th><th>DF</th><th>Series</th><th>Rate</th><th>SD</th><th></th></tr>` +
+        c.entries.map(({entry: e, rate: r}, ei) => `<tr data-entry-idx="${ei}"><td><input type="number" step="any" min="0" data-ek="conc" value="${e.conc ?? ''}" aria-label="Substrate concentration"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td><input type="text" data-ek="rawUnit" value="${esc(e.rawUnit || 'dA/min')}" aria-label="Raw unit"></td><td><input type="number" step="any" min="0" data-ek="dil" value="${e.dil ?? 1}" aria-label="Dilution"></td><td><input type="text" data-ek="series" value="${esc(e.series || '')}" aria-label="Series"></td><td class="ar-val">${r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${esc(r.rawUnit)}`) : 'n.d.'}</td><td class="ar-sd">${r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`).join('') + `</table></div>`;
+      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="kinetics">${headHtml}${protoHtml}${blanksHtml}${fitCtrl}<div class="assay-fit-wrap">${fitSummaryHtml(c.fit)}</div>${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add row</button></div></div>`;
+    }
+    if (c.mode === 'fractions') {
+      const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>Fraction</th><th>Replicates</th><th>DF</th><th>Vol (mL)</th><th>Rate</th><th>SD</th><th></th></tr>` +
+        c.entries.map(({entry: e, rate: r}, ei) => { const fm = assayFracMatch(linkedRun, e), bad = !!(linkedRun && Array.isArray(linkedRun.fracs) && linkedRun.fracs.length && !fm.matched);
+          return `<tr data-entry-idx="${ei}" data-entry-label="${esc(e.fracLabel ?? '')}"${bad ? ' class="warnc" title="Fraction label does not match run fractions"' : ''}><td><input type="text" data-ek="fracLabel" value="${esc(e.fracLabel ?? '')}" aria-label="Fraction label"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td><input type="number" step="any" min="0" data-ek="dil" value="${e.dil ?? 1}" aria-label="Dilution"></td><td><input type="number" step="any" min="0" data-ek="volMl" value="${e.volMl ?? ''}" aria-label="Volume mL"></td><td class="ar-val">${r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${esc(r.rawUnit)}`) : 'n.d.'}</td><td class="ar-sd">${r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`; }).join('') + `</table></div>`;
+      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="fractions">${headHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add fraction</button></div></div>`;
+    }
+    if (c.mode === 'profile') {
+      const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>Group</th><th>Condition</th><th>Replicates</th><th>Rate</th><th>SD</th><th></th></tr>` +
+        c.entries.map(({entry: e, rate: r}, ei) => `<tr data-entry-idx="${ei}" data-entry-label="${esc(e.xLabel ?? '')}"><td><select data-ek="group"><option value="pH"${e.group === 'pH' ? ' selected' : ''}>pH</option><option value="temp"${e.group === 'temp' ? ' selected' : ''}>Temp</option><option value="substrate"${e.group === 'substrate' ? ' selected' : ''}>Substrate</option><option value="additive"${e.group === 'additive' ? ' selected' : ''}>Additive</option></select></td><td><input type="text" data-ek="xLabel" value="${esc(e.xLabel ?? '')}" aria-label="Condition"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td class="ar-val">${r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${esc(r.rawUnit)}`) : 'n.d.'}</td><td class="ar-sd">${r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`).join('') + `</table></div>`;
+      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="profile">${headHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add condition</button></div></div>`;
+    }
+    const rows = c.steps || [];
+    const hasEntries = Array.isArray(a.entries) && a.entries.length > 0;
+    const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>Step</th><th>Replicates</th><th>Unit</th><th>DF</th><th>Vol (mL)</th><th>Prot (mg/mL)</th><th>Activity (U/mL)</th><th>SI (nkat/mL)</th><th>Total (U)</th><th>SA (U/mg)</th><th>Fold</th><th>Yield (%)</th><th>Step yield (%)</th><th>kcat (s⁻¹)</th><th></th></tr>` +
+      rows.map((r, ei) => { const e = hasEntries ? a.entries[ei] : {name: r.label, stepRef: r.stepRef, rawVals: a.replicates, rawUnit: 'dA/min', dil: 1, volMl: r.volMl, protMgMl: r.protMgMl};
+        return `<tr data-entry-idx="${ei}" data-step-ref="${esc(r.stepRef)}"${r.warn ? ' class="warnc"' : ''} title="${esc(r.warnings.join('; '))}"><td><input type="text" data-ek="name" value="${esc(e.name ?? r.label)}" aria-label="Step name"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td><select data-ek="rawUnit" aria-label="Raw unit"><option value="dA/min"${(e.rawUnit || 'dA/min') === 'dA/min' ? ' selected' : ''}>dA/min</option><option value="U/mL"${e.rawUnit === 'U/mL' ? ' selected' : ''}>U/mL</option><option value="U"${e.rawUnit === 'U' ? ' selected' : ''}>U</option><option value="U/mg"${e.rawUnit === 'U/mg' ? ' selected' : ''}>U/mg</option></select></td><td><input type="number" step="any" min="0" data-ek="dil" value="${e.dil ?? 1}" aria-label="Dilution"></td><td><input type="number" step="any" min="0" data-ek="volMl" value="${e.volMl ?? ''}" aria-label="Volume mL"></td><td><input type="number" step="any" min="0" data-ek="protMgMl" value="${e.protMgMl ?? ''}" aria-label="Protein mg/mL"></td><td class="as-upml">${r.uPerMl != null ? fmt(r.uPerMl, 2) : ''}</td><td class="as-nkat">${r.nkatPerMl != null ? fmt(r.nkatPerMl, 2) : ''}</td><td class="as-totu">${r.totalU != null ? fmt(r.totalU, 2) : ''}</td><td class="as-sa">${r.sa != null ? fmt(r.sa, 2) : ''}</td><td class="as-fold">${r.fold != null ? fmt(r.fold, 2) + '×' : ''}</td><td class="as-yld" data-raw-yield="${r.rawYieldPct != null ? fmt(r.rawYieldPct, 2) : ''}">${r.yieldPct != null ? fmt(r.yieldPct, 2) + '%' : ''}</td><td class="as-stepy">${r.stepYieldPct != null ? fmt(r.stepYieldPct, 2) + '%' : ''}</td><td class="as-kcat">${r.kcat != null ? fmt(r.kcat, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`; }).join('') +
+      `</table></div><div class="assay-warns-wrap">${rows.some(r => r.warn) ? `<ul class="assay-warns">${rows.flatMap(r => r.warnings.map(w => `<li class="warnc">${esc(r.label)}: ${esc(w)}</li>`)).join('')}</ul>` : ''}</div>`;
+    return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="steps">${headHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add step</button></div></div>`;
+  }).join('');
+}
+function createNewAssay(opts){
+  const r = curRun();
+  const a = makeAssay(Object.assign({
+    name: `Assay ${assays.length + 1}`,
+    mode: r ? 'fractions' : 'steps',
+    runId: r ? r.id : '',
+    entries: []
+  }, opts || {}));
+  assays.push(a);
+  activeAssayId = a.id;
+  renderAssays();
+  if (PROJ) queueSave();
+  return a;
+}
+function applyImportedAssayText(text, fileName){
+  let target = assays.find(x => x.id === activeAssayId) || assays[assays.length - 1];
+  const parsed = parseAssayText(text, target ? target.mode : '');
+  if (!parsed.entries.length && !parsed.blanks.length) { toast('No assay rows found'); return; }
+  if (!target) {
+    target = makeAssay({name: fileName ? fileName.replace(/\.[^.]+$/, '') : `Assay ${assays.length + 1}`, mode: parsed.mode, runId: curRun() ? curRun().id : ''});
+    assays.push(target);
+  } else if (!target.entries.length) {
+    target.mode = parsed.mode;
+  }
+  if (parsed.blanks.length) target.blanks = (target.blanks || []).concat(parsed.blanks);
+  target.entries = (target.entries || []).concat(parsed.entries);
+  activeAssayId = target.id;
+  renderAssays();
+  if (PROJ) queueSave();
+}
+$('#assayOpenBtn').addEventListener('click', () => { const a = createNewAssay(); const el = $(`#assayPanel [data-assay-id="${a.id}"] input`); if (el) el.focus(); });
+$('#assayAdd').addEventListener('click', () => { const a = createNewAssay(); const el = $(`#assayPanel [data-assay-id="${a.id}"] input`); if (el) el.focus(); });
+$('#assayImportBtn').addEventListener('click', () => $('#assayFile').click());
+$('#assayFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) applyImportedAssayText(decode(await f.arrayBuffer()), f.name); });
+$('#assayPasteToggle').addEventListener('click', () => { const b = $('#assayPasteBox'); b.hidden = !b.hidden; if (!b.hidden) $('#assayPaste').focus(); });
+$('#assayPasteGo').addEventListener('click', () => { const ta = $('#assayPaste'); if (!ta.value.trim()) return; applyImportedAssayText(ta.value, ''); ta.value = ''; $('#assayPasteBox').hidden = true; });
+$('#assayCalcList').addEventListener('toggle', e => {
+  const card = e.target.closest('.assay-card'); if (!card) return; const id = card.dataset.assayId;
+  if (e.target.classList.contains('assay-proto')) { if (e.target.open) assayProtoOpen.add(id); else assayProtoOpen.delete(id); }
+  if (e.target.classList.contains('assay-blanks')) { if (e.target.open) assayBlankOpen.add(id); else assayBlankOpen.delete(id); }
+}, true);
+$('#assayCalcList').addEventListener('focusin', e => { const card = e.target.closest('.assay-card'); if (card) activeAssayId = card.dataset.assayId; });
+$('#assayCalcList').addEventListener('input', e => {
+  const t = e.target; if (t.tagName === 'SELECT') return;
+  const card = t.closest('.assay-card'); if (!card) return;
+  const a = assays.find(x => x.id === card.dataset.assayId); if (!a) return;
+  activeAssayId = a.id;
+  if (t.dataset.ak === 'name') { a.name = t.value; if (PROJ) queueSave(); return; }
+  if (t.dataset.ap) {
+    const k = t.dataset.ap;
+    a.protocol[k] = t.type === 'number' ? (t.value === '' ? null : +t.value) : t.value;
+    updateAssayLive(card, a); if (PROJ) queueSave(); return;
+  }
+  if (t.dataset.af) {
+    const k = t.dataset.af;
+    a.fit[k] = t.type === 'number' ? (t.value === '' ? null : +t.value) : t.value;
+    updateAssayLive(card, a); if (PROJ) queueSave(); return;
+  }
+  if (t.dataset.bk) {
+    const row = t.closest('[data-blank-idx]'), bi = row ? +row.dataset.blankIdx : -1; if (bi < 0) return;
+    if (!a.blanks[bi] || typeof a.blanks[bi] !== 'object') a.blanks[bi] = {val: a.blanks[bi] ?? null, note: ''};
+    if (t.dataset.bk === 'val') a.blanks[bi].val = t.value === '' ? null : +t.value;
+    else a.blanks[bi].note = t.value;
+    updateAssayLive(card, a); if (PROJ) queueSave(); return;
+  }
+  if (t.dataset.ek) {
+    const row = t.closest('[data-entry-idx]'), ei = row ? +row.dataset.entryIdx : -1; if (ei < 0) return;
+    if (!a.entries.length && Array.isArray(a.replicates) && a.replicates.length) a.entries = [{stepRef: a.stepId || a.runId || '', name: 'Step 1', rawVals: a.replicates.slice(), rawUnit: 'dA/min', dil: 1}];
+    const ent = a.entries[ei]; if (!ent) return;
+    const k = t.dataset.ek;
+    if (k === 'rawVals') ent.rawVals = parseRawValsInput(t.value);
+    else if (t.type === 'number') ent[k] = t.value === '' ? null : +t.value;
+    else { ent[k] = t.value; if (k === 'xLabel') ent.xNum = parseAssayCell(t.value, false); }
+    updateAssayLive(card, a); if (PROJ) queueSave();
+  }
+});
+$('#assayCalcList').addEventListener('change', e => {
+  const t = e.target; if (t.tagName !== 'SELECT') return;
+  const card = t.closest('.assay-card'); if (!card) return;
+  const a = assays.find(x => x.id === card.dataset.assayId); if (!a) return;
+  activeAssayId = a.id;
+  if (t.dataset.ak) a[t.dataset.ak] = t.value;
+  else if (t.dataset.af) a.fit[t.dataset.af] = t.value;
+  else if (t.dataset.ek) {
+    const row = t.closest('[data-entry-idx]'), ei = row ? +row.dataset.entryIdx : -1;
+    if (ei >= 0 && a.entries[ei]) a.entries[ei][t.dataset.ek] = t.value;
+  }
+  renderAssays(); if (PROJ) queueSave();
+});
+$('#assayCalcList').addEventListener('click', e => {
+  const delA = e.target.closest('[data-assay-del]');
+  if (delA) { const id = delA.dataset.assayDel; assays = assays.filter(x => x.id !== id); assayProtoOpen.delete(id); assayBlankOpen.delete(id); renderAssays(); if (PROJ) queueSave(); return; }
+  const addB = e.target.closest('[data-blank-add]');
+  if (addB) { const a = assays.find(x => x.id === addB.dataset.blankAdd); if (!a) return; a.blanks.push({val: 0, note: ''}); assayBlankOpen.add(a.id); renderAssays(); if (PROJ) queueSave(); return; }
+  const delB = e.target.closest('[data-blank-del]');
+  if (delB) { const card = delB.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return; a.blanks.splice(+delB.dataset.blankDel, 1); renderAssays(); if (PROJ) queueSave(); return; }
+  const addE = e.target.closest('[data-entry-add]');
+  if (addE) {
+    const a = assays.find(x => x.id === addE.dataset.entryAdd); if (!a) return;
+    if (a.mode === 'kinetics') a.entries.push({conc: null, concUnit: 'mM', rawVals: [], rawUnit: 'dA/min', dil: 1, series: ''});
+    else if (a.mode === 'fractions') a.entries.push({fracLabel: '', rawVals: [], dil: 1, volMl: null, excluded: false});
+    else if (a.mode === 'profile') a.entries.push({group: 'pH', xLabel: '', xNum: null, series: '', rawVals: [], rawSd: null});
+    else a.entries.push({stepRef: '', name: `Step ${a.entries.length + 1}`, rawVals: [], rawUnit: 'dA/min', dil: 1, volMl: null, protMgMl: null, protSource: 'auto'});
+    renderAssays(); if (PROJ) queueSave(); return;
+  }
+  const delE = e.target.closest('[data-entry-del]');
+  if (delE) { const card = delE.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return; a.entries.splice(+delE.dataset.entryDel, 1); renderAssays(); if (PROJ) queueSave(); }
+});
 const splitRow = (line, d) => { const out = []; let cur = '', q = false; for (let i = 0; i < line.length; i++) { const c = line[i];
   if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; } else if (c === '"') q = true; else if (c === d) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out.map(v => v.trim()); };
 const ND_HEAD = /(a?\s?260\s*\/\s*a?\s?280|\ba\s?280\b|\ba\s?205\b|mg\s*\/\s*ml|[nµu]g\s*\/\s*[µu]l|conc)/i, ND_NAME = /sample\s*(name|id)|^"?sample"?\s*$/i;
@@ -11563,6 +12275,7 @@ function renderStepSheet(L){
   const lane = STEP_LANE(k), gl = lane ? gels.filter(g => lanesFor(g, lane).length) : [], rid = kind === 'run' ? k.slice(4) : '', rr = rid && runs.find(r => r.id === rid);
   const gh = onGel ? `<button type="button" class="btn" data-back="1">Back to ${esc(s.t)}</button>` : (lane ? gl.map(g => `<button type="button" class="gchip" data-gelopen="${g.id}" title="Edit lanes and ladder">${esc(g.name)}</button>`).join('') + `<button type="button" class="btn${gl.length ? ' quiet' : ''}" data-gelfor="${esc(lane)}">${gl.length ? 'Add another gel' : 'Add gel image'}</button>` : '')
     + (rr && String(rr.shade || '').trim() && runNeeds(rr).length ? `<button type="button" class="btn" data-fillcond="${esc(rid)}">Fill run conditions</button>` : '')
+    + (rr ? `<button type="button" class="btn quiet" data-addassay="${esc(rid)}">Add activity assay</button>` : '')
     + '';
   const ge = $('#ssGels'); if (ge._h !== gh) { ge._h = gh; ge.innerHTML = gh; } ge.hidden = !gh;
   /* move, remove or skip the step */
@@ -11746,6 +12459,7 @@ $('#ssGels').addEventListener('click', e => { const b = e.target.closest('button
   if (b.dataset.fillcond) { const card = document.querySelector(`.trace.run[data-id="${b.dataset.fillcond}"]`), d = card && card.querySelector('details.runcond'); if (!d) return; d.open = true;
     const r = runs.find(x => x.id === b.dataset.fillcond), c = r ? runCond(r) : {}, order = ['mBufA', 'mFlow', 'mCol', 'mGrad', 'mBufB'], k = order.find(q => !c[q] || (q === 'mCol' && c.mColAuto));
     const el = (k ? d.querySelector(`[data-k="${k}"]`) : r && !hasTxt(r.path) ? card.querySelector('[data-k="path"]') : null) || d.querySelector('input'); if (el) { el.scrollIntoView({behavior: smooth(), block: 'center'}); setTimeout(() => el.focus(), 250); } return; }
+  if (b.dataset.addassay !== undefined) { const a = createNewAssay(b.dataset.addassay ? {mode: 'fractions', runId: b.dataset.addassay} : {}); const el = $(`#assayPanel [data-assay-id="${a.id}"] input`); if (el) el.focus(); return; }
   if (b.dataset.gelopen) { cur = b.dataset.gelopen; syncControls(); render(); return; }
   if (b.dataset.gelfor) { gelTarget = b.dataset.gelfor; $('#gelFile').click(); } });
 $('#tl').addEventListener('click', e => { const fo = e.target.closest('[data-cldone], [data-clall]');
