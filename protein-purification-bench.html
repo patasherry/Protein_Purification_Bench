@@ -2738,6 +2738,215 @@ function style(ov){
   const head = ov.nest ? `<svg x="0" y="0" width="${r2(W)}" height="${r2(H)}" viewBox="0 0 ${r2(W)} ${r2(H)}" font-size="${r2(fs)}" overflow="visible">` : svgHead(W, H);
   return {W, H, fs, lw, aw: Math.max(0.5, Math.min(lw, 1.5*fs/8)), cw: fs*0.56, tl: fs*0.45, tOut: o.ticksOut ? fs*0.45 : 0, head};
 }
+const ASSAY_PAL = ['#D55E00', '#009E73', '#CC79A7', '#56B4E9', '#E69F00'];
+function safeAssayColor(col, idx){
+  const c = String(col || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(c) && c.toUpperCase() !== '#F0E442' ? c : ASSAY_PAL[(idx || 0) % ASSAY_PAL.length];
+}
+function assayAxisLabel(yUnit){
+  return yUnit === 'U/mg' ? 'Specific activity (U/mg)' : yUnit === 'nkat/mL' ? 'Activity (nkat/mL)' : yUnit === 'rel%' ? 'Relative activity (%)' : 'Activity (U/mL)';
+}
+function runHasSecAxis(run){
+  if (!run || run.prep) return false;
+  const secC = opt.sec === 'grad' ? run.grad : opt.sec === 'cond' ? run.cond : null;
+  if (!secC || !secC.xs || secC.xs.length < 2) return false;
+  const ys = secC.ys.slice().sort((p, q) => p - q), lo = ys[Math.floor(ys.length*0.02)], hi = ys[Math.floor(ys.length*0.98)];
+  return !(opt.sec === 'grad' ? hi - lo < 0.5 : hi - lo < 0.03*Math.max(1e-9, Math.abs(ys[ys.length >> 1])));
+}
+function assayEntryMgMl(e, a, run, x){
+  const pm = assayNum(e && e.protMgMl) ?? assayNum(a && a.proteinOverride);
+  if (pm != null && pm > 0) return pm;
+  if (e && e.stepRef) { const sp = assayStepProt(e.stepRef); if (sp && sp.mgMl > 0) return sp.mgMl; }
+  if (run && !run.prep) {
+    if (x != null) {
+      const uv = uvOf(run);
+      if (uv && uv.xs.length) {
+        const k = nearestIdx(uv.xs, x), mAU = uv.ys[k];
+        if (mAU > 0.5) { const pathCm = effPathMm(run)/10, e1 = (ndEpsFor(run.id) || {}).e || 1; return (mAU/1000)/(pathCm*e1); }
+      }
+    }
+    const nd = ndForRun(run); if (nd && nd.mgml > 0) return nd.mgml;
+    const pr = poolRows(run); if (pr && pr.conc > 0) return pr.conc;
+  }
+  if (a && a.mode === 'kinetics' && assayNum(a.fit && a.fit.enzConc_uM) > 0) {
+    const mw = assayStepMwKda(a.stepId || a.runId || 'final') || 50;
+    return (+a.fit.enzConc_uM)*mw/1000;
+  }
+  return 1;
+}
+function assaySeriesData(a, run){
+  if (!a || typeof a !== 'object') return null;
+  const disp = Object.assign({}, ASSAY_DISPLAY_DEF, a.display || {});
+  const yUnit = ['U/mL', 'U/mg', 'nkat/mL', 'rel%'].includes(disp.yUnit) ? disp.yUnit : 'U/mL';
+  const showErr = ['sd', 'sem', 'points'].includes(disp.showErr) ? disp.showErr : 'sd';
+  const placement = ['track', 'overlay', 'panel'].includes(disp.placement) ? disp.placement : (a.mode === 'fractions' ? 'track' : 'panel');
+  const color = safeAssayColor(disp.color, Math.max(0, assays.indexOf(a)));
+  const yLabel = assayAxisLabel(yUnit);
+  const mode = a.mode || 'steps';
+  const rawEntries = Array.isArray(a.entries) && a.entries.length ? a.entries
+    : (Array.isArray(a.replicates) && a.replicates.length ? [{fracLabel: '', stepRef: a.stepId || a.runId || '', rawVals: a.replicates, dil: Array.isArray(a.dilutions) && a.dilutions[0] ? a.dilutions[0] : 1}] : []);
+  const items = [];
+  rawEntries.forEach((e, i) => {
+    if (!e || e.excluded) return;
+    const rc = assayRate(e, a); if (!rc) return;
+    let x = null, xLabel = '', matched = true, fracIdxVal = -1;
+    if (mode === 'fractions') {
+      const fm = assayFracMatch(run, e);
+      matched = fm.matched; fracIdxVal = fm.idx;
+      x = fm.x != null ? fm.x : (run ? null : i + 1);
+      xLabel = String(e.fracLabel || (i + 1));
+    } else if (mode === 'kinetics') {
+      x = assayNum(e.conc ?? e.x); xLabel = x != null ? String(x) : '';
+    } else if (mode === 'profile') {
+      x = assayNum(e.xNum); xLabel = String(e.xLabel || (x != null ? x : i + 1));
+    } else {
+      x = i; xLabel = String(e.name || e.stepRef || `Step ${i + 1}`);
+    }
+    const mgMl = assayEntryMgMl(e, a, run, x);
+    const ptsU = rc.vals.map(v => (v - rc.blankMean)*rc.fRate);
+    const baseU = rc.uPerMl != null ? rc.uPerMl : rc.rate;
+    const sdU = rc.uPerMl != null ? rc.sdUPerMl : rc.sdRate;
+    const semU = rc.uPerMl != null ? rc.semUPerMl : rc.semRate;
+    let mul = 1;
+    if (yUnit === 'nkat/mL') mul = rc.rawUnit === 'U/mg' ? mgMl*KAT_PER_U : KAT_PER_U;
+    else if (yUnit === 'U/mg') mul = rc.sa != null && rc.rawUnit === 'U/mg' ? 1 : 1/mgMl;
+    else if (yUnit === 'U/mL' && rc.rawUnit === 'U/mg') mul = mgMl;
+    const y = baseU*mul, sd = sdU != null ? sdU*mul : null, sem = semU != null ? semU*mul : null, pts = ptsU.map(v => v*mul);
+    items.push({x, xLabel, y, sd, sem, pts, idx: i, fracIdx: fracIdxVal, matched, mul, series: String(e.series || '')});
+  });
+  let fitScale = items.length ? items[0].mul : (yUnit === 'nkat/mL' ? KAT_PER_U : yUnit === 'U/mg' ? 1/assayEntryMgMl(null, a, run, null) : 1);
+  if (yUnit === 'rel%') {
+    const peak = Math.max(0, ...items.map(q => Math.abs(q.y)));
+    const k = peak > 0 ? 100/peak : 1;
+    fitScale = k;
+    items.forEach(q => { q.y *= k; if (q.sd != null) q.sd *= k; if (q.sem != null) q.sem *= k; q.pts = q.pts.map(v => v*k); });
+  }
+  items.forEach(q => { q.err = showErr === 'sem' ? q.sem : showErr === 'sd' ? q.sd : null; });
+  return {disp, mode, color, yUnit, yLabel, showErr, placement, items, fitScale};
+}
+function drawAssayPointErr(s, X, Y, q, py, showErr, color, lw, fs){
+  if (showErr === 'points') {
+    if (q.pts.length) {
+      s.push(`<g class="assay-reps">`);
+      q.pts.forEach(v => s.push(`<circle class="assay-rep" cx="${r2(X)}" cy="${r2(py(v))}" r="${r2(Math.max(1.4, fs*0.22))}" fill="${color}" fill-opacity="0.48" stroke="none"/>`));
+      s.push(`</g>`);
+    }
+    s.push(`<circle class="assay-pt" cx="${r2(X)}" cy="${r2(Y)}" r="${r2(Math.max(1.8, fs*0.28))}" fill="#ffffff" stroke="${color}" stroke-width="${r2(lw)}"/>`);
+    return;
+  }
+  if (q.err != null && q.err > 0) {
+    const yHi = py(q.y + q.err), yLo = py(q.y - q.err), cap = Math.max(1.8, fs*0.28);
+    s.push(`<g class="assay-err" data-err="${esc(showErr)}" stroke="${color}" stroke-width="${r2(Math.max(0.5, lw*0.85))}"><line x1="${r2(X)}" y1="${r2(yHi)}" x2="${r2(X)}" y2="${r2(yLo)}"/><line x1="${r2(X - cap)}" y1="${r2(yHi)}" x2="${r2(X + cap)}" y2="${r2(yHi)}"/><line x1="${r2(X - cap)}" y1="${r2(yLo)}" x2="${r2(X + cap)}" y2="${r2(yLo)}"/></g>`);
+  }
+  s.push(`<circle class="assay-pt" cx="${r2(X)}" cy="${r2(Y)}" r="${r2(Math.max(1.8, fs*0.3))}" fill="${color}" stroke="#ffffff" stroke-width="0.4"/>`);
+}
+function buildAssaySVG(assay, ov){
+  ov = ov || {};
+  const linkedRun = assay && assay.runId ? runs.find(r => r.id === assay.runId) : null;
+  const ser = assaySeriesData(assay, linkedRun);
+  if (!ser) return {svg: null, geo: null};
+  const S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, o = opt;
+  const mode = ser.mode, pts = ser.items.filter(q => mode === 'kinetics' ? q.x != null && isFinite(q.x) : (mode === 'fractions' && linkedRun ? q.x != null : true));
+  const titleH = !ov.nest && o.runTitle && assay.name ? fs*1.45 : 0;
+  const numX = mode === 'kinetics' || (mode === 'fractions' && linkedRun && pts.some(q => q.x != null)) || (mode === 'profile' && pts.length > 1 && pts.every(q => q.x != null && isFinite(q.x)));
+  const prot = assay.protocol || {};
+  const cUnit = (assay.entries && assay.entries[0] && assay.entries[0].concUnit) || 'mM';
+  const xlab = mode === 'kinetics' ? (prot.substrate && String(prot.substrate).length <= 18 ? `${prot.substrate} (${cUnit})` : `[S] (${cUnit})`)
+    : mode === 'fractions' ? (linkedRun ? runXLabel(linkedRun) : 'Fraction')
+    : mode === 'profile' ? ((assay.entries && assay.entries[0] && ({pH: 'pH', temp: 'Temperature (°C)', substrate: 'Substrate', additive: 'Condition'})[assay.entries[0].group]) || 'Condition')
+    : 'Purification step';
+  const allLow = pts.length ? pts.flatMap(q => ser.showErr === 'points' && q.pts.length ? q.pts : [q.y - (q.err || 0)]) : [0];
+  const allHigh = pts.length ? pts.flatMap(q => ser.showErr === 'points' && q.pts.length ? q.pts : [q.y + (q.err || 0)]) : [1];
+  const fit = mode === 'kinetics' ? fitAssayKinetics(assay) : null;
+  if (fit && pts.length) { const xm = Math.max(...pts.map(q => q.x)); allHigh.push(fit.predict(xm)*ser.fitScale); }
+  const yMin0 = Math.min(0, ...allLow), yMax0 = Math.max(0, ...allHigh), ySpan = (yMax0 - yMin0) || 1;
+  const y0 = yMin0 < 0 ? yMin0 - ySpan*0.06 : 0, y1 = yMax0 + ySpan*0.14;
+  const maxCatLen = !numX && pts.length ? Math.max(...pts.map(q => q.xLabel.length)) : 0;
+  const rotCat = !numX && pts.length > 3 && maxCatLen > 5;
+  const catExtra = rotCat ? Math.min(fs*3.2, maxCatLen*fs*0.42) : 0;
+  const mT = Math.max(fs*0.75, 5) + titleH, mB = tOut + 3 + fs + catExtra + 4 + fs*1.25;
+  const T = mT, B = Math.max(T + 24, H - mB), plotH = Math.max(12, B - T);
+  let yt = ticks(y0, y1, Math.max(3, Math.round(plotH/72*2)));
+  yt = fitTicks(yt, y0, y1, 4, plotH, 0, fs*1.25);
+  const ytl = yt.v.map(v => tkf(v, yt.dec));
+  const ytf = Math.min(fs, Math.max(5.5, (plotH - 4)/Math.max(1, ser.yLabel.length*0.6)));
+  const mL = tOut + 3 + Math.max(2, ...ytl.map(s => s.length))*cw + 5 + fs*1.25, mR = Math.max(fs*1.0, 8);
+  const L = mL, R = Math.max(L + 24, W - mR);
+  const py = y => B - (y - y0)/(y1 - y0)*(B - T);
+  const s = [S.head];
+  if (o.bg && !ov.nest) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
+  if (!pts.length) {
+    s.push(`<text x="${r2((L + R)/2)}" y="${r2((T + B)/2)}" text-anchor="middle" font-size="${r2(fs*0.85)}" fill="#777777">No activity data points</text></svg>`);
+    return {svg: s.join(''), geo: {L, R, T, B, W, H, prep: ov.nest ? 'assay' : undefined, assay: true, used: H, fracC: [], nFr: 0}};
+  }
+  let xlo = 0, xhi = 1, xt = null, px = x => L + (x - xlo)/(xhi - xlo)*(R - L);
+  if (numX) {
+    const xs = pts.map(q => q.x);
+    xlo = mode === 'kinetics' ? 0 : Math.min(...xs);
+    xhi = Math.max(...xs);
+    const pad = (xhi - xlo)*0.06 || 1;
+    if (mode !== 'kinetics') xlo -= pad;
+    xhi += pad;
+    xt = fitTicks(ticks(xlo, xhi, Math.max(3, Math.round((R - L)/72*2))), xlo, xhi, Math.max(3, Math.round((R - L)/72*2)), R - L, cw, fs);
+    px = x => L + (x - xlo)/(xhi - xlo)*(R - L);
+  } else {
+    xlo = -0.5; xhi = pts.length - 0.5;
+    px = idx => L + (idx + 0.5)/pts.length*(R - L);
+  }
+  s.push(`<g class="assay-panel-plot" data-assay-id="${esc(assay.id)}">`);
+  if (numX && mode === 'kinetics' && fit) {
+    let d = '';
+    for (let j = 0; j <= 120; j++) { const xx = xlo + (xhi - xlo)*j/120, yy = fit.predict(xx)*ser.fitScale; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(yy)); }
+    s.push(`<path class="assay-fit-curve" d="${d}" fill="none" stroke="${ser.color}" stroke-width="${r2(lw*1.15)}" stroke-linejoin="round"/>`);
+  } else if (numX) {
+    const sorted = pts.slice().sort((a, b) => a.x - b.x);
+    if (sorted.length > 1) {
+      let d = '';
+      sorted.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py(q.y)); });
+      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${ser.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+    }
+  } else {
+    const bw = Math.min(fs*2.4, (R - L)/pts.length*0.56);
+    pts.forEach((q, j) => {
+      const X = px(j), yTop = py(Math.max(0, q.y)), yBot = py(Math.min(0, q.y));
+      s.push(`<rect class="assay-bar" x="${r2(X - bw/2)}" y="${r2(yTop)}" width="${r2(bw)}" height="${r2(Math.max(0.5, yBot - yTop))}" fill="${ser.color}" fill-opacity="0.28" stroke="${ser.color}" stroke-width="${r2(lw*0.8)}"/>`);
+    });
+  }
+  pts.forEach((q, j) => { const X = numX ? px(q.x) : px(j), Y = py(q.y); drawAssayPointErr(s, X, Y, q, py, ser.showErr, ser.color, lw, fs); });
+  if (fit) {
+    const kf = fs*0.76, lines = [`Km = ${sig2(fit.Km)} ${cUnit}`, fit.kcat != null ? `kcat = ${sig2(fit.kcat)} s⁻¹` : `Vmax = ${sig2(fit.Vmax*ser.fitScale)}`, fit.r2 != null ? `R² = ${fmt(fit.r2, 3)}` : ''].filter(Boolean);
+    const boxY0 = B - fs*0.4 - (lines.length - 1)*kf*1.2;
+    lines.forEach((ln, li) => s.push(`<text x="${r2(R - fs*0.35)}" y="${r2(boxY0 + li*kf*1.2)}" text-anchor="end" font-size="${r2(kf)}" fill="#333333">${esc(ln)}</text>`));
+  }
+  s.push(`</g>`);
+  const dir = o.ticksOut ? 1 : -1;
+  s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square">`);
+  if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(T)}" width="${r2(R - L)}" height="${r2(B - T)}"/>`);
+  else s.push(`<line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/><line x1="${r2(L)}" y1="${r2(T)}" x2="${r2(L)}" y2="${r2(B)}"/>`);
+  if (numX && xt) xt.v.forEach(v => s.push(`<line x1="${r2(px(v))}" y1="${r2(B)}" x2="${r2(px(v))}" y2="${r2(B + dir*tl)}"/>`));
+  else pts.forEach((_, j) => s.push(`<line x1="${r2(px(j))}" y1="${r2(B)}" x2="${r2(px(j))}" y2="${r2(B + dir*tl)}"/>`));
+  yt.v.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - dir*tl)}" y2="${r2(py(v))}"/>`));
+  s.push(`</g><g fill="#000000">`);
+  const xly = B + tOut + 3 + fs*0.78;
+  if (numX && xt) {
+    let xLast = -Infinity;
+    xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = Math.max(hw + 1, Math.min(W - hw - 1, px(v))); if (x - hw < xLast + 2) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle">${t}</text>`); });
+  } else {
+    const cf = fs*0.78;
+    let xLast = -Infinity;
+    pts.forEach((q, j) => {
+      const lbl = q.xLabel.length > 12 ? q.xLabel.slice(0, 11) + '…' : q.xLabel, x = px(j);
+      if (rotCat) { if (x - cf*0.6 < xLast + 1) return; xLast = x + cf*0.6; s.push(`<text transform="translate(${r2(x + cf*0.3)} ${r2(B + tOut + 3)}) rotate(-45)" text-anchor="end" font-size="${r2(cf)}">${esc(lbl)}</text>`); }
+      else { const hw = lbl.length*cf*0.56/2, xc = Math.max(hw + 1, Math.min(W - hw - 1, x)); if (xc - hw < xLast + 2) return; xLast = xc + hw; s.push(`<text x="${r2(xc)}" y="${r2(xly)}" text-anchor="middle" font-size="${r2(cf)}">${esc(lbl)}</text>`); }
+    });
+  }
+  s.push(`<text x="${r2((L + R)/2)}" y="${r2(xly + catExtra + 4 + fs*1.15)}" text-anchor="middle">${esc(xlab)}</text>`);
+  yt.v.forEach((v, i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
+  s.push(`<text transform="translate(${r2(fs*0.88)} ${r2((T + B)/2)}) rotate(-90)" text-anchor="middle" font-size="${r2(ytf)}" fill="${ser.color}">${esc(ser.yLabel)}</text>`);
+  if (titleH) s.push(`<text x="${r2(L)}" y="${r2(fs*1.05)}" font-weight="bold">${esc(assay.name)}</text>`);
+  s.push(`</g></svg>`);
+  return {svg: s.join(''), geo: {L, R, T, B, W, H, prep: ov.nest ? 'assay' : undefined, assay: true, used: H, fracC: [], nFr: 0}};
+}
 
 /* ---------- figure: zoom inset ---------- */
 /* Presentation only: the main plot shows the whole run and a small second plot shows the x-window. Nothing that is calculated reads these. */
@@ -3269,8 +3478,9 @@ function buildRunSVG(run, ov){
 }
 function buildRunPlainSVG(run, ov){
   ov = ov || {};
+  if (run.prep === 'assay') return buildAssaySVG(run.assay, ov);
   if (run.prep) return buildPrepSVG(run, ov);
-  const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '', isInset = /zi-$/.test(idp), compactIn = isInset && !ov.split;
+  const o = opt; let S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S; const H0 = H, idp = ov.idp || '', isInset = /zi-$/.test(idp), compactIn = isInset && !ov.split;
   const uvC = uvOf(run), dEnd = uvC.xs[uvC.xs.length-1];
   const auto = runAuto(run), wfF = (ov.fullRun || (opt.wfFull && ov.nest)) && !isInset, xlo = wfF ? uvC.xs[0] : numOr(run.xmin, auto.lo); let xhi = wfF ? dEnd : numOr(run.xmax, auto.hi); if (!(xhi > xlo)) xhi = xlo + 1;
   const uv = windowXY(procFull(run), xlo, xhi);
@@ -3282,12 +3492,31 @@ function buildRunPlainSVG(run, ov){
   const flatSec = sec && sec.xs.length > 1 && (() => { const ys = sec.ys.slice().sort((p, q) => p - q), lo = ys[Math.floor(ys.length*0.02)], hi = ys[Math.floor(ys.length*0.98)];
     return o.sec === 'grad' ? hi - lo < 0.5 : hi - lo < 0.03*Math.max(1e-9, Math.abs(ys[ys.length >> 1])); })();
   const hasSec = sec && sec.xs.length > 1 && !flatSec;
+  const runAssays = !isInset ? assays.filter(a => a && a.runId === run.id && (!a.display || a.display.visible !== false) && (a.mode === 'fractions' || !a.mode) && (!a.display || a.display.placement !== 'panel')) : [];
+  const actSer = runAssays.length ? assaySeriesData(runAssays[0], run) : null;
+  const actPts = actSer ? actSer.items.filter(q => q.x != null && q.x >= xlo && q.x <= xhi) : [];
+  const hasActOverlay = !!(actSer && actPts.length && actSer.placement === 'overlay' && !hasSec);
+  const hasActTrack = !!(actSer && actPts.length && !hasActOverlay);
+  const hasRight = hasSec || hasActOverlay;
+  let ay0 = 0, ay1 = 1, trkGap = 0, trkH = 0, trkTf = fs*0.85, at = null, atl = [];
+  if (actPts.length && (hasActOverlay || hasActTrack)) {
+    const aLow = actPts.flatMap(q => actSer.showErr === 'points' && q.pts.length ? q.pts : [q.y - (q.err || 0)]);
+    const aHigh = actPts.flatMap(q => actSer.showErr === 'points' && q.pts.length ? q.pts : [q.y + (q.err || 0)]);
+    const mn = Math.min(0, ...aLow), mx = Math.max(0, ...aHigh), sp = (mx - mn) || 1;
+    ay0 = mn < 0 ? mn - sp*0.06 : 0; ay1 = mx + sp*0.14;
+  }
+  if (hasActTrack && ov.fixB == null) {
+    trkGap = Math.max(7, fs*1.05); trkH = Math.max(fs*8.2, actSer.yLabel.length*trkTf*0.6 + fs*1.4);
+    H += trkGap + trkH; S = style(Object.assign({}, ov, {hPt: H}));
+  } else if (hasActTrack) {
+    trkGap = Math.max(5, fs*0.8); trkH = Math.max(fs*4.5, (H - fs*6)*0.34);
+  }
   const secRun = isSec(run), sfit = secRun ? secFit(secCalFor(run)) : null, marks = secRun ? (o.secMarks || 'void') : 'none';
   const showStd = sfit && sfit.pts && (marks === 'stds' || marks === 'both'), showVoid = sfit && (marks === 'void' || marks === 'both');
   const segsAll = fracSegments(run, dEnd), shaded = shadeSet(run);
   const segs = segsAll.map((sg,i) => Object.assign({i}, sg)).filter(sg => sg.b > xlo && sg.a < xhi);
   const nonW = segs.filter(sg => !sg.waste);
-  const effFracFmt = compactIn && H < 80 && o.fracFmt !== 'off' ? 'none' : o.fracFmt;
+  const effFracFmt = compactIn && H0 < 80 && o.fracFmt !== 'off' ? 'none' : o.fracFmt;
   const showFr = effFracFmt !== 'off' && nonW.length > 0;
   const plateRun = isPlate(run), labOf = sg => effFracFmt === 'num' ? ((sg.label.match(/\d+/) || [sg.label])[0]) : plateRun ? plateShort(sg.label) : sg.label;
   const pf = fs*0.8, pcw = pf*0.56, fTick = compactIn ? fs*0.42 : fs*0.55;
@@ -3297,10 +3526,14 @@ function buildRunPlainSVG(run, ov){
     if (o.sec === 'grad') { secTitle = o.y2grad; secCol = RUN_COLORS.grad; st = {v:[0,25,50,75,100], dec:0};
       /* with buffer B's strength typed on the run card (e.g. 500 mM imidazole), the axis reads in concentration */
       const bb = axisConc(run); if (bb) { const ct = ticks(bb.a, bb.c, 5), cv = ct.v.filter(v => v >= bb.a - 1e-9 && v <= bb.c*1.001); st = {v: cv.map(v => (v - bb.a)*100/(bb.c - bb.a)), dec: ct.dec}; stl = cv.map(v => tkf(v, ct.dec)); secTitle = `${bb.name} (${bb.u})`; } }
-    else { const a = arrMin(sec.ys), b = arrMax(sec.ys), r = (b-a) || 1; s0 = a - r*0.05; s1 = b + r*0.1; secTitle = o.y2cond; secCol = RUN_COLORS.cond; st = ticks(s0, s1, Math.max(3, Math.round(H/72*1.8))); }
+    else { const a = arrMin(sec.ys), b = arrMax(sec.ys), r = (b-a) || 1; s0 = a - r*0.05; s1 = b + r*0.1; secTitle = o.y2cond; secCol = RUN_COLORS.cond; st = ticks(s0, s1, Math.max(3, Math.round(H0/72*1.8))); }
     if (!stl.length) stl = st.v.map(v => tkf(v, st.dec));
+  } else if (hasActOverlay) {
+    s0 = ay0; s1 = ay1; secTitle = actSer.yLabel; secCol = actSer.color;
+    st = ticks(s0, s1, Math.max(3, Math.round(H0/72*1.8)));
+    stl = st.v.map(v => tkf(v, st.dec));
   }
-  const estW = W - fs*6 - (hasSec ? fs*6 : fs);
+  const estW = W - fs*6 - (hasRight ? fs*6 : fs);
   const widths = nonW.map(sg => (Math.min(sg.b,xhi) - Math.max(sg.a,xlo))/(xhi-xlo)*estW).sort((a,b)=>a-b);
   const medW = widths.length ? widths[Math.floor(widths.length/2)] : 0;
   const maxLab = nonW.reduce((m,sg) => Math.max(m, labOf(sg).length), 1);
@@ -3324,37 +3557,41 @@ function buildRunPlainSVG(run, ov){
   /* in a workflow every panel reserves the same room, so the chromatograms keep one height */
   const nCond = ov.nest && !isInset && COND_N ? Math.max(condL.length, COND_N) : condL.length, condH = nCond ? nCond*cf*1.2 + fs*0.5 : 0;
   const xlab = runXLabel(run);
-  const mB = tOut + (xlab ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*0.95) + (calNote ? fs*0.95 : 0) + condH, mT = ov.fixT != null ? ov.fixT : Math.max(compactIn ? 5.2 : 0, fs*0.7) + titleH + stdH + ndH, plotH0 = H - mB - mT;
+  const mB = tOut + (xlab ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*0.95) + (calNote ? fs*0.95 : 0) + condH, mT = ov.fixT != null ? ov.fixT : Math.max(compactIn ? 5.2 : 0, fs*0.7) + titleH + stdH + ndH, plotH0 = H0 - mB - mT;
   /* room above the tallest peak for its label, so the label never sits on the trace */
-  const poolCap = compactIn && H < 55 ? '' : poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
+  const poolCap = compactIn && H0 < 55 ? '' : poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
   const usable = Math.max(10, plotH0 - band - top);
   let y0 = ylo - yr*band/usable - yr*0.02, y1 = yhi + yr*top/usable;
   y0 = numOr(run.ymin, y0); y1 = numOr(run.ymax, y1); if (!(y1 > y0)) y1 = y0 + 1;
 
-  const n = Math.max(3, Math.round(H/72*1.8));
+  const n = Math.max(3, Math.round(H0/72*1.8));
   let yt = ticks(y0, y1, n);
   const B = ov.fixB != null ? ov.fixB : compactIn ? Math.max(mT + 8, H - mB) : Math.max(H - mB, mT + 24), T = mT;
-  const plotH = Math.max(8, B - T);
+  const plotB = hasActTrack ? Math.max(T + 16, B - trkGap - trkH) : B, trkT = plotB + trkGap;
+  const plotH = Math.max(8, plotB - T);
   yt = fitTicks(yt, y0, y1, n, plotH, 0, fs*1.28);
+  if (hasActOverlay) { st = fitTicks(st, s0, s1, Math.max(3, Math.round(H0/72*1.8)), Math.max(8, plotB - band - T), 0, fs*1.28); stl = st.v.map(v => tkf(v, st.dec)); }
+  if (hasActTrack) { at = fitTicks(ticks(ay0, ay1, 3), ay0, ay1, 3, Math.max(12, B - trkT), 0, fs*1.2); atl = at.v.map(v => tkf(v, at.dec)); }
   /* the strip under the trace holds fraction labels, not data, so no y values are printed there */
   if (band && (run.ymin ?? '') === '') { const keep = yt.v.filter(v => v >= ylo - yr*0.05); if (keep.length >= 2) yt.v = keep; }
   let xt = ticks(xlo, xhi, Math.max(3, Math.round(W/72*2)));
   const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = compactIn ? 3 : 0;
-  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + (o.rylabel ? 5 + fs*1.2 : 2);
-  const mR = hasSec ? tOut + 3 + Math.max(...stl.map(s=>s.length))*cw + 5 + fs*1.2 : compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8;
+  const maxLeftLen = Math.max(...ytl.map(s=>s.length), ...(atl.length ? atl.map(s=>s.length) : [0]));
+  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + maxLeftLen*cw + ((o.rylabel || hasActTrack) ? 5 + fs*1.2 : 2);
+  const mR = hasRight ? tOut + 3 + Math.max(...stl.map(s=>s.length))*cw + 5 + fs*(hasActOverlay ? 1.4 : 1.2) : compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8;
   /* keep a usable plot even when fonts or margins are too big for the figure size; compact insets never spill past W */
   const L = mL, R = ov.fixR != null ? ov.fixR : compactIn ? Math.max(mL + 8, W - mR) : Math.max(W - mR, mL + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(W/72*2)), R - L, cw, fs);
-  const px = x => L + (x-xlo)/(xhi-xlo)*(R-L), py = y => B - (y-y0)/(y1-y0)*(B-T);
-  const secB = B - band, py2 = v => secB - (v-s0)/(s1-s0)*(secB-T);
+  const px = x => L + (x-xlo)/(xhi-xlo)*(R-L), py = y => plotB - (y-y0)/(y1-y0)*(plotB-T);
+  const secB = plotB - band, py2 = v => secB - (v-s0)/(s1-s0)*(secB-T);
   const s = [S.head], extraAvoid = [];
   if (o.bg && !ov.nest) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
-  s.push(`<defs><clipPath id="${idp}plot-area"><rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(B-T)}"/></clipPath></defs>`);
+  s.push(`<defs><clipPath id="${idp}plot-area"><rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(plotB-T)}"/></clipPath></defs>`);
   /* pool blocks split only by a tiny waste segment are drawn as one, so the shading has no hairline seams */
   const pBlocks = (shaded.size ? poolBlocks(run).map(k => ({a: Math.max(k.a, xlo), b: Math.min(k.b, xhi)})).filter(k => k.b > k.a) : []).reduce((m, k) => { const q = m[m.length - 1]; if (q && k.a - q.b < (xhi - xlo)*0.012) q.b = Math.max(q.b, k.b); else m.push(Object.assign({}, k)); return m; }, []);
   /* fills under the trace stop at the zero line (or the top of the fraction-label strip), not at the plot floor */
   const bLow = (() => { const v = uv.ys.filter((_, k) => uv.xs[k] >= xlo && uv.xs[k] <= xhi).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length*0.03)] : 0; })();
-  const yBase = Math.min(B - band, py(Math.min(y1, Math.max(y0, Math.min(0, bLow)))));
+  const yBase = Math.min(plotB - band, py(Math.min(y1, Math.max(y0, Math.min(0, bLow)))));
   const links = [...laneLinks().values()].filter(l => l.run === run), laneFills = o.laneMark !== 'strip' && laneLinks().size > 0;
   if (ndTxt && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), nf = fs*0.8, w = ndTxt.length*nf*0.5;
     const X = Math.max(L + w/2, Math.min(R - w/2, px((a + b)/2))), Y = T - fs*0.4;
@@ -3363,12 +3600,12 @@ function buildRunPlainSVG(run, ov){
   if (pBlocks.length && o.poolStyle !== 'none') {
     s.push(`<g clip-path="url(#${idp}plot-area)" fill="${esc(o.poolColor)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*(laneFills ? 0.5 : 1))}" stroke="none">`);
     pBlocks.forEach(k => {
-      extraAvoid.push({x0: px(k.a), x1: px(k.b), y0: T, y1: B - band, pool: true});
+      extraAvoid.push({x0: px(k.a), x1: px(k.b), y0: T, y1: plotB - band, pool: true});
       if (o.poolStyle === 'area') {
         const i0 = lowerBound(uv.xs, k.a), i1 = Math.min(uv.xs.length-1, lowerBound(uv.xs, k.b)), st = Math.max(1, Math.ceil((i1-i0)/500));
         let d = `M${r2(px(k.a))} ${r2(yBase)}`; for (let i=i0;i<=i1;i+=st) d += `L${r2(px(uv.xs[i]))} ${r2(Math.min(yBase, py(uv.ys[i])))}`;
         d += `L${r2(px(uv.xs[i1]))} ${r2(Math.min(yBase, py(uv.ys[i1])))}L${r2(px(k.b))} ${r2(yBase)}Z`; s.push(`<path d="${d}"/>`);
-      } else s.push(`<rect x="${r2(px(k.a))}" y="${r2(T)}" width="${r2(px(k.b) - px(k.a))}" height="${r2(B-T)}"/>`);
+      } else s.push(`<rect x="${r2(px(k.a))}" y="${r2(T)}" width="${r2(px(k.b) - px(k.a))}" height="${r2(plotB-T)}"/>`);
     });
     s.push('</g>');
   }
@@ -3382,7 +3619,7 @@ function buildRunPlainSVG(run, ov){
     for (let j = Math.max(0, lowerBound(uv.xs, a0)); j < uv.xs.length && uv.xs[j] <= b0; j++) lm = Math.min(lm, uv.ys[j]);
     /* fills stand on zero; only a trace that sits mostly below zero brings the floor down with it */
     const mid = []; for (let j = Math.max(0, lowerBound(uv.xs, a0)); j < uv.xs.length && uv.xs[j] <= b0; j++) mid.push(uv.ys[j]); mid.sort((p, q) => p - q);
-    const fl = mid.length && mid[mid.length >> 1] < 0 ? lm : 0; yLinkFloor = Math.min(B - band, py(Math.min(y1, Math.max(y0, fl)))); }
+    const fl = mid.length && mid[mid.length >> 1] < 0 ? lm : 0; yLinkFloor = Math.min(plotB - band, py(Math.min(y1, Math.max(y0, fl)))); }
   if (links.length) {
     const la = numOr(o.laneAlpha, 0.55);
     s.push(`<g clip-path="url(#${idp}plot-area)" stroke="none">`);
@@ -3396,7 +3633,7 @@ function buildRunPlainSVG(run, ov){
       if (o.laneMark !== 'strip') s.push(`<path d="${d}" fill="${l.color}" fill-opacity="${r2(fo)}"/>`);
       /* strip: a thin bar on the baseline under each linked fraction keeps the trace and pool shading readable */
       else { const sh = Math.max(2.2, fs*0.4), w0 = px(b) - px(a), w = Math.max(w0 - 0.8, Math.min(fs*1.2, w0 + fs*0.6)), xc = (px(a) + px(b))/2;
-        s.push(`<rect x="${r2(xc - w/2)}" y="${r2(B - sh)}" width="${r2(w)}" height="${r2(sh)}" fill="${l.color}" stroke="#ffffff" stroke-width="0.5"/>`); } });
+        s.push(`<rect x="${r2(xc - w/2)}" y="${r2(plotB - sh)}" width="${r2(w)}" height="${r2(sh)}" fill="${l.color}" stroke="#ffffff" stroke-width="0.5"/>`); } });
     s.push('</g>');
   }
   const labMode = secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (run.isStd && o.secLabel === 'olig') ? 'mw' : (o.secLabel || 'mw')) : o.intLabel;
@@ -3430,15 +3667,15 @@ function buildRunPlainSVG(run, ov){
     const phf = Math.max(6, pf*0.9);
     s.push(`<g font-size="${r2(phf)}" fill="${RUN_COLORS.phase}">`);
     run.phases.forEach(ph => { if (ph.x <= xlo || ph.x >= xhi) return; const xp = px(ph.x), X = r2(xp);
-      extraAvoid.push({x0: xp - phf*0.3, x1: xp + phf*1.3, y0: T, y1: Math.min(B - band, T + String(ph.label || '').length*phf*0.58 + 4)});
-      s.push(`<line x1="${X}" y1="${r2(T)}" x2="${X}" y2="${r2(B - band)}" stroke="${RUN_COLORS.phase}" stroke-width="${r2(aw*0.8)}" stroke-dasharray="1.5 2"/>`);
+      extraAvoid.push({x0: xp - phf*0.3, x1: xp + phf*1.3, y0: T, y1: Math.min(plotB - band, T + String(ph.label || '').length*phf*0.58 + 4)});
+      s.push(`<line x1="${X}" y1="${r2(T)}" x2="${X}" y2="${r2(plotB - band)}" stroke="${RUN_COLORS.phase}" stroke-width="${r2(aw*0.8)}" stroke-dasharray="1.5 2"/>`);
       s.push(`<text transform="translate(${r2(xp + 2)} ${r2(T + 2)}) rotate(90)">${esc(ph.label)}</text>`); });
     s.push('</g>');
   }
   if (showVoid) { const vf = pf*0.95; s.push(`<g font-size="${r2(vf)}" fill="#666666">`);
     [[sfit.v0, 'V₀'], [sfit.vt, 'Vₜ']].forEach(([x, t]) => { if (!(x > xlo && x < xhi)) return; const xp = px(x), X = r2(xp), vw = t.length*vf*0.68 + 2;
       extraAvoid.push({x0: xp - vw - 2, x1: xp + 2, y0: T, y1: T + vf*1.3});
-      s.push(`<line x1="${X}" y1="${r2(T)}" x2="${X}" y2="${r2(B - band)}" stroke="#888888" stroke-width="${r2(aw*0.8)}" stroke-dasharray="3 2"/>`);
+      s.push(`<line x1="${X}" y1="${r2(T)}" x2="${X}" y2="${r2(plotB - band)}" stroke="#888888" stroke-width="${r2(aw*0.8)}" stroke-dasharray="3 2"/>`);
       s.push(`<text x="${r2(xp - 2)}" y="${r2(T + vf)}" text-anchor="end">${t}</text>`); });
     s.push('</g>'); }
   if (showStd) { const sf = Math.max(6, pf*0.9); s.push(`<g font-size="${r2(sf)}" fill="#555555" text-anchor="middle">`); let lastX = -Infinity, lift = 0;
@@ -3453,31 +3690,68 @@ function buildRunPlainSVG(run, ov){
   if (hasSec) s.push(`<path d="${pathD(sec.xs, sec.ys, xlo, xhi, nb, px, py2)}" stroke="${secCol}" stroke-width="${r2(lw*0.9)}" stroke-dasharray="${r2(lw*4)} ${r2(lw*2.5)}"/>`);
   s.push(`<path d="${pathD(uv.xs, uv.ys, xlo, xhi, nb, px, py)}" stroke="${run.color}" stroke-width="${lw}"/>`);
   s.push('</g>');
+  if (hasActOverlay) {
+    const sortedA = actPts.slice().sort((a, b) => a.x - b.x);
+    s.push(`<g class="assay-overlay" data-assay-id="${esc(runAssays[0].id)}">`);
+    if (sortedA.length > 1) {
+      let d = ''; sortedA.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py2(q.y)); });
+      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${actSer.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+    }
+    sortedA.forEach(q => drawAssayPointErr(s, px(q.x), py2(q.y), q, py2, actSer.showErr, actSer.color, lw, fs));
+    s.push(`</g>`);
+  }
   const dir = o.ticksOut ? 1 : -1;
   s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square">`);
-  if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(B-T)}"/>`);
-  else { s.push(`<line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/>`); s.push(`<line x1="${r2(L)}" y1="${r2(T)}" x2="${r2(L)}" y2="${r2(B)}"/>`); if (hasSec) s.push(`<line x1="${r2(R)}" y1="${r2(T)}" x2="${r2(R)}" y2="${r2(B)}"/>`); }
+  if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(plotB-T)}"/>`);
+  else { s.push(`<line x1="${r2(L)}" y1="${r2(plotB)}" x2="${r2(R)}" y2="${r2(plotB)}"/>`); s.push(`<line x1="${r2(L)}" y1="${r2(T)}" x2="${r2(L)}" y2="${r2(plotB)}"/>`); if (hasRight) s.push(`<line x1="${r2(R)}" y1="${r2(T)}" x2="${r2(R)}" y2="${r2(plotB)}"/>`); }
   xt.v.forEach(v => { const x = r2(px(v)); s.push(`<line x1="${x}" y1="${r2(B)}" x2="${x}" y2="${r2(B + dir*tl)}"/>`); });
   yt.v.forEach(v => { const y = r2(py(v)); s.push(`<line x1="${r2(L)}" y1="${y}" x2="${r2(L - dir*tl)}" y2="${y}"/>`); });
-  if (hasSec) st.v.forEach(v => { const y = r2(py2(v)); s.push(`<line x1="${r2(R)}" y1="${y}" x2="${r2(R + dir*tl)}" y2="${y}"/>`); });
+  if (hasRight) st.v.forEach(v => { const y = r2(py2(v)); s.push(`<line x1="${r2(R)}" y1="${y}" x2="${r2(R + dir*tl)}" y2="${y}"/>`); });
   s.push('</g>');
+  if (hasActTrack) {
+    const pyA = v => B - (v - ay0)/(ay1 - ay0)*(B - trkT), sortedA = actPts.slice().sort((a, b) => a.x - b.x);
+    const trkYtf = Math.min(trkTf, Math.max(5.5, (B - trkT - 4)/Math.max(1, actSer.yLabel.length*0.6)));
+    s.push(`<g class="assay-track" data-assay-id="${esc(runAssays[0].id)}">`);
+    if (pBlocks.length && o.poolStyle !== 'none') {
+      s.push(`<g fill="${esc(o.poolColor)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*0.75)}" stroke="none">`);
+      pBlocks.forEach(k => s.push(`<rect x="${r2(px(k.a))}" y="${r2(trkT)}" width="${r2(px(k.b) - px(k.a))}" height="${r2(B - trkT)}"/>`));
+      s.push(`</g>`);
+    }
+    if (sortedA.length > 1) {
+      let d = ''; sortedA.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(pyA(q.y)); });
+      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${actSer.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+    }
+    sortedA.forEach(q => drawAssayPointErr(s, px(q.x), pyA(q.y), q, pyA, actSer.showErr, actSer.color, lw, fs));
+    s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square">`);
+    if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(trkT)}" width="${r2(R - L)}" height="${r2(B - trkT)}"/>`);
+    else s.push(`<line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/><line x1="${r2(L)}" y1="${r2(trkT)}" x2="${r2(L)}" y2="${r2(B)}"/>`);
+    at.v.forEach(v => { const y = r2(pyA(v)); s.push(`<line x1="${r2(L)}" y1="${y}" x2="${r2(L - dir*tl)}" y2="${y}"/>`); });
+    s.push(`</g><g fill="#000000">`);
+    at.v.forEach((v, i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(pyA(v) + fs*0.35)}" text-anchor="end">${atl[i]}</text>`));
+    s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((trkT + B)/2)}) rotate(-90)" text-anchor="middle" font-size="${r2(trkYtf)}" fill="${actSer.color}">${esc(actSer.yLabel)}</text>`);
+    s.push(`</g></g>`);
+  }
   s.push(`<g fill="#000000">`);
   const xly = B + tOut + 3 + fs*0.78;
   const halo = ov && ov.nest ? ` stroke="#ffffff" stroke-width="${r2(fs*0.32)}" paint-order="stroke" stroke-linejoin="round"` : '';
   { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle"${halo}>${t}</text>`); }); }
   if (xlab) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle"${halo}>${esc(xlab)}</text>`);
   yt.v.forEach((v,i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
-  if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+B)/2)}) rotate(-90)" text-anchor="middle" fill="${hasSec ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
-  if (hasSec) {
+  if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+plotB)/2)}) rotate(-90)" text-anchor="middle" fill="${hasRight ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
+  if (hasRight) {
     st.v.forEach((v,i) => s.push(`<text x="${r2(R + tOut + 3)}" y="${r2(py2(v) + fs*0.35)}">${stl[i]}</text>`));
-    if (secTitle) s.push(`<text transform="translate(${r2(W - fs*0.35)} ${r2((T+secB)/2)}) rotate(-90)" text-anchor="middle" fill="${secCol}">${esc(secTitle)}</text>`);
+    if (secTitle) {
+      const rtf = hasActOverlay ? Math.min(fs, Math.max(5.5, (secB - T - 4)/Math.max(1, secTitle.length*0.6))) : fs;
+      const rx = hasActOverlay ? W - rtf*0.48 : W - fs*0.35;
+      s.push(`<text transform="translate(${r2(rx)} ${r2((T+secB)/2)}) rotate(-90)" text-anchor="middle"${hasActOverlay ? ` font-size="${r2(rtf)}"` : ''} fill="${secCol}">${esc(secTitle)}</text>`);
+    }
   }
   if (titleH) s.push(`<text x="${r2(L)}" y="${r2(fs*1.05)}" font-weight="bold">${esc(run.name)}</text>`);
   s.push('</g>');
   const tickBoxes = [], hitBox = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
   xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v); tickBoxes.push({x1: x - t.length*cw/2, x2: x + t.length*cw/2, y1: xly - fs*0.8, y2: xly + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: x - aw, x2: x + aw, y1: B - tl, y2: B}); });
   yt.v.forEach((v, i) => { const y = py(v), ty = y + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; tickBoxes.push({x1: x - w, x2: x, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: L, x2: L + tl, y1: y - aw, y2: y + aw}); });
-  if (hasSec) st.v.forEach((v, i) => { const y = py2(v), ty = y + fs*0.35, x = R + tOut + 3, w = stl[i].length*cw; tickBoxes.push({x1: x, x2: x + w, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: R - tl, x2: R, y1: y - aw, y2: y + aw}); });
+  if (hasRight) st.v.forEach((v, i) => { const y = py2(v), ty = y + fs*0.35, x = R + tOut + 3, w = stl[i].length*cw; tickBoxes.push({x1: x, x2: x + w, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: R - tl, x2: R, y1: y - aw, y2: y + aw}); });
   if (showVoid) [[sfit.v0, 'V₀'], [sfit.vt, 'Vₜ']].forEach(([x, t]) => { if (x > xlo && x < xhi) { const xr = px(x) - 2, vf = pf*0.95, vw = t.length*vf*0.68 + 2; tickBoxes.push({x1: xr - vw, x2: xr + 3, y1: T, y2: T + vf*1.25}); } });
   if (capSvg) s.push(capSvg);
   /* an uncalibrated SEC run says so, instead of leaving the reader to guess the size */
@@ -3490,7 +3764,7 @@ function buildRunPlainSVG(run, ov){
     s.push(`<g stroke="${RUN_COLORS.frac}" stroke-width="${r2(aw*0.8)}">`);
     const seen = new Set();
     nonW.forEach(sg => [sg.a, sg.b].forEach(x => { if (x < xlo || x > xhi) return; const k = x.toFixed(4); if (seen.has(k)) return; seen.add(k);
-      const X = r2(px(x)); s.push(`<line x1="${X}" y1="${r2(B)}" x2="${X}" y2="${r2(B - fTick)}"/>`); }));
+      const X = r2(px(x)); s.push(`<line x1="${X}" y1="${r2(plotB)}" x2="${X}" y2="${r2(plotB - fTick)}"/>`); }));
     s.push('</g>');
     if (effFracFmt !== 'none') {
       /* a thin white halo keeps fraction names readable where they sit on a colored fill */
@@ -3499,7 +3773,7 @@ function buildRunPlainSVG(run, ov){
          nothing is drawn on top of either y axis or an axis tick */
       const cOf = sg => (Math.max(sg.a, xlo) + Math.min(sg.b, xhi))/2, linkOf = sg => links.find(l => l.t.x !== undefined && Math.abs(l.t.a - sg.a) < 1e-9);
       const impOf = (sg, k) => !!linkOf(sg) || (shaded.has(sg.i) && o.poolStyle !== 'none' && (!nonW[k-1] || !shaded.has(nonW[k-1].i) || !nonW[k+1] || !shaded.has(nonW[k+1].i)));
-      const yb = B - fTick - 2, fBox = (sg, X) => rot ? {x1: X - pf*0.5, x2: X + pf*0.5, y1: yb - labOf(sg).length*pcw, y2: yb} : {x1: X - labOf(sg).length*pcw/2, x2: X + labOf(sg).length*pcw/2, y1: yb - pf*0.85, y2: yb + pf*0.15};
+      const yb = plotB - fTick - 2, fBox = (sg, X) => rot ? {x1: X - pf*0.5, x2: X + pf*0.5, y1: yb - labOf(sg).length*pcw, y2: yb} : {x1: X - labOf(sg).length*pcw/2, x2: X + labOf(sg).length*pcw/2, y1: yb - pf*0.85, y2: yb + pf*0.15};
       const wOfL = sg => rot ? pf*1.15 : labOf(sg).length*pf*0.56 + pf*0.5, placedX = [], keep = new Set();
       const tryPut = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c), fb = fBox(sg, X); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25 || fb.x2 > R - pf*0.25 || tickBoxes.some(b => hitBox(fb, b))) return;
         if (placedX.some(p => Math.abs(p.X - X) < (p.w + wOfL(sg))/2)) return; placedX.push({X, w: wOfL(sg)}); keep.add(k); };
@@ -3553,7 +3827,7 @@ function buildRunPlainSVG(run, ov){
               const lift2 = Math.max(base, hiIn(xlo + (xc + e[0] - L)*k, xlo + (xc + e[1] - L)*k)), Y2 = Math.max(T + fs*0.8, Math.min(Y, py(lift2) - 3));
               if (freeT(Y2, xc)) cands.push({x: xc, y: Y2, d: Math.abs(xc - pick.x)}); }); });
           if (cands.length) { cands.sort((a, b) => a.d - b.d); pick.x = cands[0].x; Y = cands[0].y; }
-          else { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y + g2*fs*0.45; if (yn > B - band - fs*0.3) break; if (freeT(yn)) { Y = yn; break; } } } } }
+          else { for (let g2 = 1; g2 <= 6; g2++) { const yn = Y + g2*fs*0.45; if (yn > plotB - band - fs*0.3) break; if (freeT(yn)) { Y = yn; break; } } } } }
       const e3 = ext(), cx0 = pick.x + (e3[0] + e3[1])/2;
       if (placed.some(q => Math.abs(q.x - cx0) < (q.w + ww)/2 + 1 && Math.abs(q.y - Y) < fs*0.85)) return;
       placed.push({x: cx0, y: Y, w: ww}); s.push(`<text x="${r2(pick.x)}" y="${r2(Y)}"${pick.an !== 'middle' ? ` text-anchor="${pick.an}"` : ''}>${esc(tt)}</text>`);
@@ -3563,7 +3837,7 @@ function buildRunPlainSVG(run, ov){
   }
   s.push('</svg>');
   const fracC = nonW.map(sg => ({label: sg.label, x: px((Math.max(sg.a, xlo) + Math.min(sg.b, xhi))/2)}));
-  return {svg: s.join(''), geo: {L,R,T,B,xlo,xhi,y0,y1,P:[],uv,px,py,W,H,run:true,band,extraAvoid,secCurve: hasSec ? {xs: sec.xs, ys: sec.ys, py2} : null, fracC, nFr: nonW.length, frA: nonW[0] && nonW[0].label, frB: nonW.length && nonW[nonW.length-1].label}};
+  return {svg: s.join(''), geo: {L,R,T,B,plotB,xlo,xhi,y0,y1,P:[],uv,px,py,W,H,run:true,band,extraAvoid,secCurve: hasSec ? {xs: sec.xs, ys: sec.ys, py2} : null, fracC, nFr: nonW.length, frA: nonW[0] && nonW[0].label, frB: nonW.length && nonW[nonW.length-1].label}};
 }
 
 /* SEC calibration figure: standards and the fitted line on log(MW) against Kav (or Ve), with sample peaks sized on it */
@@ -4556,9 +4830,9 @@ function composeRuns(list, cfg){
   let gap = fs*1.4;
   /* branches: par[i] is the panel panel i comes from; a panel that does not follow its predecessor skips ahead */
   const par = wfParents(list), fromN = i => wfFromNoteOf(list[i]), edgeNote = i => fromN(i + 1) || arrowNote(list[i]);
-  const skips = []; for (let i = 1; i < n; i++) if (par[i] !== i - 1 && cfg.arrows) skips.push(i);
+  const skips = []; for (let i = 1; i < n; i++) if (par[i] >= 0 && par[i] !== i - 1 && list[i].prep !== 'assay' && cfg.arrows) skips.push(i);
   /* a grid row holds two panels; a branch starts a new row */
-  const gcell = []; if (grid) { let rw = 0, cl = 0; list.forEach((r, i) => { if (i > 0 && (cl === 2 || par[i] !== i - 1)) { rw++; cl = 0; } gcell.push({row: rw, col: cl}); cl++; }); }
+  const gcell = []; if (grid) { let rw = 0, cl = 0; list.forEach((r, i) => { if (i > 0 && (cl === 2 || (par[i] >= 0 && par[i] !== i - 1 && r.prep !== 'assay'))) { rw++; cl = 0; } gcell.push({row: rw, col: cl}); cl++; }); }
   if (n > 1 && cfg.arrows) {
     if (row || grid) { const words = list.slice(0, -1).flatMap(r => poolLabel(r).split(' ')), nw = list.slice(0, -1).flatMap((r, i) => edgeNote(i).split(/\s+/)).reduce((m, w) => Math.max(m, w.length), 0);
       gap = Math.max(fs*3.4, words.reduce((m,w) => Math.max(m, w.length), 0)*cw + 10, nw ? Math.min(fs*7, Math.max(nw*fs*0.8*0.52 + 8, fs*5.5)) : 0); }
@@ -4573,8 +4847,8 @@ function composeRuns(list, cfg){
   const yTitle = Math.max(String(opt.rylabel || '').length, String(opt.y2grad || '').length, 12)*fs*0.56 + fs;
   const sideK = r => opt.gelPos === 'right' && cfg.showGels && gelsFor(r).length ? Math.min(0.9, Math.max(0.3, numOr(opt.gelSide, 60)/100)) : 1;
   list.forEach((r, i) => { const k = sideK(r), c = buildRunSVG(r, {wPt: pw[i]*k, hPt: chromH, idp: 'dry-', nest: true}); if (!c.geo) { ovL[i] = fs*4; ovR[i] = fs; return; } ovL[i] = c.geo.L; ovR[i] = pw[i]*k - c.geo.R;
-    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5, need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (pw[i] < need) { pw[i] = need; widened = 1; } }
-    const needH = chromH - (c.geo.B - c.geo.T) + Math.max(fs*9, yTitle); if (chromH < needH) { chromH = needH; taller = 1; } });
+    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5, need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (pw[i] < need) { pw[i] = need; widened = 1; } }
+    const bPlot = c.geo.plotB != null ? c.geo.plotB : c.geo.B, needH = chromH - (bPlot - c.geo.T) + Math.max(fs*9, yTitle); if (chromH < needH) { chromH = needH; taller = 1; } });
   if (widened) Wt = row ? pw.reduce((a, b) => a + b, 0) + (n-1)*gap : grid ? 2*Math.max(...pw) + gap : Math.max(...pw);
   if (widened && !row) pw.fill(grid ? (Wt - gap)/2 : Wt);
   /* the upstream band is as tall as its tallest panel's text at the width that panel really gets */
@@ -4649,7 +4923,7 @@ function composeRuns(list, cfg){
     const connH = gl.length && !sideHere ? (cfg.connectors ? fs*1.9 + (!row && chart.geo ? Math.min(fs*2.2, 0.06*(chart.geo.R - chart.geo.L)) : 0) : fs*0.8) + extraGap : 0;
     const off = r.gelOff || {};
     /* a text or construct panel outside the side-by-side layout is only as tall as its content plus the margin, so its gel or the next step follows it closely */
-    const ch = cfg.bandH ? cfg.bandH : r.prep && !row && chart.geo && chart.geo.used ? Math.min(chromH, chart.geo.used + textPad(fs)) : chromH;
+    const ch = cfg.bandH ? cfg.bandH : r.prep && r.prep !== 'assay' && !row && chart.geo && chart.geo.used ? Math.min(chromH, chart.geo.used + textPad(fs)) : (chart.geo && chart.geo.H > chromH ? chart.geo.H : chromH);
     /* and the panel's own frame ends there too (its drawing is never clipped, overflow is visible), so in a grid row beside a chromatogram it is not a whole chart tall */
     if (!cfg.bandH && r.prep && ch < chromH && chart.svg) chart.svg = chart.svg.replace(`height="${r2(chromH)}" viewBox="0 0 ${r2(chartW)} ${r2(chromH)}"`, `height="${r2(ch)}" viewBox="0 0 ${r2(chartW)} ${r2(ch)}"`);
     let gy = sideHere ? titleH + (chart.geo ? chart.geo.T : 0) : titleH + ch + connH, bottom = titleH + (chart.svg ? ch : 0);
@@ -4664,7 +4938,7 @@ function composeRuns(list, cfg){
       gy += dry.h + fs*0.8; bottom = Math.max(bottom, item.gy + dry.h);
       return item; });
     let slot = null;
-    if (FIG_SCREEN && anyGel && !gl.length && !r.prep && opt.noGelSlot !== false && chart.geo && slotH > 0) { const sw = Math.min(pw[i] - fs*0.5, Math.max(fs*10.5, Math.min(fs*12, (R - L)*0.7))), y0s = titleH + chromH + (cfg.connectors ? fs*1.9 : fs*0.8) + slotTop;
+    if (FIG_SCREEN && anyGel && !gl.length && !r.prep && opt.noGelSlot !== false && chart.geo && slotH > 0) { const sw = Math.min(pw[i] - fs*0.5, Math.max(fs*10.5, Math.min(fs*12, (R - L)*0.7))), y0s = titleH + ch + (cfg.connectors ? fs*1.9 : fs*0.8) + slotTop;
       slot = {x: Math.max(fs*0.25, L + (R - L - sw)/2), y: y0s, w: sw, h: slotH}; bottom = Math.max(bottom, y0s + slotH); }
     return {r, chart, gi, h: bottom, chartW, sideHere, slot, ch};
   });
@@ -4672,7 +4946,7 @@ function composeRuns(list, cfg){
   const pos = []; let Ht = 0, yAcc = 0, xAcc = 0;
   const rowH = grid ? [] : null; if (grid) panels.forEach((p, i) => { const k = gcell[i].row; rowH[k] = Math.max(rowH[k] || 0, p.h); });
   panels.forEach((p, i) => { if (row) { pos.push({x: xAcc, y: 0}); xAcc += pw[i] + gap; Ht = Math.max(Ht, p.h); }
-    else if (grid) { const k = gcell[i].row, y = rowH.slice(0, k).reduce((a, b) => a + b + vgap, 0); pos.push({x: i === n - 1 && gcell[i].col === 0 && par[i] === i - 1 ? (Wt - pw[i])/2 : gcell[i].col*(pw[0] + gap), y}); Ht = Math.max(Ht, y + rowH[k]); }
+    else if (grid) { const k = gcell[i].row, y = rowH.slice(0, k).reduce((a, b) => a + b + vgap, 0); pos.push({x: i === n - 1 && gcell[i].col === 0 && (par[i] === i - 1 || list[i].prep === 'assay') ? (Wt - pw[i])/2 : gcell[i].col*(pw[0] + gap), y}); Ht = Math.max(Ht, y + rowH[k]); }
     else { pos.push({x: 0, y: yAcc}); yAcc += p.h + (i < n-1 ? gap : 0); Ht = yAcc; } });
   /* panels the user dragged: add the offset (never left of or above the figure) and grow the figure to hold them */
   const W0 = Wt, H0 = Ht + fs*0.4;
@@ -4699,7 +4973,7 @@ function composeRuns(list, cfg){
       const gy = y + gg.gy, part = gelPart(gg.g, x + gg.gx, gy, gg.gw, gH, gg.idx, false, gg.view); defs.set(part.id, part.defs);
       gelBoxes.push({run: p.r, gid: gg.g.id, x: part.ix, y: part.top, w: part.iw, h: part.h});
       if (k === 0 && cfg.connectors && p.chart.geo && !p.sideHere && !p.r.prep) {
-        const cg = p.chart.geo, oy = y + titleH + (cg.oyMain || 0), yAxis = oy + cg.B, yTk = yAxis + fs*0.45, yLow = y + titleH + chromH + 1, y2c = gy - 1, fromAxis = opt.linkFrom !== 'below';
+        const cg = p.chart.geo, oy = y + titleH + (cg.oyMain || 0), yAxis = oy + cg.B, yTk = yAxis + fs*0.45, yLow = y + titleH + p.ch + 1, y2c = gy - 1, fromAxis = opt.linkFrom !== 'below';
         const pd = poolDark(), gray = '#7d7d7d', yBr = yLow + fs*0.45, LLc = laneLinks();
         if (y2c > yBr + 2) gg.idx.filter(li => laneAssign(gg.g, li) === p.r.id).forEach(li => {
           const t = laneTarget(p.r, part.labels[li], cg); if (!t) return;
@@ -4732,7 +5006,7 @@ function composeRuns(list, cfg){
     };
     body.push(`<g fill="#000000" stroke="#000000">`);
     for (let i=0;i<n-1;i++){
-      if (par[i + 1] !== i) continue;
+      if (par[i + 1] !== i || list[i + 1].prep === 'assay' || list[i].prep === 'assay') continue;
       const lab = poolLabel(list[i]), note = edgeNote(i), nf = fs*0.8, eid = ` data-wfe="${esc(list[i].id)}>${esc(list[i + 1].id)}"`;
       /* the note wraps to the gap's width and sits under the arrow */
       const wrapN = (t, w) => { const room = Math.max(6, Math.floor(w/(nf*0.52))), out = []; let ln = ''; t.replace(/(\d) (°C|°|mM|µM|M|h|min|mL|µL|kDa|%)(?=\s|,|$)/g, '$1\u00a0$2').split(/ +/).forEach(x => { if (ln && (ln + ' ' + x).length > room) { out.push(ln); ln = x; } else ln = ln ? ln + ' ' + x : x; }); if (ln) out.push(ln); return out; };
@@ -4785,8 +5059,9 @@ function composeRuns(list, cfg){
   return {svg: s.join(''), geo: {W: Wt, H: Ht, W0, H0, comp: true, chart, gelBoxes, zoomInsets, zoomInset: cfg.single && zoomInsets[0] ? zoomInsets[0] : null, widened: widened ? cfg.W : 0, taller: taller ? cfg.chromH : 0, pos: pos.map((q, i) => ({x: q.x, y: q.y, w: pw[i], h: panels[i].h, id: list[i].id, th: titleH}))}};
 }
 function buildRunFig(run){
-  if (!opt.runGel || !gelsFor(run).length) return buildRunSVG(run);
-  return composeRuns([run], {single: true, layout: 'stack', W: numOr(opt.w,3.5)*72, chromH: numOr(opt.h,2.6)*72, titles: !!opt.runTitle, letters: false, showGels: true, connectors: opt.connectors, arrows: false, gelMaxH: numOr(opt.wfGelH,1.8)*72});
+  const pAssays = assays.filter(a => a && a.runId === run.id && (!a.display || a.display.visible !== false) && a.display && a.display.placement === 'panel');
+  if ((!opt.runGel || !gelsFor(run).length) && !pAssays.length) return buildRunSVG(run);
+  return composeRuns([run].concat(pAssays.map(assayPanelObj)), {single: !pAssays.length, layout: pAssays.length ? 'row' : 'stack', W: (pAssays.length ? numOr(opt.w,3.5)*1.9 : numOr(opt.w,3.5))*72, chromH: numOr(opt.h,2.6)*72, titles: !!opt.runTitle || !!pAssays.length, letters: !!(opt.wfLetters && pAssays.length), showGels: !!opt.runGel, connectors: opt.connectors, arrows: false, gelMaxH: numOr(opt.wfGelH,1.8)*72});
 }
 /* the final pool's amount as a line under the workflow, so the figure states what came out */
 const sig2 = v => v >= 100 ? fmt(v, 0) : v >= 10 ? fmt(v, 1) : v >= 1 ? fmt(v, 2) : v >= 0.1 || v === 0 ? fmt(v, 2) : fmt(v, 3);
@@ -4948,13 +5223,15 @@ function wfList(){ let list = runs.filter(r => r.inWf); const c = cleaveStep();
     if (next.length === pend.length) { next.forEach(m => list.push(manObj(m))); break; } pend = next; }
   return list; }
 /* the workflow figure's panels: the steps, plus a Concentrated and NanoDrop panel after each column that has one */
-function wfFigListRaw(){ const L = wfList(); if (!prep.on || !prep.btw) return L; const out = [];
-  L.forEach(x => { out.push(x); if (!x.prep && prep.btw[x.id]) out.push(ncObj(x)); }); return out; }
+function wfFigListRaw(){ const L = wfList(), out = [];
+  L.forEach(x => { out.push(x); if (prep.on && prep.btw && !x.prep && prep.btw[x.id]) out.push(ncObj(x)); });
+  if (out.length) assays.forEach(a => { if (a && (!a.display || a.display.visible !== false) && a.display && a.display.placement === 'panel') out.push(assayPanelObj(a)); });
+  return out; }
 /* branches: a step may come from an earlier step (wfFrom, with a note wfFromNote); with none set, each step follows the one before, as always */
 const wfFromOf = r => !r ? '' : r.prep === 'manual' ? String((r.man || {}).wfFrom || '') : r.prep === 'ndconc' ? String(((prep.btw || {})[r.run && r.run.id] || {}).wfFrom || '') : r.prep ? '' : String(r.wfFrom || '');
 const wfFromNoteOf = r => !r ? '' : String((r.prep === 'manual' ? (r.man || {}).wfFromNote : r.prep === 'ndconc' ? ((prep.btw || {})[r.run && r.run.id] || {}).wfFromNote : r.prep ? '' : r.wfFromNote) || '').trim();
 /* the index each step comes from: its wfFrom when that step is earlier in the list, otherwise the step before (skipping side-branched manual steps) */
-function wfParents(L){ return L.map((r, i) => { const f = wfFromOf(r); let j = f ? L.findIndex(x => String(x.id) === String(f)) : -1; if (j < 0 && /^nc:/.test(f)) j = L.findIndex(x => String(x.id) === f.slice(3)); if (j >= 0 && j < i) return j; let p = i - 1; while (p > 0 && L[p].prep === 'manual' && wfFromOf(L[p])) p--; return p; }); }
+function wfParents(L){ return L.map((r, i) => { if (r && r.prep === 'assay') return -1; const f = wfFromOf(r); let j = f ? L.findIndex(x => String(x.id) === String(f)) : -1; if (j < 0 && /^nc:/.test(f)) j = L.findIndex(x => String(x.id) === f.slice(3)); if (j >= 0 && j < i) return j; let p = i - 1; while (p > 0 && ((L[p].prep === 'manual' && wfFromOf(L[p])) || L[p].prep === 'assay')) p--; return p; }); }
 /* paths from the starting material to each branch end */
 function wfBranches(L0){
   const L = L0 || wfList(); if (!L.length) return []; if (!L.some(r => wfFromOf(r))) return [L];
@@ -4970,7 +5247,11 @@ function wfBranches(L0){
 /* with branches, each step is followed by its own branch, so a branch is drawn in one piece */
 function wfFigList(){ const L = wfFigListRaw(); if (!L.some(r => wfFromOf(r))) return L;
   const par = wfParents(L), kids = L.map(() => []); par.forEach((q, i) => { if (q >= 0) kids[q].push(i); });
-  const out = [], walk = i => { out.push(L[i]); kids[i].forEach(walk); }; walk(0); return out; }
+  const out = [], walk = i => { out.push(L[i]); kids[i].forEach(walk); }; walk(0);
+  L.forEach(x => { if (!out.includes(x)) out.push(x); }); return out; }
+function assayPanelObj(a){ const id = 'assay:' + a.id, o = prepObj[id] || (prepObj[id] = {id, prep: 'assay', gelOff: {}, fracs: [], integ: []});
+  const nm = String(a.name || '').trim() || 'Activity assay';
+  return Object.assign(o, {name: nm, stepName: nm, inWf: true, shade: '', note: '', wfW: 1, gelZ: 1, assay: a, wfDx: 0, wfDy: 0}); }
 function ncObj(r){ const id = 'nc:' + r.id, o = prepObj[id] || (prepObj[id] = {id, prep: 'ndconc', gelOff: {}, fracs: [], integ: []}), b = prep.btw[r.id] || {};
   const nm = hasTxt(b.title) ? b.title.trim() : ({dil: 'Diluted', exch: 'Buffer exchanged', filt: 'Filtered', hold: 'Held overnight'})[b.how] || 'Concentrated';
   return Object.assign(o, {name: nm, stepName: nm, inWf: true, shade: '', note: String(b.arrow || '').trim(), wfW: numOr(b.wfW, 0.85), gelZ: 1, run: r, wfDx: numOr(b.wfDx, 0), wfDy: numOr(b.wfDy, 0)}); }
@@ -5605,6 +5886,11 @@ function figures(){
   if (ndSamples.some(s => s.spec && s.stage !== 'conc')) f.push({kind:'nd', id:'nd', name:'NanoDrop spectra'});
   if (PROJ && prep.on && prep.btw) runs.filter(r => r.inWf && prep.btw[r.id]).forEach(r => f.push({kind: 'conc', id: 'conc:' + r.id, name: `${ncObj(r).name} after ${stepTitle(r)}`, run: r}));
   secCals().forEach(c => { const ft = secFit(c); if (ft && ft.mw) f.push({kind:'cal', id:'cal:' + c.id, name:'SEC calibration: ' + c.name, cal:c}); });
+  assays.forEach(a => {
+    if (!a || (a.display && a.display.visible === false)) return;
+    const pl = (a.display && a.display.placement) || '';
+    if (pl === 'panel' || a.mode === 'kinetics' || a.mode === 'profile' || !a.runId) f.push({kind: 'assay', id: 'assay:' + a.id, name: a.name || 'Activity assay', assay: a});
+  });
   return f;
 }
 function curFig(){ const f = figures(); return f.find(x => x.id === cur) || f[0] || null; }
@@ -5624,6 +5910,7 @@ function buildFig(f, screen){ const was = FIG_SCREEN; FIG_SCREEN = !!screen;
     if (f.kind === 'step') return buildStepFig(f.step);
     if (f.kind === 'nd') return buildNDSVG();
     if (f.kind === 'conc') return buildConcFig(f.run);
+    if (f.kind === 'assay') return buildAssaySVG(f.assay);
     return buildSVG();
   } finally { FIG_SCREEN = was; }
 }
@@ -8510,6 +8797,16 @@ function updateAssayLive(card, a){
   const wBox = card.querySelector('.assay-warns-wrap');
   if (wBox) wBox.innerHTML = rows.some(r => r.warn) ? `<ul class="assay-warns">${rows.flatMap(r => r.warnings.map(w => `<li class="warnc">${esc(r.label)}: ${esc(w)}</li>`)).join('')}</ul>` : '';
 }
+function refreshPaperFig(){
+  const f = curFig(); if (f) cur = f.id;
+  const {svg, geo} = buildFig(f, true); G = geo;
+  if (svg) paper.innerHTML = svg;
+  const figs = figures(), tabs = $('#figtabs');
+  tabs.hidden = figs.length < 2;
+  const tabName = x => { if (x.kind !== 'run') return x.name; if (!PROJ || !x.run.inWf) return shortRunName(x.run); const t = stepTitle(x.run), dup = runs.filter(r => r.inWf && stepTitle(r) === t).length > 1; return dup ? `${t} ${runs.filter(r => r.inWf && stepTitle(r) === t).indexOf(x.run) + 1}` : t; };
+  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
+  if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
+}
 function renderAssays(){
   syncAssayDerived();
   const panel = $('#assayPanel'), box = $('#assayCalcList'); if (!panel || !box) return;
@@ -8518,8 +8815,15 @@ function renderAssays(){
   if (!activeAssayId || !assays.some(a => a.id === activeAssayId)) activeAssayId = assays[assays.length - 1].id;
   box.innerHTML = assays.map(a => {
     const c = assayCalc(a); if (!c) return '';
-    const p = a.protocol || {}, fCfg = a.fit || {}, linkedRun = a.runId ? runs.find(r => r.id === a.runId) : null;
+    const p = a.protocol || {}, fCfg = a.fit || {}, disp = Object.assign({}, ASSAY_DISPLAY_DEF, a.display || {}), linkedRun = a.runId ? runs.find(r => r.id === a.runId) : null;
     const rawStr = arr => Array.isArray(arr) ? arr.join(', ') : '';
+    const effPlace = ['track', 'overlay', 'panel'].includes(disp.placement) ? disp.placement : (c.mode === 'fractions' ? 'track' : 'panel');
+    const secBusy = !!(linkedRun && runHasSecAxis(linkedRun));
+    const dispHtml = `<div class="row assay-disp"><label class="chk"><input type="checkbox" data-ad="visible"${disp.visible !== false ? ' checked' : ''}>Show in figure</label>` +
+      `<label class="f">Placement<select data-ad="placement" aria-label="Placement"><option value="track"${effPlace === 'track' ? ' selected' : ''}>Track</option><option value="overlay"${effPlace === 'overlay' ? ' selected' : ''}${secBusy && effPlace !== 'overlay' ? ' disabled title="Right axis is occupied by gradient or conductivity"' : ''}>Overlay</option><option value="panel"${effPlace === 'panel' ? ' selected' : ''}>Panel</option></select></label>` +
+      `<label class="f">Y unit<select data-ad="yUnit" aria-label="Activity unit"><option value="U/mL"${disp.yUnit === 'U/mL' ? ' selected' : ''}>U/mL</option><option value="U/mg"${disp.yUnit === 'U/mg' ? ' selected' : ''}>U/mg</option><option value="nkat/mL"${disp.yUnit === 'nkat/mL' ? ' selected' : ''}>nkat/mL</option><option value="rel%"${disp.yUnit === 'rel%' ? ' selected' : ''}>rel%</option></select></label>` +
+      `<label class="f">Error<select data-ad="showErr" aria-label="Error display"><option value="sd"${disp.showErr === 'sd' ? ' selected' : ''}>± SD</option><option value="sem"${disp.showErr === 'sem' ? ' selected' : ''}>± SEM</option><option value="points"${disp.showErr === 'points' ? ' selected' : ''}>Points</option></select></label>` +
+      `<label class="f">Color<input type="color" data-ad="color" value="${esc(safeAssayColor(disp.color, 0))}" aria-label="Activity color"></label></div>`;
     const protoHtml = `<details class="cardtext assay-proto"${assayProtoOpen.has(a.id) ? ' open' : ''}><summary>STRENDA Assay Protocol</summary>` +
       `<div class="row"><label class="f">Substrate<input type="text" data-ap="substrate" value="${esc(p.substrate ?? '')}"></label><label class="f">Substrate conc.<input type="text" data-ap="substrateConc" value="${esc(p.substrateConc ?? '')}"></label></div>` +
       `<div class="row"><label class="f">Buffer<input type="text" data-ap="buffer" value="${esc(p.buffer ?? '')}"></label><label class="f">pH<input type="number" step="any" data-ap="pH" value="${p.pH ?? ''}"></label><label class="f">Temp (°C)<input type="number" step="any" data-ap="tempC" value="${p.tempC ?? ''}"></label></div>` +
@@ -8540,18 +8844,18 @@ function renderAssays(){
         `<label class="f">Weight<select data-af="weight"><option value="none"${fCfg.weight !== 'sd' ? ' selected' : ''}>Unweighted</option><option value="sd"${fCfg.weight === 'sd' ? ' selected' : ''}>1/SD²</option></select></label></div>`;
       const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>[S]</th><th>Replicates</th><th>Unit</th><th>DF</th><th>Series</th><th>Rate</th><th>SD</th><th></th></tr>` +
         c.entries.map(({entry: e, rate: r}, ei) => `<tr data-entry-idx="${ei}"><td><input type="number" step="any" min="0" data-ek="conc" value="${e.conc ?? ''}" aria-label="Substrate concentration"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td><input type="text" data-ek="rawUnit" value="${esc(e.rawUnit || 'dA/min')}" aria-label="Raw unit"></td><td><input type="number" step="any" min="0" data-ek="dil" value="${e.dil ?? 1}" aria-label="Dilution"></td><td><input type="text" data-ek="series" value="${esc(e.series || '')}" aria-label="Series"></td><td class="ar-val">${r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${esc(r.rawUnit)}`) : 'n.d.'}</td><td class="ar-sd">${r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`).join('') + `</table></div>`;
-      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="kinetics">${headHtml}${protoHtml}${blanksHtml}${fitCtrl}<div class="assay-fit-wrap">${fitSummaryHtml(c.fit)}</div>${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add row</button></div></div>`;
+      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="kinetics">${headHtml}${dispHtml}${protoHtml}${blanksHtml}${fitCtrl}<div class="assay-fit-wrap">${fitSummaryHtml(c.fit)}</div>${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add row</button></div></div>`;
     }
     if (c.mode === 'fractions') {
       const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>Fraction</th><th>Replicates</th><th>DF</th><th>Vol (mL)</th><th>Rate</th><th>SD</th><th></th></tr>` +
         c.entries.map(({entry: e, rate: r}, ei) => { const fm = assayFracMatch(linkedRun, e), bad = !!(linkedRun && Array.isArray(linkedRun.fracs) && linkedRun.fracs.length && !fm.matched);
           return `<tr data-entry-idx="${ei}" data-entry-label="${esc(e.fracLabel ?? '')}"${bad ? ' class="warnc" title="Fraction label does not match run fractions"' : ''}><td><input type="text" data-ek="fracLabel" value="${esc(e.fracLabel ?? '')}" aria-label="Fraction label"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td><input type="number" step="any" min="0" data-ek="dil" value="${e.dil ?? 1}" aria-label="Dilution"></td><td><input type="number" step="any" min="0" data-ek="volMl" value="${e.volMl ?? ''}" aria-label="Volume mL"></td><td class="ar-val">${r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${esc(r.rawUnit)}`) : 'n.d.'}</td><td class="ar-sd">${r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`; }).join('') + `</table></div>`;
-      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="fractions">${headHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add fraction</button></div></div>`;
+      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="fractions">${headHtml}${dispHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add fraction</button></div></div>`;
     }
     if (c.mode === 'profile') {
       const tbl = `<div class="tablewrap"><table class="assay-tbl"><tr><th>Group</th><th>Condition</th><th>Replicates</th><th>Rate</th><th>SD</th><th></th></tr>` +
         c.entries.map(({entry: e, rate: r}, ei) => `<tr data-entry-idx="${ei}" data-entry-label="${esc(e.xLabel ?? '')}"><td><select data-ek="group"><option value="pH"${e.group === 'pH' ? ' selected' : ''}>pH</option><option value="temp"${e.group === 'temp' ? ' selected' : ''}>Temp</option><option value="substrate"${e.group === 'substrate' ? ' selected' : ''}>Substrate</option><option value="additive"${e.group === 'additive' ? ' selected' : ''}>Additive</option></select></td><td><input type="text" data-ek="xLabel" value="${esc(e.xLabel ?? '')}" aria-label="Condition"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td class="ar-val">${r ? (r.uPerMl != null ? `${fmt(r.uPerMl, 2)} U/mL` : `${fmt(r.rate, 2)} ${esc(r.rawUnit)}`) : 'n.d.'}</td><td class="ar-sd">${r && (r.sdUPerMl ?? r.sdRate) != null ? fmt(r.sdUPerMl ?? r.sdRate, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`).join('') + `</table></div>`;
-      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="profile">${headHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add condition</button></div></div>`;
+      return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="profile">${headHtml}${dispHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add condition</button></div></div>`;
     }
     const rows = c.steps || [];
     const hasEntries = Array.isArray(a.entries) && a.entries.length > 0;
@@ -8559,7 +8863,7 @@ function renderAssays(){
       rows.map((r, ei) => { const e = hasEntries ? a.entries[ei] : {name: r.label, stepRef: r.stepRef, rawVals: a.replicates, rawUnit: 'dA/min', dil: 1, volMl: r.volMl, protMgMl: r.protMgMl};
         return `<tr data-entry-idx="${ei}" data-step-ref="${esc(r.stepRef)}"${r.warn ? ' class="warnc"' : ''} title="${esc(r.warnings.join('; '))}"><td><input type="text" data-ek="name" value="${esc(e.name ?? r.label)}" aria-label="Step name"></td><td><input type="text" data-ek="rawVals" value="${esc(rawStr(e.rawVals))}" aria-label="Replicates"></td><td><select data-ek="rawUnit" aria-label="Raw unit"><option value="dA/min"${(e.rawUnit || 'dA/min') === 'dA/min' ? ' selected' : ''}>dA/min</option><option value="U/mL"${e.rawUnit === 'U/mL' ? ' selected' : ''}>U/mL</option><option value="U"${e.rawUnit === 'U' ? ' selected' : ''}>U</option><option value="U/mg"${e.rawUnit === 'U/mg' ? ' selected' : ''}>U/mg</option></select></td><td><input type="number" step="any" min="0" data-ek="dil" value="${e.dil ?? 1}" aria-label="Dilution"></td><td><input type="number" step="any" min="0" data-ek="volMl" value="${e.volMl ?? ''}" aria-label="Volume mL"></td><td><input type="number" step="any" min="0" data-ek="protMgMl" value="${e.protMgMl ?? ''}" aria-label="Protein mg/mL"></td><td class="as-upml">${r.uPerMl != null ? fmt(r.uPerMl, 2) : ''}</td><td class="as-nkat">${r.nkatPerMl != null ? fmt(r.nkatPerMl, 2) : ''}</td><td class="as-totu">${r.totalU != null ? fmt(r.totalU, 2) : ''}</td><td class="as-sa">${r.sa != null ? fmt(r.sa, 2) : ''}</td><td class="as-fold">${r.fold != null ? fmt(r.fold, 2) + '×' : ''}</td><td class="as-yld" data-raw-yield="${r.rawYieldPct != null ? fmt(r.rawYieldPct, 2) : ''}">${r.yieldPct != null ? fmt(r.yieldPct, 2) + '%' : ''}</td><td class="as-stepy">${r.stepYieldPct != null ? fmt(r.stepYieldPct, 2) + '%' : ''}</td><td class="as-kcat">${r.kcat != null ? fmt(r.kcat, 2) : ''}</td><td><button type="button" class="xbtn" data-entry-del="${ei}" aria-label="Remove row">×</button></td></tr>`; }).join('') +
       `</table></div><div class="assay-warns-wrap">${rows.some(r => r.warn) ? `<ul class="assay-warns">${rows.flatMap(r => r.warnings.map(w => `<li class="warnc">${esc(r.label)}: ${esc(w)}</li>`)).join('')}</ul>` : ''}</div>`;
-    return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="steps">${headHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add step</button></div></div>`;
+    return `<div class="assay-card" data-assay-id="${esc(a.id)}" data-assay-mode="steps">${headHtml}${dispHtml}${protoHtml}${blanksHtml}${tbl}<div class="btns"><button type="button" class="btn mini quiet" data-entry-add="${esc(a.id)}">+ Add step</button></div></div>`;
   }).join('');
 }
 function createNewAssay(opts){
@@ -8572,24 +8876,26 @@ function createNewAssay(opts){
   }, opts || {}));
   assays.push(a);
   activeAssayId = a.id;
-  renderAssays();
+  render();
   if (PROJ) queueSave();
   return a;
 }
 function applyImportedAssayText(text, fileName){
   let target = assays.find(x => x.id === activeAssayId) || assays[assays.length - 1];
-  const parsed = parseAssayText(text, target ? target.mode : '');
+  const parsed = parseAssayText(text, target && (target.entries.length || target._modeTouched) ? target.mode : '');
   if (!parsed.entries.length && !parsed.blanks.length) { toast('No assay rows found'); return; }
   if (!target) {
-    target = makeAssay({name: fileName ? fileName.replace(/\.[^.]+$/, '') : `Assay ${assays.length + 1}`, mode: parsed.mode, runId: curRun() ? curRun().id : ''});
+    target = makeAssay({name: fileName ? fileName.replace(/\.[^.]+$/, '') : `Assay ${assays.length + 1}`, mode: parsed.mode, runId: parsed.mode === 'fractions' && curRun() ? curRun().id : ''});
     assays.push(target);
   } else if (!target.entries.length) {
     target.mode = parsed.mode;
+    if (parsed.mode === 'kinetics' || parsed.mode === 'profile') target.runId = '';
+    target.display = Object.assign({}, ASSAY_DISPLAY_DEF, target.display || {}, {placement: parsed.mode === 'fractions' ? 'track' : 'panel'});
   }
   if (parsed.blanks.length) target.blanks = (target.blanks || []).concat(parsed.blanks);
   target.entries = (target.entries || []).concat(parsed.entries);
   activeAssayId = target.id;
-  renderAssays();
+  render();
   if (PROJ) queueSave();
 }
 $('#assayOpenBtn').addEventListener('click', () => { const a = createNewAssay(); const el = $(`#assayPanel [data-assay-id="${a.id}"] input`); if (el) el.focus(); });
@@ -8605,27 +8911,28 @@ $('#assayCalcList').addEventListener('toggle', e => {
 }, true);
 $('#assayCalcList').addEventListener('focusin', e => { const card = e.target.closest('.assay-card'); if (card) activeAssayId = card.dataset.assayId; });
 $('#assayCalcList').addEventListener('input', e => {
-  const t = e.target; if (t.tagName === 'SELECT') return;
+  const t = e.target; if (t.tagName === 'SELECT' || t.type === 'checkbox') return;
   const card = t.closest('.assay-card'); if (!card) return;
   const a = assays.find(x => x.id === card.dataset.assayId); if (!a) return;
   activeAssayId = a.id;
-  if (t.dataset.ak === 'name') { a.name = t.value; if (PROJ) queueSave(); return; }
+  if (t.dataset.ak === 'name') { a.name = t.value; refreshPaperFig(); if (PROJ) queueSave(); return; }
+  if (t.dataset.ad === 'color') { a.display = Object.assign({}, ASSAY_DISPLAY_DEF, a.display || {}, {color: t.value}); refreshPaperFig(); if (PROJ) queueSave(); return; }
   if (t.dataset.ap) {
     const k = t.dataset.ap;
     a.protocol[k] = t.type === 'number' ? (t.value === '' ? null : +t.value) : t.value;
-    updateAssayLive(card, a); if (PROJ) queueSave(); return;
+    updateAssayLive(card, a); refreshPaperFig(); if (PROJ) queueSave(); return;
   }
   if (t.dataset.af) {
     const k = t.dataset.af;
     a.fit[k] = t.type === 'number' ? (t.value === '' ? null : +t.value) : t.value;
-    updateAssayLive(card, a); if (PROJ) queueSave(); return;
+    updateAssayLive(card, a); refreshPaperFig(); if (PROJ) queueSave(); return;
   }
   if (t.dataset.bk) {
     const row = t.closest('[data-blank-idx]'), bi = row ? +row.dataset.blankIdx : -1; if (bi < 0) return;
     if (!a.blanks[bi] || typeof a.blanks[bi] !== 'object') a.blanks[bi] = {val: a.blanks[bi] ?? null, note: ''};
     if (t.dataset.bk === 'val') a.blanks[bi].val = t.value === '' ? null : +t.value;
     else a.blanks[bi].note = t.value;
-    updateAssayLive(card, a); if (PROJ) queueSave(); return;
+    updateAssayLive(card, a); refreshPaperFig(); if (PROJ) queueSave(); return;
   }
   if (t.dataset.ek) {
     const row = t.closest('[data-entry-idx]'), ei = row ? +row.dataset.entryIdx : -1; if (ei < 0) return;
@@ -8635,29 +8942,34 @@ $('#assayCalcList').addEventListener('input', e => {
     if (k === 'rawVals') ent.rawVals = parseRawValsInput(t.value);
     else if (t.type === 'number') ent[k] = t.value === '' ? null : +t.value;
     else { ent[k] = t.value; if (k === 'xLabel') ent.xNum = parseAssayCell(t.value, false); }
-    updateAssayLive(card, a); if (PROJ) queueSave();
+    updateAssayLive(card, a); refreshPaperFig(); if (PROJ) queueSave();
   }
 });
 $('#assayCalcList').addEventListener('change', e => {
-  const t = e.target; if (t.tagName !== 'SELECT') return;
+  const t = e.target; if (t.tagName !== 'SELECT' && t.type !== 'checkbox' && t.type !== 'color') return;
   const card = t.closest('.assay-card'); if (!card) return;
   const a = assays.find(x => x.id === card.dataset.assayId); if (!a) return;
   activeAssayId = a.id;
-  if (t.dataset.ak) a[t.dataset.ak] = t.value;
-  else if (t.dataset.af) a.fit[t.dataset.af] = t.value;
+  if (t.dataset.ad) {
+    a.display = Object.assign({}, ASSAY_DISPLAY_DEF, a.display || {});
+    a.display[t.dataset.ad] = t.type === 'checkbox' ? t.checked : t.value;
+  } else if (t.dataset.ak) {
+    a[t.dataset.ak] = t.value;
+    if (t.dataset.ak === 'mode') { a._modeTouched = true; a.display = Object.assign({}, ASSAY_DISPLAY_DEF, a.display || {}, {placement: t.value === 'fractions' ? 'track' : 'panel'}); }
+  } else if (t.dataset.af) a.fit[t.dataset.af] = t.value;
   else if (t.dataset.ek) {
     const row = t.closest('[data-entry-idx]'), ei = row ? +row.dataset.entryIdx : -1;
     if (ei >= 0 && a.entries[ei]) a.entries[ei][t.dataset.ek] = t.value;
   }
-  renderAssays(); if (PROJ) queueSave();
+  render(); if (PROJ) queueSave();
 });
 $('#assayCalcList').addEventListener('click', e => {
   const delA = e.target.closest('[data-assay-del]');
-  if (delA) { const id = delA.dataset.assayDel; assays = assays.filter(x => x.id !== id); assayProtoOpen.delete(id); assayBlankOpen.delete(id); renderAssays(); if (PROJ) queueSave(); return; }
+  if (delA) { const id = delA.dataset.assayDel; assays = assays.filter(x => x.id !== id); assayProtoOpen.delete(id); assayBlankOpen.delete(id); render(); if (PROJ) queueSave(); return; }
   const addB = e.target.closest('[data-blank-add]');
-  if (addB) { const a = assays.find(x => x.id === addB.dataset.blankAdd); if (!a) return; a.blanks.push({val: 0, note: ''}); assayBlankOpen.add(a.id); renderAssays(); if (PROJ) queueSave(); return; }
+  if (addB) { const a = assays.find(x => x.id === addB.dataset.blankAdd); if (!a) return; a.blanks.push({val: 0, note: ''}); assayBlankOpen.add(a.id); render(); if (PROJ) queueSave(); return; }
   const delB = e.target.closest('[data-blank-del]');
-  if (delB) { const card = delB.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return; a.blanks.splice(+delB.dataset.blankDel, 1); renderAssays(); if (PROJ) queueSave(); return; }
+  if (delB) { const card = delB.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return; a.blanks.splice(+delB.dataset.blankDel, 1); render(); if (PROJ) queueSave(); return; }
   const addE = e.target.closest('[data-entry-add]');
   if (addE) {
     const a = assays.find(x => x.id === addE.dataset.entryAdd); if (!a) return;
@@ -8665,10 +8977,10 @@ $('#assayCalcList').addEventListener('click', e => {
     else if (a.mode === 'fractions') a.entries.push({fracLabel: '', rawVals: [], dil: 1, volMl: null, excluded: false});
     else if (a.mode === 'profile') a.entries.push({group: 'pH', xLabel: '', xNum: null, series: '', rawVals: [], rawSd: null});
     else a.entries.push({stepRef: '', name: `Step ${a.entries.length + 1}`, rawVals: [], rawUnit: 'dA/min', dil: 1, volMl: null, protMgMl: null, protSource: 'auto'});
-    renderAssays(); if (PROJ) queueSave(); return;
+    render(); if (PROJ) queueSave(); return;
   }
   const delE = e.target.closest('[data-entry-del]');
-  if (delE) { const card = delE.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return; a.entries.splice(+delE.dataset.entryDel, 1); renderAssays(); if (PROJ) queueSave(); }
+  if (delE) { const card = delE.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return; a.entries.splice(+delE.dataset.entryDel, 1); render(); if (PROJ) queueSave(); }
 });
 const splitRow = (line, d) => { const out = []; let cur = '', q = false; for (let i = 0; i < line.length; i++) { const c = line[i];
   if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; } else if (c === '"') q = true; else if (c === d) { out.push(cur); cur = ''; } else cur += c; } out.push(cur); return out.map(v => v.trim()); };
@@ -12584,6 +12896,7 @@ function baseName(f){
   if (f && f.kind === 'nd') return 'nanodrop_spectra';
   if (f && f.kind === 'conc') return 'concentrated_' + String(stepTitle(f.run)).toLowerCase().replace(/[^a-z0-9]+/g, '_');
   if (f && f.kind === 'cal') return 'sec_calibration_' + safe(f.cal.name);
+  if (f && f.kind === 'assay') return 'assay_' + safe(f.assay.name || f.assay.id);
   const t = traces.find(t => t.visible); return safe(t ? t.name : 'chromatogram') + (traces.filter(t=>t.visible).length > 1 ? '_overlay' : '');
 }
 const CRC = (() => { const t = new Uint32Array(256); for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = c & 1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
