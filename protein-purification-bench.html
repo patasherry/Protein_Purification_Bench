@@ -2255,11 +2255,11 @@ function makeTrace(name, p, ex){
     xc, yc, offset: 0, scale: 1, xshift: 0, peaks: [], ex: !!ex, xu: mx ? mx[1] : null, yu: my ? my[1] : null, source: p.source || null};
 }
 function makeRun(p){ const r = Object.assign({id: 'r' + (uid++), color: RUN_COLORS.uv, uvi: 0, xmin:'', xmax:'', ymin:'', ymax:'', shade:'', inWf: true, integ: [], secMode: 'auto'}, p);
-  r.secAuto = secGuess(r); applyInjShift(r);
+  r.secAuto = p && p.secAuto !== undefined ? p.secAuto : secGuess(r); applyInjShift(r);
   /* size exclusion opens on the fractions around its peaks */
   if (r.secAuto && r.crop === undefined) r.crop = 'peaks';
   /* a calibration standards run is not a purification step */
-  if (/standard|\bstds?\b|calib|\bgf ?std/i.test((r.file || '') + ' ' + (r.method || ''))) { r.inWf = false; r.isStd = true; }
+  if (/standard|\bstds?\b|calib|\bgf ?std/i.test((r.file || '') + ' ' + (r.method || ''))) { if (p && p.inWf === undefined) r.inWf = false; if (p && p.isStd === undefined) r.isStd = true; }
   return r; }
 function sgSmooth(y, w){
   const m = (w-1)/2, n = y.length; if (n < w) return y.slice();
@@ -2744,9 +2744,9 @@ function poolMeas(run){ const pc = numOr(run.poolConc, null); if (pc !== null &&
   const bc = b ? numOr(b.conc, null) : null; if (bc !== null && bc >= 0) return {c: bc, v: bv, vMl: volMl(bv, run), src: 'btw', how: b.how || 'conc'};
   return {c: null, v: null, vMl: null, src: null}; }
 /* NanoDrop readings of the concentrated sample after a column */
-const ndFinalOf = run => typeof ndSamples === 'undefined' ? [] : ndSamples.filter(x => x.runId === run.id && x.stage === 'conc' && x.kind !== 'nucleic' && !x.hide && !CRUDE_RE.test(x.name));
+const ndFinalOf = run => typeof ndSamples === 'undefined' ? [] : ndSamples.filter(x => x.runId === run.id && (x.stage === 'conc' || x.stage === 'final') && x.kind !== 'nucleic' && !x.hide && !CRUDE_RE.test(x.name));
 /* older projects stored a Concentrated step's readings as final: move them to the step */
-function ndMigrate(){ if (!prep.btw) return; ndSamples.forEach(x => { if (x.stage === 'final' && prep.btw[x.runId]) x.stage = 'conc'; }); }
+function ndMigrate(){ const runIds = new Set(runs.map(r => r.id)); ndSamples.forEach(x => { if (x.stage === 'final' && (runIds.has(x.runId) || (prep.btw && prep.btw[x.runId]))) x.stage = 'conc'; }); }
 /* a reading typed on the run card: with a volume after concentrating it is the Concentrated step after the column, which shows in the timeline */
 function measToStep(r){ const b = prep.btw && prep.btw[r.id], c = numOr(r.poolConc, 0), v = numOr(r.poolFinalVol, 0), p = poolRows(Object.assign({}, r, {poolConc: '', poolFinalVol: ''})), pv = p && xUnit(r) !== 'min' ? p.volMl : 0;
   const conc = v > 0 && !(pv > 0 && Math.abs(v - pv) < 0.05*pv); if (!b && !conc) return;
@@ -9769,7 +9769,7 @@ function renderNext(){ const n = nextStep(), bar = $('#nextBar'); if (!n || next
   const go = $('#nextGo'); go.hidden = !n.go; go.textContent = n.go || ''; go.onclick = n.act || null; bar.dataset.k = n.k; }
 $('#nextHide').addEventListener('click', () => { const k = $('#nextBar').dataset.k; if (k === 'undoOpen') projUndo = null; else nextHidden.add(k); renderNext(); });
 /* ---------- projects: everything in one JSON file ---------- */
-const plain = o => { const out = {}; Object.keys(o).forEach(k => { if (k[0] === '_' || typeof o[k] === 'function') return; if ((k === 'injX' || k === 'injShift' || k === 'pathFromFile') && !Object.prototype.hasOwnProperty.call(o, k)) return; out[k] = o[k]; }); return out; };
+const plain = o => { const out = {}; Object.keys(o).forEach(k => { if (k[0] === '_' || typeof o[k] === 'function') return; if ((k === 'injX' || k === 'injShift' || k === 'pathFromFile' || k === 'shift' || k === 'poolConc' || k === 'poolFinalVol' || k === 'ndFinalVol') && !Object.prototype.hasOwnProperty.call(o, k)) return; out[k] = o[k]; }); return out; };
 function projectData(){
   const gs = gels.map(g => { const o = plain(g); ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist'].forEach(k => delete o[k]);
     let img = g._img || ''; if (!img) { try { /* always PNG: a JPEG copy of a large gel read differently after export and import (#1324, #1426). JPEG only if the browser cannot make the PNG. */
@@ -9780,7 +9780,13 @@ function projectData(){
      change it and every project file saved before the rename fails to import, and every file saved after it fails to
      open in an older copy. The same goes for the 'hplc-fig-opt' settings key and the 'hfb-projects' database. */
   const pExp = JSON.parse(JSON.stringify(prep)); if (pExp && pExp.cloning && Array.isArray(pExp.cloning.stages)) pExp.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; delete s.gel.adjImage; } });
-  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => noId(r, 'blobId')), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), assays: assays.map(assayClone), prep: pExp, srcDiag: Object.assign({}, srcDiag), directory: cleanDirectoryForExport(PROJ ? PROJ.directory : null, true)};
+  return {app: 'HPLC Figure Bench', version: 1, schemaVersion: 1, saved: new Date().toISOString(), cur, opt: plain(opt), runs: runs.map(r => {
+    const c = noId(r, 'blobId');
+    ['shift', 'injX', 'injShift', 'poolConc', 'poolFinalVol', 'ndFinalVol'].forEach(k => {
+      if (Object.prototype.hasOwnProperty.call(r, k) && r[k] !== undefined) c[k] = r[k];
+    });
+    return c;
+  }), traces: traces.filter(t => !t.ex).map(t => noId(t, 'blobId')), gels: gs, struct: struct ? noId(struct, 'blobId') : null, nanodrop: ndSamples.map(n => noId(n, 'specId')), assays: assays.map(assayClone), prep: pExp, srcDiag: Object.assign({}, srcDiag), directory: cleanDirectoryForExport(PROJ ? PROJ.directory : null, true)};
 }
 let projUndo = null, failedGels = []; const isApp = a => a === 'HPLC Figure Bench' || a === 'Protein Purification Bench';
 /* a project file can be partial or damaged: keep what can be used and count what was skipped */
@@ -9793,6 +9799,18 @@ function cleanProject(d){
   d.runs.forEach(r => {
     if (!Object.prototype.hasOwnProperty.call(r, 'injX') && Object.prototype.hasOwnProperty.call(r, 'injShift')) {
       r.injX = r.injShift;
+    }
+    if ((!Object.prototype.hasOwnProperty.call(r, 'injShift') || r.injShift == null) && Object.prototype.hasOwnProperty.call(r, 'injX') && r.injX != null) {
+      if (isSec(r) || secGuess(r)) r.injShift = r.injX;
+    }
+    if (!Object.prototype.hasOwnProperty.call(r, 'shift') || r.shift == null) {
+      r.shift = 0;
+    }
+    if (!Object.prototype.hasOwnProperty.call(r, 'poolConc') && d.prep && d.prep.btw && d.prep.btw[r.id] && d.prep.btw[r.id].conc != null && d.prep.btw[r.id].conc !== '') {
+      r.poolConc = +d.prep.btw[r.id].conc;
+    }
+    if (!Object.prototype.hasOwnProperty.call(r, 'poolFinalVol') && d.prep && d.prep.btw && d.prep.btw[r.id] && d.prep.btw[r.id].vOut != null && d.prep.btw[r.id].vOut !== '') {
+      r.poolFinalVol = +d.prep.btw[r.id].vOut;
     }
   });
   d.traces = keep(d.traces, t => isO(t) && Array.isArray(t.rows));
@@ -9825,7 +9843,7 @@ async function openProject(data, name, noUndo){
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
       const g = Object.assign(makeGel(sg.name, c), sg); delete g.image;
       Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false}); processGel(g); ng.push(g); } catch (e) { failedGels.push(sg); toast(`Could not restore gel ${sg.name}`); } }
-  runs = data.runs.map(r => { if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return r; }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); if (!Array.isArray(prep.manual)) prep.manual = []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} }; canonClones(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = data.nanodrop || []; ndMigrate(); assays = Array.isArray(data.assays) ? data.assays : [];
+  runs = data.runs.map(r => { if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return makeRun(r); }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); if (!Array.isArray(prep.manual)) prep.manual = []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} }; canonClones(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = data.nanodrop || []; ndMigrate(); assays = Array.isArray(data.assays) ? data.assays : [];
   srcDiag = (data.srcDiag && typeof data.srcDiag === 'object' && !Array.isArray(data.srcDiag)) ? Object.assign({}, data.srcDiag) : {};
   /* the project's settings apply, but calibrations and known proteins kept in this browser are merged rather than replaced */
   if (data.opt) { const dopt = data.opt, myCals = secCals().slice(), myKnown = Array.isArray(opt.known) ? opt.known.slice() : null, myQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : [], myQDel = Array.isArray(opt.myQuickDel) ? opt.myQuickDel.slice() : []; Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);

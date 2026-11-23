@@ -271,6 +271,115 @@ await T.t('legacy-sec-project', async () => {
   await close();
 });
 
+await T.t('legacy-sec-nd-project', async () => {
+  const {p, errs, close} = await open(), h = H(p);
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i <= 40; i++) {
+    const x = 5.0 + i * 0.25;
+    const y = 5.0 + 95.0 * Math.exp(-0.5 * Math.pow((x - 10.0) / 0.8, 2));
+    xs.push(Math.round(x * 100) / 100);
+    ys.push(Math.round(y * 100) / 100);
+  }
+  const proj = {
+    app: 'HPLC Figure Bench',
+    version: 1,
+    runs: [{
+      id: 'r1',
+      name: 'Superdex 200 Increase',
+      secMode: 'on',
+      secCal: 'cal_s200i',
+      inWf: true,
+      crop: 'peaks',
+      shade: 'F1',
+      fracs: [{x: 8.5, label: 'F1'}, {x: 11.5, label: 'F2'}],
+      uvs: [{name: 'UV', xs, ys}],
+      integ: [{a: 8.5, b: 11.5}],
+      injX: 1.2,
+      shift: 0,
+      poolConc: 2.5,
+      poolFinalVol: 1.0,
+      ndFinalVol: 0.8
+    }],
+    nanodrop: [{
+      id: 'nd1',
+      name: 'Final pool',
+      runId: 'r1',
+      stage: 'final',
+      a280: 1.5,
+      conc: 3.0,
+      kind: 'protein'
+    }],
+    prep: {name: 'Test Prep'},
+    opt: {
+      secStds: true,
+      secCals: [{
+        id: 'cal_s200i',
+        name: 'Superdex 200 Increase 10/300 GL',
+        col: 's200i',
+        unit: 'mL',
+        v0: 8.0,
+        vt: 24.0,
+        stds: [
+          {name: 'Thyroglobulin', kda: 670, ve: 9.0},
+          {name: 'Ovalbumin', kda: 44, ve: 15.0}
+        ]
+      }]
+    }
+  };
+
+  await h.newProject('Legacy SEC ND');
+  await p.click(SEL.home).catch(() => {});
+  await p.waitForTimeout(600);
+  await p.setInputFiles(SEL.importFile, {
+    name: 'legacy_sec_nd.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(proj))
+  });
+  await p.waitForTimeout(3000);
+
+  const tl = await h.timeline();
+  T.check('legacy-sec-nd.opens', tl.some(x => x.k === 'run:r1'), `timeline: ${tl.map(x => x.k).join(', ')}`);
+
+  await h.step('run:r1');
+  await p.waitForTimeout(500);
+
+  const pt = await h.peakTable();
+  const head = pt[0] || [];
+  const iv = head.findIndex(c => /^(Ve|Center|Apex|Elution time)\b/i.test(c));
+  const imw = head.findIndex(c => /apparent mass|mw/i.test(c));
+  const r0 = pt[1] || [];
+  const ve = parseFloat(r0[iv]);
+  const mw = parseFloat(r0[imw]);
+
+  T.check('legacy-sec-nd.ve-not-double-shifted', Math.abs(ve - 10.0) < 0.25, `Ve is ${ve}, expected ~10.0`);
+  T.check('legacy-sec-nd.mw-present', !isNaN(mw) && mw > 0, `Apparent MW is ${mw}`);
+
+  const pc = await p.$eval('#pcr1', el => el.value).catch(() => '');
+  const pv = await p.$eval('#pvr1', el => el.value).catch(() => '');
+  T.check('legacy-sec-nd.poolConc-card', pc === '2.5', `poolConc on card is "${pc}"`);
+  T.check('legacy-sec-nd.poolFinalVol-card', pv === '1' || pv === '1.0', `poolFinalVol on card is "${pv}"`);
+
+  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), p.click(SEL.exportBtn)]);
+  const f = path.join(ROOT, 'results', 'legacy_sec_nd_export.json');
+  await dl.saveAs(f);
+
+  const exp = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const expRun = exp.runs[0] || {};
+  const expNd = (exp.nanodrop || []).find(x => x.id === 'nd1') || {};
+
+  T.check('legacy-sec-nd.export-poolConc', expRun.poolConc === 2.5, `export poolConc is ${expRun.poolConc}`);
+  T.check('legacy-sec-nd.export-poolFinalVol', expRun.poolFinalVol === 1 || expRun.poolFinalVol === 1.0, `export poolFinalVol is ${expRun.poolFinalVol}`);
+  T.check('legacy-sec-nd.export-ndFinalVol', expRun.ndFinalVol === 0.8, `export ndFinalVol is ${expRun.ndFinalVol}`);
+  T.check('legacy-sec-nd.export-injShift', expRun.injShift === 1.2, `export injShift is ${expRun.injShift}`);
+  T.check('legacy-sec-nd.export-injX', expRun.injX === 1.2, `export injX is ${expRun.injX}`);
+  T.check('legacy-sec-nd.export-shift', expRun.shift === 0, `export shift is ${expRun.shift}`);
+  T.check('legacy-sec-nd.export-nd-migrated', expNd.stage === 'conc', `legacy final migrated to conc: ${expNd.stage}`);
+  T.check('legacy-sec-nd.no-error', !errs.length, errs.join(' | '));
+
+  await close();
+});
+
 await T.t('empty-uvs-project', async () => { const {p, errs, close} = await open(), h = H(p);
   await p.setInputFiles(SEL.importFile, path.join(Q, 'empty_uvs_proj.json')); await p.waitForTimeout(3000);
   await h.step('figure'); await p.waitForTimeout(500);
