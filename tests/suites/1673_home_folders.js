@@ -512,6 +512,63 @@ const checkHomeContrast = p => p.evaluate(() => {
     }
   });
 
+  await T.t('home-redesign-professional-scientific-ui', async () => {
+    // Return to home screen on main page
+    if (await vis('#homeBtn')) {
+      await p.click('#homeBtn');
+      await h.wait(500);
+    }
+
+    // 1. Font family on #home includes Segoe UI
+    const fontInfo = await p.evaluate(() => {
+      const h = document.querySelector('#home');
+      return h ? getComputedStyle(h).fontFamily : '';
+    });
+    T.check('home-font-segoe-ui', fontInfo.includes('Segoe UI'), `Font family: ${fontInfo}`);
+
+    // 2. No emojis in #home (tree, toolbar, cards, etc.)
+    const emojiCheck = await p.evaluate(() => {
+      const h = document.querySelector('#home');
+      if (!h) return {hasEmoji: false, emojis: []};
+      const text = h.innerText;
+      const m = text.match(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu) || [];
+      return {hasEmoji: m.length > 0, emojis: [...new Set(m)]};
+    });
+    T.check('home-no-emojis', !emojiCheck.hasEmoji, `Found emojis: ${emojiCheck.emojis.join(', ')}`);
+
+    // 3. Compact header with Settings control
+    const hasSettings = await vis('#homeSettings');
+    T.check('home-settings-button-present', hasSettings, '#homeSettings visible in toolbar');
+
+    // 4. Main project list has structured columns (Name, Type, Protein/Construct, Workflow Stage, Status, Last Modified)
+    await p.click('#homeViewList');
+    await h.wait(200);
+
+    const columnsCheck = await p.evaluate(() => {
+      const hdr = document.querySelector('#projList .proj-header');
+      if (!hdr) return {hasHeader: false};
+      const text = hdr.innerText.toLowerCase();
+      const hasName = text.includes('name');
+      const hasType = text.includes('type');
+      const hasProt = text.includes('protein') || text.includes('construct');
+      const hasStage = text.includes('stage') || text.includes('workflow');
+      const hasStatus = text.includes('status');
+      const hasMod = text.includes('modified');
+      return {hasHeader: true, hasName, hasType, hasProt, hasStage, hasStatus, hasMod, text};
+    });
+    T.check('home-columns-present',
+      columnsCheck.hasHeader && columnsCheck.hasName && columnsCheck.hasType && columnsCheck.hasProt && columnsCheck.hasStage && columnsCheck.hasStatus && columnsCheck.hasMod,
+      JSON.stringify(columnsCheck));
+
+    // 5. Compact status badges for Planned, In Progress, Completed, Requires Review, Archived
+    const statusBadges = await p.evaluate(() => {
+      const badges = [...document.querySelectorAll('#projList .status-badge')].map(b => b.innerText.trim());
+      return [...new Set(badges)];
+    });
+    T.check('home-status-badges-rendered', statusBadges.length > 0 && statusBadges.some(s => /Planned|In Progress|Completed|Requires Review|Archived/i.test(s)),
+      JSON.stringify(statusBadges));
+  });
+
   T.check('no-page-errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

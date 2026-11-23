@@ -43,76 +43,126 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 ::selection{background:var(--accent-soft)}
 /* header */
 /* projects: home, project bar, step timeline */
-.home{max-width:1120px;margin:6px auto 48px;display:grid;gap:18px}
-.home-intro h2{margin:0 0 6px;font-size:24px;font-weight:600;letter-spacing:-.02em;text-wrap:balance}
-.home-intro p{margin:0;color:var(--muted);max-width:62ch}
-.newproj{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.2fr) auto;gap:10px 12px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.home{max-width:1180px;margin:4px auto 36px;display:grid;gap:12px;font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+.home-intro{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px;padding:2px}
+.home-intro h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.home-intro p{margin:0;color:var(--muted);font-size:12.5px;max-width:70ch}
+.newproj{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1.2fr) auto;gap:8px 12px;align-items:end;background:var(--field,#fff);border:1px solid var(--line);border-radius:6px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
 @media (max-width:640px){.newproj{grid-template-columns:minmax(0,1fr)}}
-.home-org{display:grid;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
-.home-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 14px;background:var(--card,var(--panel));border-bottom:1px solid var(--line)}
+.home-org{display:grid;border:1px solid var(--line);border-radius:8px;background:var(--field,#fff);box-shadow:0 1px 3px rgba(0,0,0,.04);overflow:hidden}
+.home-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:8px 12px;background:var(--panel,#f8fafc);border-bottom:1px solid var(--line)}
+.home-tb-left{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.home-tb-title{font-size:13px;font-weight:600;color:var(--ink);letter-spacing:-.01em;display:flex;align-items:center;gap:6px}
 .home-tb-acts,.home-tb-find{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.home-search{font:inherit;font-size:13px;padding:5px 10px;min-height:32px;width:200px;max-width:100%;border:1px solid var(--line2);border-radius:var(--r-s);background:var(--field);color:var(--ink)}
-.home-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
-.home-sort-wrap{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
-.home-sort-wrap select{width:auto;min-height:32px;font-size:12.5px;padding-block:4px}
+.home-search{font:inherit;font-size:12.5px;padding:5px 10px;min-height:30px;width:200px;max-width:100%;border:1px solid var(--line2);border-radius:var(--r-s);background:var(--field,#fff);color:var(--ink)}
+.home-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
+.home-sort-wrap{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.home-sort-wrap select{width:auto;min-height:30px;font-size:12px;padding-block:3px}
 .home-view-seg{display:inline-flex;gap:2px;padding:2px;background:var(--soft);border:1px solid var(--line);border-radius:var(--r)}
-.home-view-btn{font:inherit;font-size:12.5px;padding:4px 10px;min-height:26px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.home-view-btn{font:inherit;font-size:12px;padding:3px 9px;min-height:24px;border:0;border-radius:4px;background:transparent;color:var(--muted);cursor:pointer}
 .home-view-btn:hover{color:var(--ink)}
-.home-view-btn[aria-pressed="true"]{background:var(--field);color:var(--ink);font-weight:600;box-shadow:0 0 0 1px var(--line2)}
-.home-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;background:var(--well,var(--bg));border-bottom:1px solid var(--line)}
-.home-breadcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0;flex:1}
-.home-crumb{font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.home-view-btn[aria-pressed="true"]{background:var(--field,#fff);color:var(--ink);font-weight:600;box-shadow:0 0 0 1px var(--line2)}
+.home-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px;background:var(--well,var(--bg));border-bottom:1px solid var(--line);font-size:12px}
+.home-breadcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:3px;min-width:0;flex:1}
+.home-crumb{font:inherit;font-size:12px;padding:3px 7px;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
 .home-crumb:hover{background:var(--hover);color:var(--ink)}
-.home-crumb.active{color:var(--ink);font-weight:600;background:var(--card,var(--field));border-color:var(--line)}
-.home-sel-bar{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
-.home-body{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:240px}
-.home-tree{border-right:1px solid var(--line);background:var(--card,var(--panel));padding:10px 8px;overflow-y:auto;display:grid;align-content:start;gap:2px}
-.home-tree-node{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+.home-crumb.active{color:var(--ink);font-weight:600;background:var(--field,#fff);border-color:var(--line)}
+.crumb-sep{color:var(--line2);font-size:11px;margin:0 2px}
+.home-sel-bar{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.home-body{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:280px}
+.home-tree{border-right:1px solid var(--line);background:var(--panel,#f8fafc);padding:8px 6px;overflow-y:auto;display:grid;align-content:start;gap:1px}
+.home-tree-node{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;font-size:12.5px;color:var(--ink);cursor:pointer;user-select:none;transition:background .1s}
 .home-tree-node:hover{background:var(--hover)}
-.home-tree-node.active{background:var(--accent);color:var(--accent-ink);font-weight:500}
+.home-tree-node.active{background:var(--accent);color:var(--accent-ink);font-weight:600}
 .home-tree-node.active .home-tree-cnt{color:var(--accent-ink)}
-.home-tree-toggle{width:14px;flex:none;text-align:center;font-size:11px;opacity:.75;cursor:pointer}
+.home-tree-toggle{width:14px;flex:none;text-align:center;font-size:10px;opacity:.75;cursor:pointer;display:grid;place-items:center}
+.home-tree-icon{display:inline-flex;align-items:center;justify-content:center;color:var(--muted);flex:none}
+.home-tree-node.active .home-tree-icon{color:var(--accent-ink)}
 .home-tree-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.home-tree-cnt{font-size:11.5px;color:var(--muted);flex:none}
-.home-tree-sep{height:1px;background:var(--line);margin:6px 4px}
-.home-main{padding:14px;background:var(--bg);min-width:0}
-.projlist{display:grid;gap:8px}
-.projlist.home-grid{grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px;align-items:stretch}
-.projlist .empty-p{color:var(--muted);margin:0;padding:8px 4px;grid-column:1/-1}
-.home-cb-wrap{grid-column:1;grid-row:1 / span 2;display:grid;place-items:center;padding:4px;margin:-4px;cursor:pointer}
-.home-cb{width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
-.home-kind-badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;letter-spacing:.02em;flex:none}
+.home-tree-cnt{font-size:11px;color:var(--muted);flex:none;padding:0 3px}
+.home-tree-sep{height:1px;background:var(--line);margin:4px 2px}
+.home-main{padding:0;background:var(--field,#fff);min-width:0;display:flex;flex-direction:column}
+.projlist{display:flex;flex-direction:column}
+.proj-header{display:grid;grid-template-columns:28px minmax(180px,2fr) 75px minmax(110px,1.2fr) minmax(130px,1.3fr) 115px 95px minmax(105px,auto);align-items:center;gap:6px 10px;padding:7px 12px;background:var(--panel,#f8fafc);border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;user-select:none}
+.proj-header span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.projlist .empty-p{color:var(--muted);margin:0;padding:16px 14px}
+.home-cb-wrap{display:grid;place-items:center;padding:2px;cursor:pointer}
+.home-cb{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer}
+.home-kind-badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;letter-spacing:.02em;flex:none;line-height:1.3}
 .home-kind-badge.is-folder{background:rgba(217,130,0,.15);color:var(--ink);border:1px solid #d98200}
 .home-kind-badge.is-proj{background:var(--accent-soft);color:var(--ink);border:1px solid var(--accent)}
-.fcard{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:4px 12px;width:100%;padding:11px 14px;border:1px solid var(--line2);border-left:4px solid #d98200;border-radius:var(--r);background:var(--soft);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.fcard{display:grid;grid-template-columns:28px minmax(180px,2fr) 75px minmax(110px,1.2fr) minmax(130px,1.3fr) 115px 95px minmax(105px,auto);align-items:center;gap:6px 10px;width:100%;padding:8px 12px;border:0;border-bottom:1px solid var(--line);border-left:3px solid #d98200;background:var(--soft,#f8fafc);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .1s}
 .fcard:hover{border-color:var(--accent);border-left-color:#d98200;background:var(--hover)}
-.fcard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.fcard .ficon{color:#d98200;display:grid;place-items:center;grid-column:2;grid-row:1 / span 2}
-.fcard .fn-row{display:flex;align-items:center;gap:8px;min-width:0;grid-column:3}
-.fcard .fn{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fcard .fm{color:var(--muted);font-size:12.5px;grid-column:3}
-.fcard .facts{grid-column:4;grid-row:1 / span 2;display:flex;gap:6px;align-items:center}
-.pcard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 12px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--card,var(--panel));color:inherit;font:inherit;text-align:left;cursor:pointer}
-.pcard:hover{border-color:var(--line2);background:var(--hover)}
-.pcard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.pcard .pn-row{display:flex;align-items:center;gap:8px;min-width:0;grid-column:2}
-.pcard .pn{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pcard .pm{color:var(--muted);font-size:12.5px;grid-column:2}
-.pcard .pd{display:flex;gap:4px;align-items:center;grid-column:3;grid-row:1 / span 2}
-.pcard .pacts{grid-column:4;grid-row:1 / span 2;display:flex;gap:6px;align-items:center}
-.pcard.has-del{grid-template-columns:auto minmax(0,1fr) auto auto}
-.fcard.is-selected,.pcard.is-selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.fcard:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fcard .fn-col{display:flex;align-items:center;gap:8px;min-width:0}
+.fcard .ficon{color:#d98200;display:grid;place-items:center;flex:none}
+.fcard .fn{font-weight:600;font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .fm{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .facts{display:flex;gap:4px;align-items:center;justify-content:flex-end}
+.pcard{display:grid;grid-template-columns:28px minmax(180px,2fr) 75px minmax(110px,1.2fr) minmax(130px,1.3fr) 115px 95px minmax(105px,auto);align-items:center;gap:6px 10px;width:100%;padding:8px 12px;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;background:var(--field,#fff);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .1s}
+.pcard:hover{border-color:var(--line2);border-left-color:var(--accent);background:var(--hover)}
+.pcard:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.pn-col{display:flex;align-items:center;gap:8px;min-width:0}
+.picon-svg{color:var(--muted);flex:none}
+.pcard .pn{font-weight:600;font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col-type{display:flex;align-items:center}
+.col-prot{font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col-stage{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col-status{display:flex;align-items:center}
+.col-mod{font-size:12px;color:var(--muted);white-space:nowrap}
+.pcard .pd{display:inline-flex;gap:3px;align-items:center;margin-left:auto}
+.pcard .pacts{display:flex;gap:4px;align-items:center;justify-content:flex-end}
+.status-badge{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;letter-spacing:.01em;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;border:1px solid transparent;line-height:1.25}
+.status-badge.st-planned{background:rgba(100,116,139,.1);color:#334155;border-color:rgba(100,116,139,.3)}
+.status-badge.st-progress{background:rgba(37,99,235,.1);color:#1d4ed8;border-color:rgba(37,99,235,.3)}
+.status-badge.st-completed{background:rgba(16,185,129,.1);color:#047857;border-color:rgba(16,185,129,.3)}
+.status-badge.st-review{background:rgba(217,119,6,.1);color:#92400e;border-color:rgba(217,119,6,.3)}
+.status-badge.st-archived{background:rgba(107,114,128,.1);color:#374151;border-color:rgba(107,114,128,.3)}
+.status-badge.st-active{background:rgba(37,99,235,.08);color:#1d4ed8;border-color:rgba(37,99,235,.2)}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .status-badge.st-planned{background:rgba(148,163,184,.15);color:#cbd5e1;border-color:rgba(148,163,184,.35)}
+  :root:not([data-theme="light"]) .status-badge.st-progress{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.35)}
+  :root:not([data-theme="light"]) .status-badge.st-completed{background:rgba(16,185,129,.15);color:#6ee7b7;border-color:rgba(16,185,129,.35)}
+  :root:not([data-theme="light"]) .status-badge.st-review{background:rgba(245,158,11,.15);color:#fcd34d;border-color:rgba(245,158,11,.35)}
+  :root:not([data-theme="light"]) .status-badge.st-archived{background:rgba(156,163,175,.15);color:#d1d5db;border-color:rgba(156,163,175,.35)}
+  :root:not([data-theme="light"]) .status-badge.st-active{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.3)}
+}
+:root[data-theme="dark"] .status-badge.st-planned{background:rgba(148,163,184,.15);color:#cbd5e1;border-color:rgba(148,163,184,.35)}
+:root[data-theme="dark"] .status-badge.st-progress{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.35)}
+:root[data-theme="dark"] .status-badge.st-completed{background:rgba(16,185,129,.15);color:#6ee7b7;border-color:rgba(16,185,129,.35)}
+:root[data-theme="dark"] .status-badge.st-review{background:rgba(245,158,11,.15);color:#fcd34d;border-color:rgba(245,158,11,.35)}
+:root[data-theme="dark"] .status-badge.st-archived{background:rgba(156,163,175,.15);color:#d1d5db;border-color:rgba(156,163,175,.35)}
+:root[data-theme="dark"] .status-badge.st-active{background:rgba(59,130,246,.15);color:#93c5fd;border-color:rgba(59,130,246,.3)}
+.fcard.is-selected,.pcard.is-selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--field,#fff))}
 .home-drag-over{outline:2px dashed var(--accent)!important;outline-offset:-2px;background:var(--accent-soft)!important}
-.projlist.home-grid .fcard,.projlist.home-grid .pcard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px}
-.projlist.home-grid .fcard .ficon{display:none}
-.projlist.home-grid .fn-row,.projlist.home-grid .pn-row{width:100%}
+.projlist.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:10px;padding:12px;align-items:stretch}
+.projlist.home-grid .proj-header{display:none}
+.projlist.home-grid .fcard,.projlist.home-grid .pcard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px;border:1px solid var(--line);border-radius:6px}
+.projlist.home-grid .fcard{border-left:3px solid #d98200}
+.projlist.home-grid .fn-col,.projlist.home-grid .pn-col{width:100%}
 .projlist.home-grid .fn,.projlist.home-grid .pn{white-space:normal;word-break:break-word}
 .projlist.home-grid .facts,.projlist.home-grid .pacts{margin-top:auto;padding-top:4px;width:100%;justify-content:flex-end}
-.pdot{width:9px;height:9px;border-radius:50%;background:var(--line2)}
+.pdot{width:8px;height:8px;border-radius:50%;background:var(--line2)}
 .pdot.done{background:var(--accent)}
 .pdot.warn{background:var(--warn)}
-@media (max-width:740px){.home-body{grid-template-columns:minmax(0,1fr)}.home-tree{border-right:0;border-bottom:1px solid var(--line);max-height:190px}.home-tb-find{width:100%}.home-search{flex:1 1 160px;width:auto}}
-@media (max-width:560px){.pcard,.pcard.has-del,.fcard{grid-template-columns:auto minmax(0,1fr)}.fcard .ficon{display:none}.fcard .fn-row,.fcard .fm,.fcard .facts,.pcard .pn-row,.pcard .pm,.pcard .pd,.pcard .pacts{grid-column:2;grid-row:auto}.pcard .pacts,.fcard .facts{justify-content:flex-start;flex-wrap:wrap}}
+@media (max-width:860px){
+  .proj-header{grid-template-columns:28px minmax(140px,2fr) minmax(100px,1.2fr) 105px minmax(90px,auto)}
+  .proj-header .ph-type,.proj-header .ph-mod{display:none}
+  .pcard,.fcard{grid-template-columns:28px minmax(140px,2fr) minmax(100px,1.2fr) 105px minmax(90px,auto)}
+  .pcard .col-type,.pcard .col-mod,.fcard .col-type,.fcard .col-mod{display:none}
+}
+@media (max-width:640px){
+  .home-body{grid-template-columns:minmax(0,1fr)}
+  .home-tree{border-right:0;border-bottom:1px solid var(--line);max-height:180px}
+  .home-tb-find{width:100%}
+  .home-search{flex:1 1 140px;width:auto}
+  .proj-header{display:none}
+  .pcard,.fcard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:10px}
+  .pn-col,.fn-col{width:100%}
+  .pcard .pn,.fcard .fn{white-space:normal;word-break:break-word}
+  .pcard .col-type,.pcard .col-mod,.fcard .col-type,.fcard .col-mod{display:flex}
+  .pacts,.facts{margin-top:4px;width:100%;justify-content:flex-start;flex-wrap:wrap}
+}
 .home-where{margin:0;color:var(--muted);font-size:12.5px}
 .home-alt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .projbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;flex:1 1 260px}
@@ -724,7 +774,7 @@ button,input,select,textarea{font-family:inherit}
   <div class="projbar" id="projBar" hidden>
     <span class="pb-sep" aria-hidden="true">/</span>
     <div class="proj-dir-nav" id="projDirNav">
-      <button type="button" class="btn quiet proj-dir-btn" id="openDirBtn" title="Open Project Explorer (folders, preparations and files)">📁 Explorer</button>
+      <button type="button" class="btn quiet proj-dir-btn" id="openDirBtn" title="Open Project Explorer (folders, preparations and files)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4.1c.4 0 .78.16 1.06.44L10.2 5H16.5A1.5 1.5 0 0 1 18 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5v-10Z" fill="currentColor" fill-opacity=".15"/></svg> Explorer</button>
       <span class="proj-dir-crumbs" id="projDirCrumbs" title="Current location in project"></span>
     </div>
     <span class="pb-sep" aria-hidden="true">/</span>
@@ -750,8 +800,8 @@ button,input,select,textarea{font-family:inherit}
 
 <section class="home" id="home" hidden aria-labelledby="homeTitle">
   <div class="home-intro">
-    <h2 id="homeTitle">Your purification projects</h2>
-    <p>Start a project when you transform, then add to it at each step: expression, lysis, every column, cleavage and the final sample. The figure, summary and methods build as you go.</p>
+    <h2 id="homeTitle">Purification Projects</h2>
+    <p>Scientific workspace for protein purification data, chromatography, and gel figures.</p>
   </div>
   <form class="newproj" id="newProj" autocomplete="off">
     <label class="f">Project name<input type="text" id="npName" required placeholder="e.g. KPP-MM, prep 3" spellcheck="false"></label>
@@ -768,6 +818,7 @@ button,input,select,textarea{font-family:inherit}
         <button type="button" class="btn" id="homeRename">Rename</button>
         <button type="button" class="btn" id="homeArchive" aria-pressed="false">Archive</button>
         <button type="button" class="btn" id="homeRestore" hidden>Restore</button>
+        <button type="button" class="btn" id="homeSettings">Settings</button>
       </div>
       <div class="home-tb-find">
         <input type="search" id="homeSearch" class="home-search" placeholder="Search projects and folders…" aria-label="Search">
@@ -787,7 +838,7 @@ button,input,select,textarea{font-family:inherit}
       </div>
     </div>
     <div class="home-nav-bar">
-      <button type="button" class="btn quiet" id="homeGoUp" title="Up to parent folder">↑ Up</button>
+      <button type="button" class="btn quiet" id="homeGoUp" title="Up to parent folder"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" style="vertical-align:-1px;margin-right:2px"><path d="M8 3l5 5h-3v6H6V8H3z"/></svg>Up</button>
       <nav class="home-breadcrumbs" id="homeBreadcrumbs" aria-label="Folder breadcrumbs"></nav>
       <div class="home-sel-bar" id="homeSelBar" hidden>
         <span id="homeSelCount"></span>
@@ -802,6 +853,16 @@ button,input,select,textarea{font-family:inherit}
       </div>
     </div>
   </div>
+  <dialog class="dir-modal" id="homeSettingsModal" aria-labelledby="homeSettingsTitle">
+    <div class="dir-modal-box">
+      <h3 id="homeSettingsTitle">Application Settings</h3>
+      <p id="homeSettingsDesc" class="hint"></p>
+      <label class="f">Storage location<input type="text" id="homeSettingsStorage" readonly class="dir-input"></label>
+      <div class="dir-modal-acts">
+        <button type="button" class="btn primary" id="homeSettingsClose">Done</button>
+      </div>
+    </div>
+  </dialog>
   <dialog class="dir-modal" id="homePromptModal" aria-labelledby="homePromptTitle">
     <form id="homePromptForm" method="dialog" class="dir-modal-box">
       <h3 id="homePromptTitle">New Folder</h3>
@@ -10474,6 +10535,12 @@ function paintHome(){
     const activeProjs = projs.filter(p => !homeProjPlacement(p.id).archived);
     const rootProjsCnt = activeProjs.filter(p => homeProjPlacement(p.id).folderId === 'root').length;
     const rootSubCnt = HOME_ORG.folders.filter(f => !f.archived && (f.parentId || 'root') === 'root').length;
+    const fIconSvg = `<svg class="home-tree-icon" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4.1c.4 0 .78.16 1.06.44L10.2 5H16.5A1.5 1.5 0 0 1 18 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5v-10Z" fill="currentColor" fill-opacity=".15"/></svg>`;
+    const rootIconSvg = `<svg class="home-tree-icon" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 10 3l7 6.5V17a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/><path d="M7 18v-7h6v7"/></svg>`;
+    const archIconSvg = `<svg class="home-tree-icon" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="16" height="4" rx="1"/><path d="M4 7v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7"/><line x1="8" y1="11" x2="12" y2="11"/></svg>`;
+    const chevSvg = isExp => isExp
+      ? `<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3 6l5 5 5-5z"/></svg>`
+      : `<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M6 3l5 5-5 5z"/></svg>`;
     const buildNodes = (pId, depth) => {
       const kids = sortHomeItems(HOME_ORG.folders.filter(f => !f.archived && (f.parentId || 'root') === pId), 'name-asc');
       return kids.map(f => {
@@ -10481,14 +10548,14 @@ function paintHome(){
         const isExp = expSet.has(f.id);
         const fCnt = activeProjs.filter(p => homeProjPlacement(p.id).folderId === f.id).length + HOME_ORG.folders.filter(x => !x.archived && (x.parentId || 'root') === f.id).length;
         const isCur = !homeShowArchive && homeCurFolder === f.id;
-        return `<div class="home-tree-node${isCur ? ' active' : ''}" role="treeitem" tabindex="0" style="padding-left:${depth * 14 + 8}px" data-folder-id="${esc(f.id)}" data-drop-folder="${esc(f.id)}" draggable="true"><span class="home-tree-toggle" data-htree-toggle="${esc(f.id)}">${subK ? (isExp ? '▾' : '▸') : '•'}</span><span aria-hidden="true">📁</span><span class="home-tree-name">${esc(f.name)}</span><span class="home-tree-cnt">${fCnt}</span></div>${subK && isExp ? buildNodes(f.id, depth + 1) : ''}`;
+        return `<div class="home-tree-node${isCur ? ' active' : ''}" role="treeitem" tabindex="0" style="padding-left:${depth * 14 + 8}px" data-folder-id="${esc(f.id)}" data-drop-folder="${esc(f.id)}" draggable="true"><span class="home-tree-toggle" data-htree-toggle="${esc(f.id)}">${subK ? chevSvg(isExp) : '•'}</span>${fIconSvg}<span class="home-tree-name">${esc(f.name)}</span><span class="home-tree-cnt">${fCnt}</span></div>${subK && isExp ? buildNodes(f.id, depth + 1) : ''}`;
       }).join('');
     };
     const rootExp = expSet.has('root');
     const archCnt = HOME_ORG.folders.filter(f => f.archived).length + projs.filter(p => homeProjPlacement(p.id).archived).length;
-    let th = `<div class="home-tree-node${!homeShowArchive && homeCurFolder === 'root' ? ' active' : ''}" role="treeitem" tabindex="0" data-folder-id="root" data-drop-folder="root"><span class="home-tree-toggle" data-htree-toggle="root">${rootSubCnt ? (rootExp ? '▾' : '▸') : '•'}</span><span aria-hidden="true">🏠</span><span class="home-tree-name">Top level</span><span class="home-tree-cnt">${rootProjsCnt + rootSubCnt}</span></div>`;
+    let th = `<div class="home-tree-node${!homeShowArchive && homeCurFolder === 'root' ? ' active' : ''}" role="treeitem" tabindex="0" data-folder-id="root" data-drop-folder="root"><span class="home-tree-toggle" data-htree-toggle="root">${rootSubCnt ? chevSvg(rootExp) : '•'}</span>${rootIconSvg}<span class="home-tree-name">Top level</span><span class="home-tree-cnt">${rootProjsCnt + rootSubCnt}</span></div>`;
     if (rootExp) th += buildNodes('root', 1);
-    th += `<div class="home-tree-sep" role="separator"></div><div class="home-tree-node${homeShowArchive ? ' active' : ''}" role="treeitem" tabindex="0" data-folder-id="__archive__"><span class="home-tree-toggle">•</span><span aria-hidden="true">🗄</span><span class="home-tree-name">Archive</span><span class="home-tree-cnt">${archCnt}</span></div>`;
+    th += `<div class="home-tree-sep" role="separator"></div><div class="home-tree-node${homeShowArchive ? ' active' : ''}" role="treeitem" tabindex="0" data-folder-id="__archive__"><span class="home-tree-toggle">•</span>${archIconSvg}<span class="home-tree-name">Archive</span><span class="home-tree-cnt">${archCnt}</span></div>`;
     treeEl.innerHTML = th;
   }
 
@@ -10498,6 +10565,9 @@ function paintHome(){
     el.innerHTML = `<p class="empty-p">${homeShowArchive ? 'No archived folders or projects.' : homeSearchTerm ? 'No folders or projects match your search.' : (!projs.length && !HOME_ORG.folders.length) ? 'No projects yet. Start one above when you transform your construct, or click New Folder to create folders.' : 'This folder is empty. Drag projects here, use Move on selected projects, or click New Folder or New Project.'}</p>`;
     return;
   }
+  const headerHtml = HOME_ORG.view === 'list'
+    ? `<div class="proj-header" role="row" aria-hidden="true"><span class="ph-cb"></span><span class="ph-name">Name</span><span class="ph-type">Type</span><span class="ph-prot">Protein / Construct</span><span class="ph-stage">Workflow Stage</span><span class="ph-status">Status</span><span class="ph-mod">Last Modified</span><span class="ph-acts">Actions</span></div>`
+    : '';
   const fHtml = visFolders.map(f => {
     const sel = homeSelected.has('folder:' + f.id);
     const subCnt = HOME_ORG.folders.filter(x => !x.archived && (x.parentId || 'root') === f.id).length;
@@ -10508,16 +10578,38 @@ function paintHome(){
     if (!parts.length && !homeShowArchive) parts.push('Empty folder');
     if (f.updated) parts.push(`updated ${fmtWhen(f.updated)}`);
     if (homeSearchTerm && f.parentId && f.parentId !== 'root') { const pp = homeFolderPath(f.parentId).map(x => x.name); if (pp.length) parts.push(`in ${pp.join(' / ')}`); }
-    return `<div class="fcard${sel ? ' is-selected' : ''}" role="button" tabindex="0" draggable="${!homeShowArchive}" data-fid="${esc(f.id)}"${!homeShowArchive ? ` data-drop-folder="${esc(f.id)}"` : ''}><label class="home-cb-wrap" data-hsel-stop><input type="checkbox" class="home-cb" data-hsel="folder:${esc(f.id)}"${sel ? ' checked' : ''} aria-label="Select folder ${esc(f.name)}"></label><span class="ficon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4.1c.4 0 .78.16 1.06.44L10.2 5H16.5A1.5 1.5 0 0 1 18 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5v-10Z" fill="currentColor" opacity=".22" stroke="currentColor" stroke-width="1.4"/></svg></span><span class="fn-row"><span class="home-kind-badge is-folder">Folder</span><span class="fn">${esc(f.name)}</span></span><span class="fm">${esc(parts.join(', '))}</span><span class="facts">${!homeShowArchive ? `<button type="button" class="btn" data-fopen="${esc(f.id)}">Open</button>` : `<button type="button" class="btn" data-hrestore="folder:${esc(f.id)}">Restore</button><button type="button" class="btn danger" data-hfdel="${esc(f.id)}">${fdelArm === f.id ? 'Delete? Click again' : 'Delete'}</button>`}</span></div>`;
+    const stageSummary = parts.slice(0, 2).join(', ') || 'Empty folder';
+    const modSummary = f.updated ? fmtWhen(f.updated) : '—';
+    const statusText = f.archived ? 'Archived' : 'Folder';
+    const statusCls = f.archived ? 'st-archived' : 'st-active';
+    return `<div class="fcard${sel ? ' is-selected' : ''}" role="button" tabindex="0" draggable="${!homeShowArchive}" data-fid="${esc(f.id)}"${!homeShowArchive ? ` data-drop-folder="${esc(f.id)}"` : ''}><label class="home-cb-wrap" data-hsel-stop><input type="checkbox" class="home-cb" data-hsel="folder:${esc(f.id)}"${sel ? ' checked' : ''} aria-label="Select folder ${esc(f.name)}"></label><span class="fn-col"><span class="ficon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4.1c.4 0 .78.16 1.06.44L10.2 5H16.5A1.5 1.5 0 0 1 18 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5v-10Z" fill="currentColor" fill-opacity=".15"/></svg></span><span class="fn">${esc(f.name)}</span></span><span class="col-type"><span class="home-kind-badge is-folder">Folder</span></span><span class="col-prot">—</span><span class="col-stage fm">${esc(stageSummary)}</span><span class="col-status"><span class="status-badge ${statusCls}">${statusText}</span></span><span class="col-mod">${esc(modSummary)}</span><span class="facts">${!homeShowArchive ? `<button type="button" class="btn" data-fopen="${esc(f.id)}">Open</button>` : `<button type="button" class="btn" data-hrestore="folder:${esc(f.id)}">Restore</button><button type="button" class="btn danger" data-hfdel="${esc(f.id)}">${fdelArm === f.id ? 'Delete? Click again' : 'Delete'}</button>`}</span></div>`;
   }).join('');
   const pHtml = visProjs.map(p => {
     const sel = homeSelected.has('project:' + p.id);
     const pl = homeProjPlacement(p.id);
-    const metaParts = [p.protein, (d => `${d.filter(x => x === 1).length} of ${d.length} steps done${d.some(x => x === 2) ? `, ${d.filter(x => x === 2).length} need details` : ''}`)(p.dots || []), `updated ${fmtWhen(p.updated)}`].filter(Boolean);
+    const d = p.dots || [];
+    const doneCnt = d.filter(x => x === 1).length;
+    const warnCnt = d.filter(x => x === 2).length;
+    const stageText = d.length ? `${doneCnt} of ${d.length} steps done${warnCnt ? `, ${warnCnt} need details` : ''}` : 'Setup';
+    const metaParts = [p.protein, stageText, `updated ${fmtWhen(p.updated)}`].filter(Boolean);
     if (homeSearchTerm && pl.folderId !== 'root') { const pp = homeFolderPath(pl.folderId).map(x => x.name); if (pp.length) metaParts.push(`in ${pp.join(' / ')}`); }
-    return `<div class="pcard has-del${sel ? ' is-selected' : ''}" role="button" tabindex="0" draggable="${!homeShowArchive}" data-pid="${esc(p.id)}"><label class="home-cb-wrap" data-hsel-stop><input type="checkbox" class="home-cb" data-hsel="project:${esc(p.id)}"${sel ? ' checked' : ''} aria-label="Select project ${esc(p.name || 'Untitled project')}"></label><span class="pn-row"><span class="home-kind-badge is-proj">Project</span><span class="pn">${esc(p.name || 'Untitled project')}</span></span><span class="pm">${esc(metaParts.join(', '))}</span><span class="pd" aria-hidden="true">${(p.dots || []).map(d => `<i class="pdot${d === 2 ? ' warn' : d ? ' done' : ''}"></i>`).join('')}</span><span class="pacts">${!homeShowArchive ? `<button type="button" class="btn" tabindex="-1" aria-hidden="true">Open</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button>` : `<button type="button" class="btn" data-hrestore="project:${esc(p.id)}">Restore</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button>`}</span></div>`;
+
+    let statusText = 'Planned', statusCls = 'st-planned';
+    if (pl.archived) {
+      statusText = 'Archived'; statusCls = 'st-archived';
+    } else if (warnCnt > 0) {
+      statusText = 'Requires Review'; statusCls = 'st-review';
+    } else if (d.length > 0 && doneCnt === d.length) {
+      statusText = 'Completed'; statusCls = 'st-completed';
+    } else if (doneCnt > 0) {
+      statusText = 'In Progress'; statusCls = 'st-progress';
+    } else {
+      statusText = 'Planned'; statusCls = 'st-planned';
+    }
+
+    return `<div class="pcard p-card has-del${sel ? ' is-selected' : ''}" role="button" tabindex="0" draggable="${!homeShowArchive}" data-pid="${esc(p.id)}"><label class="home-cb-wrap" data-hsel-stop><input type="checkbox" class="home-cb" data-hsel="project:${esc(p.id)}"${sel ? ' checked' : ''} aria-label="Select project ${esc(p.name || 'Untitled project')}"></label><span class="pn-col"><svg class="picon-svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5h7l3 3V13.5A1 1 0 0 1 12 14.5H3A1 1 0 0 1 2 13.5V3.5A1 1 0 0 1 3 2.5Z"/><path d="M10 2.5V5.5H13"/></svg><span class="pn p-name">${esc(p.name || 'Untitled project')}</span></span><span class="col-type"><span class="home-kind-badge is-proj">Project</span></span><span class="col-prot">${esc(p.protein || '—')}</span><span class="col-stage pm">${esc(metaParts.join(', '))}<span class="pd" aria-hidden="true">${d.map(x => `<i class="pdot${x === 2 ? ' warn' : x ? ' done' : ''}"></i>`).join('')}</span></span><span class="col-status"><span class="status-badge ${statusCls}">${statusText}</span></span><span class="col-mod">${esc(fmtWhen(p.updated || p.created))}</span><span class="pacts">${!homeShowArchive ? `<button type="button" class="btn" tabindex="-1" aria-hidden="true">Open</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button>` : `<button type="button" class="btn" data-hrestore="project:${esc(p.id)}">Restore</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button>`}</span></div>`;
   }).join('');
-  el.innerHTML = fHtml + pHtml;
+  el.innerHTML = headerHtml + fHtml + pHtml;
 }
 async function renderHome(){
   const my = ++homeSeq, el = $('#projList');
@@ -10826,6 +10918,18 @@ $('#homeSort').addEventListener('change', e => {
 });
 $('#homeViewList').addEventListener('click', () => { HOME_ORG.view = 'list'; saveHomeOrg(); paintHome(); });
 $('#homeViewGrid').addEventListener('click', () => { HOME_ORG.view = 'grid'; saveHomeOrg(); paintHome(); });
+$('#homeSettings').addEventListener('click', () => {
+  const storeLabel = $('#homeSettingsStorage');
+  if (storeLabel) storeLabel.value = STORE.mode === 'cloud' ? 'Cloud database (synced across sessions)' : STORE.mode === 'local' ? 'Local browser database (IndexedDB)' : 'None (in-memory)';
+  const descEl = $('#homeSettingsDesc'), whereEl = $('#homeWhere');
+  if (descEl && whereEl) descEl.textContent = whereEl.textContent;
+  const modal = $('#homeSettingsModal');
+  if (modal && modal.showModal) modal.showModal();
+});
+$('#homeSettingsClose').addEventListener('click', () => {
+  const modal = $('#homeSettingsModal');
+  if (modal && modal.close) modal.close();
+});
 
 $('#homePromptForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -10909,7 +11013,7 @@ $('#homeOrg').addEventListener('drop', e => {
 const QKEYS = ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'targetName', 'taggedName', 'protKda', 'tagKda', 'eps', 'epsMode', 'secMono'];
 let QUICK = null;
 function leaveWorkspace(){
-  ['#cloneArchiveModal', '#projExplorerModal', '#dirPromptModal', '#dirMoveModal', '#homePromptModal', '#homeMoveModal'].forEach(sel => { const m = $(sel); if (m && m.open) m.close(); });
+  ['#cloneArchiveModal', '#projExplorerModal', '#dirPromptModal', '#dirMoveModal', '#homePromptModal', '#homeMoveModal', '#homeSettingsModal'].forEach(sel => { const m = $(sel); if (m && m.open) m.close(); });
   if (MODE === 'quick' && (runs.length || gels.length || struct || assays.length || traces.some(t => !t.ex))) { QUICK = {runs, traces, gels, struct, ndSamples, assays, prep, cur, customTagSeq, o: {}}; QKEYS.forEach(k => { QUICK.o[k] = opt[k]; }); }
   const p = PROJ ? flushSave() : saveChain; PROJ = null; MODE = 'home'; return p;
 }
