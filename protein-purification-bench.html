@@ -43,25 +43,76 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 ::selection{background:var(--accent-soft)}
 /* header */
 /* projects: home, project bar, step timeline */
-.home{max-width:960px;margin:6px auto 48px;display:grid;gap:18px}
+.home{max-width:1120px;margin:6px auto 48px;display:grid;gap:18px}
 .home-intro h2{margin:0 0 6px;font-size:24px;font-weight:600;letter-spacing:-.02em;text-wrap:balance}
 .home-intro p{margin:0;color:var(--muted);max-width:62ch}
 .newproj{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.2fr) auto;gap:10px 12px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
 @media (max-width:640px){.newproj{grid-template-columns:minmax(0,1fr)}}
+.home-org{display:grid;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.home-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 14px;background:var(--card,var(--panel));border-bottom:1px solid var(--line)}
+.home-tb-acts,.home-tb-find{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.home-search{font:inherit;font-size:13px;padding:5px 10px;min-height:32px;width:200px;max-width:100%;border:1px solid var(--line2);border-radius:var(--r-s);background:var(--field);color:var(--ink)}
+.home-search:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
+.home-sort-wrap{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.home-sort-wrap select{width:auto;min-height:32px;font-size:12.5px;padding-block:4px}
+.home-view-seg{display:inline-flex;gap:2px;padding:2px;background:var(--soft);border:1px solid var(--line);border-radius:var(--r)}
+.home-view-btn{font:inherit;font-size:12.5px;padding:4px 10px;min-height:26px;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.home-view-btn:hover{color:var(--ink)}
+.home-view-btn[aria-pressed="true"]{background:var(--field);color:var(--ink);font-weight:600;box-shadow:0 0 0 1px var(--line2)}
+.home-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;background:var(--well,var(--bg));border-bottom:1px solid var(--line)}
+.home-breadcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0;flex:1}
+.home-crumb{font:inherit;font-size:12.5px;padding:3px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--muted);cursor:pointer}
+.home-crumb:hover{background:var(--hover);color:var(--ink)}
+.home-crumb.active{color:var(--ink);font-weight:600;background:var(--card,var(--field));border-color:var(--line)}
+.home-sel-bar{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.home-body{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:240px}
+.home-tree{border-right:1px solid var(--line);background:var(--card,var(--panel));padding:10px 8px;overflow-y:auto;display:grid;align-content:start;gap:2px}
+.home-tree-node{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
+.home-tree-node:hover{background:var(--hover)}
+.home-tree-node.active{background:var(--accent);color:var(--accent-ink);font-weight:500}
+.home-tree-node.active .home-tree-cnt{color:var(--accent-ink)}
+.home-tree-toggle{width:14px;flex:none;text-align:center;font-size:11px;opacity:.75;cursor:pointer}
+.home-tree-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home-tree-cnt{font-size:11.5px;color:var(--muted);flex:none}
+.home-tree-sep{height:1px;background:var(--line);margin:6px 4px}
+.home-main{padding:14px;background:var(--bg);min-width:0}
 .projlist{display:grid;gap:8px}
-.projlist .empty-p{color:var(--muted);margin:0;padding:6px 2px}
-.pcard{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 16px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.projlist.home-grid{grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px;align-items:stretch}
+.projlist .empty-p{color:var(--muted);margin:0;padding:8px 4px;grid-column:1/-1}
+.home-cb-wrap{grid-column:1;grid-row:1 / span 2;display:grid;place-items:center;padding:4px;margin:-4px;cursor:pointer}
+.home-cb{width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
+.home-kind-badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;letter-spacing:.02em;flex:none}
+.home-kind-badge.is-folder{background:rgba(217,130,0,.15);color:var(--ink);border:1px solid #d98200}
+.home-kind-badge.is-proj{background:var(--accent-soft);color:var(--ink);border:1px solid var(--accent)}
+.fcard{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:4px 12px;width:100%;padding:11px 14px;border:1px solid var(--line2);border-left:4px solid #d98200;border-radius:var(--r);background:var(--soft);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.fcard:hover{border-color:var(--accent);border-left-color:#d98200;background:var(--hover)}
+.fcard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fcard .ficon{color:#d98200;display:grid;place-items:center;grid-column:2;grid-row:1 / span 2}
+.fcard .fn-row{display:flex;align-items:center;gap:8px;min-width:0;grid-column:3}
+.fcard .fn{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .fm{color:var(--muted);font-size:12.5px;grid-column:3}
+.fcard .facts{grid-column:4;grid-row:1 / span 2;display:flex;gap:6px;align-items:center}
+.pcard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 12px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--card,var(--panel));color:inherit;font:inherit;text-align:left;cursor:pointer}
 .pcard:hover{border-color:var(--line2);background:var(--hover)}
 .pcard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pcard .pn-row{display:flex;align-items:center;gap:8px;min-width:0;grid-column:2}
 .pcard .pn{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pcard .pm{color:var(--muted);font-size:12.5px;grid-column:1}
-.pcard .pd{display:flex;gap:4px;align-items:center;grid-column:2;grid-row:1 / span 2}
-.pcard .pacts{grid-column:3;grid-row:1 / span 2;display:flex;gap:6px}
-.pcard.has-del{grid-template-columns:minmax(0,1fr) auto auto}
+.pcard .pm{color:var(--muted);font-size:12.5px;grid-column:2}
+.pcard .pd{display:flex;gap:4px;align-items:center;grid-column:3;grid-row:1 / span 2}
+.pcard .pacts{grid-column:4;grid-row:1 / span 2;display:flex;gap:6px;align-items:center}
+.pcard.has-del{grid-template-columns:auto minmax(0,1fr) auto auto}
+.fcard.is-selected,.pcard.is-selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.home-drag-over{outline:2px dashed var(--accent)!important;outline-offset:-2px;background:var(--accent-soft)!important}
+.projlist.home-grid .fcard,.projlist.home-grid .pcard{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px}
+.projlist.home-grid .fcard .ficon{display:none}
+.projlist.home-grid .fn-row,.projlist.home-grid .pn-row{width:100%}
+.projlist.home-grid .fn,.projlist.home-grid .pn{white-space:normal;word-break:break-word}
+.projlist.home-grid .facts,.projlist.home-grid .pacts{margin-top:auto;padding-top:4px;width:100%;justify-content:flex-end}
 .pdot{width:9px;height:9px;border-radius:50%;background:var(--line2)}
 .pdot.done{background:var(--accent)}
 .pdot.warn{background:var(--warn)}
-@media (max-width:560px){.pcard.has-del{grid-template-columns:minmax(0,1fr)}.pcard .pd,.pcard .pacts{grid-column:1;grid-row:auto}.pcard .pacts{justify-content:flex-start}}
+@media (max-width:740px){.home-body{grid-template-columns:minmax(0,1fr)}.home-tree{border-right:0;border-bottom:1px solid var(--line);max-height:190px}.home-tb-find{width:100%}.home-search{flex:1 1 160px;width:auto}}
+@media (max-width:560px){.pcard,.pcard.has-del,.fcard{grid-template-columns:auto minmax(0,1fr)}.fcard .ficon{display:none}.fcard .fn-row,.fcard .fm,.fcard .facts,.pcard .pn-row,.pcard .pm,.pcard .pd,.pcard .pacts{grid-column:2;grid-row:auto}.pcard .pacts,.fcard .facts{justify-content:flex-start;flex-wrap:wrap}}
 .home-where{margin:0;color:var(--muted);font-size:12.5px}
 .home-alt{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .projbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;flex:1 1 260px}
@@ -697,9 +748,72 @@ button,input,select,textarea{font-family:inherit}
     <label class="f">Project name<input type="text" id="npName" required placeholder="e.g. KPP-MM, prep 3" spellcheck="false"></label>
     <label class="f">Protein<input type="text" id="npProt" placeholder="e.g. KPP-MM" spellcheck="false"></label>
     <button class="btn primary" type="submit">Start project</button>
-    <div class="np-type" id="npType"><button type="button" id="npCloning" class="tgl" role="switch" aria-checked="false"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button><span class="hint" id="npCloningHint">Off: the project starts at the construct and expression steps.</span></div>
+    <div class="np-type" id="npType"><button type="button" id="npCloning" class="tgl" role="switch" aria-checked="false"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button><span class="hint" id="npCloningHint">Off: the project starts at the construct and expression steps.</span><span class="hint" id="npDestHint" hidden></span></div>
   </form>
-  <div class="projlist" id="projList" aria-live="polite"></div>
+  <div class="home-org" id="homeOrg">
+    <div class="home-toolbar" id="homeToolbar" role="toolbar" aria-label="Project organization">
+      <div class="home-tb-acts">
+        <button type="button" class="btn primary" id="homeNewProj">New Project</button>
+        <button type="button" class="btn" id="homeNewFolder">New Folder</button>
+        <button type="button" class="btn" id="homeMove">Move</button>
+        <button type="button" class="btn" id="homeRename">Rename</button>
+        <button type="button" class="btn" id="homeArchive" aria-pressed="false">Archive</button>
+        <button type="button" class="btn" id="homeRestore" hidden>Restore</button>
+      </div>
+      <div class="home-tb-find">
+        <input type="search" id="homeSearch" class="home-search" placeholder="Search projects and folders…" aria-label="Search">
+        <label class="home-sort-wrap" for="homeSort"><span>Sort</span>
+          <select id="homeSort" aria-label="Sort">
+            <option value="updated-desc">Updated (Newest)</option>
+            <option value="updated-asc">Updated (Oldest)</option>
+            <option value="name-asc">Name (A–Z)</option>
+            <option value="name-desc">Name (Z–A)</option>
+            <option value="created-desc">Created (Newest)</option>
+          </select>
+        </label>
+        <div class="home-view-seg" role="group" aria-label="List or Grid View">
+          <button type="button" class="home-view-btn" id="homeViewList" aria-pressed="true">List</button>
+          <button type="button" class="home-view-btn" id="homeViewGrid" aria-pressed="false">Grid</button>
+        </div>
+      </div>
+    </div>
+    <div class="home-nav-bar">
+      <button type="button" class="btn quiet" id="homeGoUp" title="Up to parent folder">↑ Up</button>
+      <nav class="home-breadcrumbs" id="homeBreadcrumbs" aria-label="Folder breadcrumbs"></nav>
+      <div class="home-sel-bar" id="homeSelBar" hidden>
+        <span id="homeSelCount"></span>
+        <button type="button" class="linkbtn" id="homeSelAll">Select all</button>
+        <button type="button" class="linkbtn" id="homeSelClear">Clear</button>
+      </div>
+    </div>
+    <div class="home-body">
+      <aside class="home-tree" id="homeTree" role="tree" aria-label="Project folders"></aside>
+      <div class="home-main">
+        <div class="projlist home-list" id="projList" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+  <dialog class="dir-modal" id="homePromptModal" aria-labelledby="homePromptTitle">
+    <form id="homePromptForm" method="dialog" class="dir-modal-box">
+      <h3 id="homePromptTitle">New Folder</h3>
+      <label class="f"><span id="homePromptLabel">Name</span><input type="text" id="homePromptInput" class="dir-input" required autocomplete="off" spellcheck="false"></label>
+      <label class="f" id="homePromptParentWrap">Parent folder<select id="homePromptParent" class="dir-select"></select></label>
+      <div class="dir-modal-acts">
+        <button type="submit" class="btn primary" id="homePromptConfirm">OK</button>
+        <button type="button" class="btn" id="homePromptCancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="dir-modal" id="homeMoveModal" aria-labelledby="homeMoveTitle">
+    <div class="dir-modal-box">
+      <h3 id="homeMoveTitle">Move to folder</h3>
+      <label class="f">Destination folder<select id="homeMoveSelect" class="dir-select"></select></label>
+      <div class="dir-modal-acts">
+        <button type="button" class="btn primary" id="homeMoveConfirm">Move</button>
+        <button type="button" class="btn" id="homeMoveCancel">Cancel</button>
+      </div>
+    </div>
+  </dialog>
   <p class="home-where" id="homeWhere"></p>
   <div class="home-alt">
     <button class="btn" id="homeImport" type="button">Open file</button>
@@ -9719,8 +9833,10 @@ $('#projFile').addEventListener('change', async e => { const f = e.target.files[
 /* from the home screen or a project, a project file opens as a project of its own and never replaces the open one */
 async function importAsProject(data, fname){
   if (!data || !isApp(data.app) || !Array.isArray(data.runs)) { toast(`${fname} is not a project saved by this tool`); return; }
+  const targetHomeFolder = MODE === 'home' && !homeShowArchive && homeCurFolder && homeCurFolder !== 'root' ? homeCurFolder : 'root';
   await leaveWorkspace(); resetWorkspace(); try { await openProject(data, fname, true); } catch (e) { console.warn('import failed', e); toast(`Could not open ${fname}: the file is damaged`); showHome(); return; } stripBlobIds(); stripDirBlobIds(data.directory); traces = traces.filter(t => !t.ex);
   PROJ = mkProj(newPid(), fname.replace(/(_project)?\.json$/i, '').replace(/_/g, ' '), Date.now());
+  if (targetHomeFolder !== 'root') await assignProjectHomeFolder(PROJ.id, targetHomeFolder);
   initProjectDirectory(PROJ, data.directory);
   if (failedGels.length) PROJ.lost.gels = failedGels.map(g => Object.assign({}, g, {imageId: undefined}));
   prep.on = true; MODE = 'proj'; enterApp(); applyProjUI(); renderList();
@@ -10035,12 +10151,34 @@ async function storeLoad(id){
 }
 async function storeDelete(id){
   await storeInit();
-  if (STORE.mode === 'cloud') { const ref = projCol().doc(id), d = await ref.get(); const refs = d.exists ? (d.data().refs || []) : []; await ref.delete(); refs.forEach(x => STORE.assets.delete(x).catch(() => {})); return; }
-  if (STORE.mode === 'local') {
+  if (STORE.mode === 'cloud') { const ref = projCol().doc(id), d = await ref.get(); const refs = d.exists ? (d.data().refs || []) : []; await ref.delete(); refs.forEach(x => STORE.assets.delete(x).catch(() => {})); }
+  else if (STORE.mode === 'local') {
     const p = await idbDo('readonly', st => st.get(id));
     await idbDo('readwrite', st => st.delete(id));
     if (p && p.refs) p.refs.forEach(x => idbDo('readwrite', st => st.delete(x), 'blobs').catch(() => {}));
   }
+  homeSelected.delete('project:' + id);
+  if (HOME_ORG.projects && HOME_ORG.projects[id]) { delete HOME_ORG.projects[id]; saveHomeOrg(); }
+}
+async function storeRenameProject(id, newName){
+  const nm = String(newName || '').trim();
+  if (!id || !nm) return false;
+  await saveChain;
+  await storeInit();
+  if (STORE.mode === 'cloud') {
+    const ref = projCol().doc(id), d = await ref.get();
+    if (!d.exists) return false;
+    const curD = d.data();
+    await ref.set(Object.assign({}, curD, {name: nm, updated: Date.now(), rev: (curD.rev || 0) + 1}));
+  } else if (STORE.mode === 'local') {
+    const p = await idbDo('readonly', st => st.get(id));
+    if (!p) return false;
+    p.name = nm; p.updated = Date.now(); p.rev = (p.rev || 0) + 1;
+    await idbDo('readwrite', st => st.put(p));
+  }
+  try { localStorage.removeItem(PEND(id)); } catch (e) {}
+  if (Array.isArray(homeProjects)) { const hp = homeProjects.find(x => x.id === id); if (hp) { hp.name = nm; hp.updated = Date.now(); } }
+  return true;
 }
 /* upload ids belong to the project they were uploaded for: a file or quick work uploads again */
 function stripBlobIds(){ runs.forEach(r => delete r.blobId); traces.forEach(t => delete t.blobId); gels.forEach(g => delete g.imageId); if (struct) delete struct.blobId; ndSamples.forEach(n => delete n.specId); if (prep && prep.cloning && Array.isArray(prep.cloning.stages)) prep.cloning.stages.forEach(s => { if (s && s.gel) { delete s.gel.imageId; delete s.gel.origImageId; } }); }
@@ -10068,43 +10206,649 @@ $('#rawList').addEventListener('click', async e => {
 /* ---------- home ---------- */
 const fmtWhen = t => { if (!t) return ''; const d = new Date(t), now = new Date(), same = d.toDateString() === now.toDateString();
   return same ? `today, ${d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}` : d.toLocaleDateString([], {month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric'}); };
-let delArm = '', delAt = 0, homeSeq = 0;
+const HOME_ORG_KEY = 'hfb-home-org', HOME_ORG_BLOB = 'home-org-v1', HOME_SORTS = ['updated-desc', 'updated-asc', 'name-asc', 'name-desc', 'created-desc'];
+let HOME_ORG = {version: 1, folders: [], projects: {}, expanded: ['root'], currentFolderId: 'root', view: 'list', sort: 'updated-desc', savedAt: 0};
+let delArm = '', delAt = 0, fdelArm = '', fdelAt = 0, homeSeq = 0, homeOrgReady = null, homeOrgSaveChain = Promise.resolve();
+let homeCurFolder = 'root', homeShowArchive = false, homeSearchTerm = '', homeSelected = new Set(), homeProjects = null, homePromptAct = null, homeMoveItemsList = [], homeDragItems = null;
+
+function normHomeOrg(raw){
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const seen = new Set();
+  const folders = (Array.isArray(d.folders) ? d.folders : []).filter(f => f && typeof f === 'object' && typeof f.id === 'string' && f.id && f.id !== 'root' && f.id !== '__archive__' && !seen.has(f.id) && seen.add(f.id)).map(f => ({
+    id: f.id,
+    name: String(f.name || '').trim() || 'Untitled Folder',
+    parentId: typeof f.parentId === 'string' && f.parentId && f.parentId !== f.id ? f.parentId : 'root',
+    created: +f.created || Date.now(),
+    updated: +f.updated || +f.created || Date.now(),
+    archived: !!f.archived,
+    archivedAt: +f.archivedAt || 0,
+    archivedWith: typeof f.archivedWith === 'string' ? f.archivedWith : ''
+  }));
+  const fMap = new Map(folders.map(f => [f.id, f]));
+  folders.forEach(f => {
+    if (f.parentId !== 'root' && !fMap.has(f.parentId)) f.parentId = 'root';
+    const vis = new Set([f.id]); let curF = fMap.get(f.parentId);
+    while (curF) { if (vis.has(curF.id)) { f.parentId = 'root'; break; } vis.add(curF.id); curF = curF.parentId === 'root' ? null : fMap.get(curF.parentId); }
+  });
+  const projects = {};
+  if (d.projects && typeof d.projects === 'object' && !Array.isArray(d.projects)) {
+    Object.keys(d.projects).forEach(pid => {
+      const pm = d.projects[pid];
+      if (!pm || typeof pm !== 'object') return;
+      projects[pid] = {
+        folderId: typeof pm.folderId === 'string' && pm.folderId ? pm.folderId : 'root',
+        archived: !!pm.archived,
+        archivedAt: +pm.archivedAt || 0,
+        archivedWith: typeof pm.archivedWith === 'string' ? pm.archivedWith : ''
+      };
+    });
+  }
+  const expanded = Array.isArray(d.expanded) ? [...new Set(d.expanded.filter(x => typeof x === 'string'))] : ['root'];
+  const curId = typeof d.currentFolderId === 'string' && (d.currentFolderId === 'root' || fMap.has(d.currentFolderId)) ? d.currentFolderId : 'root';
+  const curF = curId === 'root' ? null : fMap.get(curId);
+  return {
+    version: 1,
+    folders,
+    projects,
+    expanded,
+    currentFolderId: curF && curF.archived ? 'root' : curId,
+    view: d.view === 'grid' ? 'grid' : 'list',
+    sort: HOME_SORTS.includes(d.sort) ? d.sort : 'updated-desc',
+    savedAt: +d.savedAt || 0
+  };
+}
+function ensureHomeOrg(){
+  if (homeOrgReady) return homeOrgReady;
+  homeOrgReady = (async () => {
+    await storeInit();
+    let loaded = null;
+    if (STORE.mode === 'cloud') {
+      try { const d = await projCol().doc('_home_org').get(); if (d.exists && d.data() && d.data().org) loaded = d.data().org; } catch (e) {}
+    } else {
+      let idbOrg = null, lsOrg = null;
+      if (STORE.mode === 'local') { try { idbOrg = await getLocalBlob(HOME_ORG_BLOB); } catch (e) {} }
+      try { lsOrg = JSON.parse(localStorage.getItem(HOME_ORG_KEY) || 'null'); } catch (e) {}
+      if (idbOrg && lsOrg) loaded = (+lsOrg.savedAt || 0) >= (+idbOrg.savedAt || 0) ? lsOrg : idbOrg;
+      else loaded = idbOrg || lsOrg;
+    }
+    if (loaded && typeof loaded === 'object') {
+      HOME_ORG = normHomeOrg(loaded);
+      homeCurFolder = HOME_ORG.currentFolderId || 'root';
+    }
+  })();
+  return homeOrgReady;
+}
+function saveHomeOrg(){
+  HOME_ORG.currentFolderId = homeShowArchive ? 'root' : (homeCurFolder || 'root');
+  HOME_ORG.savedAt = Date.now();
+  const snap = normHomeOrg(HOME_ORG);
+  HOME_ORG = snap;
+  if (STORE.mode !== 'cloud') { try { localStorage.setItem(HOME_ORG_KEY, JSON.stringify(snap)); } catch (e) {} }
+  homeOrgSaveChain = homeOrgSaveChain.then(async () => {
+    await storeInit();
+    if (STORE.mode === 'cloud') { try { await projCol().doc('_home_org').set({kind: 'home_org', updated: snap.savedAt, org: snap}); } catch (e) {} }
+    else if (STORE.mode === 'local') { try { await putLocalBlob(HOME_ORG_BLOB, snap); } catch (e) {} }
+  }).catch(() => {});
+  return homeOrgSaveChain;
+}
+async function assignProjectHomeFolder(pid, fid){
+  await ensureHomeOrg();
+  const f = HOME_ORG.folders.find(x => x.id === fid && !x.archived);
+  if (!f) return;
+  HOME_ORG.projects[pid] = {folderId: f.id, archived: false, archivedAt: 0, archivedWith: ''};
+  saveHomeOrg();
+}
+const homeFolderById = id => HOME_ORG.folders.find(f => f.id === id) || null;
+function isHomeDescendant(folderId, ancestorId){
+  let curF = homeFolderById(folderId); const seen = new Set();
+  while (curF && curF.parentId && curF.parentId !== 'root' && !seen.has(curF.id)) {
+    seen.add(curF.id);
+    if (curF.parentId === ancestorId) return true;
+    curF = homeFolderById(curF.parentId);
+  }
+  return false;
+}
+function homeFolderPath(fid){
+  const out = [], seen = new Set(); let curF = homeFolderById(fid);
+  while (curF && !seen.has(curF.id)) { seen.add(curF.id); out.unshift(curF); curF = curF.parentId === 'root' ? null : homeFolderById(curF.parentId); }
+  return out;
+}
+function homeProjPlacement(pid){
+  const pm = HOME_ORG.projects[pid];
+  const archived = !!(pm && pm.archived);
+  let folderId = (pm && pm.folderId) || 'root';
+  if (folderId !== 'root') {
+    const f = homeFolderById(folderId);
+    if (!f || (!archived && f.archived)) folderId = 'root';
+  }
+  return {folderId, archived, archivedWith: (pm && pm.archivedWith) || ''};
+}
+const parseHomeKey = k => { const i = String(k || '').indexOf(':'); return i > 0 ? {type: k.slice(0, i), id: k.slice(i + 1)} : null; };
+function sortHomeItems(arr, sortKey){
+  return arr.slice().sort((a, b) => {
+    const an = String(a.name || ''), bn = String(b.name || '');
+    if (sortKey === 'name-asc') return an.localeCompare(bn, undefined, {sensitivity: 'base'});
+    if (sortKey === 'name-desc') return bn.localeCompare(an, undefined, {sensitivity: 'base'});
+    if (sortKey === 'updated-asc') return (a.updated || a.created || 0) - (b.updated || b.created || 0);
+    if (sortKey === 'created-desc') return (b.created || b.updated || 0) - (a.created || a.updated || 0);
+    return (b.updated || b.created || 0) - (a.updated || a.created || 0);
+  });
+}
+function syncHomeSelUI(){
+  const bar = $('#homeSelBar'), cnt = $('#homeSelCount');
+  if (!bar || !cnt) return;
+  const n = homeSelected.size;
+  bar.hidden = n === 0;
+  cnt.textContent = n ? `${n} selected` : '';
+}
+function homeVisItems(projs){
+  let visFolders = [], visProjs = [];
+  const q = homeSearchTerm.toLowerCase();
+  if (homeShowArchive) {
+    visFolders = HOME_ORG.folders.filter(f => f.archived);
+    visProjs = projs.filter(p => homeProjPlacement(p.id).archived);
+    if (q) {
+      visFolders = visFolders.filter(f => f.name.toLowerCase().includes(q));
+      visProjs = visProjs.filter(p => String(p.name || '').toLowerCase().includes(q) || String(p.protein || '').toLowerCase().includes(q));
+    }
+  } else if (q) {
+    visFolders = HOME_ORG.folders.filter(f => !f.archived && f.name.toLowerCase().includes(q));
+    visProjs = projs.filter(p => !homeProjPlacement(p.id).archived && (String(p.name || '').toLowerCase().includes(q) || String(p.protein || '').toLowerCase().includes(q)));
+  } else {
+    visFolders = HOME_ORG.folders.filter(f => !f.archived && (f.parentId || 'root') === homeCurFolder);
+    visProjs = projs.filter(p => { const pl = homeProjPlacement(p.id); return !pl.archived && pl.folderId === homeCurFolder; });
+  }
+  return {visFolders: sortHomeItems(visFolders, HOME_ORG.sort), visProjs: sortHomeItems(visProjs, HOME_ORG.sort)};
+}
+function paintHome(){
+  const projs = Array.isArray(homeProjects) ? homeProjects : [];
+  if (homeCurFolder !== 'root') { const cf = homeFolderById(homeCurFolder); if (!cf || cf.archived) homeCurFolder = 'root'; }
+  const validIds = new Set([...HOME_ORG.folders.map(f => 'folder:' + f.id), ...projs.map(p => 'project:' + p.id)]);
+  [...homeSelected].forEach(k => { if (!validIds.has(k)) homeSelected.delete(k); });
+
+  const sortEl = $('#homeSort'); if (sortEl && sortEl.value !== HOME_ORG.sort) sortEl.value = HOME_ORG.sort;
+  const vList = $('#homeViewList'), vGrid = $('#homeViewGrid'), el = $('#projList');
+  if (vList && vGrid) { vList.setAttribute('aria-pressed', HOME_ORG.view === 'list' ? 'true' : 'false'); vGrid.setAttribute('aria-pressed', HOME_ORG.view === 'grid' ? 'true' : 'false'); }
+  if (el) el.className = `projlist home-${HOME_ORG.view}`;
+  const upBtn = $('#homeGoUp'); if (upBtn) upBtn.disabled = !homeShowArchive && homeCurFolder === 'root';
+  const restBtn = $('#homeRestore'), archBtn = $('#homeArchive');
+  if (restBtn) restBtn.hidden = !homeShowArchive;
+  if (archBtn) archBtn.setAttribute('aria-pressed', homeShowArchive ? 'true' : 'false');
+  const destHint = $('#npDestHint');
+  if (destHint) {
+    if (!homeShowArchive && homeCurFolder !== 'root') {
+      const pNames = homeFolderPath(homeCurFolder).map(f => f.name);
+      destHint.textContent = pNames.length ? `Creates in folder: ${pNames.join(' / ')}` : '';
+      destHint.hidden = !pNames.length;
+    } else destHint.hidden = true;
+  }
+  syncHomeSelUI();
+
+  const bcEl = $('#homeBreadcrumbs');
+  if (bcEl) {
+    let bc = `<button type="button" class="home-crumb${!homeShowArchive && homeCurFolder === 'root' ? ' active' : ''}" data-crumb-id="root" data-drop-folder="root">Top level</button>`;
+    if (homeShowArchive) bc += ` <span class="crumb-sep">/</span> <span class="home-crumb active">Archive</span>`;
+    else if (homeCurFolder !== 'root') {
+      const path = homeFolderPath(homeCurFolder);
+      bc += path.map((f, i) => ` <span class="crumb-sep">/</span> <button type="button" class="home-crumb${i === path.length - 1 ? ' active' : ''}" data-crumb-id="${esc(f.id)}" data-drop-folder="${esc(f.id)}">${esc(f.name)}</button>`).join('');
+    }
+    bcEl.innerHTML = bc;
+  }
+
+  const treeEl = $('#homeTree');
+  if (treeEl) {
+    const expSet = new Set(HOME_ORG.expanded);
+    const activeProjs = projs.filter(p => !homeProjPlacement(p.id).archived);
+    const rootProjsCnt = activeProjs.filter(p => homeProjPlacement(p.id).folderId === 'root').length;
+    const rootSubCnt = HOME_ORG.folders.filter(f => !f.archived && (f.parentId || 'root') === 'root').length;
+    const buildNodes = (pId, depth) => {
+      const kids = sortHomeItems(HOME_ORG.folders.filter(f => !f.archived && (f.parentId || 'root') === pId), 'name-asc');
+      return kids.map(f => {
+        const subK = HOME_ORG.folders.some(x => !x.archived && (x.parentId || 'root') === f.id);
+        const isExp = expSet.has(f.id);
+        const fCnt = activeProjs.filter(p => homeProjPlacement(p.id).folderId === f.id).length + HOME_ORG.folders.filter(x => !x.archived && (x.parentId || 'root') === f.id).length;
+        const isCur = !homeShowArchive && homeCurFolder === f.id;
+        return `<div class="home-tree-node${isCur ? ' active' : ''}" role="treeitem" tabindex="0" style="padding-left:${depth * 14 + 8}px" data-folder-id="${esc(f.id)}" data-drop-folder="${esc(f.id)}" draggable="true"><span class="home-tree-toggle" data-htree-toggle="${esc(f.id)}">${subK ? (isExp ? '▾' : '▸') : '•'}</span><span aria-hidden="true">📁</span><span class="home-tree-name">${esc(f.name)}</span><span class="home-tree-cnt">${fCnt}</span></div>${subK && isExp ? buildNodes(f.id, depth + 1) : ''}`;
+      }).join('');
+    };
+    const rootExp = expSet.has('root');
+    const archCnt = HOME_ORG.folders.filter(f => f.archived).length + projs.filter(p => homeProjPlacement(p.id).archived).length;
+    let th = `<div class="home-tree-node${!homeShowArchive && homeCurFolder === 'root' ? ' active' : ''}" role="treeitem" tabindex="0" data-folder-id="root" data-drop-folder="root"><span class="home-tree-toggle" data-htree-toggle="root">${rootSubCnt ? (rootExp ? '▾' : '▸') : '•'}</span><span aria-hidden="true">🏠</span><span class="home-tree-name">Top level</span><span class="home-tree-cnt">${rootProjsCnt + rootSubCnt}</span></div>`;
+    if (rootExp) th += buildNodes('root', 1);
+    th += `<div class="home-tree-sep" role="separator"></div><div class="home-tree-node${homeShowArchive ? ' active' : ''}" role="treeitem" tabindex="0" data-folder-id="__archive__"><span class="home-tree-toggle">•</span><span aria-hidden="true">🗄</span><span class="home-tree-name">Archive</span><span class="home-tree-cnt">${archCnt}</span></div>`;
+    treeEl.innerHTML = th;
+  }
+
+  if (!el) return;
+  const {visFolders, visProjs} = homeVisItems(projs);
+  if (!visFolders.length && !visProjs.length) {
+    el.innerHTML = `<p class="empty-p">${homeShowArchive ? 'No archived folders or projects.' : homeSearchTerm ? 'No folders or projects match your search.' : (!projs.length && !HOME_ORG.folders.length) ? 'No projects yet. Start one above when you transform your construct, or click New Folder to create folders.' : 'This folder is empty. Drag projects here, use Move on selected projects, or click New Folder or New Project.'}</p>`;
+    return;
+  }
+  const fHtml = visFolders.map(f => {
+    const sel = homeSelected.has('folder:' + f.id);
+    const subCnt = HOME_ORG.folders.filter(x => !x.archived && (x.parentId || 'root') === f.id).length;
+    const prjCnt = projs.filter(p => { const pl = homeProjPlacement(p.id); return !pl.archived && pl.folderId === f.id; }).length;
+    const parts = [];
+    if (subCnt) parts.push(`${subCnt} subfolder${subCnt === 1 ? '' : 's'}`);
+    if (prjCnt) parts.push(`${prjCnt} project${prjCnt === 1 ? '' : 's'}`);
+    if (!parts.length && !homeShowArchive) parts.push('Empty folder');
+    if (f.updated) parts.push(`updated ${fmtWhen(f.updated)}`);
+    if (homeSearchTerm && f.parentId && f.parentId !== 'root') { const pp = homeFolderPath(f.parentId).map(x => x.name); if (pp.length) parts.push(`in ${pp.join(' / ')}`); }
+    return `<div class="fcard${sel ? ' is-selected' : ''}" role="button" tabindex="0" draggable="${!homeShowArchive}" data-fid="${esc(f.id)}"${!homeShowArchive ? ` data-drop-folder="${esc(f.id)}"` : ''}><label class="home-cb-wrap" data-hsel-stop><input type="checkbox" class="home-cb" data-hsel="folder:${esc(f.id)}"${sel ? ' checked' : ''} aria-label="Select folder ${esc(f.name)}"></label><span class="ficon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h4.1c.4 0 .78.16 1.06.44L10.2 5H16.5A1.5 1.5 0 0 1 18 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5v-10Z" fill="currentColor" opacity=".22" stroke="currentColor" stroke-width="1.4"/></svg></span><span class="fn-row"><span class="home-kind-badge is-folder">Folder</span><span class="fn">${esc(f.name)}</span></span><span class="fm">${esc(parts.join(', '))}</span><span class="facts">${!homeShowArchive ? `<button type="button" class="btn" data-fopen="${esc(f.id)}">Open</button>` : `<button type="button" class="btn" data-hrestore="folder:${esc(f.id)}">Restore</button><button type="button" class="btn danger" data-hfdel="${esc(f.id)}">${fdelArm === f.id ? 'Delete? Click again' : 'Delete'}</button>`}</span></div>`;
+  }).join('');
+  const pHtml = visProjs.map(p => {
+    const sel = homeSelected.has('project:' + p.id);
+    const pl = homeProjPlacement(p.id);
+    const metaParts = [p.protein, (d => `${d.filter(x => x === 1).length} of ${d.length} steps done${d.some(x => x === 2) ? `, ${d.filter(x => x === 2).length} need details` : ''}`)(p.dots || []), `updated ${fmtWhen(p.updated)}`].filter(Boolean);
+    if (homeSearchTerm && pl.folderId !== 'root') { const pp = homeFolderPath(pl.folderId).map(x => x.name); if (pp.length) metaParts.push(`in ${pp.join(' / ')}`); }
+    return `<div class="pcard has-del${sel ? ' is-selected' : ''}" role="button" tabindex="0" draggable="${!homeShowArchive}" data-pid="${esc(p.id)}"><label class="home-cb-wrap" data-hsel-stop><input type="checkbox" class="home-cb" data-hsel="project:${esc(p.id)}"${sel ? ' checked' : ''} aria-label="Select project ${esc(p.name || 'Untitled project')}"></label><span class="pn-row"><span class="home-kind-badge is-proj">Project</span><span class="pn">${esc(p.name || 'Untitled project')}</span></span><span class="pm">${esc(metaParts.join(', '))}</span><span class="pd" aria-hidden="true">${(p.dots || []).map(d => `<i class="pdot${d === 2 ? ' warn' : d ? ' done' : ''}"></i>`).join('')}</span><span class="pacts">${!homeShowArchive ? `<button type="button" class="btn" tabindex="-1" aria-hidden="true">Open</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button>` : `<button type="button" class="btn" data-hrestore="project:${esc(p.id)}">Restore</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button>`}</span></div>`;
+  }).join('');
+  el.innerHTML = fHtml + pHtml;
+}
 async function renderHome(){
-  const my = ++homeSeq, el = $('#projList'); el.innerHTML = '<p class="empty-p">Loading projects…</p>';
+  const my = ++homeSeq, el = $('#projList');
+  if (homeProjects === null && el) el.innerHTML = '<p class="empty-p">Loading projects…</p>';
   await storeInit();
+  await ensureHomeOrg();
   if (my !== homeSeq) return;
   $('#homeWhere').textContent = STORE.mode === 'cloud' ? 'Projects are saved with this page, so they open wherever you are signed in. Run data and gel images are uploaded with them, and only people you share the page with can open it.'
     : STORE.mode === 'local' ? 'Projects are saved in this browser. Open a project, then choose Export project to move one to another computer or keep a copy.'
     : 'This view cannot keep projects. Open a project, then choose Export project to save your work.';
-  let list = []; try { list = await storeList(); } catch (e) { if (my === homeSeq) el.innerHTML = '<p class="empty-p">Could not load your projects. Reload the page to try again.</p>'; return; }
+  let list = []; try { list = await storeList(); } catch (e) { if (my === homeSeq && el) el.innerHTML = '<p class="empty-p">Could not load your projects. Reload the page to try again.</p>'; return; }
   if (my !== homeSeq) return;
-  if (!list.length) { el.innerHTML = '<p class="empty-p">No projects yet. Start one above when you transform your construct.</p>'; return; }
-  el.innerHTML = list.map(p => `<div class="pcard has-del" role="button" tabindex="0" data-pid="${esc(p.id)}"><span class="pn">${esc(p.name || 'Untitled project')}</span>
-    <span class="pm">${esc([p.protein, (d => `${d.filter(x => x === 1).length} of ${d.length} steps done${d.some(x => x === 2) ? `, ${d.filter(x => x === 2).length} need details` : ''}`)(p.dots || []), `updated ${fmtWhen(p.updated)}`].filter(Boolean).join(', '))}</span>
-    <span class="pd" aria-hidden="true">${(p.dots || []).map(d => `<i class="pdot${d === 2 ? ' warn' : d ? ' done' : ''}"></i>`).join('')}</span>
-    <span class="pacts"><button type="button" class="btn" tabindex="-1" aria-hidden="true">Open</button><button type="button" class="btn danger pdel" data-pdel="${esc(p.id)}">${delArm === p.id ? 'Delete? Click again' : 'Delete'}</button></span></div>`).join('');
+  homeProjects = list;
+  paintHome();
 }
+function homeOpenFolder(fid){
+  if (fid === '__archive__') { homeShowArchive = true; homeSelected.clear(); paintHome(); return; }
+  homeShowArchive = false;
+  homeCurFolder = fid === 'root' || homeFolderById(fid) ? fid : 'root';
+  if (homeCurFolder !== 'root') {
+    const exp = new Set(HOME_ORG.expanded); exp.add('root');
+    homeFolderPath(homeCurFolder).forEach(f => { if (f.parentId) exp.add(f.parentId); });
+    HOME_ORG.expanded = [...exp];
+  }
+  homeSelected.clear();
+  saveHomeOrg();
+  paintHome();
+}
+function createHomeFolder(name, parentId){
+  const nm = String(name || '').trim() || 'New Folder';
+  const pid = parentId && parentId !== 'root' && homeFolderById(parentId) ? parentId : 'root';
+  const f = {id: 'hf-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name: nm, parentId: pid, created: Date.now(), updated: Date.now(), archived: false, archivedAt: 0, archivedWith: ''};
+  HOME_ORG.folders.push(f);
+  const exp = new Set(HOME_ORG.expanded); exp.add('root'); exp.add(pid); HOME_ORG.expanded = [...exp];
+  homeShowArchive = false;
+  saveHomeOrg();
+  paintHome();
+  toast(`Created folder "${nm}"`);
+}
+function moveHomeItems(items, targetFolderId){
+  const dest = targetFolderId === 'root' ? 'root' : (homeFolderById(targetFolderId) && !homeFolderById(targetFolderId).archived ? targetFolderId : null);
+  if (!dest) return false;
+  for (const it of items) {
+    if (it.type === 'folder') {
+      if (it.id === dest || isHomeDescendant(dest, it.id)) {
+        toast('Cannot move a folder into itself or one of its subfolders');
+        return false;
+      }
+    }
+  }
+  let moved = 0;
+  items.forEach(it => {
+    if (it.type === 'folder') {
+      const f = homeFolderById(it.id);
+      if (f && !f.archived) { f.parentId = dest; f.updated = Date.now(); moved++; }
+    } else if (it.type === 'project') {
+      const cur = HOME_ORG.projects[it.id] || {folderId: 'root', archived: false, archivedAt: 0, archivedWith: ''};
+      cur.folderId = dest; cur.archived = false; cur.archivedWith = '';
+      HOME_ORG.projects[it.id] = cur;
+      moved++;
+    }
+  });
+  if (!moved) return false;
+  const exp = new Set(HOME_ORG.expanded); exp.add('root'); if (dest !== 'root') exp.add(dest); HOME_ORG.expanded = [...exp];
+  homeSelected.clear();
+  saveHomeOrg();
+  paintHome();
+  const destName = dest === 'root' ? 'Top level' : (homeFolderById(dest) || {name: 'folder'}).name;
+  toast(`Moved ${moved === 1 ? '1 item' : `${moved} items`} to ${destName}`);
+  return true;
+}
+function archiveHomeItems(items){
+  const now = Date.now(); let cnt = 0;
+  const archSubtree = (fid, rootId) => {
+    HOME_ORG.folders.filter(x => (x.parentId || 'root') === fid).forEach(sub => {
+      if (!sub.archived) { sub.archived = true; sub.archivedAt = now; sub.archivedWith = rootId; }
+      archSubtree(sub.id, rootId);
+    });
+    (homeProjects || []).forEach(p => {
+      const pl = HOME_ORG.projects[p.id];
+      if (pl && pl.folderId === fid && !pl.archived) { pl.archived = true; pl.archivedAt = now; pl.archivedWith = rootId; }
+    });
+  };
+  items.forEach(it => {
+    if (it.type === 'folder') {
+      const f = homeFolderById(it.id);
+      if (f && !f.archived) {
+        f.archived = true; f.archivedAt = now; f.archivedWith = ''; cnt++;
+        archSubtree(f.id, f.id);
+        if (homeCurFolder === f.id || isHomeDescendant(homeCurFolder, f.id)) homeCurFolder = f.parentId || 'root';
+      }
+    } else if (it.type === 'project') {
+      const cur = HOME_ORG.projects[it.id] || {folderId: 'root', archived: false, archivedAt: 0, archivedWith: ''};
+      if (!cur.archived) { cur.archived = true; cur.archivedAt = now; cur.archivedWith = ''; HOME_ORG.projects[it.id] = cur; cnt++; }
+    }
+  });
+  if (!cnt) return;
+  homeSelected.clear();
+  saveHomeOrg();
+  paintHome();
+  toast(`Archived ${cnt === 1 ? '1 item' : `${cnt} items`}`);
+}
+function restoreHomeItems(items){
+  let cnt = 0;
+  items.forEach(it => {
+    if (it.type === 'folder') {
+      const f = homeFolderById(it.id);
+      if (f && f.archived) {
+        f.archived = false; f.archivedWith = ''; f.updated = Date.now();
+        if (f.parentId !== 'root') { const pf = homeFolderById(f.parentId); if (!pf || pf.archived) f.parentId = 'root'; }
+        HOME_ORG.folders.filter(x => x.archivedWith === f.id).forEach(x => { x.archived = false; x.archivedWith = ''; });
+        Object.keys(HOME_ORG.projects).forEach(pid => { const pm = HOME_ORG.projects[pid]; if (pm && pm.archivedWith === f.id) { pm.archived = false; pm.archivedWith = ''; } });
+        cnt++;
+      }
+    } else if (it.type === 'project') {
+      const pm = HOME_ORG.projects[it.id];
+      if (pm && pm.archived) {
+        pm.archived = false; pm.archivedWith = '';
+        if (pm.folderId !== 'root') { const pf = homeFolderById(pm.folderId); if (!pf || pf.archived) pm.folderId = 'root'; }
+        cnt++;
+      }
+    }
+  });
+  if (!cnt) return;
+  homeSelected.clear();
+  saveHomeOrg();
+  paintHome();
+  toast(`Restored ${cnt === 1 ? '1 item' : `${cnt} items`}`);
+}
+function populateHomeFolderSelect(selEl, excludeFolderIds, selectedVal){
+  if (!selEl) return;
+  selEl.innerHTML = '';
+  const rootOpt = document.createElement('option');
+  rootOpt.value = 'root'; rootOpt.textContent = 'Top level (All projects)';
+  selEl.appendChild(rootOpt);
+  const excl = new Set(excludeFolderIds || []);
+  const addLevel = (pId, prefix) => {
+    sortHomeItems(HOME_ORG.folders.filter(f => !f.archived && (f.parentId || 'root') === pId), 'name-asc').forEach(f => {
+      if (excl.has(f.id)) return;
+      const o = document.createElement('option');
+      o.value = f.id;
+      o.textContent = prefix ? `${prefix} / ${f.name}` : f.name;
+      selEl.appendChild(o);
+      addLevel(f.id, o.textContent);
+    });
+  };
+  addLevel('root', '');
+  if (selectedVal && [...selEl.options].some(o => o.value === selectedVal)) selEl.value = selectedVal;
+}
+
+$('#projList').addEventListener('change', e => {
+  const cb = e.target.closest('[data-hsel]');
+  if (!cb) return;
+  if (cb.checked) homeSelected.add(cb.dataset.hsel);
+  else homeSelected.delete(cb.dataset.hsel);
+  const card = cb.closest('.fcard, .pcard');
+  if (card) card.classList.toggle('is-selected', cb.checked);
+  syncHomeSelUI();
+});
 $('#projList').addEventListener('click', async e => {
+  if (e.target.closest('[data-hsel-stop]')) return;
+  const rest = e.target.closest('[data-hrestore]');
+  if (rest) { e.stopPropagation(); const it = parseHomeKey(rest.dataset.hrestore); if (it) restoreHomeItems([it]); return; }
+  const fdel = e.target.closest('[data-hfdel]');
+  if (fdel) {
+    e.stopPropagation();
+    const fid = fdel.dataset.hfdel;
+    if (fdelArm !== fid || Date.now() - fdelAt < 600) { if (fdelArm !== fid) { fdelArm = fid; fdelAt = Date.now(); } fdel.textContent = 'Delete? Click again'; setTimeout(() => { if (fdelArm === fid) { fdelArm = ''; paintHome(); } }, 4000); return; }
+    fdelArm = '';
+    const dropIds = new Set([fid]);
+    const collect = pId => { HOME_ORG.folders.filter(x => x.parentId === pId).forEach(x => { if (!dropIds.has(x.id)) { dropIds.add(x.id); collect(x.id); } }); };
+    collect(fid);
+    HOME_ORG.folders = HOME_ORG.folders.filter(x => !dropIds.has(x.id));
+    Object.keys(HOME_ORG.projects).forEach(pid => { const pm = HOME_ORG.projects[pid]; if (pm && dropIds.has(pm.folderId)) pm.folderId = 'root'; });
+    dropIds.forEach(id => homeSelected.delete('folder:' + id));
+    saveHomeOrg(); paintHome(); toast('Folder deleted'); return;
+  }
   const del = e.target.closest('[data-pdel]');
   if (del) { e.stopPropagation(); const id = del.dataset.pdel; if (delArm !== id || Date.now() - delAt < 600) { if (delArm !== id) { delArm = id; delAt = Date.now(); } del.textContent = 'Delete? Click again'; setTimeout(() => { if (delArm === id) { delArm = ''; renderHome(); } }, 4000); return; }
     delArm = ''; try { await storeDelete(id); toast('Project deleted'); } catch (err) { toast('Could not delete the project'); } renderHome(); return; }
-  const c = e.target.closest('[data-pid]'); if (c) openStoredProject(c.dataset.pid); });
-$('#projList').addEventListener('keydown', e => { const c = e.target.closest('[data-pid]'); if (c && (e.key === 'Enter' || e.key === ' ') && e.target === c) { e.preventDefault(); openStoredProject(c.dataset.pid); } });
+  const fop = e.target.closest('[data-fopen]');
+  if (fop) { e.stopPropagation(); homeOpenFolder(fop.dataset.fopen); return; }
+  const fc = e.target.closest('[data-fid]');
+  if (fc) {
+    if (e.ctrlKey || e.metaKey) { const k = 'folder:' + fc.dataset.fid; if (homeSelected.has(k)) homeSelected.delete(k); else homeSelected.add(k); paintHome(); return; }
+    if (!homeShowArchive) homeOpenFolder(fc.dataset.fid);
+    return;
+  }
+  const c = e.target.closest('[data-pid]');
+  if (c) {
+    if (e.ctrlKey || e.metaKey) { const k = 'project:' + c.dataset.pid; if (homeSelected.has(k)) homeSelected.delete(k); else homeSelected.add(k); paintHome(); return; }
+    openStoredProject(c.dataset.pid);
+  }
+});
+$('#projList').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const fc = e.target.closest('[data-fid]'); if (fc && e.target === fc && !homeShowArchive) { e.preventDefault(); homeOpenFolder(fc.dataset.fid); return; }
+  const c = e.target.closest('[data-pid]'); if (c && e.target === c) { e.preventDefault(); openStoredProject(c.dataset.pid); }
+});
+
+$('#homeTree').addEventListener('click', e => {
+  const tgl = e.target.closest('[data-htree-toggle]');
+  if (tgl) {
+    e.stopPropagation();
+    const id = tgl.dataset.htreeToggle, s = new Set(HOME_ORG.expanded);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    HOME_ORG.expanded = [...s]; saveHomeOrg(); paintHome(); return;
+  }
+  const node = e.target.closest('[data-folder-id]');
+  if (node) homeOpenFolder(node.dataset.folderId);
+});
+$('#homeTree').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const node = e.target.closest('[data-folder-id]');
+  if (node && e.target === node) { e.preventDefault(); homeOpenFolder(node.dataset.folderId); }
+});
+$('#homeBreadcrumbs').addEventListener('click', e => {
+  const b = e.target.closest('[data-crumb-id]');
+  if (b) homeOpenFolder(b.dataset.crumbId);
+});
+$('#homeGoUp').addEventListener('click', () => {
+  if (homeShowArchive) { homeOpenFolder('root'); return; }
+  if (homeCurFolder === 'root') return;
+  const cf = homeFolderById(homeCurFolder);
+  homeOpenFolder((cf && cf.parentId) || 'root');
+});
+$('#homeSelAll').addEventListener('click', () => {
+  const {visFolders, visProjs} = homeVisItems(homeProjects || []);
+  visFolders.forEach(f => homeSelected.add('folder:' + f.id));
+  visProjs.forEach(p => homeSelected.add('project:' + p.id));
+  paintHome();
+});
+$('#homeSelClear').addEventListener('click', () => { homeSelected.clear(); paintHome(); });
+
+$('#homeNewProj').addEventListener('click', () => {
+  const inp = $('#npName');
+  if (inp) { inp.scrollIntoView({block: 'nearest'}); inp.focus(); inp.select(); }
+});
+$('#homeNewFolder').addEventListener('click', async () => {
+  await ensureHomeOrg();
+  homePromptAct = {action: 'new-folder'};
+  $('#homePromptTitle').textContent = 'New Folder';
+  $('#homePromptLabel').textContent = 'Folder name';
+  $('#homePromptInput').value = 'New Folder';
+  $('#homePromptParentWrap').hidden = false;
+  populateHomeFolderSelect($('#homePromptParent'), [], homeShowArchive ? 'root' : homeCurFolder);
+  $('#homePromptModal').showModal();
+  $('#homePromptInput').select();
+});
+$('#homeMove').addEventListener('click', async () => {
+  await ensureHomeOrg();
+  let items = [...homeSelected].map(parseHomeKey).filter(Boolean);
+  if (!items.length && !homeShowArchive && homeCurFolder !== 'root') items = [{type: 'folder', id: homeCurFolder}];
+  if (!items.length) { toast('Select one or more folders or projects to move'); return; }
+  homeMoveItemsList = items;
+  const excl = [];
+  items.filter(x => x.type === 'folder').forEach(x => {
+    excl.push(x.id);
+    HOME_ORG.folders.forEach(f => { if (isHomeDescendant(f.id, x.id)) excl.push(f.id); });
+  });
+  let singleName = '';
+  if (items.length === 1) {
+    if (items[0].type === 'folder') singleName = (homeFolderById(items[0].id) || {}).name || '';
+    else singleName = ((homeProjects || []).find(p => p.id === items[0].id) || {}).name || '';
+  }
+  $('#homeMoveTitle').textContent = items.length === 1 && singleName ? `Move "${singleName}"` : `Move ${items.length} items`;
+  const allInSub = items.every(it => it.type === 'project' ? homeProjPlacement(it.id).folderId !== 'root' : ((homeFolderById(it.id) || {}).parentId || 'root') !== 'root');
+  populateHomeFolderSelect($('#homeMoveSelect'), excl, allInSub ? 'root' : undefined);
+  $('#homeMoveModal').showModal();
+});
+$('#homeRename').addEventListener('click', async () => {
+  await ensureHomeOrg();
+  let items = [...homeSelected].map(parseHomeKey).filter(Boolean);
+  if (!items.length && !homeShowArchive && homeCurFolder !== 'root') items = [{type: 'folder', id: homeCurFolder}];
+  if (!items.length) { toast('Select a folder or project to rename'); return; }
+  if (items.length > 1) { toast('Select a single folder or project to rename'); return; }
+  const it = items[0];
+  let curName = '';
+  if (it.type === 'folder') { const f = homeFolderById(it.id); if (!f) return; curName = f.name; }
+  else { const p = (homeProjects || []).find(x => x.id === it.id); if (!p) return; curName = p.name || 'Untitled project'; }
+  homePromptAct = {action: 'rename', type: it.type, id: it.id};
+  $('#homePromptTitle').textContent = it.type === 'folder' ? 'Rename Folder' : 'Rename Project';
+  $('#homePromptLabel').textContent = 'New name';
+  $('#homePromptInput').value = curName;
+  $('#homePromptParentWrap').hidden = true;
+  $('#homePromptModal').showModal();
+  $('#homePromptInput').select();
+});
+$('#homeArchive').addEventListener('click', async () => {
+  await ensureHomeOrg();
+  const items = [...homeSelected].map(parseHomeKey).filter(Boolean);
+  if (!homeShowArchive && items.length) { archiveHomeItems(items); return; }
+  homeShowArchive = !homeShowArchive;
+  homeSelected.clear();
+  paintHome();
+});
+$('#homeRestore').addEventListener('click', async () => {
+  await ensureHomeOrg();
+  const items = [...homeSelected].map(parseHomeKey).filter(Boolean);
+  if (!items.length) { toast('Select archived items to restore'); return; }
+  restoreHomeItems(items);
+});
+$('#homeSearch').addEventListener('input', e => { homeSearchTerm = e.target.value.trim(); paintHome(); });
+$('#homeSort').addEventListener('change', e => {
+  if (HOME_SORTS.includes(e.target.value)) { HOME_ORG.sort = e.target.value; saveHomeOrg(); paintHome(); }
+});
+$('#homeViewList').addEventListener('click', () => { HOME_ORG.view = 'list'; saveHomeOrg(); paintHome(); });
+$('#homeViewGrid').addEventListener('click', () => { HOME_ORG.view = 'grid'; saveHomeOrg(); paintHome(); });
+
+$('#homePromptForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const val = $('#homePromptInput').value.trim();
+  const parentVal = $('#homePromptParent').value || 'root';
+  const act = homePromptAct; homePromptAct = null;
+  $('#homePromptModal').close();
+  if (!act || !val) return;
+  if (act.action === 'new-folder') createHomeFolder(val, parentVal);
+  else if (act.action === 'rename') {
+    if (act.type === 'folder') {
+      const f = homeFolderById(act.id);
+      if (f) { f.name = val; f.updated = Date.now(); homeSelected.clear(); saveHomeOrg(); paintHome(); toast(`Renamed folder to "${val}"`); }
+    } else if (act.type === 'project') {
+      const ok = await storeRenameProject(act.id, val);
+      if (ok) { homeSelected.clear(); paintHome(); toast(`Renamed project to "${val}"`); }
+      else toast('Could not rename project');
+    }
+  }
+});
+$('#homePromptCancel').addEventListener('click', () => { homePromptAct = null; $('#homePromptModal').close(); });
+$('#homeMoveConfirm').addEventListener('click', () => {
+  const dest = $('#homeMoveSelect').value || 'root';
+  const items = homeMoveItemsList.slice(); homeMoveItemsList = [];
+  $('#homeMoveModal').close();
+  if (items.length) moveHomeItems(items, dest);
+});
+$('#homeMoveCancel').addEventListener('click', () => { homeMoveItemsList = []; $('#homeMoveModal').close(); });
+
+$('#homeOrg').addEventListener('dragstart', e => {
+  const row = e.target.closest('#projList .pcard[data-pid], #projList .fcard[data-fid], #homeTree .home-tree-node[data-folder-id]');
+  if (!row) return;
+  let key = '';
+  if (row.dataset.pid) key = 'project:' + row.dataset.pid;
+  else if (row.dataset.fid) key = 'folder:' + row.dataset.fid;
+  else if (row.dataset.folderId && row.dataset.folderId !== 'root' && row.dataset.folderId !== '__archive__') key = 'folder:' + row.dataset.folderId;
+  if (!key) { e.preventDefault(); return; }
+  const keys = homeSelected.has(key) ? [...homeSelected] : [key];
+  const items = keys.map(parseHomeKey).filter(Boolean);
+  homeDragItems = items;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('application/json', JSON.stringify(items)); } catch (err) {}
+    try { e.dataTransfer.setData('text/plain', JSON.stringify(items)); } catch (err) {}
+  }
+});
+$('#homeOrg').addEventListener('dragend', () => {
+  homeDragItems = null;
+  document.querySelectorAll('#homeOrg .home-drag-over').forEach(el => el.classList.remove('home-drag-over'));
+});
+$('#homeOrg').addEventListener('dragover', e => {
+  if (e.dataTransfer && e.dataTransfer.types && [...e.dataTransfer.types].includes('Files') && !homeDragItems) return;
+  const dropT = e.target.closest('[data-drop-folder]');
+  if (!dropT) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('#homeOrg .home-drag-over').forEach(el => { if (el !== dropT) el.classList.remove('home-drag-over'); });
+  dropT.classList.add('home-drag-over');
+});
+$('#homeOrg').addEventListener('dragleave', e => {
+  const dropT = e.target.closest('[data-drop-folder]');
+  if (dropT && (!e.relatedTarget || !dropT.contains(e.relatedTarget))) dropT.classList.remove('home-drag-over');
+});
+$('#homeOrg').addEventListener('drop', e => {
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) return;
+  const dropT = e.target.closest('[data-drop-folder]');
+  document.querySelectorAll('#homeOrg .home-drag-over').forEach(el => el.classList.remove('home-drag-over'));
+  if (!dropT) return;
+  e.preventDefault();
+  e.stopPropagation();
+  let items = homeDragItems;
+  homeDragItems = null;
+  if (!items && e.dataTransfer) {
+    const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+    if (raw) { try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) items = parsed; else if (parsed && parsed.type && parsed.id) items = [parsed]; } catch (err) {} }
+  }
+  if (items && items.length) moveHomeItems(items, dropT.dataset.dropFolder || 'root');
+});
+
 /* quick-mode work is kept aside while projects are open, and comes back with Quick figure */
 const QKEYS = ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'targetName', 'taggedName', 'protKda', 'tagKda', 'eps', 'epsMode', 'secMono'];
 let QUICK = null;
 function leaveWorkspace(){
-  ['#cloneArchiveModal', '#projExplorerModal', '#dirPromptModal', '#dirMoveModal'].forEach(sel => { const m = $(sel); if (m && m.open) m.close(); });
+  ['#cloneArchiveModal', '#projExplorerModal', '#dirPromptModal', '#dirMoveModal', '#homePromptModal', '#homeMoveModal'].forEach(sel => { const m = $(sel); if (m && m.open) m.close(); });
   if (MODE === 'quick' && (runs.length || gels.length || struct || assays.length || traces.some(t => !t.ex))) { QUICK = {runs, traces, gels, struct, ndSamples, assays, prep, cur, customTagSeq, o: {}}; QKEYS.forEach(k => { QUICK.o[k] = opt[k]; }); }
   const p = PROJ ? flushSave() : saveChain; PROJ = null; MODE = 'home'; return p;
 }
-function showHome(){ leaveWorkspace().then(() => { if (MODE === 'home') renderHome(); }); setSaveState(''); document.body.classList.remove('proj'); $('#home').hidden = false; document.querySelector('.app').hidden = true; applyProjUI(); renderHome(); }
-function enterApp(){ $('#home').hidden = true; document.querySelector('.app').hidden = false; }
+function showHome(){ leaveWorkspace().then(() => { if (MODE === 'home') renderHome(); }); setSaveState(''); document.body.classList.remove('proj'); $('#home').hidden = false; document.querySelector('.app').hidden = true; window.scrollTo(0, 0); applyProjUI(); renderHome(); }
+function enterApp(){ $('#home').hidden = true; document.querySelector('.app').hidden = false; window.scrollTo(0, 0); }
 function resetWorkspace(){ rawFiles = []; runs = []; traces = []; gels = []; struct = null; ndSamples = []; assays = []; srcDiag = {}; prep = JSON.parse(JSON.stringify(PREP_DEF)); prep.on = true;
   QKEYS.forEach(k => { opt[k] = DEF[k]; }); customTagSeq = ''; cur = 'overlay'; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null; }
 const newPid = () => 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function newProject(name, protein, include){
+  const targetHomeFolder = MODE === 'home' && !homeShowArchive && homeCurFolder && homeCurFolder !== 'root' ? homeCurFolder : 'root';
   await leaveWorkspace(); resetWorkspace(); opt.targetName = String(protein || '').trim(); PROJ = mkProj(newPid(), name, Date.now());
+  if (targetHomeFolder !== 'root') await assignProjectHomeFolder(PROJ.id, targetHomeFolder);
   initProjectDirectory(PROJ);
   prep.includeCloning = include === true || include === 'cloning'; CL();
   MODE = 'proj'; enterApp(); applyProjUI(); renderList(); selectStep(CL().type === 'cloning' ? 'clone:setup' : 'construct'); await flushSave(true);
