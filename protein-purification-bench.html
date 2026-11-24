@@ -3087,7 +3087,7 @@ function buildAssaySVG(assay, ov){
   const titleH = !ov.nest && o.runTitle && assay.name ? fs*1.45 : 0;
   const numX = mode === 'kinetics' || (mode === 'fractions' && linkedRun && pts.some(q => q.x != null)) || (mode === 'profile' && pts.length > 1 && pts.every(q => q.x != null && isFinite(q.x)));
   const prot = assay.protocol || {};
-  const cUnit = (assay.entries && assay.entries[0] && assay.entries[0].concUnit) || 'mM';
+  const cUnit = (assay.entries && assay.entries[0] && assay.entries[0].concUnit) || (assay.kinetics && assay.kinetics.unit) || 'mM';
   const xlab = mode === 'kinetics' ? (prot.substrate && String(prot.substrate).length <= 18 ? `${prot.substrate} (${cUnit})` : `[S] (${cUnit})`)
     : mode === 'fractions' ? (linkedRun ? runXLabel(linkedRun) : 'Fraction')
     : mode === 'profile' ? ((assay.entries && assay.entries[0] && ({pH: 'pH', temp: 'Temperature (°C)', substrate: 'Substrate', additive: 'Condition'})[assay.entries[0].group]) || 'Condition')
@@ -3151,8 +3151,9 @@ function buildAssaySVG(assay, ov){
   }
   pts.forEach((q, j) => { const X = numX ? px(q.x) : px(j), Y = py(q.y); drawAssayPointErr(s, X, Y, q, py, ser.showErr, ser.color, lw, fs); });
   if (fit) {
-    const kf = fs*0.76, lines = [`Km = ${sig2(fit.Km)} ${cUnit}`, fit.kcat != null ? `kcat = ${sig2(fit.kcat)} s⁻¹` : `Vmax = ${sig2(fit.Vmax*ser.fitScale)}`, fit.r2 != null ? `R² = ${fmt(fit.r2, 3)}` : ''].filter(Boolean);
-    const boxY0 = B - fs*0.4 - (lines.length - 1)*kf*1.2;
+    const kLbl = fit.model === 'hill' ? 'K₀.₅' : 'Km';
+    const kf = fs*0.76, lines = [`${kLbl} = ${sig2(fit.Km)} ${cUnit}`, fit.kcat != null ? `kcat = ${sig2(fit.kcat)} s⁻¹` : `Vmax = ${sig2(fit.Vmax*ser.fitScale)}`, fit.kcatKm != null ? `kcat/Km = ${fmtKcatKm(fit.kcatKm)} M⁻¹ s⁻¹` : '', fit.r2 != null ? `R² = ${fmt(fit.r2, 3)}` : ''].filter(Boolean);
+    const boxY0 = Math.max(T + kf, B - fs*0.4 - (lines.length - 1)*kf*1.2);
     lines.forEach((ln, li) => s.push(`<text x="${r2(R - fs*0.35)}" y="${r2(boxY0 + li*kf*1.2)}" text-anchor="end" font-size="${r2(kf)}" fill="#333333">${esc(ln)}</text>`));
   }
   s.push(`</g>`);
@@ -6225,7 +6226,7 @@ function assayMethodsParts(lc, v){
     const entries = Array.isArray(a.entries) ? a.entries : [];
     const maxRep = Math.max(0, ...(entries.length ? entries.map(e => Array.isArray(e && e.rawVals) ? e.rawVals.length : 0) : [Array.isArray(a.replicates) ? a.replicates.length : 0]));
     const usesDa = entries.length ? entries.some(e => (e && e.rawUnit || 'dA/min') === 'dA/min') : (Array.isArray(a.replicates) && a.replicates.length && (!a.rawUnit || a.rawUnit === 'dA/min'));
-    const cUnit = (entries[0] && entries[0].concUnit) || 'mM';
+    const cUnit = (entries[0] && entries[0].concUnit) || (a.kinetics && a.kinetics.unit) || 'mM';
     let subPart = '';
     if (mode === 'kinetics') {
       const concs = entries.map(e => assayNum(e && (e.conc ?? e.x))).filter(x => x != null && x >= 0).sort((x, y) => x - y);
@@ -6250,7 +6251,8 @@ function assayMethodsParts(lc, v){
     if (mode === 'kinetics' && fit) {
       const isBeerOrNkat = entries.some(e => { const ru = String((e && e.rawUnit) || 'dA/min').trim(); return (ru === 'dA/min' && eps > 0 && rxnV > 0 && enzV > 0) || /^nkat\/mL$/i.test(ru); });
       const vUnitTxt = isBeerOrNkat ? 'U/mL' : String((entries[0] && entries[0].rawUnit) || 'U/mL');
-      R.push(`Steady-state kinetics${nm ? ` (${nm})` : ''}: Km = ${sig2(fit.Km)}${fit.seKm != null ? ` ± ${sig2(fit.seKm)}` : ''} ${cUnit}, Vmax = ${sig2(fit.Vmax)}${fit.seVmax != null ? ` ± ${sig2(fit.seVmax)}` : ''} ${vUnitTxt}${fit.hillN != null ? `, nH = ${fmt(fit.hillN, 2)}${fit.seHillN != null ? ` ± ${fmt(fit.seHillN, 2)}` : ''}` : ''}${fit.Ki != null ? `, Ki = ${sig2(fit.Ki)}${fit.seKi != null ? ` ± ${sig2(fit.seKi)}` : ''} ${cUnit}` : ''}${fit.kcat != null ? `, kcat = ${sig2(fit.kcat)}${fit.seKcat != null ? ` ± ${sig2(fit.seKcat)}` : ''} s⁻¹` : ''} (R² = ${fmt(fit.r2, 4)}${fit.aicc != null ? `, AICc = ${fmt(fit.aicc, 2)}` : ''}).`);
+      const kLbl = fit.model === 'hill' ? 'K₀.₅' : 'Km';
+      R.push(`Steady-state kinetics${nm ? ` (${nm})` : ''}: ${kLbl} = ${sig2(fit.Km)}${fit.seKm != null ? ` ± ${sig2(fit.seKm)}` : ''} ${cUnit}, Vmax = ${sig2(fit.Vmax)}${fit.seVmax != null ? ` ± ${sig2(fit.seVmax)}` : ''} ${vUnitTxt}${fit.hillN != null ? `, nH = ${fmt(fit.hillN, 2)}${fit.seHillN != null ? ` ± ${fmt(fit.seHillN, 2)}` : ''}` : ''}${fit.Ki != null ? `, Ki = ${sig2(fit.Ki)}${fit.seKi != null ? ` ± ${sig2(fit.seKi)}` : ''} ${cUnit}` : ''}${fit.kcat != null ? `, kcat = ${sig2(fit.kcat)}${fit.seKcat != null ? ` ± ${sig2(fit.seKcat)}` : ''} s⁻¹` : ''} (R² = ${fit.r2 != null ? fmt(fit.r2, 4) : 'n.d.'}${fit.aicc != null ? `, AICc = ${fmt(fit.aicc, 2)}` : ''}${fit.kcatKm != null ? `, kcat/Km = ${fmtKcatKm(fit.kcatKm)}${fit.seKcatKm != null ? ` ± ${fmtKcatKm(fit.seKcatKm)}` : ''} M⁻¹ s⁻¹` : ''}).`);
     } else if (mode === 'fractions') {
       const scored = entries.filter(e => e && !e.excluded).map(e => ({e, r: assayRate(e, a)})).filter(x => x.r && (x.r.uPerMl != null || x.r.rate != null));
       if (scored.length) {
@@ -8551,6 +8553,7 @@ function assayKcatScale(vUnit, effEnz_uM, activeSites, mwKda){
   if (u === 'nM/s') return 1 / (1000 * effEnz_uM);
   return null;
 }
+function fmtKcatKm(v){ return v == null || !(v > 0) ? '0' : v >= 1e4 || v < 0.01 ? v.toExponential(2) : sig2(v); }
 function fitKineticsLM(assayOrPoints, fitOpts){
   const isArr = Array.isArray(assayOrPoints);
   const a = isArr ? {} : (assayOrPoints && typeof assayOrPoints === 'object' ? assayOrPoints : {});
@@ -8583,7 +8586,7 @@ function fitKineticsLM(assayOrPoints, fitOpts){
       if (Array.isArray(pt.replicates) && pt.replicates.length) {
         const vals = pt.replicates.map(x => assayExtractNum(x, a)).filter(x => x !== null).map(v => (v - blankMean) * factor);
         const st = assaySampleStats(vals);
-        if (st.n) obs.push({s, y: st.mean, sd: st.sd});
+        vals.forEach(y => obs.push({s, y, sd: st.sd}));
       } else {
         const vr = numOr(pt.v != null ? pt.v : (pt.rate != null ? pt.rate : pt.slope), null);
         if (vr === null) return;
@@ -8598,7 +8601,7 @@ function fitKineticsLM(assayOrPoints, fitOpts){
         }
       }
     });
-    groups.forEach(g => { const st = assaySampleStats(g.ys); if (st.n) obs.push({s: g.s, y: st.mean, sd: st.sd}); });
+    groups.forEach(g => { const st = assaySampleStats(g.ys); g.ys.forEach(y => obs.push({s: g.s, y, sd: st.sd})); });
   } else {
     rawPts.forEach(pt => {
       if (!pt || typeof pt !== 'object') return;
@@ -8757,9 +8760,10 @@ function fitKineticsLM(assayOrPoints, fitOpts){
   let sstW = 0;
   obs.forEach(o => { sstW += o.w * (o.y - yBarW) * (o.y - yBarW); });
   const r2 = sstW > 0 ? 1 - ssrW / sstW : null;
-  const rmse = Math.sqrt(ssrUnw / (df > 0 ? df : obs.length));
-  const K = pCount + 1;
-  const aicc = (obs.length > K + 1 && ssrW > 0) ? obs.length * Math.log(ssrW / obs.length) + 2 * K + (2 * K * (K + 1)) / (obs.length - K - 1) : null;
+  const rmse = df > 0 ? Math.sqrt(ssrUnw / df) : null;
+  const sumLogW = obs.reduce((s, o) => s + Math.log(o.w), 0), K = pCount + 1;
+  const aic = ssrW > 0 ? obs.length * Math.log(ssrW / obs.length) - sumLogW + 2 * K : null;
+  const aicc = (aic != null && obs.length > K + 1) ? aic + (2 * K * (K + 1)) / (obs.length - K - 1) : null;
   let cov = null;
   if (df > 0) {
     const inv = lmInvert(JtWJ);
@@ -8806,7 +8810,7 @@ function fitKineticsLM(assayOrPoints, fitOpts){
     vUnit, sUnit,
     params, se,
     kcat, seKcat, kcatKm, seKcatKm, effEnz_uM,
-    r2, ssr: ssrW, ssrUnweighted: ssrUnw, rmse, aicc,
+    r2, ssr: ssrW, ssrUnweighted: ssrUnw, rmse, aic, aicc,
     converged: best.conv,
     points: ptsOut,
     warnings
@@ -9055,7 +9059,7 @@ function hanesWoolfInit(pts){
 }
 /* Nonlinear kinetics regression via Levenberg-Marquardt (MM, Hill, Substrate Inhibition) with Hanes-Woolf init, SE, R2, RMSE, AICc */
 function fitAssayKinetics(assayOrPoints, fitOpts){
-  let pts = [], cfg = Object.assign({}, ASSAY_FIT_DEF, fitOpts || {}), vUnit = String((fitOpts && fitOpts.vUnit) || '').trim();
+  let pts = [], cfg = Object.assign({}, ASSAY_FIT_DEF, fitOpts || {}), vUnit = String((fitOpts && fitOpts.vUnit) || '').trim(), sUnit = String((fitOpts && (fitOpts.sUnit || fitOpts.concUnit)) || '').trim();
   if (Array.isArray(assayOrPoints)) {
     pts = assayOrPoints.flatMap(p => {
       if (Array.isArray(p)) { const x = assayNum(p[0]), y = assayNum(p[1]); return x != null && y != null ? [{x, y, sd: assayNum(p[2])}] : []; }
@@ -9072,6 +9076,7 @@ function fitAssayKinetics(assayOrPoints, fitOpts){
     });
   } else if (assayOrPoints && typeof assayOrPoints === 'object') {
     const a = assayOrPoints; cfg = Object.assign({}, ASSAY_FIT_DEF, a.fit || {}, fitOpts || {});
+    if (!sUnit) sUnit = String((a.entries && a.entries[0] && a.entries[0].concUnit) || (a.kinetics && a.kinetics.unit) || 'mM').trim();
     const seriesFilter = cfg.series ? String(cfg.series) : '';
     const B = assayBlankStats(a), prot = a.protocol || {};
     (a.entries || []).forEach(e => {
@@ -9098,17 +9103,21 @@ function fitAssayKinetics(assayOrPoints, fitOpts){
   const cleanPts = pts.filter(p => p && isFinite(p.x) && isFinite(p.y) && p.x >= 0);
   const modelName = cfg.model === 'hill' ? 'hill' : cfg.model === 'subInhib' ? 'subInhib' : 'mm';
   const pDim = modelName === 'mm' ? 2 : 3, n = cleanPts.length;
-  if (n < pDim) return null;
-  let sdByX = null;
+  const distinctS = new Set(cleanPts.map(q => q.x)).size;
+  if (n < pDim || distinctS < pDim) return null;
+  const warn = n === pDim ? '0 degrees of freedom (exact interpolation; add substrate concentrations or replicates)' : '';
+  let sdByX = null, medSd = null;
   if (cfg.weight === 'sd') {
     const grp = new Map();
     cleanPts.forEach(p => { const k = String(p.x); if (!grp.has(k)) grp.set(k, []); grp.get(k).push(p.y); });
     sdByX = new Map();
     grp.forEach((ys, k) => { if (ys.length > 1) { const m = ys.reduce((a, b) => a + b, 0)/ys.length; sdByX.set(k, Math.sqrt(ys.reduce((t, v) => t + (v - m)**2, 0)/(ys.length - 1))); } });
+    const posSds = cleanPts.map(p => p.sd > 0 ? p.sd : (sdByX.get(String(p.x)) > 0 ? sdByX.get(String(p.x)) : null)).filter(x => x != null && x > 0).sort((x, y) => x - y);
+    if (posSds.length) medSd = posSds[posSds.length >> 1];
   }
   const ws = cleanPts.map(p => {
     if (cfg.weight !== 'sd') return 1;
-    const s = p.sd > 0 ? p.sd : (sdByX && sdByX.get(String(p.x)) > 0 ? sdByX.get(String(p.x)) : null);
+    const s = p.sd > 0 ? p.sd : (sdByX && sdByX.get(String(p.x)) > 0 ? sdByX.get(String(p.x)) : medSd);
     return s > 0 ? 1/(s*s) : 1;
   });
   const evalF = (q, x) => {
@@ -9163,26 +9172,39 @@ function fitAssayKinetics(assayOrPoints, fitOpts){
     if (cur < bestE) { bestE = cur; bestP = q; }
   }
   const H = Array.from({length: pDim}, () => new Float64Array(pDim));
-  let rss = 0;
+  let rss = 0, ssrW = 0, sumW = 0, sumWy = 0;
   for (let i = 0; i < n; i++) {
-    const f = evalF(bestP, cleanPts[i].x), r = cleanPts[i].y - f, J = evalJ(bestP, cleanPts[i].x), w = ws[i];
-    rss += r*r;
+    const y = cleanPts[i].y, f = evalF(bestP, cleanPts[i].x), r = y - f, J = evalJ(bestP, cleanPts[i].x), w = ws[i];
+    rss += r*r; ssrW += w*r*r; sumW += w; sumWy += w*y;
     for (let a = 0; a < pDim; a++) for (let b = 0; b < pDim; b++) H[a][b] += w*J[a]*J[b];
   }
-  const inv = n > pDim ? invertSmallMat(H) : null, s2 = n > pDim ? bestE/(n - pDim) : null;
+  const inv = n > pDim ? invertSmallMat(H) : null, s2 = n > pDim ? ssrW/(n - pDim) : null;
   const se = inv && s2 != null ? bestP.map((_, i) => inv[i][i] >= 0 ? Math.sqrt(s2*inv[i][i]) : null) : bestP.map(() => null);
-  const meanY = cleanPts.reduce((s, p) => s + p.y, 0)/n, sst = cleanPts.reduce((s, p) => s + (p.y - meanY)**2, 0);
-  const r2 = sst > 0 ? 1 - rss/sst : null, rmse = Math.sqrt(rss/n);
-  /* Burnham & Anderson (2002) small-sample AICc with k = p + 1 (parameters plus residual variance σ²) */
-  const k = pDim + 1, aic = rss > 0 ? n*Math.log(rss/n) + 2*k : null, aicc = aic != null && n > k + 1 ? aic + 2*k*(k + 1)/(n - k - 1) : null;
+  const yBarW = sumW > 0 ? sumWy/sumW : 0;
+  let sstW = 0;
+  for (let i = 0; i < n; i++) sstW += ws[i]*(cleanPts[i].y - yBarW)**2;
+  const r2 = sstW > 0 ? 1 - ssrW/sstW : null, rmse = n > pDim ? Math.sqrt(rss/(n - pDim)) : null;
+  /* Burnham & Anderson (2002) weighted Gaussian log-likelihood AIC/AICc with k = p + 1 (parameters plus residual variance σ²) */
+  const sumLogW = ws.reduce((s, w) => s + Math.log(w), 0), k = pDim + 1;
+  const aic = ssrW > 0 ? n*Math.log(ssrW/n) - sumLogW + 2*k : null;
+  const aicc = aic != null && n > k + 1 ? aic + 2*k*(k + 1)/(n - k - 1) : null;
   const enzU = assayNum(cfg.enzConc_uM), sites = assayNum(cfg.activeSitesPerMol) > 0 ? +cfg.activeSitesPerMol : 1, et = enzU > 0 ? enzU*sites : null;
-  const uNorm = vUnit.toLowerCase();
-  const kcatScale = et > 0 ? (uNorm === 'um/s' || uNorm === 'µm/s' || uNorm === 'nkat/ml' ? 1/et : uNorm === 'u/ml' ? 1000/(60*et) : 1/(60*et)) : null;
+  const mwKda = assayNum(cfg.mwKda) || (!Array.isArray(assayOrPoints) && assayOrPoints ? assayResolveProtein(assayOrPoints).kda : null);
+  const kcatScale = assayKcatScale(vUnit || 'dA/min', et, sites, mwKda);
   const kcat = kcatScale != null ? bestP[0]*kcatScale : null;
   const seKcat = kcatScale != null && se[0] != null ? se[0]*kcatScale : null;
+  let kcatKm = null, seKcatKm = null;
+  const sFactorM = ASSAY_CONC_M[assayNormConcUnit(sUnit || 'mM')] || null;
+  if (kcat != null && modelName !== 'hill' && sFactorM && bestP[1] > 0) {
+    kcatKm = kcat/(bestP[1]*sFactorM);
+    if (inv && s2 != null && se[0] != null && se[1] != null && bestP[0] > 0) {
+      const relVar = (se[0]/bestP[0])**2 + (se[1]/bestP[1])**2 - 2*(s2*inv[0][1])/(bestP[0]*bestP[1]);
+      seKcatKm = kcatKm*Math.sqrt(Math.max(0, relVar));
+    }
+  }
   return {model: modelName, Vmax: bestP[0], Km: bestP[1], hillN: modelName === 'hill' ? bestP[2] : null, Ki: modelName === 'subInhib' ? bestP[2] : null,
     seVmax: se[0], seKm: se[1], seHillN: modelName === 'hill' ? se[2] : null, seKi: modelName === 'subInhib' ? se[2] : null,
-    kcat, seKcat, n, p: pDim, rss, wrss: bestE, r2, rmse, aic, aicc, predict: x => evalF(bestP, x)};
+    kcat, seKcat, kcatKm, seKcatKm, n, p: pDim, rss, wrss: ssrW, r2, rmse, aic, aicc, warn, predict: x => evalF(bestP, x)};
 }
 function assayCalc(a){
   if (!a || typeof a !== 'object') return null;
@@ -9311,12 +9333,15 @@ const assayProtoOpen = new Set(), assayBlankOpen = new Set();
 let activeAssayId = '';
 function fitSummaryHtml(f){
   if (!f) return `<div class="assay-fit muted">Insufficient points for fit</div>`;
-  return `<div class="assay-fit" data-model="${esc(f.model)}"><span class="af-vmax">Vmax ${fmt(f.Vmax, 4)}${f.seVmax != null ? ` ± ${fmt(f.seVmax, 4)}` : ''}</span> <span class="af-km">Km ${fmt(f.Km, 6)}${f.seKm != null ? ` ± ${fmt(f.seKm, 6)}` : ''}</span>` +
+  const kLbl = f.model === 'hill' ? 'K₀.₅' : 'Km';
+  return `<div class="assay-fit" data-model="${esc(f.model)}"><span class="af-vmax">Vmax ${fmt(f.Vmax, 4)}${f.seVmax != null ? ` ± ${fmt(f.seVmax, 4)}` : ''}</span> <span class="af-km">${kLbl} ${fmt(f.Km, 6)}${f.seKm != null ? ` ± ${fmt(f.seKm, 6)}` : ''}</span>` +
     (f.hillN != null ? ` <span class="af-hill">n ${fmt(f.hillN, 4)}${f.seHillN != null ? ` ± ${fmt(f.seHillN, 4)}` : ''}</span>` : '') +
     (f.Ki != null ? ` <span class="af-ki">Ki ${fmt(f.Ki, 4)}${f.seKi != null ? ` ± ${fmt(f.seKi, 4)}` : ''}</span>` : '') +
     (f.kcat != null ? ` <span class="af-kcat">kcat ${fmt(f.kcat, 2)} s⁻¹</span>` : '') +
-    ` <span class="af-r2">R² ${f.r2 != null ? fmt(f.r2, 5) : 'n.d.'}</span> <span class="af-rmse">RMSE ${fmt(f.rmse, 3)}</span>` +
-    (f.aicc != null ? ` <span class="af-aicc">AICc ${fmt(f.aicc, 2)}</span>` : '') + `</div>`;
+    (f.kcatKm != null ? ` <span class="af-kcatkm">kcat/Km ${fmtKcatKm(f.kcatKm)}${f.seKcatKm != null ? ` ± ${fmtKcatKm(f.seKcatKm)}` : ''} M⁻¹ s⁻¹</span>` : '') +
+    ` <span class="af-r2">R² ${f.r2 != null ? fmt(f.r2, 5) : 'n.d.'}</span> <span class="af-rmse">RMSE ${f.rmse != null ? fmt(f.rmse, 3) : 'n.d.'}</span>` +
+    (f.aicc != null ? ` <span class="af-aicc">AICc ${fmt(f.aicc, 2)}</span>` : '') +
+    (f.warn ? ` <span class="af-warn warnc">${esc(f.warn)}</span>` : '') + `</div>`;
 }
 function updateAssayLive(card, a){
   syncAssayDerived();

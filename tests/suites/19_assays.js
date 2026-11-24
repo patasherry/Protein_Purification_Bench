@@ -901,5 +901,183 @@ async function txt(root, sel) {
     }
   });
 
+  await T.t('kinetics-rigor-weighted-aicc-units-kcatkm-and-hill-k05', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    const txt = async (root, sel) => ((await root.locator(sel).first().textContent().catch(() => '')) || '').trim();
+    try {
+      p.setDefaultTimeout(15000);
+      // 1. Scale-invariant weighted AICc & engine parity (fitKineticsLM vs fitAssayKinetics)
+      const jit = [0.12, -0.09, 0.10, -0.11, 0.08, 40.0];
+      const sds = [0.2, 0.2, 0.2, 0.2, 0.2, 40.0];
+      const sArr = [0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+      const pts1 = sArr.map((s, i) => ({s, v: 100 * s / (1.0 + s) + jit[i], sd: sds[i]}));
+      const pts10 = sArr.map((s, i) => ({s, v: 100 * s / (1.0 + s) + jit[i], sd: sds[i] * 10}));
+      const entries1 = sArr.map((s, i) => ({conc: s, concUnit: 'mM', rawVals: [100 * s / (1.0 + s) + jit[i]], rawSd: sds[i], rawUnit: 'uM/min'}));
+
+      const calc = await importJsonAndCalc(p, h, 'assay_weighted_aicc.json', baseProject([
+        {
+          id: 'wsd1', name: 'Weighted SD 1x', kind: 'kinetics', mode: 'kinetics', rawUnit: 'uM/min',
+          kinetics: {substrate: 'S', unit: 'mM', vUnit: 'uM/min', points: pts1},
+          entries: entries1,
+          fit: {model: 'mm', weight: 'sd', enzConc_uM: 0.1}
+        },
+        {
+          id: 'wsd10', name: 'Weighted SD 10x', kind: 'kinetics', mode: 'kinetics', rawUnit: 'uM/min',
+          kinetics: {substrate: 'S', unit: 'mM', vUnit: 'uM/min', points: pts10},
+          fit: {model: 'mm', weight: 'sd', enzConc_uM: 0.1}
+        }
+      ]));
+      const f1 = calc && calc.assays && calc.assays[0] && calc.assays[0].fit;
+      const f10 = calc && calc.assays && calc.assays[1] && calc.assays[1].fit;
+      T.check('weight.aicc-scale-invariant-under-sd-rescaling',
+        !!(f1 && f10 && f1.aicc != null && f10.aicc != null && T.near(f1.aicc, f10.aicc, 1e-6)),
+        `aicc(1x)=${f1 && f1.aicc}, aicc(10x)=${f10 && f10.aicc}`);
+
+      const uiAiccTxt = await p.locator('#assayPanel [data-assay-id="wsd1"] .af-aicc').textContent().catch(() => '');
+      const mAicc = (uiAiccTxt || '').match(/-?\d+(?:\.\d+)?/);
+      const uiAicc = mAicc ? +mAicc[0] : null;
+      T.check('weight.engine1-and-engine2-aicc-agree',
+        !!(f1 && f1.aicc != null && uiAicc != null && T.near(uiAicc, f1.aicc, 0.02)),
+        `engine1=${f1 && f1.aicc}, ui="${uiAiccTxt}"`);
+
+      // 2. UI guardrails: 1-[S] triplicate refused, 0-df interpolation warned, uncalibrated dA/min withholds kcat, nM/s scales accurately, weighted R2 reflects weights
+      await p.click('#homeBtn');
+      await h.wait(250);
+      await p.setInputFiles('#projFile', {
+        name: 'kin_guardrails.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({
+          app: 'Protein Purification Bench', version: 1, schemaVersion: 1, cur: 'workflow',
+          runs: [makeRun('r1', 'SEC_Run', 'SEC', 12, 'F1-F3')],
+          traces: [], gels: [],
+          prep: {on: true, name: 'Kinetics Guardrails'},
+          assays: [
+            {
+              id: 'a_1s', name: 'One S Triplicate', mode: 'kinetics',
+              fit: {model: 'mm', weight: 'none', enzConc_uM: 0.1},
+              entries: [{conc: 1.0, concUnit: 'mM', rawVals: [10.0, 10.5, 9.5], rawUnit: 'U/mL'}]
+            },
+            {
+              id: 'a_2pt', name: 'Two Point Exact', mode: 'kinetics',
+              fit: {model: 'mm', weight: 'none'},
+              entries: [
+                {conc: 0.5, concUnit: 'mM', rawVals: [4.0], rawUnit: 'U/mL'},
+                {conc: 2.0, concUnit: 'mM', rawVals: [10.0], rawUnit: 'U/mL'}
+              ]
+            },
+            {
+              id: 'a_uncal', name: 'Uncalibrated dA/min', mode: 'kinetics',
+              fit: {model: 'mm', weight: 'none', enzConc_uM: 0.1},
+              entries: [0.1, 0.25, 0.5, 1.0, 2.5].map(s => ({conc: s, concUnit: 'mM', rawVals: [+(0.24 * s / (0.5 + s)).toFixed(5)], rawUnit: 'dA/min'}))
+            },
+            {
+              id: 'a_nms', name: 'Calibrated nM/s', mode: 'kinetics',
+              fit: {model: 'mm', weight: 'none', enzConc_uM: 0.05},
+              entries: [0.1, 0.25, 0.5, 1.0, 2.5].map(s => ({conc: s, concUnit: 'mM', rawVals: [+(500 * s / (0.5 + s)).toFixed(4)], rawUnit: 'nM/s'}))
+            },
+            {
+              id: 'a_wsd', name: 'Weighted Outlier', mode: 'kinetics',
+              fit: {model: 'mm', weight: 'sd'},
+              entries: sArr.map((s, i) => ({conc: s, concUnit: 'mM', rawVals: [100 * s / (1.0 + s) + jit[i]], rawSd: sds[i], rawUnit: 'uM/min'}))
+            }
+          ]
+        }))
+      });
+      await h.wait(600);
+
+      const c1 = p.locator('#assayPanel [data-assay-id="a_1s"]');
+      const fit1Txt = await txt(c1, '.assay-fit');
+      T.check('kin/refuses-single-distinct-s', fit1Txt.includes('Insufficient points') && !(await c1.locator('.af-vmax').count()), `fit="${fit1Txt}"`);
+
+      const c2 = p.locator('#assayPanel [data-assay-id="a_2pt"]');
+      const vmax2 = await txt(c2, '.af-vmax'), warn2 = await txt(c2, '.af-warn'), rmse2 = await txt(c2, '.af-rmse');
+      T.check('kin/zero-df-warns-and-withholds-se', !vmax2.includes('±') && warn2.includes('0 degrees of freedom') && rmse2.includes('n.d.'), `vmax="${vmax2}", warn="${warn2}", rmse="${rmse2}"`);
+
+      const c3 = p.locator('#assayPanel [data-assay-id="a_uncal"]');
+      T.check('kin/uncalibrated-damin-withholds-kcat', (await c3.locator('.af-vmax').count()) === 1 && (await c3.locator('.af-kcat').count()) === 0, `kcat="${await txt(c3, '.af-kcat')}"`);
+
+      const c4 = p.locator('#assayPanel [data-assay-id="a_nms"]');
+      const kcat4 = await txt(c4, '.af-kcat'), kcatKm4 = await txt(c4, '.af-kcatkm');
+      T.check('kin/nms-scales-kcat-and-kcatkm', kcat4.includes('10.00 s⁻¹') && kcatKm4.includes('2.00e+4'), `kcat="${kcat4}", kcatKm="${kcatKm4}"`);
+
+      const c5 = p.locator('#assayPanel [data-assay-id="a_wsd"]');
+      const r2Txt = await txt(c5, '.af-r2');
+      const r2Match = r2Txt.match(/-?\d+(?:\.\d+)?/);
+      const r2Val = r2Match ? +r2Match[0] : 0;
+      T.check('kin/weighted-r2-reflects-weights', r2Val > 0.999, `r2Txt="${r2Txt}"`);
+
+      // 3. Methods/Results text & exported SVG geometry for kcat/Km, Hill K0.5, and legacy kinetics.unit fallback
+      await p.click('#homeBtn');
+      await h.wait(250);
+      const mmEntries = [0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0].map((s, i) => ({
+        id: 'm' + i, conc: s, rawVals: [+((12 * s) / (0.4 + s)).toFixed(5)], rawUnit: 'U/mL'
+      }));
+      const hillEntries = [0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0].map((s, i) => ({
+        id: 'h' + i, conc: s, concUnit: 'mM', rawVals: [+(80 * Math.pow(s, 2.5) / (Math.pow(2.0, 2.5) + Math.pow(s, 2.5))).toFixed(5)], rawUnit: 'uM/s'
+      }));
+      const daEntries = [0.1, 0.25, 0.5, 1.0, 2.5].map((s, i) => ({
+        id: 'd' + i, conc: s, concUnit: 'mM', rawVals: [+(0.30 * s / (0.5 + s)).toFixed(5)], rawUnit: 'dA/min'
+      }));
+      await p.setInputFiles('#projFile', {
+        name: 'kinetics_rigor_methods.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({
+          app: 'Protein Purification Bench', version: 1, schemaVersion: 1, name: 'Kinetics Rigor Methods',
+          opt: {protKda: 40}, prep: {on: true, name: 'Enzyme Prep'},
+          runs: [makeRun('r1', 'SEC_Run', 'SEC', 12, 'F1-F3')],
+          traces: [], gels: [], ndSamples: [],
+          assays: [
+            {
+              id: 'ak_mm', name: 'Kinase MM', mode: 'kinetics',
+              kinetics: {unit: 'uM'},
+              protocol: {substrate: 'ATP', buffer: '25 mM HEPES', pH: 7.5, tempC: 30},
+              fit: {model: 'mm', weight: 'none', enzConc_uM: 1.0},
+              display: {visible: true, placement: 'panel'},
+              entries: mmEntries
+            },
+            {
+              id: 'ak_hill', name: 'Allosteric Hill', mode: 'kinetics',
+              protocol: {substrate: 'ATP', buffer: '25 mM HEPES', pH: 7.5, tempC: 30},
+              fit: {model: 'hill', weight: 'none', enzConc_uM: 0.5},
+              display: {visible: true, placement: 'panel'},
+              entries: hillEntries
+            },
+            {
+              id: 'ak_1s', name: 'Single Conc', mode: 'kinetics',
+              protocol: {substrate: 'ATP', buffer: '25 mM HEPES', pH: 7.5, tempC: 30},
+              fit: {model: 'mm', weight: 'none', enzConc_uM: 1.0},
+              display: {visible: false, placement: 'panel'},
+              entries: [{id: 's0', conc: 1.0, concUnit: 'mM', rawVals: [5.0, 5.1, 4.9], rawUnit: 'U/mL'}]
+            },
+            {
+              id: 'ak_da', name: 'Uncalibrated Slope', mode: 'kinetics',
+              protocol: {substrate: 'NADH', buffer: '50 mM Tris', pH: 8.0, tempC: 25, wavelengthNm: 340},
+              fit: {model: 'mm', weight: 'none', enzConc_uM: 0.2},
+              display: {visible: false, placement: 'panel'},
+              entries: daEntries
+            }
+          ]
+        }))
+      });
+      await h.wait(600);
+      await h.step('figure');
+      const mTxt = await h.methods();
+      T.check('kinetics-mm-kcatkm-after-r2', /Steady-state kinetics \(Kinase MM\): Km = 0\.40(?: ± [0-9.e-]+)? uM[\s\S]*?kcat = 200(?: ± [0-9.e+-]+)? s⁻¹ \(R² = 1\.0000[^)]*kcat\/Km = 5\.00e\+8/.test(mTxt), mTxt);
+      T.check('kinetics-hill-uses-k05-not-km', /Steady-state kinetics \(Allosteric Hill\): K₀\.₅ = 2\.00/.test(mTxt) && !/Steady-state kinetics \(Allosteric Hill\):[^\n]*kcat\/Km/.test(mTxt), mTxt);
+      T.check('kinetics-single-conc-withheld', !mTxt.includes('Steady-state kinetics (Single Conc):'), mTxt);
+      T.check('kinetics-uncalibrated-damin-withholds-kcat', /Steady-state kinetics \(Uncalibrated Slope\): Km = /.test(mTxt) && !/Steady-state kinetics \(Uncalibrated Slope\):[^\n]*kcat =/.test(mTxt), mTxt);
+
+      const svg = await h.exportSvg();
+      const boxes = await h.svgBoxes(svg);
+      const texts = boxes.texts.map(t => t.t.trim());
+      T.check('kinetics-svg-shows-kcatkm-and-hill-k05',
+        texts.some(t => t.startsWith('Km = 0.40 uM')) && texts.some(t => t.includes('kcat/Km = 5.00e+8')) && texts.some(t => t.startsWith('K₀.₅ = 2.00 mM')) && boxes.clipped.length === 0,
+        JSON.stringify({texts, clipped: boxes.clipped}));
+      T.check('kinetics-rigor-no-page-errors', errs.length === 0, errs.join('; '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
