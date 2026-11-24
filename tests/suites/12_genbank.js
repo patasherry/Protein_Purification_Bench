@@ -499,6 +499,177 @@ const files = {
     }
   });
 
+  /* 16. Broadened TEV P1' (ENLYFQ[^P]), scar tooltip/note, /transl_table warning & cloning sequencing scope */
+  await T.t('tev_p1_prime_scar_transl_table_and_seq_scope', async () => {
+    const CODONS = {A:'GCT',C:'TGC',D:'GAT',E:'GAA',F:'TTT',G:'GGT',H:'CAT',I:'ATT',K:'AAA',L:'CTG',M:'ATG',N:'AAT',P:'CCG',Q:'CAG',R:'CGT',S:'TCT',T:'ACC',V:'GTG',W:'TGG',Y:'TAT'};
+    const aaToNt = aa => aa.split('').map(c => CODONS[c] || 'GCT').join('');
+    const filler = n => 'ACGT'.repeat(Math.ceil(n / 4)).slice(0, n);
+    const fmtOrigin = s => {
+      const out = [];
+      for (let i = 0; i < s.length; i += 60) out.push(String(i + 1).padStart(9) + ' ' + s.slice(i, i + 60).toLowerCase().match(/.{1,10}/g).join(' '));
+      return out.join('\n');
+    };
+    const makeGb = (locus, orfAa) => {
+      const orfNt = aaToNt(orfAa) + 'TAA';
+      const kanNt = 'ATG' + 'GCTGAA'.repeat(135) + 'TAA';
+      const seq = filler(49) + 'TAATACGACTCACTATAGG' + filler(41) + 'AAGGAGATATACATAA' + filler(5) + orfNt + filler(600) + kanNt + filler(200);
+      const cdsEnd = 130 + orfNt.length;
+      const kanStart = cdsEnd + 601;
+      return [
+        `LOCUS       ${locus}           ${seq.length} bp    DNA     circular SYN 01-JAN-2000`,
+        'DEFINITION  Synthetic His6-TEV construct.',
+        'FEATURES             Location/Qualifiers',
+        '     promoter        50..68',
+        '                     /label="T7_promoter"',
+        '     RBS             110..125',
+        '                     /label="RBS"',
+        `     CDS             131..${cdsEnd}`,
+        '                     /label="His6-TEV-Target"',
+        `     CDS             ${kanStart}..${kanStart + kanNt.length - 1}`,
+        '                     /label="KanR"',
+        'ORIGIN',
+        fmtOrigin(seq),
+        '//'
+      ].join('\n');
+    };
+
+    const P = await open(), h = H(P.p);
+    P.p.on('dialog', d => d.accept());
+    try {
+      await h.newProject('GenBank TEV Met P1');
+      await P.p.click('#tl [data-step="construct"]');
+      await h.wait(250);
+
+      const pasteGb = async txt => {
+        if (!(await P.p.locator('#gbText').isVisible())) {
+          await P.p.click('#gbPaste');
+          await h.wait(150);
+        }
+        await P.p.fill('#gbText', txt);
+        await P.p.click('#gbPasteGo');
+        await h.wait(700);
+      };
+
+      const expCleaved = 'M' + 'AWYAE'.repeat(8); // 41 aa starting with M at P1'
+      await pasteGb(makeGb('pET_HIS_TEV_M', 'MGSSHHHHHHSSGENLYFQ' + expCleaved));
+
+      const gotSeq = await P.p.$eval('#protSeq', e => e.value.trim());
+      const gotPreset = await P.p.$eval('#o-tagPreset2', e => e.value);
+      const tblInfo = await P.p.evaluate(() => {
+        const tr = document.querySelector('#protTable tr:nth-child(2)');
+        const nt = document.getElementById('protNote');
+        return {
+          cell0Inner: tr && tr.cells[0] ? tr.cells[0].innerText.replace(/\u00a0/g, ' ').trim() : '',
+          cell0Title: tr && tr.cells[0] ? (tr.cells[0].getAttribute('title') || '') : '',
+          cell1Aa: tr && tr.cells[1] ? tr.cells[1].innerText.trim() : '',
+          noteVis: !!(nt && !nt.hidden),
+          noteTxt: nt ? nt.innerText.trim() : ''
+        };
+      });
+      T.check(
+        'tev_met.splits_at_enlyfq_m',
+        gotSeq === expCleaved && gotSeq.startsWith('MAWYAE') && gotPreset === 'histev',
+        `protSeq="${gotSeq}" preset="${gotPreset}"`
+      );
+      T.check(
+        'tev_met.untagged_cell_strictly_untagged',
+        /^Untagged$/.test(tblInfo.cell0Inner) && tblInfo.cell1Aa === '41',
+        JSON.stringify(tblInfo)
+      );
+      T.check(
+        'tev_met.scar_in_title_and_note',
+        /ENLYFQ/.test(tblInfo.cell0Title) && /\+M/.test(tblInfo.cell0Title) &&
+          tblInfo.noteVis && /\+M/.test(tblInfo.noteTxt),
+        JSON.stringify(tblInfo)
+      );
+
+      // Proline at P1' (ENLYFQP) blocks TEV cleavage (Kapust et al., 2002)
+      await P.p.click('#homeBtn');
+      await h.wait(350);
+      await h.newProject('GenBank TEV Pro P1');
+      await P.p.click('#tl [data-step="construct"]');
+      await h.wait(250);
+      const unsplitOrf = 'MGSSHHHHHHSSGENLYFQP' + 'AWYAE'.repeat(8); // 60 aa
+      await pasteGb(makeGb('pET_HIS_TEV_P', unsplitOrf));
+      const proSeq = await P.p.$eval('#protSeq', e => e.value.trim());
+      T.check('tev_pro.not_cleaved_at_proline', proSeq === unsplitOrf, `expected 60-aa unsplit, got "${proSeq}"`);
+
+      // Unsupported /transl_table=4 emits warning while filtering out mistranslated CDS
+      await P.p.click('#homeBtn');
+      await h.wait(350);
+      await h.newProject('GenBank TranslTable 4');
+      await P.p.click('#tl [data-step="construct"]');
+      await h.wait(250);
+      const badNt = 'ATG' + 'GCTTGGTAT'.repeat(12) + 'TAA';
+      const gbTbl4 = [
+        `LOCUS       pMYCO_TBL4              ${badNt.length} bp    DNA     linear   SYN 01-JAN-2000`,
+        'FEATURES             Location/Qualifiers',
+        `     CDS             1..${badNt.length}`,
+        '                     /transl_table=4',
+        'ORIGIN',
+        fmtOrigin(badNt),
+        '//'
+      ].join('\n');
+      await pasteGb(gbTbl4);
+      const tbl4Status = await P.p.$eval('#gbStatus', e => e.textContent.trim());
+      const tbl4Seq = await P.p.$eval('#protSeq', e => e.value.trim());
+      T.check(
+        'transl_table4.warns_and_filters',
+        /transl_table=4/.test(tbl4Status) && tbl4Seq === '',
+        `status="${tbl4Status}" protSeq="${tbl4Seq}"`
+      );
+
+      // Cloning sequencing method options & scope in Methods text
+      await P.p.click('#homeBtn');
+      await h.wait(350);
+      await h.newProject('Cloning Seq Scope', 'cloning');
+      await P.p.locator('#clonePanel [data-cl="tpl"][data-v="ath"]').click();
+      await h.wait(400);
+      await h.allSteps();
+      const tl = await h.timeline();
+      const seqStep = tl.find(x => x.t === 'Sequencing and alignment');
+      const selStep = tl.find(x => x.t === 'Selection of a sequence-verified clone');
+      await h.step(seqStep.k);
+      await P.p.locator('#clonePanel [data-cf="provider"]').first().fill('Azenta');
+      await P.p.locator('#clonePanel [data-cf="provider"]').first().dispatchEvent('change');
+      const methodIsSelect = (await P.p.locator('#clonePanel select[data-cf="method"]').count()) > 0;
+      const methodOpts = methodIsSelect
+        ? await P.p.$$eval('#clonePanel select[data-cf="method"] option', os => os.map(o => o.textContent.trim()))
+        : [];
+      if (methodIsSelect) {
+        await P.p.locator('#clonePanel select[data-cf="method"]').first().selectOption('Sanger (insert / junctions)');
+      }
+      await P.p.locator('#clonePanel [data-cst]').first().selectOption('done');
+      await h.wait(250);
+      await h.step(selStep.k);
+      await P.p.locator('#clonePanel [data-cfrom]').first().selectOption({index: 1});
+      await P.p.locator('#clonePanel [data-cf="ver"]').first().selectOption('Sequence verified');
+      await P.p.locator('#clonePanel [data-cst]').first().selectOption('done');
+      await h.wait(250);
+      await h.step('transform');
+      await P.p.locator('#pr-trPlasmid').fill('pET28-HIS-TEV');
+      await P.p.locator('#pr-trPlasmid').dispatchEvent('change');
+      await P.p.locator('#clonePanel [data-cst]').first().selectOption('done');
+      await h.wait(250);
+      await h.step('figure');
+      await P.p.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) b.open = true; });
+      await h.wait(250);
+      const sangerMeth = await h.methods();
+      T.check(
+        'cloning_seq.sanger_vs_nanopore_options_and_scope',
+        methodIsSelect &&
+          methodOpts.includes('Whole-plasmid sequencing (nanopore)') &&
+          methodOpts.includes('Sanger (insert / junctions)') &&
+          /insert and cloning junctions/.test(sangerMeth),
+        `opts=${JSON.stringify(methodOpts)} meth="${sangerMeth}"`
+      );
+
+      errs.push(...P.errs);
+    } finally {
+      await P.close();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

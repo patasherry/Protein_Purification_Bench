@@ -856,6 +856,101 @@ ORIGIN
     }
   });
 
+  /* ================= 15. His-TEV/His-3C presets, DNA-in-#protSeq guard, GST withholding hint & scar tooltip ================= */
+  await T.t('15_histev_dna_guard_and_tag_hints', async () => {
+    const {p: p15, errs: errs15, close: close15} = await open(), h15 = H(p15);
+    try {
+      await h15.newProject('HisTEV & DNA Guard');
+      await h15.step('construct');
+      const ubiq = 'MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG';
+      await p15.fill('#protSeq', ubiq);
+      await p15.dispatchEvent('#protSeq', 'input');
+      await p15.dispatchEvent('#protSeq', 'change');
+      await h15.wait(250);
+
+      const hasHisTev = (await p15.locator('#o-tagPreset2 option[value="histev"]').count()) > 0;
+      const hasHis3c = (await p15.locator('#o-tagPreset2 option[value="his3c"]').count()) > 0;
+      T.check('15_histev.presets_exist', hasHisTev && hasHis3c, `histev=${hasHisTev} his3c=${hasHis3c}`);
+      if (hasHisTev) {
+        await p15.selectOption('#o-tagPreset2', 'histev');
+        await h15.wait(300);
+      }
+      const epsTxt = await p15.$eval('#protEps', e => e.textContent.trim());
+      const untagM = epsTxt.match(/Untagged:\s*ε₂₈₀\s*([\d,]+)\s*M⁻¹cm⁻¹/);
+      const tagM = epsTxt.match(/Tagged:\s*ε₂₈₀\s*([\d,]+)\s*M⁻¹cm⁻¹/);
+      const untagE = untagM ? +untagM[1].replace(/,/g, '') : -1;
+      const tagE = tagM ? +tagM[1].replace(/,/g, '') : -1;
+      const rows15 = await p15.$$eval('#protTable tr', rs => rs.slice(1).map(r => ({
+        form: r.cells[0].innerText.trim(),
+        title: r.cells[0].getAttribute('title') || '',
+        aa: +r.cells[1].textContent.trim(),
+        a280: parseFloat(r.cells[4].textContent.trim())
+      })));
+      const expTaggedA280 = calcExtinction('MGSSHHHHHHSSGENLYFQG' + ubiq).a280;
+      const expUntagA280 = calcExtinction('G' + ubiq).a280;
+      const uRow = rows15.find(r => r.form === 'Untagged');
+      const tRow = rows15.find(r => r.form === 'Tagged');
+      T.check(
+        '15_histev.tagged_adds_1490_and_a280',
+        untagE === 1490 && tagE - untagE === 1490 && !!uRow && !!tRow && uRow.aa === 77 && tRow.aa === 96 &&
+          T.near(tRow.a280, expTaggedA280, 0.01) && T.near(uRow.a280, expUntagA280, 0.01),
+        `eps="${epsTxt}" rows=${JSON.stringify(rows15)}`
+      );
+
+      await p15.selectOption('#o-tagPreset2', 'his');
+      await h15.wait(250);
+      const hisCheck = await p15.evaluate(() => {
+        const td = document.querySelector('#protTable tr:nth-child(2) td');
+        const nt = document.getElementById('protNote');
+        return {
+          inner: td ? td.innerText.trim() : '',
+          title: td ? (td.getAttribute('title') || '') : '',
+          noteVis: !!(nt && !nt.hidden),
+          noteTxt: nt ? nt.innerText.trim() : ''
+        };
+      });
+      T.check(
+        '15_his_scar.tooltip_and_note_keep_untagged_cell',
+        hisCheck.inner === 'Untagged' && /GSH/.test(hisCheck.title) && /thrombin/i.test(hisCheck.title) &&
+          hisCheck.noteVis && /GSH/.test(hisCheck.noteTxt),
+        JSON.stringify(hisCheck)
+      );
+
+      await p15.selectOption('#o-tagPreset2', 'gst');
+      await h15.wait(250);
+      const gstVis = await p15.locator('#protNote').isVisible();
+      const gstTxt = gstVis ? (await p15.locator('#protNote').innerText()).trim() : '';
+      T.check(
+        '15_gst_hint.explains_precleavage_withholding',
+        gstVis && /GST/.test(gstTxt) && /withheld/i.test(gstTxt),
+        `vis=${gstVis} txt="${gstTxt}"`
+      );
+
+      await p15.selectOption('#o-tagPreset2', '');
+      await h15.wait(150);
+      const dna60 = 'ATGGCTTGGTACGCTGAAGCTGCTTGGTACGCTGAAGCTGCTTGGTACGCTGAAGCTTAA';
+      const expAa = 'MAWYAEAAWYAEAAWYAEA';
+      await p15.fill('#protSeq', dna60);
+      await p15.dispatchEvent('#protSeq', 'input');
+      await p15.dispatchEvent('#protSeq', 'change');
+      await h15.wait(250);
+      const dnaWarnVis = await p15.locator('#protNote.warnc').isVisible();
+      const dnaWarnTxt = dnaWarnVis ? (await p15.locator('#protNote').innerText()).trim() : '';
+      T.check('15_dna_guard.warnc_visible', dnaWarnVis && /DNA\/RNA sequence/i.test(dnaWarnTxt), `vis=${dnaWarnVis} txt="${dnaWarnTxt}"`);
+      const transBtn = p15.locator('#protNote button', {hasText: 'Translate DNA ORF'});
+      if ((await transBtn.count()) > 0 && (await transBtn.isVisible())) {
+        await transBtn.click();
+        await h15.wait(300);
+      }
+      const afterTrans = await p15.$eval('#protSeq', e => e.value.trim());
+      T.check('15_dna_guard.translates_orf', afterTrans === expAa, `expected ${expAa}, got ${afterTrans}`);
+
+      errs.push(...errs15);
+    } finally {
+      await close15();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

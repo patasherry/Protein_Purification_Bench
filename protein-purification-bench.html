@@ -942,7 +942,7 @@ button,input,select,textarea{font-family:inherit}
       <label class="f">Protein sequence, untagged<textarea id="protSeq" data-opt="protSeq" rows="3" spellcheck="false" placeholder="Paste the sequence, or load a PDB entry"></textarea></label>
       <div class="row">
         <label class="f">Tag<select id="o-tagPreset2" data-opt="tagPreset">
-          <option value="">No tag</option><option value="sumo">His-SUMO</option><option value="his">His-tag (thrombin site)</option><option value="gst">GST</option><option value="hisgst">His-GST</option><option value="mbp">MBP</option>
+          <option value="">No tag</option><option value="sumo">His-SUMO</option><option value="his">His-tag (thrombin site)</option><option value="histev">His-TEV</option><option value="his3c">His-3C</option><option value="gst">GST</option><option value="hisgst">His-GST</option><option value="mbp">MBP</option>
           <option value="hismbp">His-MBP</option><option value="trx">His-Trx</option><option value="gfp">GFP</option><option value="custom">Other</option></select></label>
         <label class="f tagf">Tag end<select id="o-tagPos" data-opt="tagPos"><option value="N">N-terminal</option><option value="C">C-terminal</option></select></label>
       </div>
@@ -1527,6 +1527,8 @@ button,input,select,textarea{font-family:inherit}
             <option value="">No tag</option>
             <option value="sumo">His-SUMO (~12.5 kDa)</option>
             <option value="his">His-tag (~2.2 kDa)</option>
+            <option value="histev">His-TEV (~2.2 kDa)</option>
+            <option value="his3c">His-3C (~2.2 kDa)</option>
             <option value="gst">GST (~26 kDa)</option>
             <option value="hisgst">His-GST (~28 kDa)</option>
             <option value="mbp">MBP (~42.5 kDa)</option>
@@ -4639,7 +4641,7 @@ function knownFor(g, laneI, b){
   const res = out.sort((p, q) => p.d - q.d).map(x => x.k); res.tol = tol; return res;
 }
 const KNOWN_COL = {contam: '#D98200', label: '#555555', cleaved: '#1B9E77', uncleaved: '#7F3C8D', freetag: '#C05600'};
-const TAG_PRESETS = {his: ['His-tag', 2.2], sumo: ['His-SUMO', 12.5], gst: ['GST', 26], hisgst: ['His-GST', 28], mbp: ['MBP', 42.5], hismbp: ['His-MBP', 43.5], trx: ['His-Trx', 13], gfp: ['GFP', 27], custom: ['tag', null]};
+const TAG_PRESETS = {his: ['His-tag', 2.2], histev: ['His-TEV', 2.2], his3c: ['His-3C', 2.2], sumo: ['His-SUMO', 12.5], gst: ['GST', 26], hisgst: ['His-GST', 28], mbp: ['MBP', 42.5], hismbp: ['His-MBP', 43.5], trx: ['His-Trx', 13], gfp: ['GFP', 27], custom: ['tag', null]};
 /* expected cleaved, uncleaved and free-tag sizes; protein size comes from the setting or from bands already marked as target / tagged */
 function cleavePlan(g){
   if (!opt.cleaveDetect) return null;
@@ -5793,11 +5795,11 @@ function gbCassette(gb){
   return {main, tx: main.tx, prom: promName, lacO: !!lacO, rbs: !!rbs, term: !!term, res: [...new Set(res)], ori: [...new Set(ori)], inner};
 }
 /* where the tag ends and the protein begins: a protease site, else where the protein sequence starts */
-const SITES = [['sumo', /(QIGG|EQTGG|QTGG)/g, 0, 'SUMO protease'], ['tev', /ENLYFQ(?=[GS])/g, 0, 'TEV protease'], ['3c', /LEVLFQ(?=GP)/g, 0, '3C protease'], ['thrombin', /LVPR(?=GS)/g, 0, 'thrombin'], ['ek', /DDDDK/g, 0, 'enterokinase'], ['xa', /IEGR/g, 0, 'factor Xa']];
+const SITES = [['sumo', /(QIGG|EQTGG|QTGG)/g, 0, 'SUMO protease'], ['tev', /ENLYFQ(?=[^P])/g, 0, 'TEV protease'], ['3c', /LEVLFQ(?=GP)/g, 0, '3C protease'], ['thrombin', /LVPR(?=GS)/g, 0, 'thrombin'], ['ek', /DDDDK/g, 0, 'enterokinase'], ['xa', /IEGR/g, 0, 'factor Xa']];
 const TAG_NAME_RE = [[/smt3|sumo/i, 'SUMO'], [/\bgst\b|glutathione/i, 'GST'], [/\bmbp\b|male|maltose/i, 'MBP'], [/\btrx|thioredoxin/i, 'Trx'], [/gfp/i, 'GFP'], [/strep/i, 'Strep-tag'], [/flag/i, 'FLAG'], [/avi/i, 'Avi']];
 function splitOrf(tx, ps, inner){
   ps = ps || ''; const n = tx.length, pi = ps.length >= 8 ? tx.indexOf(ps.slice(0, Math.min(20, ps.length))) : -1;
-  const specRe = /QIGG|EQTGG|QTGG|ENLYFQ(?=[GS])|LEVLFQ(?=GP)|LVPR(?=GS)/, affMot = /WSHPQFEK|DYKDDDDK|GLNDIFEAQKIEWHE/;
+  const specRe = /QIGG|EQTGG|QTGG|ENLYFQ(?=[^P])|LEVLFQ(?=GP)|LVPR(?=GS)/, affMot = /WSHPQFEK|DYKDDDDK|GLNDIFEAQKIEWHE/;
   const hasNtag = /^.{0,30}H{6}/.test(tx) || new RegExp(`^.{0,30}(?:${affMot.source})`).test(tx) || (inner || []).some(x => x.a <= 40 && TAG_NAME_RE.some(([re]) => re.test(x.label))) || specRe.test(tx.slice(0, 60));
   const hasCtag = /H{6}[^H]{0,30}$/.test(tx) || new RegExp(`(?:${affMot.source}).{0,30}$`).test(tx) || (inner || []).some(x => (x.b >= n - 40 || x.a >= n - 60) && TAG_NAME_RE.some(([re]) => re.test(x.label))) || specRe.test(tx.slice(Math.max(0, n - 60)));
   const cterm = pi === 0 || (pi < 0 && hasCtag && !hasNtag);
@@ -8001,6 +8003,7 @@ const AA3 = {ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C', GLN:'Q', GLU:'E', GLY:
   MSE:'M', SEC:'U', PYL:'O', SEP:'S', TPO:'T', PTR:'Y', CSO:'C', HYP:'P', MLY:'K', KCX:'K', CME:'C', LLP:'K'};
 /* tag sequences used when the user has not pasted their own */
 const TAG_SEQ = {his: 'MGSSHHHHHHSSGLVPRGSH', /* cleaves at R|G, leaving GSH */
+  histev: 'MGSSHHHHHHSSGENLYFQG', his3c: 'MGSSHHHHHHSSGLEVLFQGP',
   sumo: 'MGSSHHHHHHGSGLVPRGSASMSDSEVNQEAKPEVKPEVKPETHINLKVSDGSSEIFFKIKKTTPLRRLMEAFAKRQGKEMDSLRFLYDGIRIQADQTPEDLDMEDNDIIEAHREQIGG'};
 const cleanSeq = s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
 function seqMass(s){ if (!s) return 0; let m = 18.01524; for (const c of s) m += AA_MASS[c] ?? 110; return m; }
@@ -8106,9 +8109,14 @@ function protForms(){
   if (!p) return [];
   if (!tg) return [{k: 'Untagged', seq: p}].map(x => Object.assign(x, {mass: seqMass(x.seq), pi: seqPI(x.seq), a280: seqA280(x.seq), unk: seqUnknowns(x.seq)}));
   const fusion = opt.tagPos === 'C' ? p + tg : tg + p;
-  const sp = splitOrf(fusion, p);
+  const sp = splitOrf(fusion, p), pn = sp.cut ? sp.cut.name : 'protease';
+  const scar = sp.prot !== p ? (sp.cterm && sp.prot.startsWith(p) ? `Includes C-terminal ${sp.prot.slice(p.length)} left after ${pn} cleavage` : !sp.cterm && sp.prot.endsWith(p) ? `Includes N-terminal ${sp.prot.slice(0, sp.prot.length - p.length)} left after ${pn} cleavage` : '')
+    : sp.cut && sp.cterm && sp.cut.k !== 'sumo' ? `Includes C-terminal ${sp.cut.k === 'tev' ? 'ENLYFQ' : sp.cut.k === '3c' ? 'LEVLFQ' : sp.cut.k === 'thrombin' ? 'LVPR' : 'protease site'} left after ${pn} cleavage`
+    : sp.cut && !sp.cterm && sp.cut.k === 'tev' && sp.prot ? `Includes N-terminal +${sp.prot[0]} (P1′ residue after ENLYFQ↓${sp.prot[0]} ${pn} cleavage)`
+    : sp.cut && !sp.cterm && sp.cut.k === '3c' && sp.prot.length >= 2 ? `Includes N-terminal ${sp.prot.slice(0, 2)} left after ${pn} cleavage`
+    : sp.cut && !sp.cterm && sp.cut.k === 'thrombin' && sp.prot.length >= 2 ? `Includes N-terminal ${sp.prot.startsWith('GSH') ? 'GSH' : sp.prot.slice(0, 2)} left after ${pn} cleavage` : '';
   const out = [
-    {k: 'Untagged', seq: sp.prot},
+    {k: 'Untagged', t: scar || undefined, scar, seq: sp.prot},
     {k: 'Tagged', t: `${name} on the ${opt.tagPos === 'C' ? 'C' : 'N'} terminus`, seq: fusion},
     {k: 'Tag only', t: name, seq: sp.tag}
   ];
@@ -8143,12 +8151,15 @@ function renderProt(){
   const pv = $('#protView'); if (pv) { pv.hidden = !(PROJ && curStep === 'construct' && struct); if (!pv.hidden) pv.querySelectorAll('[data-pview]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.pview === 'struct') === (cur === 'struct')))); }
   /* say plainly when the table is not the loaded entry, or the gel and SEC still use an older size */
   const note = $('#protNote'), main = struct && struct.ents.find(e => e.id === struct.ent), mine = cleanSeq(opt.protSeq), msg = [];
+  if (mine.length >= 24 && mine.replace(/[ACGTU]/g, '').length / mine.length <= 0.10) msg.push(`This looks like a DNA/RNA sequence (A/C/G/T only). <button type="button" class="linkbtn" id="protTransDna">Translate DNA ORF</button>`);
+  if (F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && !TAG_SEQ[opt.tagPreset] && TAG_PRESETS[opt.tagPreset]) msg.push(`Enter your ${esc(TAG_PRESETS[opt.tagPreset][0])} tag sequence above (or load a GenBank file) to compute tagged mass and pre-cleavage A₂₈₀; until then, pre-cleavage mg are withheld.`);
+  if (F.length > 1 && F[0].scar) msg.push(`${esc(F[0].scar)}.`);
   if (main && mine && mine !== main.seq) msg.push(`The table uses your pasted sequence, not ${esc(struct.code)}. <button type="button" class="linkbtn" id="protTake">Use ${esc(struct.code)}</button>`);
   if (F.length && +opt.protKda > 0 && Math.abs(opt.protKda - F[0].mass/1000) > 0.15) msg.push(`Gel and SEC still use ${fmt(+opt.protKda, 1)} kDa. <button type="button" class="linkbtn" id="protApply">Update to ${fmt(F[0].mass/1000, 1)}</button>`);
   const h = msg.join(' '); if (note._h !== h) { note._h = h; note.innerHTML = h; } note.hidden = !h;
 }
 $('#protView').addEventListener('click', e => { const b = e.target.closest('[data-pview]'); if (!b) return; cur = b.dataset.pview === 'struct' && struct ? 'struct' : 'step:construct'; syncControls(); render(); });
-$('#protNote').addEventListener('click', e => { if (e.target.id === 'protTake' && struct) { const en = struct.ents.find(x => x.id === struct.ent); if (en) { opt.protSeq = en.seq; opt.protSrc = struct.code; saveOpt(); syncControls(); render(); } } else if (e.target.id === 'protApply') applyProt(); });
+$('#protNote').addEventListener('click', e => { if (e.target.id === 'protTake' && struct) { const en = struct.ents.find(x => x.id === struct.ent); if (en) { opt.protSeq = en.seq; opt.protSrc = struct.code; saveOpt(); syncControls(); render(); } } else if (e.target.id === 'protApply') applyProt(); else if (e.target.id === 'protTransDna') { const s = cleanSeq(opt.protSeq); let tx = translateNt(s, 1, 11, false).replace(/\*.*$/, ''); if (tx.length < 8) { const m = s.match(/A[TU]G(?:[A-Z]{3})+/); if (m) tx = translateNt(m[0], 1, 11, false).replace(/\*.*$/, '') || tx; } if (tx) { opt.protSeq = tx; opt.protSrc = ''; $('#protSeq').value = tx; saveOpt(); syncControls(); render(); } } });
 $('#protSeq').addEventListener('input', () => { opt.protSrc = ''; });
 function applyProt(quiet){ const F = protForms(); if (!F.length) return; const u = F[0], t = F[2];
   opt.protKda = +fmt(u.mass/1000, 1); opt.secMono = opt.protKda; if (t) opt.tagKda = +fmt(t.mass/1000, 1);
@@ -8160,7 +8171,7 @@ $('#protUse').addEventListener('click', () => applyProt());
 function useOrf(m, quiet){ if (!m || !m.tagSeq) { if (m) { opt.protSeq = m.protSeq; opt.tagSeq = ''; opt.tagPreset = ''; opt.protSrc = prep.gb ? prep.gb.name : ''; applyProt(quiet); } return; }
   const names = m.tagParts.join(' ');
   opt.protSeq = m.protSeq; opt.tagSeq = m.tagSeq; opt.tagPos = m.cterm ? 'C' : 'N'; opt.protSrc = prep.gb ? prep.gb.name : '';
-  opt.tagPreset = m.cut && m.cut.k === 'sumo' ? 'sumo' : /GST/.test(names) ? (/His/.test(names) ? 'hisgst' : 'gst') : /MBP/.test(names) ? (/His/.test(names) ? 'hismbp' : 'mbp') : /Trx/.test(names) ? 'trx' : /GFP/.test(names) ? 'gfp' : /^His\d+$/.test(names) ? 'his' : 'custom';
+  opt.tagPreset = m.cut && m.cut.k === 'sumo' ? 'sumo' : /GST/.test(names) ? (/His/.test(names) ? 'hisgst' : 'gst') : /MBP/.test(names) ? (/His/.test(names) ? 'hismbp' : 'mbp') : /Trx/.test(names) ? 'trx' : /GFP/.test(names) ? 'gfp' : /^His\d+$/.test(names) ? (m.cut && m.cut.k === 'tev' ? 'histev' : m.cut && m.cut.k === '3c' ? 'his3c' : 'his') : 'custom';
   applyProt(quiet); }
 async function loadGenBank(f){
   if (/\.dna$/i.test(f.name)) { toast(`${f.name} is a SnapGene file. In SnapGene choose Export, then GenBank (.gb), and drop that file here.`); return; }
@@ -8181,8 +8192,8 @@ function loadGenBankText(text, fname){
       prep.prevProt = diff ? prev : null; useOrf(m, true);
     } else prep.prevProt = null;
     if (!cur || cur === 'overlay') { if (runs.filter(r => r.inWf).length >= 2) cur = 'workflow'; }
-    const nCds = gb.feats.filter(f => f.type === 'CDS').length;
-    render(); toast((m && m.src === 'gb' ? `Loaded ${gb.name}: ORF of ${m.tx.length} residues${nCds > 1 ? ` (first of ${nCds} CDS features)` : ''}${m.cut ? `, cut by ${m.cut.name}` : ''}.${prep.prevProt ? ' The Protein section now uses this ORF.' : ''}` : `Loaded ${gb.name}, but found no ORF to draw.`) + (gb.recs > 1 ? ` Only the first of ${gb.recs} records was read.` : '') + (gb.lenBad ? ` Warning: the sequence has ${gb.seq.length} bases but LOCUS says ${gb.len}.` : '')); }
+    const nCds = gb.feats.filter(f => f.type === 'CDS').length, badTbl = [...new Set(gb.feats.filter(f => f.type === 'CDS' && !f.tx && f.translTable && f.translTable !== 1 && f.translTable !== 11).map(f => f.translTable))];
+    render(); toast((m && m.src === 'gb' ? `Loaded ${gb.name}: ORF of ${m.tx.length} residues${nCds > 1 ? ` (first of ${nCds} CDS features)` : ''}${m.cut ? `, cut by ${m.cut.name}` : ''}.${prep.prevProt ? ' The Protein section now uses this ORF.' : ''}` : `Loaded ${gb.name}, but found no ORF to draw.`) + (badTbl.length ? ` Skipped CDS with unsupported /transl_table=${badTbl.join(', ')} (only tables 1 and 11 are translated without an explicit /translation).` : '') + (gb.recs > 1 ? ` Only the first of ${gb.recs} records was read.` : '') + (gb.lenBad ? ` Warning: the sequence has ${gb.seq.length} bases but LOCUS says ${gb.len}.` : '')); }
   catch (e) { toast(e.message === 'protein record' ? `${fname} is a protein GenBank record. The Construct section needs a DNA record (plasmid).` : `Could not read ${fname} as GenBank. Export it from SnapGene or Benchling as GenBank (.gb).`); }
 }
 function renderPrep(){
@@ -8203,7 +8214,8 @@ function renderPrep(){
   { const sel = $('#pr-cleaveAfter'), wf = runs.filter(r => r.inWf), cid = cleaveRunId(), h = wf.map((r, k) => `<option value="${r.id}"${r.id === cid ? ' selected' : ''}>${k + 1}. ${esc(stepTitle(r))}</option>`).join('') || '<option value="">No runs yet</option>';
     if (sel._h !== h) { sel._h = h; sel.innerHTML = h; } if (sel !== document.activeElement) sel.value = cid; $('#pr-protease').placeholder = !String(prep.protease || '').trim() && cleaveProtease() ? `${cleaveProtease()} (construct)` : 'e.g. Ulp1'; } $('#gbClear').hidden = !prep.gb; $('#gbPick').textContent = prep.gb ? 'Load another GenBank file' : 'Load GenBank file';
   const m = prep.gb || cleanSeq(opt.protSeq) ? constructModel() : null, st = $('#gbStatus'); let h = '';
-  if (prep.gb) { if (!m || m.src !== 'gb') h = `No ORF found in ${esc(prep.gb.name)}.`;
+  if (prep.gb) { const badTbl = [...new Set((prep.gb.feats || []).filter(f => f.type === 'CDS' && !f.tx && f.translTable && f.translTable !== 1 && f.translTable !== 11).map(f => f.translTable))];
+    if (!m || m.src !== 'gb') h = `No ORF found in ${esc(prep.gb.name)}.` + (badTbl.length ? ` <span class="warnc">Skipped CDS with /transl_table=${esc(badTbl.join(', '))} (only genetic codes 1 and 11 are translated automatically).</span>` : '');
     else { const nCds = (prep.gb.feats || []).filter(f => f.type === 'CDS').length;
       h = `${esc(prep.gb.name)}, ${prep.gb.len.toLocaleString('en-US')} bp. ORF ${m.tx.length} residues${nCds > 1 ? ` (first of ${nCds} CDS features)` : ''}, ${fmt(m.mTag, 1)} kDa${m.cut ? `, ${esc(m.cut.name)} site after residue ${m.cterm ? m.segs.find(x => x.kind === 'prot').b : m.segs.find(x => x.kind === 'prot').a - 1}` : ''}${m.prom ? `, ${esc(m.prom)} promoter` : ''}.`;
       const th = m.tx.indexOf('LVPRGS'); if (th >= 0 && !(m.cut && m.cut.k === 'thrombin')) h += ` Also has a thrombin site (LVPRGS, residues ${th + 1} to ${th + 6}).`;
@@ -12522,9 +12534,9 @@ const CL_KIND = {
     ref: ['P1: 50 mM Tris, pH 8.0; 10 mM EDTA; 100 µg/mL RNase A; 43 µg/mL thymolphthalein', 'P2: 200 mM NaOH; 1% SDS', 'N3: 4.2 M guanidinium hydrochloride; 0.9 M potassium acetate, pH 4.8. Requires review: the source recipe had an incomplete entry.'],
     f: 'colony:Source colony and culture;cultVol:Culture volume:n:mL;spin:Centrifugation conditions;p1:P1 volume:n:µL;p2:P2 volume:n:µL;n3:N3 volume:n:µL;washes:Wash steps and volumes;elu:Elution solution;eluVol:Elution volume:n:µL;conc:Final DNA concentration:n:ng/µL;r280:A260/A280:n;r230:A260/A230:n;sampleId:Final sample ID;loc:Storage location;seqSub:Sequencing submission'},
   seq: {t: 'Sequencing and alignment', what: 'Sequencing provider, method, alignment result and unexpected mutations.',
-    q: [{n: 'Plasmidsaurus, whole-plasmid', src: 'Whole-plasmid sequencing', set: {provider: 'Plasmidsaurus', method: 'Whole-plasmid (ONT)', expMut: 'Present'}},
-      {n: 'Sanger, Azenta/Genewiz', src: 'Sanger sequencing', set: {provider: 'Azenta / Genewiz', method: 'Sanger'}}],
-    from: ['miniprep'], fromMsg: 'A sequencing record must name the plasmid prep it used', f: 'provider:Sequencing provider;method:Sequencing method;primers:Sequencing primers;order:Order number;file:Sequencing file names:a;aln:Alignment result:a;coverage:Coverage;expMut:Expected mutation:s:Present/Absent/Not applicable;unexpected:Unexpected mutations:a;reviewer:Reviewer;reviewed:Verification date:d'},
+    q: [{n: 'Plasmidsaurus, whole-plasmid', src: 'Whole-plasmid sequencing', set: {provider: 'Plasmidsaurus', method: 'Whole-plasmid sequencing (nanopore)', expMut: 'Present'}},
+      {n: 'Sanger, Azenta/Genewiz', src: 'Sanger sequencing', set: {provider: 'Azenta / Genewiz', method: 'Sanger (insert / junctions)'}}],
+    from: ['miniprep'], fromMsg: 'A sequencing record must name the plasmid prep it used', f: 'provider:Sequencing provider;method:Sequencing method:s:Whole-plasmid sequencing (nanopore)|Sanger (insert / junctions)|Other;primers:Sequencing primers;order:Order number;file:Sequencing file names:a;aln:Alignment result:a;coverage:Coverage;expMut:Expected mutation:s:Present/Absent/Not applicable;unexpected:Unexpected mutations:a;reviewer:Reviewer;reviewed:Verification date:d'},
   select: {t: 'Selection of a sequence-verified clone', what: 'Verified clone ID, plasmid name, stock location and verification status.',
     q: [{n: 'Sequence verified', src: 'Clone verification', set: {ver: 'Sequence verified'}}],
     from: ['seq'], fromMsg: 'A verified clone must name its sequencing record', f: 'clone:Clone ID;plasmid:Plasmid name;stock:Plasmid or glycerol-stock location;ver:Verification status:s:Sequence verified/Failed verification',
@@ -13106,7 +13118,7 @@ let clOpen = '', clArm = '', clHtml = '', clPickTpl = false;
 function clField(a, fd){ const v = a.f[fd.k] == null ? '' : a.f[fd.k], at = `data-cf="${esc(fd.k)}" data-at="${esc(a.id)}"`, lab = esc(fd.l) + (fd.ty === 'n' && fd.x ? ` (${esc(fd.x)})` : '');
   if (fd.ty === 'c') return `<label class="check cl-wide"><input type="checkbox" ${at}${v ? ' checked' : ''}> ${lab}</label>`;
   if (fd.ty === 'a' || fd.ty === 'q') return `<label class="f cl-wide">${lab}<textarea rows="2" ${at}${fd.ty === 'q' ? ' class="cl-seq" spellcheck="false"' : ''}>${esc(v)}</textarea></label>`;
-  if (fd.ty === 's' || fd.ty === 'g') { const stg = (clAt(a.id) || {}).s, os = fd.ty === 'g' ? gels.map(g => g.name) : fd.x.split('/');
+  if (fd.ty === 's' || fd.ty === 'g') { const stg = (clAt(a.id) || {}).s, os = fd.ty === 'g' ? gels.map(g => g.name) : fd.x.includes('|') ? fd.x.split('|') : fd.x.split('/');
     if (fd.ty === 'g' && stg && stg.gel && stg.gel.name && !os.includes(stg.gel.name)) os.unshift(stg.gel.name);
     const all = os.includes(v) || !hasTxt(v) ? os : os.concat([v]);
     return `<label class="f">${lab}<select ${at}><option value="">${fd.ty === 'g' ? ((gels.length || (stg && stg.gel && stg.gel.name)) ? 'No gel linked' : 'No gel image in this project yet') : 'Not recorded'}</option>${all.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
@@ -13241,13 +13253,13 @@ function clMethodsText(){
   const prov = seqAt && hasTxt(seqAt.f.provider) ? seqAt.f.provider.trim() : '';
   const seqM = seqAt && hasTxt(seqAt.f.method) ? seqAt.f.method.trim() : '';
   const verified = c.stages.some(s => s.kind === 'select' && !s.skip && s.at.some(a => CL_OK(a.st) && a.f.ver === 'Sequence verified'));
-  const bypassed = !!(ta && ta.f.bypass);
+  const bypassed = !!(ta && ta.f.bypass), seqScope = /sanger/i.test(seqM) ? 'the insert and cloning junctions' : /whole-plasmid|nanopore|\bont\b/i.test(seqM) ? 'the whole-plasmid sequence' : 'the sequence';
   let seqSent = '';
   if (prov) {
     if (bypassed) {
       seqSent = `Sequencing was performed by ${prov}${seqM ? ` (${seqM})` : ''}; verification was not recorded (bypassed).`;
     } else if (verified) {
-      seqSent = `Sequencing by ${prov}${seqM ? ` (${seqM})` : ''} confirmed the sequence.`;
+      seqSent = `Sequencing by ${prov}${seqM ? ` (${seqM})` : ''} confirmed ${seqScope}.`;
     } else if (selAt && selAt.f.ver === 'Failed verification') {
       seqSent = `Sequencing by ${prov}${seqM ? ` (${seqM})` : ''} failed verification.`;
     } else {
@@ -13257,7 +13269,7 @@ function clMethodsText(){
     if (bypassed) {
       seqSent = `Sequence verification was not recorded (bypassed).`;
     } else if (verified) {
-      seqSent = `A sequence-verified clone was confirmed.`;
+      seqSent = seqM ? `${seqM} confirmed ${seqScope}.` : `A sequence-verified clone was confirmed.`;
     }
   }
 
@@ -13548,7 +13560,7 @@ function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curS
     const bad = c.ext.ver === 'yes' && !hasTxt(c.ext.note);
     return `<h2>Where the plasmid came from</h2><p class="hint">Cloning was done outside this workflow, or was not documented here.</p><div class="cl-grid"><label class="f cl-wide">Source of the plasmid or construct<input type="text" data-cext="src" value="${esc(c.ext.src)}"></label>
       <label class="f">Sequence verification<select data-cext="ver"><option value="">Not recorded</option><option value="yes"${c.ext.ver === 'yes' ? ' selected' : ''}>Sequence verified</option><option value="no"${c.ext.ver === 'no' ? ' selected' : ''}>Not verified</option></select></label>
-      <label class="f">How it was verified<input type="text" data-cext="note" value="${esc(c.ext.note)}"></label></div>${bad ? '<p class="cl-flag">Say how it was verified. Without that it is not recorded as sequence verified.</p>' : ''}${clTypeSel()}`; }
+      <label class="f">How it was verified<input type="text" list="clVerOpts" data-cext="note" value="${esc(c.ext.note)}"><datalist id="clVerOpts"><option value="Whole-plasmid sequencing (nanopore)"><option value="Sanger (insert / junctions)"></datalist></label></div>${bad ? '<p class="cl-flag">Say how it was verified. Without that it is not recorded as sequence verified.</p>' : ''}${clTypeSel()}`; }
   const addSel = `<label class="f">Add a stage<select data-cadd="1"><option value="">Choose a stage to add</option><optgroup label="Cloning">${Object.keys(CL_KIND).filter(k => !CL_CC.includes(k)).map(k => `<option value="${k}">${esc(CL_KIND[k].t)}</option>`).join('')}</optgroup><optgroup label="Mix and Go competent cells"><option value="cc:all">All competent-cell stages</option>${CL_CC.map(k => `<option value="${k}">${esc(CL_KIND[k].t)}</option>`).join('')}</optgroup></select></label>`;
   if (!s) { const tp = c.tpl && CL_TPL[c.tpl] && !clPickTpl ? `<p class="hint cl-wf">Workflow: <b>${esc(CL_TPL[c.tpl].t)}</b> · <button type="button" class="linkbtn" data-cl="chgwf">Change workflow</button></p>` : `<div class="cl-tpls">${Object.keys(CL_TPL).map(k => `<button type="button" class="btn${c.tpl === k ? ' primary' : ''}" data-cl="tpl" data-v="${k}"${c.tpl === k ? ' aria-pressed="true"' : ''}>${esc(CL_TPL[k].t)}</button>`).join('')}</div>${c.tpl && clPickTpl ? `<p class="hint cl-wf"><button type="button" class="linkbtn" data-cl="chgwf-cancel">Keep ${esc(CL_TPL[c.tpl].t)}</button></p>` : ''}`;
     return `<h2>Cloning workflow</h2>${!c.tpl && !c.stages.length ? '<p class="hint">Choose a workflow. Its stages appear in the step list, every one can be skipped or repeated, and choosing another workflow later only adds stages.</p>' : ''}
