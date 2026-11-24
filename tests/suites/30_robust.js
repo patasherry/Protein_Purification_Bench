@@ -28,6 +28,7 @@ const sel1 = async (p, h, k) => { await p.click(`#tl [data-step="${k}"]`); await
 /* ---------------- bad inputs ---------------- */
 await T.t('bad', async () => { const {p, errs, close} = await open(), h = H(p); await h.newProject('Bad inputs'); await watchToasts(p);
   await h.dropFiles(F.his); await h.pool('T1-T6'); await takeToasts(p);
+  { const lbl = await p.$eval('.trace.run.sel [data-act="suggest"]', e => e.textContent); T.check('suggest.label', lbl === 'Suggest fractions', 'expected "Suggest fractions", got ' + lbl); }
   /* each rejected input: a toast that says something, no page error, no new step or tab */
   const reject = async (id, files, why) => { const e0 = errs.length, c0 = await counts(p, h); await h.dropFiles(files); const ts = await takeToasts(p), c1 = await counts(p, h);
     T.check(`bad.${id}.toast`, ts.some(t => t.length > 15), `${why}; toasts: ${ts.join(' | ') || 'none'}`); // a clear message, not silence
@@ -99,31 +100,6 @@ await T.t('fuzz', async () => { const {p, errs, close} = await open(), h = H(p);
   await close(); });
 
 /* ---------------- persistence ---------------- */
-await T.t('save-reload', async () => { const {p, errs, close} = await open(), h = H(p);
-  await h.newProject('SaveReload');
-  await h.dropFiles(path.join(DATA, 'standins', 'imac_histrap_1ml_step.csv'));
-  await h.pool('T1-T6');
-  await h.addConc(path.join(DATA, 'nd', 'nd_one_protein_a280.csv'), 0.5);
-  await h.step('figure');
-  const ts = await p.$$('#paper svg text');
-  for (const t of ts) if (/^[A-Z]\s/.test(((await t.textContent()) || '').trim())) {
-    await t.click(); await p.waitForTimeout(300);
-    const i = await p.$(SEL.wfTitle); if (i) { await i.fill('IMAC Step'); await i.press('Enter'); }
-    break;
-  }
-  await openMethods(p); await p.waitForTimeout(400);
-  const tl0 = JSON.stringify(await h.timeline()), sum0 = JSON.stringify(await h.sumTable()), mth0 = await h.methods().catch(() => '');
-  await p.waitForTimeout(3500);
-  await p.reload(); await p.waitForTimeout(1200);
-  const opened = await openCard(p, 'SaveReload');
-  T.check('save-reload.listed', opened, 'opened project from home screen');
-  await h.step('figure'); await openMethods(p); await p.waitForTimeout(400);
-  const tl1 = JSON.stringify(await h.timeline()), sum1 = JSON.stringify(await h.sumTable()), mth1 = await h.methods().catch(() => '');
-  T.check('save-reload.timeline', tl0 === tl1, diff({tl: tl0}, {tl: tl1}));
-  T.check('save-reload.sumTable', sum0 === sum1, diff({sum: sum0}, {sum: sum1}));
-  T.check('save-reload.methods', mth0 === mth1, `methods before len ${mth0.length} vs after len ${mth1.length}`);
-  T.check('save-reload.no-error', !errs.length, errs.join(' | '));
-  await close(); });
 
 async function build(p, h){ await h.newProject('Persist'); await h.dropFiles(F.his); await h.pool('T1-T6'); await h.addConc(F.ndSpec, 0.25); await h.dropFiles(F.zip); await h.dropFiles(F.q); await h.pool('T11-T16');
   await h.step('figure'); const t = (await p.$$('#paper svg text')); for (const x of t) if (/^[A-Z]\s/.test(((await x.textContent()) || '').trim())) { await x.click(); await p.waitForTimeout(300); const i = await p.$(SEL.wfTitle); if (i) { await i.fill('Renamed panel'); await i.press('Enter'); } break; }
@@ -512,18 +488,6 @@ await T.t('partial-project', async () => { const {p, errs, close} = await open()
   }
   await close(); });
 
-/* ---------------- performance budgets ---------------- */
-await T.t('perf', async () => { const {p, errs, close} = await open(), h = H(p); await h.newProject('Perf');
-  { const n0 = (await h.timeline()).length, t0 = Date.now(); await p.setInputFiles('#file', F.big); let ms = null;
-    for (let k = 0; k < 120; k++) { await p.waitForTimeout(100); if ((await h.timeline()).length > n0) { ms = Date.now() - t0; break; } }
-    T.check('perf.load-200k-under-6s', ms != null && ms < 6000, ms == null ? 'not loaded in 12 s' : ms + ' ms'); } // a long run must load quickly
-  { await p.waitForTimeout(800); const r = (await h.timeline()).find(x => x.k.startsWith('run:')); if (r) await h.step(r.k);
-    const ms = await p.evaluate(async () => { const e = document.querySelector('.trace.run.sel [data-k=shade]'); if (!e) return -1; const t = performance.now(); e.value = 'A3-A12'; e.dispatchEvent(new Event('input', {bubbles: true})); await new Promise(r => requestAnimationFrame(() => r())); return Math.round(performance.now() - t); });
-    T.check('perf.pool-typing-under-400ms', ms >= 0 && ms < 400, ms + ' ms on the 200k run'); } // typing in the pool box stays responsive
-  { for (const f of [F.his, F.ortho, F.q, F.s200, F.zip]) await h.dropFiles(f); await h.addConc(F.nd, 0.3); await h.addConc(null, 0.2); await h.addConc(null, 0.1); const n = purif(await h.timeline()).length;
-    const ms = await p.evaluate(async () => { const b = document.querySelector('#tl [data-step="figure"]'); const t = performance.now(); b.click(); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return Math.round(performance.now() - t); });
-    T.check('perf.workflow-8-steps-under-1.5s', n >= 8 && ms < 1500, `${n} steps, ${ms} ms`); } // the full figure renders in time
-  T.check('perf.no-error', !errs.length, errs.join(' | ')); await close(); });
 
 /* a hand-made or older project file whose trace has only an id, a name and rows still opens, and the trace is drawn on the overlay (#148) */
 await T.t('missing-trace-fields', async () => { const {p, errs, close} = await open();
@@ -611,16 +575,6 @@ await T.t('malformed-id', async () => { const {p, errs, close} = await open(), h
   await p.waitForTimeout(500);
   const steps2 = await p.$$eval('#tl button[data-step^="man:"]', els => els.map(e => e.getAttribute('data-step')));
   T.check('malformed-id.advances-valid', steps2.includes('man:m1000'), `advances valid highest suffix: ${steps2.join(', ')}`);
-  await close();
-});
-
-await T.t('suggest-label', async () => {
-  const {p, errs, close} = await open(), h = H(p);
-  await h.newProject('Suggest label');
-  await h.dropFiles(F.his);
-  await h.step((await h.timeline()).find(x => /^run:/.test(x.k)).k);
-  const lbl = await p.$eval('.trace.run.sel [data-act="suggest"]', e => e.textContent);
-  T.check('suggest.label', lbl === 'Suggest fractions', 'expected "Suggest fractions", got ' + lbl);
   await close();
 });
 

@@ -597,6 +597,34 @@ async function theoPeakMassTest() {
   }
 }
 
+async function poolDipSameSpan() {
+  const {poolDipCsv, trapArea, POOL, A, B} = require('../data/gen_pool_dip');
+  const num = s => { const m = String(s == null ? '' : s).replace(/,/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : NaN; };
+  const setVal = (p, sel, v) => p.evaluate(([sel, v]) => { const e = document.querySelector(sel); if (!e) return false; e.value = v; e.dispatchEvent(new Event('input', {bubbles: true})); e.dispatchEvent(new Event('change', {bubbles: true})); return true; }, [sel, String(v)]);
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    await h.newProject('Pool area');
+    await h.addRun({name: 'pool_dip.csv', mimeType: 'text/csv', buffer: Buffer.from(poolDipCsv())});
+    await setVal(p, '#o-intMethod', 'trap'); await setVal(p, '#o-intBase', 'zero'); await h.wait(300);
+    await h.pool(POOL);
+    await p.evaluate(() => document.getElementById('intAuto').click()); await h.wait(600);
+    await setVal(p, '#ia0', A); await h.wait(250); await setVal(p, '#ib0', B); await h.wait(350);
+    const t = await h.peakTable(), head = t[0] || [], ia = head.findIndex(c => /^Area/.test(c));
+    const reg = t.find(r => r[0] === 'P1'), pool = t.find(r => /^Pool/.test(r[0] || ''));
+    T.check('same_span.rows_shown', ia >= 0 && reg && pool, JSON.stringify(t));
+    if (ia >= 0 && reg && pool) {
+      const ra = num(reg[ia]), pa = num(pool[ia]), exp = trapArea(A, B, true), info = `region ${reg[ia]}, pool ${pool[ia]}, closed form ${exp.toFixed(3)}`;
+      T.check('same_span.same_interval', num(reg[1]) === A && num(reg[2]) === B && num(pool[1]) === A && num(pool[2]) === B, info);
+      T.check('same_span.pool_equals_region', Math.abs(pa - ra) <= 1, info);
+      T.check('same_span.pool_matches_trapezoid', Math.abs(pa - exp) <= 0.5 + 1e-9, info);
+      T.check('same_span.region_matches_trapezoid', Math.abs(ra - exp) <= 0.5 + 1e-9, info);
+    }
+  } finally {
+    T.check('same_span.no_page_errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -608,5 +636,6 @@ async function theoPeakMassTest() {
   await T.t('peak_separator', peakSeparator);
   await T.t('uv_path_cell_selector', uvPathCellSelector);
   await T.t('theo_peak_mass', theoPeakMassTest);
+  await T.t('pool_dip_same_span', poolDipSameSpan);
   T.done();
 })();

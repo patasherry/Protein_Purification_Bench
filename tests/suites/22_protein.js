@@ -766,6 +766,96 @@ ORIGIN
     } finally { await close12(); }
   });
 
+  /* ================= 13. Tag mass sync & His6-GST preset (#796) ================= */
+  await T.t('13_tag_mass_and_hisgst_preset', async () => {
+    const {p: p13, errs: errs13, close: close13} = await open(), h13 = H(p13);
+    try {
+      await p13.evaluate(() => { document.querySelector('#pickGel').click(); });
+      await p13.setInputFiles('#gelFile', [path.join(DATA, 'standins', 'gel_photo.jpg')]);
+      await h13.wait(400);
+      const seq100 = 'ACDEFGHIKLMNPQRSTVWY'.repeat(5);
+      await p13.evaluate(t => {
+        const tp = document.querySelector('#o-tagPreset'); tp.value = 'sumo'; tp.dispatchEvent(new Event('input', {bubbles: true})); tp.dispatchEvent(new Event('change', {bubbles: true}));
+        const ps = document.querySelector('#protSeq'); ps.value = t; ps.dispatchEvent(new Event('input', {bubbles: true})); ps.dispatchEvent(new Event('change', {bubbles: true}));
+      }, seq100);
+      await h13.wait(400);
+      const {tagKda, untagKda} = await p13.evaluate(() => {
+        const rows = [...document.querySelectorAll('#protTable tr')].slice(1);
+        const cell = label => { const r = rows.find(x => x.cells.length > 2 && x.cells[0].textContent.includes(label)); return r ? parseFloat(r.cells[2].textContent) : null; };
+        return {tagKda: cell('Tag only'), untagKda: cell('Untagged')};
+      });
+      await p13.evaluate(m => {
+        const c = document.querySelector('#o-cleaveDetect'); if (c && !c.checked) c.click();
+        const k = document.querySelector('#o-protKda'); k.value = m; k.dispatchEvent(new Event('input', {bubbles: true})); k.dispatchEvent(new Event('change', {bubbles: true}));
+      }, untagKda || 0);
+      await h13.wait(350);
+      const freeTag = await p13.$eval('#cleaveInfo', e => { const m = (e.textContent || '').match(/free His-SUMO\s+([0-9.]+)\s+kDa/); return m ? parseFloat(m[1]) : null; }).catch(() => null);
+      T.check('13_tag_mass.agree', tagKda != null && freeTag != null && Math.abs(tagKda - freeTag) <= 0.15, `Tag=${tagKda}, Free=${freeTag}`);
+
+      await p13.click('#homeBtn').catch(() => {}); await h13.wait(400);
+      await h13.newProject('His6-GST Preset');
+      await h13.gb(path.join(DATA, 'gb', 'gb_his6_gst.gb'));
+      const preset = await p13.$eval('#o-tagPreset', e => e.value);
+      T.check('13_his6_gst.preset_equals_hisgst', preset === 'hisgst', `got '${preset}'`);
+      errs.push(...errs13);
+    } finally { await close13(); }
+  });
+
+  /* ================= 14. Untagged default vs chosen/saved His-SUMO (#1007) ================= */
+  await T.t('14_untagged_default_and_saved_sumo', async () => {
+    const SEQ = 'M' + 'AKWYE'.repeat(20), PATH_MM = 2;
+    const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : null; };
+    const expMg = (area, e) => area > 0 && e > 0 ? area / 1000 / (e * PATH_MM / 10) : null;
+    const nearMg = (got, exp) => got != null && exp != null && Math.abs(got - exp) <= Math.max(0.011, 0.01 * exp);
+
+    // Check bare sequence untagged default AND switching to His-SUMO in one project
+    {
+      const {p: p14, errs: errs14, close: close14} = await open(), h14 = H(p14);
+      p14.on('dialog', d => d.accept());
+      try {
+        await h14.newProject('Tag default');
+        await h14.step('construct');
+        const setVal = (sel, v) => p14.evaluate(({sel, v}) => { const e = document.querySelector(sel); e.value = v; e.dispatchEvent(new Event('input', {bubbles: true})); e.dispatchEvent(new Event('change', {bubbles: true})); }, {sel, v});
+        const shown0 = await p14.$eval('#o-tagPreset2', e => e.value);
+        await setVal('#protSeq', SEQ); await h14.wait(350);
+        await h14.addRun(path.join(DATA, 'standins', 'imac_histrap_1ml_step.csv')); await h14.pool('T1-T6');
+        const l = p14.locator('.trace.run.sel [data-k=path]').first();
+        await l.evaluate(e => { for (let d = e.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true; });
+        await l.fill(String(PATH_MM)); await l.dispatchEvent('change'); await h14.wait(300);
+        const readState = async () => {
+          await h14.step('construct');
+          const prot = await p14.$$eval('#protTable tr', rs => rs.slice(1).map(r => [...r.cells].map(c => c.textContent.trim())));
+          const a280 = k => { const r = prot.find(c => c[0].startsWith(k)); return r ? num(r[r.length - 1]) : null; };
+          const rStep = (await h14.timeline()).find(x => /^run:/.test(x.k)); await h14.step(rStep.k);
+          const area = await p14.$$eval('#intTable tr', rs => { const hd = [...(rs[0] || {cells: []}).cells].map(c => c.textContent.trim()), pr = rs.find(r => r.classList.contains('pool')); const i = hd.findIndex(t => /^Area/.test(t)); return pr && i >= 0 ? pr.cells[i].textContent.trim() : null; });
+          await h14.step('figure');
+          const rs = await h14.sumTable(), hd = rs[0] || [], mi = hd.findIndex(k => /^Protein \(mg\)/.test(k));
+          const row = rs.slice(1).find(r => r.length === hd.length && mi >= 0 && num(r[mi]) > 0);
+          return {untagged: a280('Untagged'), tagged: a280('Tagged'), area: num(area), mg: row ? num(row[mi]) : null};
+        };
+        const s0 = await readState();
+        T.check('14_no_tag.default_untagged', shown0 === '' && s0.untagged > 0 && s0.tagged == null && nearMg(s0.mg, expMg(s0.area, s0.untagged)), JSON.stringify({shown0, s0}));
+        await h14.step('construct'); await setVal('#o-tagPreset2', 'sumo'); await h14.wait(250);
+        const s1 = await readState();
+        T.check('14_sumo_chosen.uses_tagged_coeff', s1.tagged > 0 && s1.tagged < s1.untagged && nearMg(s1.mg, expMg(s1.area, s1.tagged)), JSON.stringify(s1));
+        errs.push(...errs14);
+      } finally { await close14(); }
+    }
+
+    // Legacy saved settings without tagPreset keep migrated His-SUMO
+    for (const [k, saved] of [['saved_sumo', {tagPreset: 'sumo', tidy13: true, tidy14: true}], ['saved_no_key', {tidy13: true, tidy14: true}]]) {
+      const {p: ps, errs: es, close: cs} = await open(), hs = H(ps);
+      try {
+        await ps.addInitScript(s => { localStorage.setItem('hplc-fig-opt', s); }, JSON.stringify(saved));
+        await ps.reload(); await ps.waitForSelector('#npName', {state: 'visible', timeout: 15000});
+        await hs.newProject('Saved ' + k); await hs.step('construct');
+        const shown = await ps.$eval('#o-tagPreset2', e => e.value);
+        T.check(`14_${k}.keeps_sumo`, shown === 'sumo', `shown=${shown}`);
+        errs.push(...es);
+      } finally { await cs(); }
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

@@ -442,5 +442,224 @@ const {open, H, suite, fs, path, DATA} = require('../lib/harness');
     } finally { await close(); }
   });
 
+  /* #1433/#1434: Include Cloning switch keyboard/settings, confirmation modal, migration, archival progress & restore (deduplicated against entry above) */
+  await T.t('include-cloning-lifecycle', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const sw = p.locator('#npCloning');
+      const openSettings = () => p.evaluate(() => { const d = document.querySelector('details.proj-settings'); if (d) d.open = true; });
+      const headOn = async () => await p.locator('#projType').getAttribute('aria-checked') === 'true';
+      const clickHead = async () => { await openSettings(); await p.locator('#projType').click(); };
+      const setPrep = async (sel, val) => { await p.locator(sel).fill(val); await p.locator(sel).dispatchEvent('change'); await h.wait(250); };
+      const importObj = async (name, data) => {
+        await p.click('#homeBtn').catch(() => {}); await h.wait(350); await p.click('#homeQuick'); await h.wait(700);
+        await p.setInputFiles('#projFile', {name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data))}); await h.wait(1500);
+      };
+
+      // Switch keyboard handling (click/Space/Enter without submitting form)
+      T.check('switch/labelled-and-no-radios', await sw.count() === 1 && await p.locator('#newProj input[type=radio]').count() === 0 && (await sw.innerText()).trim() === 'Include Cloning' && await sw.getAttribute('role') === 'switch');
+      await sw.click(); await h.wait(100);
+      await sw.focus(); await p.keyboard.press('Space'); await h.wait(100);
+      T.check('switch/space-toggles-off', await sw.getAttribute('aria-checked') === 'false');
+      await p.fill('#npName', ''); await sw.focus(); await p.keyboard.press('Enter'); await h.wait(200);
+      T.check('switch/enter-toggles-without-submit', await sw.getAttribute('aria-checked') === 'true' && await p.locator('#npName').isVisible());
+      await sw.click(); await h.wait(100);
+
+      // Closed details.proj-settings block + Restore button hidden when empty
+      await h.newProject('Settings check', 'expression');
+      T.check('settings-block-contains-both', await p.evaluate(() => {
+        const d = document.querySelector('details.proj-settings');
+        return !!(d && !d.open && d.querySelector('.clone-toggle') && d.querySelector('input[type=text][name=projName]'));
+      }));
+      await openSettings();
+      const restoreBtn = p.locator('details.proj-settings #projCloneRestore');
+      T.check('archive/restore-hidden-when-empty', !(await restoreBtn.isVisible()));
+
+      // Confirmation modal (cancel vs confirm) + archival progress + restore
+      await p.click('#homeBtn'); await h.wait(500);
+      await h.newProject('Archive & Restore Synthetic', 'cloning');
+      await openSettings();
+      T.check('archive/restore-hidden-when-active', !(await restoreBtn.isVisible()));
+      await cl(p).locator('[data-cl=tpl][data-v=pcr]').click(); await h.wait(400);
+      const cRowsBefore = await rows(h);
+      await h.step(cRowsBefore[1].k);
+      await cl(p).locator('[data-cf="construct"]').fill('pSYN-GFP'); await cl(p).locator('[data-cf="construct"]').dispatchEvent('change');
+      await cl(p).locator('select[data-cst]').selectOption('done'); await h.wait(250);
+      const pcrRow = cRowsBefore.find(r => /PCR amplification/i.test(r.t)), gelRow = cRowsBefore.find(r => /PCR product analysis/i.test(r.t));
+      await h.step(pcrRow.k);
+      const fromVal = await cl(p).locator('select[data-cfrom] option').nth(1).getAttribute('value');
+      await cl(p).locator('select[data-cfrom]').selectOption(fromVal);
+      await cl(p).locator('select[data-cst]').selectOption('done'); await h.wait(250);
+      const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+      await h.step(gelRow.k);
+      await p.setInputFiles('#clonePanel .cl-gel-file', {name: 'syn_agarose.png', mimeType: 'image/png', buffer: png1x1}); await h.wait(500);
+      await cl(p).locator('select[data-cst]').selectOption('done'); await h.wait(250);
+
+      // Clone connection validation while on
+      await h.step('expr'); await setPrep('#pr-medium', 'TB');
+      await p.waitForFunction(() => !/Starter, induction/.test((document.querySelector('#tl [data-step="expr"] .ts') || {}).textContent || ''), {timeout: 5000});
+      let exprStep = (await h.timeline()).find(x => x.k === 'expr');
+      T.check('validate/on-needs-clone', exprStep.warn && /Connect the clone/.test(exprStep.s), JSON.stringify(exprStep));
+      await h.step('transform'); await setPrep('#pr-strain2', 'BL21(DE3)'); await setPrep('#pr-trSel', 'Kanamycin');
+      await p.click('#prCloneAdd'); await h.wait(200);
+      const cRow = p.locator('#prClones [data-clone]').first();
+      await cRow.locator('input[type=text]').first().fill('C3 synthetic'); await cRow.locator('input[type=text]').first().dispatchEvent('change');
+      await cRow.locator('input[type=radio]').first().check(); await h.wait(300);
+      exprStep = (await h.timeline()).find(x => x.k === 'expr');
+      T.check('validate/selected-clone-connects', !exprStep.warn && !/Connect the clone/.test(exprStep.s), JSON.stringify(exprStep));
+
+      await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep="man:column"]'); await h.wait(300);
+      await setPrep('#man-resin', '2 mL Ni-NTA'); await setPrep('#man-elution', '250 mM imidazole'); await setPrep('#man-vol', '4'); await setPrep('#man-conc', '2.5');
+
+      await h.allSteps();
+      const tlOn = await h.timeline(), cloneCountOn = tlOn.filter(s => /^clone:/.test(s.k)).length, cloneDoneOn = tlOn.filter(s => /^clone:/.test(s.k) && s.done && !s.warn).length;
+      const totalOn = tlOn.length, doneOn = tlOn.filter(s => s.done && !s.warn).length;
+      const progText = async () => (await p.locator('#stepsProg').innerText()).trim();
+      const progBefore = await progText();
+      const beforeStages = JSON.parse(await exportJson(p)).prep.cloning.stages;
+
+      // Cancel archive modal -> stays ON; confirm archive modal -> archives stages & updates progress
+      const modal = p.locator('#cloneArchiveModal');
+      await clickHead(); await h.wait(250);
+      T.check('dialog/visible-when-data-exists', await modal.isVisible());
+      await p.locator('#cloneArchiveCancel').click(); await h.wait(200);
+      T.check('dialog/cancel-keeps-on', !(await modal.isVisible()) && await headOn() && (await rows(h)).length === cloneCountOn);
+      await clickHead(); await h.wait(250);
+      await p.locator('#cloneArchiveConfirm').click(); await h.wait(300);
+      const expectedArchivedProg = `${doneOn - cloneDoneOn} of ${totalOn - cloneCountOn} steps done`;
+      await openSettings();
+      T.check('archive/active-progress-and-restore-btn', !(await headOn()) && await restoreBtn.isVisible() && progBefore === `${doneOn} of ${totalOn} steps done` && (await progText()) === expectedArchivedProg);
+      const archivedJson = JSON.parse(await exportJson(p));
+      T.check('archive/records-kept-when-off', archivedJson.prep.includeCloning === false && archivedJson.prep.cloning.stages.length === beforeStages.length);
+
+      // Restore via button restores stages, gel attachment, links, and progress
+      await restoreBtn.click(); await h.wait(400);
+      await openSettings();
+      const restoredStages = JSON.parse(await exportJson(p)).prep.cloning.stages;
+      T.check('archive/restore-preserves-everything', await headOn() && !(await restoreBtn.isVisible()) && (await progText()) === `${doneOn} of ${totalOn} steps done` &&
+        restoredStages.length === beforeStages.length && restoredStages.find(s => s.kind === 'pcr_setup')?.at[0]?.from === fromVal &&
+        /^data:image\/png/.test(restoredStages.find(s => s.kind === 'gel')?.gel?.image || ''));
+
+      // Legacy migration inference
+      const legacy = cloning => ({app: 'HPLC Figure Bench', version: 1, name: 'legacy', runs: [], traces: [], gels: [], prep: Object.assign({on: true, name: 'pSYN-1'}, cloning === undefined ? {} : {cloning})});
+      await importObj('old_with_stages.json', legacy({type: '', tpl: '', stages: [{id: 's1', kind: 'design', name: '', skip: false, at: []}], ext: {src: '', ver: '', note: ''}}));
+      T.check('migrate/stages-imply-on', await headOn());
+      await importObj('old_before_cloning.json', legacy(undefined));
+      T.check('migrate/no-record-off', !(await headOn()) && (await rows(h)).length === 0 && JSON.parse(await exportJson(p)).prep.includeCloning === false);
+      T.check('include-cloning/no page errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
+  /* #1436 & #1439: stage folding ("Show all stages", "N done") and Transformation join / legacy transfer migration */
+  await T.t('fold-and-transformation-join', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const vis = async () => (await h.timeline()).filter(x => /^clone:/.test(x.k));
+      await h.newProject('Fold and Join', 'cloning');
+      await cl(p).locator('[data-cl=tpl][data-v=ath]').click(); await h.wait(500);
+      let v = await vis();
+      T.check('fold/at-most-4-rows', v.length <= 4 && v[0].k === 'clone:setup', JSON.stringify(v.map(x => x.t)));
+      const all = p.locator('#tl [data-clall="1"]');
+      T.check('fold/show-all-link', /Show all stages \(14\)/.test(await all.innerText()));
+      await all.click(); await h.wait(250);
+      v = await vis();
+      T.check('fold/show-all-shows-15-and-join-names', v.length === 15 && !v.some(x => x.t === 'Transfer to expression') && v.some(x => x.t === 'Cloning transformation'));
+      await h.step('expr'); await h.step('clone:setup');
+      T.check('fold/show-all-holds', (await vis()).length === 15);
+
+      const first3 = v.slice(1, 4);
+      for (const s of first3.slice(0, 2)) { await h.step(s.k); await cl(p).locator('[data-cst]').first().selectOption('done'); await h.wait(250); }
+      await p.locator('#tl [data-clall="0"]').click(); await h.wait(200);
+      await h.step('construct');
+      v = await vis();
+      const done = p.locator('#tl [data-cldone]');
+      T.check('fold/done-row-and-next-stage', (await done.count()) === 1 && /2 done/.test(await done.innerText()) && v.some(x => x.k === first3[2].k) && !v.some(x => x.k === first3[0].k));
+      await done.click(); await h.wait(250);
+      v = await vis();
+      T.check('fold/done-row-lists-finished', v.some(x => x.k === first3[0].k) && v.some(x => x.k === first3[1].k));
+
+      // Verified clone fills Transformation & Construct plasmid unless user typed a custom value (#1439)
+      await go(h, 'Selection of a sequence-verified clone');
+      await field(p, 'Plasmid name').fill('pSYN-7'); await field(p, 'Plasmid name').dispatchEvent('change');
+      await field(p, 'Verification status').selectOption('Sequence verified');
+      await cl(p).locator('[data-cst]').first().selectOption('done'); await h.wait(300);
+      await h.step('transform');
+      T.check('join/verified-clone-fills-and-transfer-at-transform', await p.locator('#pr-trPlasmid').inputValue() === 'pSYN-7' && /Transfer to expression/.test(await cl(p).innerText()) && await cl(p).locator('[data-cf=plasmid], [data-cf=host], [data-cf=marker]').count() === 0);
+      await h.step('construct');
+      T.check('join/verified-clone-fills-construct', await p.locator('#pr-name').inputValue() === 'pSYN-7');
+      await h.step('transform'); await trPlasmid(p, h, 'pMINE-1');
+      await go(h, 'Selection of a sequence-verified clone');
+      await field(p, 'Plasmid name').fill('pSYN-8'); await field(p, 'Plasmid name').dispatchEvent('change'); await h.wait(300);
+      await h.step('transform');
+      T.check('join/typed-value-kept', await p.locator('#pr-trPlasmid').inputValue() === 'pMINE-1');
+
+      // Older project with legacy transfer stage migrates cleanly (#1439)
+      const oldProj = trP => ({app: 'HPLC Figure Bench', version: 1, name: 'older', runs: [], traces: [], gels: [],
+        prep: {on: true, name: '', trPlasmid: trP, strain: '', trSel: '', cloning: {type: 'cloning', tpl: '', ext: {src: '', ver: '', note: ''},
+          stages: [{id: 's1', kind: 'transfer', name: '', skip: false, at: [{id: 'a1', st: 'done', from: '', ck: {}, f: {plasmid: 'pOLD-1', host: 'BL21(DE3)', marker: 'kanamycin', clone: 'C3', bypass: true}}]}]}}});
+      const loadOld = async (nm, d) => { await p.click('#homeBtn').catch(() => {}); await h.wait(350); await p.click('#homeQuick'); await h.wait(700);
+        await p.setInputFiles('#projFile', {name: nm, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(d))}); await h.wait(1500); };
+      await loadOld('older_empty.json', oldProj(''));
+      await h.step('transform');
+      T.check('older/plasmid-and-strain-moved', await p.locator('#pr-trPlasmid').inputValue() === 'pOLD-1' && await p.locator('#pr-strain2').inputValue() === 'BL21(DE3)');
+      await loadOld('older_differs.json', oldProj('pOTHER-2'));
+      await h.step('transform');
+      const jDiff = JSON.parse(await exportJson(p));
+      T.check('older/typed-wins-and-notes-keep-old', await p.locator('#pr-trPlasmid').inputValue() === 'pOTHER-2' && /pOLD-1/.test(jDiff.prep.cloning.stages.find(s => s.kind === 'transfer').at[0].f._n || ''));
+      T.check('fold-join/no page errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
+  /* #1305 & #1582: selected clone handoff, live glycerol-stock sync on edit, failed deselection, and canonical import */
+  await T.t('selected-clone-handoff-and-stock-sync', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const set = async (loc, val) => { await loc.fill(val); await loc.dispatchEvent('change'); await h.wait(320); };
+      const readMethods = async () => { await p.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) { b.open = false; b.open = true; } }); await h.wait(250); return h.methods(); };
+      const cRow = i => p.locator('#prClones [data-clone]').nth(i);
+      const USED = /used for expression/;
+
+      await h.newProject('Clone handoff');
+      await h.step('construct'); await set(p.locator('#pr-name'), 'pSYN-1305');
+      await h.step('transform'); await set(p.locator('#pr-trMethod'), 'heat shock'); await set(p.locator('#pr-trStock'), 'box 1, B2');
+      await p.click('#prCloneAdd'); await h.wait(200); await p.click('#prCloneAdd'); await h.wait(200);
+      await set(cRow(0).locator('[data-cl=name]'), 'A1');
+      await set(cRow(1).locator('[data-cl=name]'), 'A2');
+      await set(cRow(1).locator('[data-cl=stock]'), 'box 3, A4');
+      await cRow(0).locator('[data-cl=status]').selectOption('failed'); await h.wait(250);
+
+      T.check('clone/failed-disabled-and-unselected-default', await cRow(0).locator('[data-cl=sel]').isDisabled() && await p.locator('#prClones [data-cl=none]').isChecked() && await p.inputValue('#pr-trStock') === 'box 1, B2' && !USED.test(await readMethods()));
+
+      await cRow(1).locator('[data-cl=status]').selectOption('verified'); await h.wait(250);
+      await cRow(1).locator('[data-cl=sel]').click(); await h.wait(300);
+      T.check('clone/selection-fills-stock-and-methods', await p.inputValue('#pr-trStock') === 'box 3, A4' && (await readMethods()).includes('Clone A2, verified, was used for expression (glycerol stock box 3, A4).'));
+
+      // Live stock edit on selected clone updates prep.trStock (#1582)
+      await set(cRow(1).locator('[data-cl=stock]'), 'box 9, H12');
+      const selJson = JSON.parse(await exportJson(p));
+      T.check('clone/edit-syncs-trStock-and-export', await p.inputValue('#pr-trStock') === 'box 9, H12' && selJson.prep.trStock === 'box 9, H12' && selJson.prep.selectedCloneId === selJson.prep.clones[1].id);
+
+      // Marking selected clone failed clears selection
+      await cRow(1).locator('[data-cl=status]').selectOption('failed'); await h.wait(300);
+      T.check('clone/failed-clears-selection', await p.locator('#prClones [data-cl=none]').isChecked() && !USED.test(await readMethods()));
+
+      // Canonical import of failed/missing/legacy selections
+      const loadMut = async (nm, mut) => { const d = JSON.parse(JSON.stringify(selJson)); mut(d.prep);
+        await p.click('#homeBtn').catch(() => {}); await h.wait(350); await p.click('#homeQuick'); await h.wait(700);
+        await p.setInputFiles('#projFile', {name: nm, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(d))}); await h.wait(1500); };
+      await loadMut('failed.json', pr => { pr.clones[1].status = 'failed'; });
+      T.check('clone/import-failed-null', JSON.parse(await exportJson(p)).prep.selectedCloneId === null && !USED.test(await readMethods()));
+      await loadMut('missing.json', pr => { pr.selectedCloneId = 'nope'; });
+      T.check('clone/import-missing-null', JSON.parse(await exportJson(p)).prep.selectedCloneId === null);
+      await loadMut('legacy.json', pr => { delete pr.clones; delete pr.selectedCloneId; pr.trStock = 'box 1, B2'; });
+      const legD = JSON.parse(await exportJson(p));
+      T.check('clone/import-legacy', Array.isArray(legD.prep.clones) && !legD.prep.clones.length && legD.prep.selectedCloneId === null && legD.prep.trStock === 'box 1, B2');
+      T.check('clone/no-page-errors', !errs.length, errs.join(' | '));
+    } finally { await close(); }
+  });
+
   T.done();
 })();

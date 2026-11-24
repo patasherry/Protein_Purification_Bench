@@ -215,6 +215,59 @@ const IMAC = require('../data/gen_imac_missing');
     }
   });
 
+  /* #1415 & #1582: plain HPLC trace in project gets its own timeline step, poolConc IDs stay unique, and deleting a run card clears dangling links */
+  await T.t('hplc_in_project_and_run_card_links', async () => {
+    const csvRows = ['Time (min),UV 280 (mAU)'];
+    for (let i = 0; i <= 200; i++) { const t = i / 50; csvRows.push(`${t.toFixed(2)},${(2 + 80 * Math.exp(-0.5 * ((t - 2) / 0.1) ** 2)).toFixed(3)}`); }
+    const traceFile = {name: 'synthetic_hplc.csv', mimeType: 'text/csv', buffer: Buffer.from(csvRows.join('\n') + '\n')};
+    const title = () => p.$eval('#ssTitle', e => e.textContent.trim());
+    const drawn = () => p.$eval('#paper svg', e => e.textContent.includes('synthetic_hplc')).catch(() => false);
+
+    await p.reload(); await h.wait(400);
+    await h.newProject('Plain trace');
+    T.check('step/absent-before', !(await h.timeline()).some(x => x.k === 'hplc'));
+    await h.addRun(traceFile);
+    const tl = await h.timeline();
+    T.check('step/own-step-no-run', !tl.some(x => /^run:/.test(x.k)) && tl.some(x => x.k === 'hplc' && /1 trace/.test(x.s)) && await title() === 'HPLC traces' && await drawn() && await p.locator('#list .trace').first().isVisible());
+    await h.step('construct');
+    T.check('step/leaves', await title() === 'Construct' && !(await drawn()));
+    await h.step('hplc');
+    T.check('step/comes-back', await title() === 'HPLC traces' && await drawn());
+    await p.locator('#list .trace [data-act=del]').first().click(); await h.wait(400);
+    T.check('step/gone-with-the-trace', !(await h.timeline()).some(x => x.k === 'hplc') && await title() === 'Construct');
+
+    // Add run, verify poolConc unique IDs on re-import, and verify run-card deletion cleans btw/nd/cleaveAfter links
+    await h.addRun(src('his')); await h.pool('T1-T6');
+    const rid = (await h.timeline()).find(x => x.k.startsWith('run:')).k.slice(4);
+    await h.addConc(null, 2.0);
+    await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep=cleave]'); await h.wait(350);
+    await h.step('final'); await p.click('#ndManual'); await h.wait(250);
+    await p.locator('#ndList .nd-edit > summary').first().click(); await h.wait(150);
+    await p.locator('#ndList [data-ndk="runId"]').first().selectOption(rid); await h.wait(250);
+
+    const [dl0] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#projSave')]);
+    const data0 = JSON.parse(fs.readFileSync(await dl0.path(), 'utf8'));
+    data0.runs[0].poolConc = '2.5';
+
+    // Delete run card -> clears dangling btw, ndSamples.runId, and cleaveAfter
+    await h.step('run:' + rid);
+    await p.locator(`#list .trace.run[data-id="${rid}"] [data-act="del"]`).click(); await h.wait(400);
+    const [dl1] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#projSave')]);
+    const dDel = JSON.parse(fs.readFileSync(await dl1.path(), 'utf8'));
+    T.check('delrun/clears-dangling-links', !(dDel.prep?.btw && Object.prototype.hasOwnProperty.call(dDel.prep.btw, rid)) && (dDel.nanodrop || []).every(x => x.runId !== rid) && dDel.prep?.cleaveAfter !== rid);
+
+    // Import saved poolConc project and check unique #pc<id> vs #pcap<id> + compact krow checkbox
+    await p.click('#homeBtn').catch(() => {}); await h.wait(350);
+    await p.click('#homeQuick'); await h.wait(600);
+    await p.setInputFiles('#projFile', {name: 'poolconc.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data0))});
+    await h.wait(1500);
+    T.check('poolconc/unique-ids', (await p.locator(`[id="pc${rid}"]`).count()) === 1 && (await p.locator(`#pcap${rid}`).count()) === 1);
+    await h.dropFiles(src('gel'));
+    await p.locator('details[data-sub="gknown"] > summary').click(); await h.wait(300);
+    const cbW = await p.locator('#knownList .krow input[type="checkbox"]').first().evaluate(e => e.getBoundingClientRect().width);
+    T.check('krow/compact-checkbox-width', cbW > 0 && cbW <= 20, `width=${cbW}`);
+  });
+
   T.check('no-page-errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

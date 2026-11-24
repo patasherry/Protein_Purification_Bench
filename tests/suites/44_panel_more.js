@@ -178,6 +178,103 @@ const {open, H, suite, src} = require('../lib/harness');
     T.check('search_empty_state_hint', emptyVis && emptyCleared && ph === 'Search settings/data/files', `emptyVis=${emptyVis} emptyCleared=${emptyCleared} ph=${ph}`);
   });
 
+  /* #431, #936, #1060: UI tokens/switches/reduced-motion, timeline 'Add run' & '+' stage controls, and 2-line trace title clamping in existing browser */
+  await T.t('ui_tokens_timeline_buttons_and_trace_wrap', async () => {
+    await h.step('figure'); await h.wait(250);
+    const ui = await p.evaluate(() => {
+      const px = s => parseFloat(s) || 0;
+      const prim = [...document.querySelectorAll('.btn.primary')].find(e => e.getClientRects().length) || document.querySelector('.btn.primary');
+      const pc = prim ? getComputedStyle(prim) : null, pr = prim ? prim.getBoundingClientRect() : null;
+      const cb = document.querySelector('#panel input[type=checkbox]'), cs = cb ? getComputedStyle(cb) : null, ca = cb ? getComputedStyle(cb, '::after') : null;
+      const seg = document.querySelector('#panel .seg'), segL = seg ? seg.querySelector('label') : null;
+      const grp = document.querySelector('#panel > .grp'), h2 = grp ? grp.querySelector('h2') : null;
+      const root = getComputedStyle(document.documentElement), svg = document.querySelector('#paper svg');
+      const tt = document.querySelector('.tl .tt'), tts = tt ? getComputedStyle(tt) : null;
+      const tracesEl = document.querySelector('.traces');
+      return {
+        primOk: !!(prim && px(pc.borderTopLeftRadius) >= 8 && pr.height >= 31.5),
+        swOk: !!(cb && cs.appearance === 'none' && px(cs.width) >= 1.5 * px(cs.height) && px(cs.borderTopLeftRadius) >= px(cs.height) / 2 - 1 && ca.content !== 'none' && ca.content !== 'normal'),
+        segOk: !!(seg && segL && px(getComputedStyle(seg).borderTopLeftRadius) >= 8 && px(getComputedStyle(segL).borderTopLeftRadius) >= 6),
+        grpOk: !!(grp && h2 && px(getComputedStyle(grp).borderTopLeftRadius) >= 10 && px(getComputedStyle(grp).borderTopLeftRadius) <= 12 && /caps/.test(getComputedStyle(h2).fontVariantCaps) && px(getComputedStyle(h2).fontSize) <= 13.5),
+        tokOk: /^-apple-system/.test(getComputedStyle(document.body).fontFamily) && ['--accent', '--ios-blue', '--card', '--sep', '--label', '--label2', '--panel'].every(k => root.getPropertyValue(k).trim()),
+        figFontOk: !!(svg && /Arial/.test(svg.getAttribute('font-family') || '') && !/apple-system/.test(svg.getAttribute('font-family') || '')),
+        clampOk: !!(tts && tts.whiteSpace === 'normal' && (tts.webkitLineClamp || tts.getPropertyValue('-webkit-line-clamp')) === '2' && tracesEl && getComputedStyle(tracesEl).overflowY === 'auto')
+      };
+    });
+    T.check('ios_look.controls_tokens_and_figure_font', ui.primOk && ui.swOk && ui.segOk && ui.grpOk && ui.tokOk && ui.figFontOk, JSON.stringify(ui));
+    T.check('sidebar_wrap.clamp_and_scroll', ui.clampOk, JSON.stringify(ui));
+
+    const wrapH = await p.evaluate(() => {
+      const tt = document.querySelector('.tl li .tt');
+      if (!tt) return 0;
+      const prev = tt.textContent;
+      tt.textContent = 'Superdex 200 Increase 10/300 GL - Preparative size-exclusion chromatography of target protein peak';
+      const h = tt.offsetHeight;
+      tt.textContent = prev;
+      return h;
+    });
+    T.check('sidebar_wrap.long_title_wraps', wrapH > 24, `height=${wrapH}`);
+
+    await p.emulateMedia({reducedMotion: 'reduce'}); await h.wait(100);
+    const noTrans = await p.evaluate(() => { const c = document.querySelector('#panel input[type=checkbox]'); return !!c && [getComputedStyle(c).transitionDuration, getComputedStyle(c, '::after').transitionDuration].every(d => d.split(',').every(x => parseFloat(x) === 0)); });
+    T.check('ios_look.reduced_motion', noTrans);
+    await p.emulateMedia({reducedMotion: 'no-preference'});
+
+    // #936: Add run menu toggle & '+' biological stage button
+    const addBtn = p.locator('#tl [data-addmenu]');
+    T.check('add_run_button.label', (await addBtn.textContent())?.trim() === 'Add run');
+    await addBtn.click(); await h.wait(150);
+    T.check('add_run_button.cancel_and_menu', (await addBtn.textContent())?.trim() === 'Cancel' && await p.locator('.tl-menu').isVisible());
+    await addBtn.click(); await h.wait(150);
+    T.check('add_run_button.restored', (await addBtn.textContent())?.trim() === 'Add run');
+
+    const stageAddBtn = p.locator('.tl-head [data-addstage]').first();
+    T.check('stage_header_add_btn', await stageAddBtn.count() >= 1 && (await stageAddBtn.textContent())?.trim() === '+');
+    await stageAddBtn.click(); await h.wait(350);
+    T.check('stage_header_activates_clone_setup', await p.locator('#tl [data-step="clone:setup"][aria-current="step"]').count() === 1 && await p.locator('#clonePanel [data-cadd]').count() === 1);
+  });
+
+  /* #1267: toast placement below header across desktop/phone, click-to-dismiss, and 1-click run/trace deletion Undo */
+  await T.t('toast_dismiss_and_card_undo', async () => {
+    const pathMod = require('path'), {DATA} = require('../lib/harness');
+    const at = await open({width: 1280, height: 860}), {p: pt} = at, ht = H(pt);
+    try {
+      await ht.newProject('Toast & Undo');
+      await ht.addRun(pathMod.join(DATA, 'chrom/valid_unicorn.zip'));
+      await ht.pool('T3-T6');
+
+      for (const [k, w] of [['desktop', 1280], ['phone', 390]]) {
+        await pt.setViewportSize({width: w, height: 860}); await ht.wait(150);
+        await ht.step('final');
+        await pt.setInputFiles('#file', pathMod.join(DATA, 'nd/nd_malformed_header.csv'));
+        await pt.waitForSelector('#toast .pill', {timeout: 5000});
+        const g = await pt.evaluate(() => { const t = document.querySelector('#toast .pill').getBoundingClientRect(), hd = document.querySelector('header.top').getBoundingClientRect(); return {toastTop: t.top, headerBottom: hd.bottom, scrolled: window.scrollY}; });
+        const bad = pt.locator('#toast .pill', {hasText: 'no usable measurements'});
+        await bad.click(); await ht.wait(150);
+        T.check(`toast_${k}_below_header_and_dismisses`, (g.scrolled > 0 || g.toastTop >= g.headerBottom - 0.5) && (await bad.count()) === 0, JSON.stringify(g));
+      }
+
+      await pt.setViewportSize({width: 1280, height: 860});
+      const csvRows = ['Time (min),UV 280 (mAU)'];
+      for (let i = 0; i <= 100; i++) { const t = i / 20; csvRows.push(`${t.toFixed(2)},${(2 + 80 * Math.exp(-0.5 * ((t - 2.5) / 0.1) ** 2)).toFixed(3)}`); }
+      await ht.addRun({name: 'synthetic_trace.csv', mimeType: 'text/csv', buffer: Buffer.from(csvRows.join('\n') + '\n')});
+
+      const rid = (await ht.timeline()).find(x => x.k.startsWith('run:')).k.slice(4);
+      await ht.step('run:' + rid);
+      await pt.locator(`#list .trace.run[data-id="${rid}"] [data-act="del"]`).click(); await ht.wait(250);
+      T.check('undo/run-immediate-removal', (await pt.locator(`#list .trace.run[data-id="${rid}"]`).count()) === 0);
+      await pt.locator('#toast .pill button', {hasText: 'Undo'}).click(); await ht.wait(350);
+      T.check('undo/run-and-pool-restored', await pt.locator(`#list .trace.run[data-id="${rid}"]`).isVisible() && (await pt.locator(`#list .trace.run[data-id="${rid}"] [data-k="shade"]`).inputValue()) === 'T3-T6');
+
+      await ht.step('hplc');
+      await pt.locator('#list .trace[data-kind="trace"] [data-act="del"]').first().click(); await ht.wait(250);
+      T.check('undo/trace-immediate-removal', (await pt.locator('#list .trace[data-kind="trace"]').count()) === 0);
+      await pt.locator('#toast .pill button', {hasText: 'Undo'}).click(); await ht.wait(350);
+      T.check('undo/trace-restored', (await pt.locator('#list .trace[data-kind="trace"]').count()) === 1);
+      errs.push(...at.errs);
+    } finally { await at.close(); }
+  });
+
   T.check('no_errors', !errs.length, errs.join('|'));
   await close();
   if (T.done) T.done();

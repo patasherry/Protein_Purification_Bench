@@ -83,5 +83,67 @@ async function fresh(id, fn){
     T.check('purity_missing_not_shown_in_svg', !html2.includes('0% pure'), `SVG does not include 0% pure`);
   });
 
+  /* #1022 & #1023: downstream allocation and kept-back carryover semantics tested across all 5 split states in one project */
+  await fresh('downstream_allocation_and_carryover', async (p, h) => {
+    p.on('dialog', d => d.accept());
+    const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,%]/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : null; };
+    const pct = (a, b) => a > 0 && b > 0 ? 100 * a / b : null;
+    const near = (got, want) => got != null && want != null && Math.abs(got - want) <= Math.max(1, 0.02 * want);
+    const setVal = (sel, v) => p.evaluate(({sel, v}) => { const e = document.querySelector(sel); if (!e) return false; e.value = v; e.dispatchEvent(new Event('input', {bubbles: true})); e.dispatchEvent(new Event('change', {bubbles: true})); return true; }, {sel, v: String(v)});
+    const CONC = 5, VOUT = 5, VIN = 20;
+
+    await h.newProject('Allocation and Carryover');
+    await setVal('#o-protKda', 50); await setVal('#o-eps', 1); await h.wait(150);
+    await h.addRun(path.join(DATA, 'standins', 'imac_histrap_1ml_step.csv')); await h.pool('T1-T6');
+    await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep=conc]'); await h.wait(400);
+    await setVal('#btw-vIn', VIN); await setVal('#btw-conc', CONC); await setVal('#btw-vOut', VOUT); await h.wait(250);
+    const sum = p.locator('#btwSplitBox > summary'); if (await sum.isVisible()) await sum.click(); await h.wait(150);
+    const fields = await p.evaluate(() => ['#btw-vLoad', '#btw-vKeep', '#btw-keepAs'].map(s => { const e = document.querySelector(s); return !!e && !!e.offsetParent; }));
+    T.check('split.fields_shown', fields.every(Boolean), JSON.stringify(fields));
+
+    await h.addRun(path.join(DATA, 'chrom', 'sec_semicolon_unicorn7.csv')); await h.pool('1.A.1-1.A.3');
+    await p.evaluate(() => { for (const [k, v] of [['path', '2'], ['mFlow', '0.5']]) { const el = document.querySelector(`.trace.run.sel [data-k=${k}]`); if (el) { el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); } } });
+    await h.wait(250);
+
+    const concKey = (await h.timeline()).find(x => /^btw:|^conc:|^nc:/.test(x.k)).k;
+    const probe = async ({vLoad = '', vKeep = '', keepAs = ''} = {}) => {
+      await h.step(concKey);
+      const sumOpen = await p.locator('#btwSplitBox').evaluate(d => d && d.open).catch(() => true);
+      if (!sumOpen) { await p.locator('#btwSplitBox > summary').click(); await h.wait(100); }
+      await setVal('#btw-vLoad', vLoad); await setVal('#btw-vKeep', vKeep); await setVal('#btw-keepAs', keepAs); await h.wait(250);
+      const hint = await p.$eval('#btwSplit', e => e.hidden ? '' : e.textContent).catch(() => '');
+      await h.step('figure'); await h.wait(250);
+      const rs = await h.sumTable(), head = rs[0] || [], rows = rs.slice(1).filter(r => r.length === head.length);
+      const col = re => head.findIndex(k => re.test(k)), mi = col(/^Protein \(mg\)/), yi = col(/^Yield/), si = col(/^Step yield/), ci = rows.findIndex(r => /concentrat/i.test(r[0] || ''));
+      const g = (r, i) => r && i >= 0 ? num(r[i]) : null, s1 = rows[0], conc = rows[ci], sec = rows[ci + 1];
+      const notes = await p.$$eval('#sumNotes li', ls => ls.map(l => l.textContent));
+      return {hint, notes, s1Mg: g(s1, mi), concMg: g(conc, mi), secMg: g(sec, mi), secY: g(sec, yi), secStep: g(sec, si)};
+    };
+
+    // 1. Legacy (no split): all 25 mg loaded, no hint, no kept-back note
+    const leg = await probe();
+    T.check('legacy.conc_mg', leg.concMg === CONC * VOUT, JSON.stringify(leg));
+    T.check('legacy.step_yield_from_all', near(leg.secStep, pct(leg.secMg, CONC * VOUT)) && near(leg.secY, pct(leg.secMg, leg.s1Mg)), JSON.stringify(leg));
+    T.check('legacy.no_hint_or_note', leg.hint === '' && !leg.notes.some(t => /kept back/.test(t)), JSON.stringify(leg));
+
+    // 2. Split (1 mL loaded, 4 mL kept back): step yield from 5 mg loaded, route yield vs step 1, kept-back note shown
+    const sp = await probe({vLoad: 1, vKeep: 4, keepAs: 'flash-frozen, -80 °C'});
+    const note = sp.notes.find(t => /kept back/.test(t)) || '';
+    T.check('split.conc_mg_whole_output', sp.concMg === CONC * VOUT, JSON.stringify(sp));
+    T.check('split.hint_names_loaded', /5\.00 mg \(1\.0 of 5\.0 mL\) went on to the next step, 4\.0 mL kept back/.test(sp.hint), sp.hint);
+    T.check('split.step_yield_from_loaded', near(sp.secStep, pct(sp.secMg, CONC * 1)) && sp.secStep <= 100 && near(sp.secY, pct(sp.secMg, sp.s1Mg)), JSON.stringify(sp));
+    T.check('split.kept_note_complete', /25\.00 mg in all; 5\.00 mg \(1\.0 of 5\.0 mL\) was loaded on the next step and 20\.00 mg \(4\.0 mL, flash-frozen, -80 °C\) kept back/.test(note) &&
+      near(num((note.match(/kept back, (\d+)% of step 1/) || [])[1]), pct(CONC * 4, sp.s1Mg)) &&
+      /Kept back is not lost: the next step's step yield counts from the 5\.00 mg loaded/.test(note), note);
+
+    // 3. Kept-only (4 mL kept -> 1 mL loaded), Over-split (2+4 > 5 mL), and Zero-loaded (0 mL)
+    const ko = await probe({vKeep: 4});
+    T.check('kept_only.step_yield_from_rest', near(ko.secStep, pct(ko.secMg, CONC * 1)) && /5\.00 mg \(1\.0 of 5\.0 mL\)/.test(ko.hint), JSON.stringify(ko));
+    const ov = await probe({vLoad: 2, vKeep: 4});
+    T.check('over.flagged_and_falls_back_to_all', /is 6\.0 mL, more than the 5\.0 mL/.test(ov.hint) && near(ov.secStep, pct(ov.secMg, CONC * VOUT)), JSON.stringify(ov));
+    const zr = await probe({vLoad: 0, vKeep: 5});
+    T.check('zero.flagged_and_falls_back_to_all', /load of 0 mL/.test(zr.hint) && near(zr.secStep, pct(zr.secMg, CONC * VOUT)), JSON.stringify(zr));
+  });
+
   T.done();
 })();

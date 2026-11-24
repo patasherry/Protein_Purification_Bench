@@ -165,6 +165,58 @@ const F = {gb: src('gb'), imac: src('his'), q: src('q'), sec: path.join(DATA, 's
     T.check('methods_ph_no_junk', !JUNK.some(re => re.test(m)), 'Junk found in methods with pH: ' + m);
   });
 
+  /* #1089: clicking missing detail chips in #methodsGaps navigates to the step and focuses the field */
+  await T.t('actionable_methods_gaps', async () => {
+    await p.click('#homeBtn').catch(() => {}); await h.wait(400);
+    await h.newProject('Methods Gaps Test');
+    const figEmptySummary = (await p.locator('#tl [data-step="figure"] .ts').textContent())?.trim();
+    T.check('figure-empty-summary', figEmptySummary === 'Builds after you add a purification step.', `summary: ${figEmptySummary}`);
+    await h.addRun(F.imac);
+    await h.pool('T1-T6');
+    await h.step('figure');
+    const gapsEl = p.locator('#methodsGaps');
+    T.check('methods-gaps-visible', await gapsEl.isVisible() && await gapsEl.locator('button.gap-btn').count() > 0, 'gap buttons visible');
+    const flowBtn = p.locator('#methodsGaps button.gap-btn[data-gap*="flow"]').first();
+    T.check('flow-rate-gap-button-found', await flowBtn.count() > 0);
+    if (await flowBtn.count() > 0) {
+      await flowBtn.click(); await h.wait(350);
+      const activeId = await p.evaluate(() => document.activeElement ? document.activeElement.id : '');
+      const stepSel = await p.evaluate(() => document.querySelector('.tl li.cur button')?.dataset.step || '');
+      T.check('flow-rate-field-focused-and-navigated', activeId.startsWith('mFlow') && stepSel.startsWith('run:'), `activeId=${activeId} step=${stepSel}`);
+    }
+    await h.step('figure');
+    const trBtn = p.locator('#methodsGaps button.gap-btn[data-gap="Transformation"]').first();
+    T.check('transformation-gap-button-found', await trBtn.count() > 0);
+    if (await trBtn.count() > 0) {
+      await trBtn.click(); await h.wait(350);
+      const activeIdTr = await p.evaluate(() => document.activeElement ? document.activeElement.id : '');
+      const stepSelTr = await p.evaluate(() => document.querySelector('.tl li.cur button')?.dataset.step || '');
+      T.check('transform-field-focused-and-navigated', (activeIdTr === 'pr-trPlasmid' || activeIdTr === 'pr-strain2') && stepSelTr === 'transform', `activeId=${activeIdTr} step=${stepSelTr}`);
+    }
+  });
+
+  /* #1468: Methods text respects run/step volume unit (µL vs mL) for between-step and manual steps (UI/DOM only) */
+  await T.t('between_step_volume_units', async () => {
+    const loadUnitProj = async (unit, fname) => {
+      const proj = {
+        app: 'HPLC Figure Bench', version: 1,
+        opt: {preset: 'column', fs: 9, w: 7, h: 5, wfH: 0.9, tidy13: true, tidy14: true},
+        runs: [{id: 'r1', name: 'IMAC', inWf: true, xu: unit, uvi: 0, uvs: [{name: 'UV', yu: 'mAU', xs: [0, 100], ys: [0, 100]}], fracs: [], phases: [], integ: []}],
+        traces: [], gels: [],
+        prep: {on: true, btw: {'r1': {how: 'conc', vOut: 50}}, manual: [{id: 'm1', kind: 'conc', name: 'Concentration step', vol: 50, inWf: true, unit}]}
+      };
+      await p.click('#homeBtn').catch(() => {}); await h.wait(400);
+      await p.click('#homeQuick'); await h.wait(400);
+      await p.setInputFiles('#projFile', {name: fname, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(proj))});
+      await h.wait(500);
+      return methods();
+    };
+    const mUl = await loadUnitProj('µL', 'test_ul.json');
+    T.check('methods-dom-ul-contains-50-ul', mUl.includes('50 µL') && !mUl.includes('50 mL'), `Methods text: ${mUl}`);
+    const mMl = await loadUnitProj('mL', 'test_ml.json');
+    T.check('methods-dom-ml-contains-50-ml', mMl.includes('50 mL'), `Methods text: ${mMl}`);
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

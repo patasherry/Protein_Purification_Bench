@@ -771,4 +771,86 @@ await T.t('workflow-minigel-ladder-kda-no-overlap', async () => {
   }
 });
 
+/* #1324, #1330, #1426: one 3000x3000 synthetic gel (>12 MB PNG data URL) survives both IndexedDB save/reload and JSON export/import as lossless PNG with identical densitometry */
+await T.t('oversized-gel-blob-and-export-roundtrip', async () => {
+  const pathMod = require('path'), osMod = require('os');
+  const a = await open(), {p} = a, h = H(p);
+  let fresh = null, tmpPng = null, savedJson = null;
+  try {
+    const png = await p.evaluate(() => {
+      const W = 3000, Hh = 3000, c = document.createElement('canvas'); c.width = W; c.height = Hh;
+      const x = c.getContext('2d'), im = x.createImageData(W, Hh); let s = 1324;
+      const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return (s >>> 24) - 128; };
+      for (let y = 0; y < Hh; y++) for (let col = 0; col < W; col++) {
+        const lane = Math.floor(col / 1000), dx = Math.abs(col % 1000 - 500), w = Math.exp(-.5 * (dx / 240) ** 8);
+        const bands = lane === 0 ? [[600, 60, 38], [1450, 65, 38], [2160, 65, 38]] : [[1200, 110, 62], [2300, 55, 75]];
+        const dark = bands.reduce((tot, [mu, hh, z]) => tot + hh * Math.exp(-.5 * ((y - mu) / z) ** 2), 0) * w;
+        const j = 4 * (W * y + col), v = Math.max(0, Math.min(255, Math.round(235 - dark + rnd() * .3)));
+        im.data[j] = im.data[j + 1] = im.data[j + 2] = v; im.data[j + 3] = 255;
+      }
+      x.putImageData(im, 0, 0); return c.toDataURL('image/png');
+    });
+    T.check('oversized.exceeds-legacy-ceiling', png.length > 12e6, 'data URL length ' + png.length);
+    tmpPng = pathMod.join(osMod.tmpdir(), 'ppb_oversized_' + Date.now() + '.png');
+    fs.writeFileSync(tmpPng, Buffer.from(png.split(',')[1], 'base64'));
+
+    await h.newProject('Oversized gel');
+    await h.addRun(src('his'));
+    await p.setInputFiles('#gelFile', tmpPng);
+    await p.waitForFunction(() => document.querySelectorAll('#bandTable tbody tr').length >= 2, null, {timeout: 20000});
+    const readCsv = async pg => { const w = pg.waitForEvent('download', {timeout: 15000}); await pg.evaluate(() => document.querySelector('#bandCsv').click()); return fs.readFileSync(await (await w).path(), 'utf8'); };
+    const beforeCsv = await readCsv(p);
+    T.check('oversized.purity-read-before-save', /\d/.test(beforeCsv) && beforeCsv.split('\n').length > 2, beforeCsv.slice(0, 200));
+
+    const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 20000}), p.click('#projSave')]);
+    savedJson = pathMod.join(osMod.tmpdir(), 'ppb_oversized_' + Date.now() + '.json');
+    await dl.saveAs(savedJson);
+    const exported = JSON.parse(fs.readFileSync(savedJson, 'utf8'));
+    T.check('oversized.exported-as-png', /^data:image\/png/.test(exported.gels[0].image || ''), (exported.gels[0].image || '').slice(0, 40));
+
+    await h.wait(2800);
+    await p.reload();
+    await p.waitForSelector('#projList [data-pid]', {timeout: 15000});
+    await p.locator('#projList [data-pid]').first().click();
+    await p.waitForSelector('.trace.gelc[data-kind=gel] .thead', {state: 'attached', timeout: 15000});
+    await p.evaluate(() => document.querySelector('.trace.gelc[data-kind=gel] .thead').click());
+    await p.waitForFunction(() => document.querySelectorAll('#bandTable tbody tr').length >= 2, null, {timeout: 15000});
+    const reloadCsv = await readCsv(p);
+    T.check('oversized.reload-csv-identical', reloadCsv === beforeCsv, 'IndexedDB reload densitometry match');
+
+    fresh = await open();
+    await fresh.p.click('#homeQuick');
+    await fresh.p.setInputFiles('#projFile', savedJson);
+    await fresh.p.waitForSelector('.trace.gelc[data-kind=gel] .thead', {state: 'attached', timeout: 15000});
+    await fresh.p.evaluate(() => document.querySelector('.trace.gelc[data-kind=gel] .thead').click());
+    await fresh.p.waitForFunction(() => document.querySelectorAll('#bandTable tbody tr').length >= 2, null, {timeout: 15000});
+    const importCsv = await readCsv(fresh.p);
+    T.check('oversized.export-import-csv-identical', importCsv === beforeCsv, 'JSON export/import densitometry match');
+    T.check('oversized.no-errors', !a.errs.length && !fresh.errs.length, a.errs.concat(fresh.errs).join(' | '));
+  } finally {
+    if (fresh) await fresh.close();
+    await a.close();
+    if (tmpPng) fs.rmSync(tmpPng, {force: true});
+    if (savedJson) fs.rmSync(savedJson, {force: true});
+  }
+});
+
+/* #99: toast shifts above #markPrompt on narrow viewports so ladder-marking controls are not covered */
+await T.t('band-controls-no-overlap', async () => {
+  const a = await open({width: 600, height: 800}), {p} = a, h = H(p);
+  try {
+    await h.newProject('Test Overlap');
+    await p.locator('#gelFile').setInputFiles(src('gel'));
+    await h.wait(500);
+    T.check('band-overlap.toast-visible', await p.evaluate(() => { const el = document.getElementById('toast'); return !!(el && !el.hidden && getComputedStyle(el).display !== 'none'); }), 'Toast visible');
+    await p.click('#g-mark');
+    await h.wait(200);
+    T.check('band-overlap.prompt-visible', await p.evaluate(() => { const el = document.getElementById('markPrompt'); return !!(el && !el.hidden && getComputedStyle(el).display !== 'none'); }), 'Mark prompt visible');
+    T.check('band-overlap.toast-shifted', await p.evaluate(() => { const el = document.getElementById('toast'); return el.classList.contains('overlap') && parseInt(getComputedStyle(el).bottom, 10) >= 70; }), 'Toast shifted');
+    T.check('band-overlap.no-errors', !a.errs.length, a.errs.join(' | '));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
