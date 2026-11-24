@@ -518,5 +518,55 @@ async function fresh(id, fn){
     T.check('nd/ratio_2.0_quiet', !!byName('Sample ng_uL') && !byName('Sample ng_uL').flags.some(t => /outside expected range/i.test(t)), JSON.stringify(byName('Sample ng_uL')));
   });
 
+  // #1726: #ndManual ("Type a reading") starts blank (no 1.00 or null*1 === 0.00 mg/mL), renders inline A280/mg/mL/260/280 inputs, and updates .nd-v and .nd-flags live without dropping focus.
+  await fresh('manual_typed_reading', async (p, h) => {
+    const id = 'nd/manual_typed_reading';
+    await h.newProject('Manual typed reading');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.step('final');
+    await p.click('#ndManual');
+    await p.locator(SEL.row).first().waitFor();
+
+    const initVal = (await p.locator('.ndr .nd-v').first().textContent()).trim();
+    T.check(id + '/starts_empty', initVal === '', `expected empty .nd-v before typing, got "${initVal}"`);
+
+    const aInp = await p.$('.ndr input[data-ndk="a280"]');
+    const cInp = await p.$('.ndr input[data-ndk="conc"]');
+    const rInp = await p.$('.ndr input[data-ndk="r280"]');
+    const vis = async el => el ? await el.isVisible() : false;
+    const hasInputs = (await vis(aInp)) && (await vis(cInp)) && (await vis(rInp));
+    T.check(id + '/has_inline_inputs', hasInputs, `a280=${!!aInp} conc=${!!cInp} r280=${!!rInp}`);
+
+    let a280Focus = false, valAfterA280 = '', flagsAfterR280 = '', r280Focus = false, valAfterConc = '', a280Cleared = false, clearedStaysEmpty = false;
+    if (aInp && cInp && rInp) {
+      a280Focus = await aInp.evaluate(e => document.activeElement === e);
+      await aInp.fill('2.80');
+      const stA = await aInp.evaluate(e => ({connected: e.isConnected, active: document.activeElement === e, value: e.value}));
+      a280Focus = a280Focus && stA.connected && stA.active && stA.value === '2.80';
+      valAfterA280 = (await p.locator('.ndr .nd-v').first().textContent()).trim();
+
+      await rInp.fill('0.95');
+      const stR = await rInp.evaluate(e => ({connected: e.isConnected, active: document.activeElement === e, value: e.value}));
+      r280Focus = stR.connected && stR.active && stR.value === '0.95';
+      flagsAfterR280 = (await p.locator('.ndr .nd-flags').first().textContent()).trim();
+
+      await cInp.fill('3.50');
+      const stC = await cInp.evaluate(e => ({connected: e.isConnected, active: document.activeElement === e, value: e.value}));
+      valAfterConc = stC.connected && stC.active ? (await p.locator('.ndr .nd-v').first().textContent()).trim() : '';
+      a280Cleared = await aInp.evaluate(e => e.value === '');
+
+      await cInp.fill('');
+      clearedStaysEmpty = (await p.locator('.ndr .nd-v').first().textContent()).trim() === '';
+      await aInp.fill('2.80');
+    }
+    T.check(id + '/live_a280_and_focus', a280Focus && valAfterA280 === '2.80 mg/mL', `focus=${a280Focus} val="${valAfterA280}"`);
+    T.check(id + '/live_r280_flags_and_focus', r280Focus && /260\/280\s+0\.95/.test(flagsAfterR280) && /▲/.test(flagsAfterR280), `focus=${r280Focus} flags="${flagsAfterR280}"`);
+    T.check(id + '/live_conc_and_null_guard', valAfterConc === '3.50 mg/mL' && a280Cleared && clearedStaysEmpty, `val="${valAfterConc}" a280Cleared=${a280Cleared} clearedStaysEmpty=${clearedStaysEmpty}`);
+
+    await p.setViewportSize({width: 390, height: 844});
+    const noOverflow390 = hasInputs && await p.$eval('.ndr', el => el.scrollWidth <= el.clientWidth + 1);
+    T.check(id + '/fits_390px', noOverflow390, 'manual inputs fit within .ndr at 390px width without horizontal overflow');
+  });
+
   T.done();
 })();
