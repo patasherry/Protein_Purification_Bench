@@ -10392,6 +10392,7 @@ async function openProject(data, name, noUndo){
   ndUid = Math.max(uid, ndSamples.length + 1 + Date.now() % 1000);
   { const seenN = new Set(); ndSamples.forEach(n => { const k = n.id != null ? String(n.id) : ''; if (!k || seenN.has(k)) n.id = 'nd' + (ndUid++); seenN.add(String(n.id)); }); }
   cur = data.cur || 'overlay'; marking = null; tagMode = ''; customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
+  clAll = false; clDoneOpen = false; tlHtml = '';
   await agEnsureAdjImage();
   if (PROJ) initProjectDirectory(PROJ, data.directory);
   renderList(); syncControls(); render(); saveOpt();
@@ -11464,7 +11465,7 @@ function leaveWorkspace(){
 function showHome(){ leaveWorkspace().then(() => { if (MODE === 'home') renderHome(); }); setSaveState(''); document.body.classList.remove('proj'); $('#home').hidden = false; document.querySelector('.app').hidden = true; window.scrollTo(0, 0); applyProjUI(); renderHome(); }
 function enterApp(){ $('#home').hidden = true; document.querySelector('.app').hidden = false; window.scrollTo(0, 0); }
 function resetWorkspace(){ rawFiles = []; runs = []; traces = []; gels = []; struct = null; ndSamples = []; assays = []; srcDiag = {}; prep = JSON.parse(JSON.stringify(PREP_DEF)); prep.on = true;
-  QKEYS.forEach(k => { opt[k] = DEF[k]; }); customTagSeq = ''; cur = 'overlay'; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null; }
+  QKEYS.forEach(k => { opt[k] = DEF[k]; }); customTagSeq = ''; cur = 'overlay'; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null; clAll = false; clDoneOpen = false; tlHtml = ''; }
 const newPid = () => 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function newProject(name, protein, include){
   const targetHomeFolder = MODE === 'home' && !homeShowArchive && homeCurFolder && homeCurFolder !== 'root' ? homeCurFolder : 'root';
@@ -11681,6 +11682,7 @@ async function switchActivePrep(prepId){
   if (!target) return;
   PROJ.directory.activePrepId = prepId;
   wfSel = null; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null;
+  clAll = false; clDoneOpen = false; tlHtml = '';
   if (target.data) {
     const d = target.data;
     runs = (d.runs || []).map(r => { const rc = Object.assign({}, r); if (rc.fracs && !Array.isArray(rc.fracs)) rc.fracs = [rc.fracs]; else if (!Array.isArray(rc.fracs)) rc.fracs = []; return makeRun(rc); });
