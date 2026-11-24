@@ -901,6 +901,72 @@ async function txt(root, sel) {
     }
   });
 
+  await T.t('split-yield-provenance-and-unadjusted-csv', async () => {
+    const {p, close, errs} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(12000);
+      await p.locator('#projFile').setInputFiles({
+        name: 'split_provenance.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({
+          app: 'Protein Purification Bench',
+          version: 1,
+          schemaVersion: 1,
+          name: 'Split Basis Provenance',
+          opt: {protKda: 50, eps: 1.0},
+          prep: {
+            on: true,
+            name: 'Split Basis Prep',
+            btw: {r1: {how: 'conc', conc: '4.0', vOut: '2', vLoad: '1', vKeep: '1', unit: 'mL'}}
+          },
+          runs: [
+            makeRun('r1', 'HisTrap_IMAC', 'IMAC', 10, 'F1-F3'),
+            makeRun('r2', 'Superdex200_SEC', 'SEC', 12, 'F1-F3')
+          ],
+          traces: [], gels: [], ndSamples: [],
+          assays: [{
+            id: 'a1',
+            name: 'NADH oxidase',
+            mode: 'steps',
+            protocol: {substrate: 'NADH', substrateConc: '0.2 mM', buffer: '50 mM Tris-HCl', pH: 8.0, tempC: 25, wavelengthNm: 340, eps_mM: 6.22, pathCm: 1, rxnVolMl: 1.0, enzVolMl: 0.02},
+            blanks: [{val: 0.002}, {val: 0.002}],
+            entries: [
+              {id: 'e1', name: 'Clarified lysate', stepRef: 'lysis', volMl: 50, protMgMl: 4.0, dil: 1, rawVals: [0.1264, 0.1264], rawUnit: 'dA/min'},
+              {id: 'e2', name: 'IMAC', stepRef: 'run:r1', volMl: 10, protMgMl: 2.0, dil: 5, rawVals: [0.10152, 0.10152], rawUnit: 'dA/min'},
+              {id: 'e3', name: 'SEC', stepRef: 'run:r2', volMl: 2.5, protMgMl: 0.6, dil: 10, rawVals: [0.07664, 0.07664], rawUnit: 'dA/min'}
+            ],
+            display: {visible: true, placement: 'panel', yUnit: 'U/mg', showErr: 'sd'}
+          }]
+        }))
+      });
+      await h.wait(600);
+      await h.step('figure');
+      const tbl = await h.sumTable();
+      const concRow = tbl.find(r => /concentrat/i.test(r[0] || ''));
+      const basis = await p.$eval('#sumBasis', e => e.textContent);
+      T.check('split-conc-row-preserved-on-load', !!concRow && concRow.includes('8.00'), JSON.stringify(concRow));
+      T.check('split-basis-explains-both-columns', /protein Yield \(%\).*route.*Activity yield \(%\).*split-adjusted/i.test(basis), basis);
+
+      let csvText = '';
+      if (await p.isVisible('#sumCsv')) {
+        const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 5000}).catch(() => null), p.click('#sumCsv')]);
+        if (dl) {
+          const chunks = [];
+          for await (const ch of await dl.createReadStream()) chunks.push(ch);
+          csvText = Buffer.concat(chunks).toString('utf8');
+        }
+      }
+      const csvLines = csvText.trim().split(/\r?\n/);
+      const csvHdr = (csvLines[0] || '').split(',');
+      const secLine = csvLines.find(l => l.includes('Superdex200_SEC')) || '';
+      const secCols = secLine.split(',');
+      T.check('split-csv-unadjusted-activity-yield', csvHdr[csvHdr.length - 1] === 'Activity yield unadjusted (%)' && secCols[secCols.length - 1] === '30.0', JSON.stringify({lastCol: csvHdr[csvHdr.length - 1], secLast: secCols[secCols.length - 1]}));
+      T.check('split-provenance-no-page-errors', errs.length === 0, errs.join('; '));
+    } finally {
+      await close();
+    }
+  });
+
   await T.t('kinetics-rigor-weighted-aicc-units-kcatkm-and-hill-k05', async () => {
     const {p, errs, close} = await open(), h = H(p);
     const txt = async (root, sel) => ((await root.locator(sel).first().textContent().catch(() => '')) || '').trim();

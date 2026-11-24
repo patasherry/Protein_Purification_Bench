@@ -80,7 +80,12 @@ def log(*a):
 
 def cloud_report(s):
     """Cloud: keep one comment on the tracking issue with what the last cloud pass did, since the Actions log is hard to reach."""
-    meta = json.dumps({'ag_off_until': int(s.get('ag_off_until', 0)), 'ag_refused': int(s.get('ag_refused', 0))})
+    meta = json.dumps({
+        'ag_off_until': int(s.get('ag_off_until', 0)),
+        'ag_refused': int(s.get('ag_refused', 0)),
+        'ag_done': list(s.get('ag_done', []))[-50:],
+        'ag_tried': s.get('ag_tried', {}),
+    })
     body = f'<!-- cloud-report -->\n<!-- cloud-state {meta} -->\n**Last cloud manager pass** (GitHub Actions, while the PC is off)\n\n```\n' + '\n'.join(LOGGED[-60:])[-6000:] + '\n```'
     try:
         cid = s.get('report_id') or next((c['id'] for c in comments(TRACK) if c['body'].startswith('<!-- cloud-report -->')), None)
@@ -103,13 +108,32 @@ def load():
         s['day'], s['count'] = today, {}
     for k in ('answered', 'triaged', 'flagged', 'advised'):
         s.setdefault(k, {})
-    if CLOUD and not s.get('ag_off_until'):
+    if CLOUD:
         try:
             c = next((c for c in reversed(comments(TRACK)) if '<!-- cloud-state ' in c['body']), None)
             m = c and re.search(r'<!-- cloud-state (\{.*?\}) -->', c['body'])
             if m:
-                for k, v in json.loads(m.group(1)).items():
-                    s.setdefault(k, v)
+                cs = json.loads(m.group(1))
+                done_ids = [x for x in (cs.get('ag_done') or []) if isinstance(x, str)]
+                if done_ids:
+                    cur_done = s.setdefault('ag_done', [])
+                    for x in done_ids:
+                        if x not in cur_done:
+                            cur_done.append(x)
+                    del cur_done[:-50]
+                    ag = s.get('antigravity')
+                    if isinstance(ag, dict):
+                        for k, j in list(ag.items()):
+                            if isinstance(j, dict) and j.get('id') in done_ids:
+                                ag.pop(k, None)
+                cs_tried = cs.get('ag_tried')
+                if isinstance(cs_tried, dict) and cs_tried:
+                    tr = s.setdefault('ag_tried', {})
+                    for k, v in cs_tried.items():
+                        tr[k] = max(rt.tries(tr.get(k)), rt.tries(v))
+                for k, v in cs.items():
+                    if k not in ('ag_done', 'ag_tried'):
+                        s.setdefault(k, v)
         except Exception:
             pass
     return s
@@ -1775,20 +1799,48 @@ def all_text(o):
     return ''
 
 
+def _mark_ag_done(s, jid):
+    if not jid:
+        return
+    done = s.setdefault('ag_done', [])
+    if jid not in done:
+        done.append(jid)
+        del done[:-50]
+
+
 def antigravity(s):
     """Start Antigravity jobs from the work queue, and turn finished ones into PRs. Polls on each pass, so nothing waits on it."""
     if not GEMINI_KEY:
         return
     a = s.setdefault('antigravity', {})
+    open_ag_prs = {}
+    if a:
+        try:
+            for p in (gh(f'repos/{REPO}/pulls?state=open&per_page=100') or []):
+                if isinstance(p, dict):
+                    ref = (p.get('head') or {}).get('ref') or ''
+                    if ref.startswith('antigravity/issue-'):
+                        open_ag_prs[ref] = p.get('number')
+        except Exception:
+            pass
     for n, job in list(a.items()):
+        branch = f'antigravity/issue-{n}'
+        if branch in open_ag_prs:
+            _mark_ag_done(s, job.get('id'))
+            a.pop(n)
+            label(int(n), add=['antigravity-done'], remove=['antigravity-running'])
+            log(f'#{n}: PR #{open_ag_prs[branch]} already open on {branch}, skipping duplicate push')
+            continue
         try:
             it = gem_api(f'interactions/{job["id"]}')
         except Exception as e:
             log(f'#{n}: Antigravity status check failed: {str(e)[:200]}')
             if time.time() - job['at'] > 3 * 3600:
-                s.setdefault('ag_tried', {})[n] = rt.tries(s['ag_tried'].get(n)) + 1
-                lost_more = s['ag_tried'][n] < AG_MAX_TRIES
+                tried_map = s.setdefault('ag_tried', {})
+                tried_map[n] = rt.tries(tried_map.get(n)) + 1
+                lost_more = tried_map[n] < AG_MAX_TRIES
                 label(int(n), add=['for-antigravity' if lost_more else QUEUE] + ([] if lost_more else ['ag-returned']), remove=['antigravity-running', 'for-antigravity'])
+                _mark_ag_done(s, job.get('id'))
                 a.pop(n)
                 log(f'#{n}: Antigravity job lost ({e}), back to the queue')
             continue
@@ -1797,6 +1849,7 @@ def antigravity(s):
             log(f'#{n}: Antigravity still working ({st or "no status"}, {int((time.time() - job["at"]) / 60)} min, {it.get("usage", {}).get("total_tokens", "?")} tokens)')
             continue
         log(f'#{n}: Antigravity finished with status {st}; result keys: {", ".join(sorted(it.keys()))[:200]}')
+        _mark_ag_done(s, job.get('id'))
         a.pop(n)
         steps = [x for x in (it.get('steps') or []) if isinstance(x, dict) and x.get('type') not in ('function_call', 'function_result')]
         txt = it.get('output_text') or all_text(it.get('outputs') or steps[-3:])  # the agent's last words only: tool output can hold other diffs
@@ -1807,7 +1860,7 @@ def antigravity(s):
             desc = txt.rsplit('===PR BODY START===', 1)[1].split('===PR BODY END===', 1)[0].strip() if '===PR BODY START===' in txt else '(No description.)'
             if not diff.strip():
                 raise RuntimeError('no diff in its answer')
-            pr = apply_agent_diff(int(n), job['title'], diff, f'{AG_MARK}\nCloses #{n}. Made by the **Google Antigravity agent** (Gemini API), started by the local manager.\n\nJob kind: {job.get("kind") or rt.kind(job["title"])}\n\n{desc}', f'antigravity/issue-{n}', 'the Google Antigravity agent')
+            pr = apply_agent_diff(int(n), job['title'], diff, f'{AG_MARK}\nCloses #{n}. Made by the **Google Antigravity agent** (Gemini API), started by the local manager.\n\nJob kind: {job.get("kind") or rt.kind(job["title"])}\n\n{desc}', branch, 'the Google Antigravity agent')
             label(int(n), add=['antigravity-done'], remove=['antigravity-running'])
             post(int(n), f'Antigravity opened #{pr}. It goes through the Test suite and the automatic review like any PR.' + SIGN.format(rv.MODEL))
             log(f'#{n}: Antigravity opened PR #{pr}')
@@ -1817,8 +1870,9 @@ def antigravity(s):
                 post(int(n), f'**For the lead:** the Antigravity job needed to change or remove an existing check, which workers are not allowed to do ({str(e)[:300]}). Routed to `for-coordinator` instead of retrying.' + SIGN.format(rv.MODEL))
                 log(f'#{n}: Antigravity job hit existing-check gate, routed to the lead')
                 continue
-            s.setdefault('ag_tried', {})[n] = rt.tries(s['ag_tried'].get(n)) + 1
-            more = s['ag_tried'][n] < AG_MAX_TRIES
+            tried_map = s.setdefault('ag_tried', {})
+            tried_map[n] = rt.tries(tried_map.get(n)) + 1
+            more = tried_map[n] < AG_MAX_TRIES
             back = 'for-antigravity' if more else QUEUE
             # the queue takes it after the last try, and ag-returned stops the leader routing it straight back to Antigravity
             label(int(n), add=[back] + ([] if more else ['ag-returned']), remove=['antigravity-running', 'for-antigravity'])

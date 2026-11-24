@@ -205,13 +205,46 @@ function parseCsv(text) {
       const f2Csv = csvRows.find(r => r[2] === 'F2');
       T.check('band_csv_has_fraction_yield', cMg >= 0 && cYld >= 0 && !!f2Csv && +f2Csv[cMg] > 0.30 && +f2Csv[cYld] > 60, `CSV row=${JSON.stringify(f2Csv)}`);
 
+      // Switch to workflow view and verify the Fraction Yield summary table (#fracYieldBox / #fracYieldTable)
+      await h.step('figure');
+      await h.wait(400);
+      const wfFy = await p.evaluate(() => {
+        const panel = document.querySelector('#sumPanel');
+        const box = document.querySelector('#fracYieldBox');
+        const tbl = document.querySelector('#fracYieldTable');
+        const vis = el => !!el && !el.hidden && getComputedStyle(el).display !== 'none';
+        const title = box ? (box.querySelector('.intp-head')?.textContent || '').trim() : '';
+        const rows = tbl ? [...tbl.rows].map(r => [...r.cells].map(c => c.textContent.trim())) : [];
+        return {panelVis: vis(panel), boxVis: vis(box), title, rows};
+      });
+      const fyHead = wfFy.rows[0] || [];
+      const fyRow = wfFy.rows.slice(1).find(r => r[0] === 'F2');
+      const iArea = fyHead.findIndex(h => /UV area/i.test(h));
+      const iPur = fyHead.findIndex(h => /purity/i.test(h));
+      const iMass = fyHead.findIndex(h => /mass/i.test(h));
+      const fyArea = fyRow && iArea >= 0 ? num(fyRow[iArea]) : null;
+      const fyPur = fyRow && iPur >= 0 ? num(fyRow[iPur]) : null;
+      const fyMass = fyRow && iMass >= 0 ? num(fyRow[iMass]) : null;
+      T.check('workflow_fraction_yield_table_visible', wfFy.panelVis && wfFy.boxVis && /Fraction Yield/i.test(wfFy.title) && iArea >= 0 && iPur >= 0 && iMass >= 0, `panelVis=${wfFy.panelVis} boxVis=${wfFy.boxVis} title="${wfFy.title}" head=${fyHead.join('|')}`);
+      T.check('workflow_fraction_yield_row_values', !!fyRow && fyArea > 450 && fyArea < 500 && fyPur > 65 && fyPur < 85 && fyMass > 0.30 && fyMass < 0.42, `row=${JSON.stringify(fyRow)} area=${fyArea} pur=${fyPur} mass=${fyMass}`);
+
       // Missing data check 2: clearing band tags via #g-tagClear returns null gracefully with no errors
+      await h.step(runStep.k);
+      await p.locator('#ssGels [data-gelopen]').first().click();
+      await h.wait(300);
       const clearBtn = p.locator('#g-tagClear');
       await ensureVisible(clearBtn);
       await clearBtn.click();
       await h.wait(400);
       const headAfterClear = await p.$$eval('#bandTable th', ths => ths.map(t => t.textContent.trim()));
       T.check('null_after_tag_clear', !headAfterClear.some(h => /fraction yield/i.test(h)), `headers after clear: ${headAfterClear.join(' | ')}`);
+      await h.step('figure');
+      await h.wait(300);
+      const boxVisAfterClear = await p.evaluate(() => {
+        const box = document.querySelector('#fracYieldBox');
+        return !!box && !box.hidden && getComputedStyle(box).display !== 'none' && !document.querySelector('#sumPanel')?.hidden;
+      });
+      T.check('workflow_fraction_yield_hidden_after_clear', !boxVisAfterClear, `boxVisAfterClear=${boxVisAfterClear}`);
     });
 
     T.check('no_page_errors', !errs.length, errs.join(' | '));

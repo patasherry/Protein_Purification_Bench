@@ -180,5 +180,57 @@ ql({github, context: {repo: {owner: 'patasherry', repo: 'hplc-figure-bench'}}, c
 r_ql = subprocess.run(['node', '-e', ql_js], cwd=HERE.parents[1], capture_output=True, text=True)
 check('queue-leader.js lists for-coordinator PRs under Waiting on Claude without false positives', r_ql.returncode == 0, r_ql.stderr)
 
+# 8. antigravity() skips duplicate push when PR is already open and initializes ag_tried cleanly on failure (#1721)
+_orig_ag = (mgr.GEMINI_KEY, mgr.DRY, mgr.gh, mgr.gem_api, mgr.apply_agent_diff, mgr.label, mgr.post, mgr.issues, mgr.issues_q)
+push_calls, labelled_ag = [], []
+try:
+    mgr.GEMINI_KEY = 'fake-key'
+    mgr.DRY = False
+    def _fake_gh_ag(path, method='GET', body=None, accept='application/vnd.github+json'):
+        if method == 'GET' and path.endswith('/pulls?state=open&per_page=100'):
+            return [{'number': 1721, 'head': {'ref': 'antigravity/issue-1679'}}]
+        return []
+    def _fake_gem_ag(path, method='GET', body=None):
+        if path == 'interactions/int-fail':
+            return {'status': 'incomplete', 'steps': []}
+        raise AssertionError(f'unexpected gem_api call: {path}')
+    mgr.gh = _fake_gh_ag
+    mgr.gem_api = _fake_gem_ag
+    mgr.apply_agent_diff = lambda *a, **kw: push_calls.append(a) or 9999
+    mgr.label = lambda n, add=None, remove=None: labelled_ag.append((n, add, remove))
+    mgr.post = lambda *a, **kw: None
+    mgr.issues = lambda *a, **kw: []
+    mgr.issues_q = lambda *a, **kw: []
+    st_ag = {
+        'antigravity': {
+            '1679': {'id': 'int-1679', 'title': 'Fraction Yield', 'at': 1000},
+            '1680': {'id': 'int-fail', 'title': 'Failing Job', 'at': 1000},
+        }
+        # Note: 'ag_tried' intentionally absent (as after ag_reset1 pop)
+    }
+    mgr.antigravity(st_ag)
+finally:
+    (mgr.GEMINI_KEY, mgr.DRY, mgr.gh, mgr.gem_api, mgr.apply_agent_diff, mgr.label, mgr.post, mgr.issues, mgr.issues_q) = _orig_ag
+
+check('antigravity() skips apply_agent_diff when PR already open on antigravity/issue-N',
+      len(push_calls) == 0 and '1679' not in st_ag['antigravity'] and 'int-1679' in st_ag.get('ag_done', []))
+check('antigravity() initializes missing ag_tried without KeyError on job failure',
+      st_ag.get('ag_tried', {}).get('1680') == 1 and 'int-fail' in st_ag.get('ag_done', []))
+
+# 9. load() reconciles stale cached antigravity jobs against <!-- cloud-state --> on #17
+_orig_cloud, _orig_state, _orig_comments = mgr.CLOUD, mgr.STATE, mgr.comments
+try:
+    tmp_st = Path(tempfile.mkdtemp()) / 'state.json'
+    tmp_st.write_text('{"day": "2026-11-24", "count": {}, "antigravity": {"1679": {"id": "int-1679", "title": "FY"}, "1682": {"id": "int-1682", "title": "Active"}}}', encoding='utf-8')
+    mgr.CLOUD = True
+    mgr.STATE = tmp_st
+    mgr.comments = lambda n: [{'body': '<!-- cloud-report -->\n<!-- cloud-state {"ag_off_until": 0, "ag_refused": 0, "ag_done": ["int-1679"], "ag_tried": {"1680": 2}} -->\nlog'}]
+    loaded = mgr.load()
+finally:
+    mgr.CLOUD, mgr.STATE, mgr.comments = _orig_cloud, _orig_state, _orig_comments
+
+check('load() prunes completed Antigravity jobs recorded in cloud-state on #17',
+      '1679' not in loaded.get('antigravity', {}) and '1682' in loaded.get('antigravity', {}) and loaded.get('ag_tried', {}).get('1680') == 2)
+
 print(f'\n{len(bad)} failed' if bad else '\nall passed')
 sys.exit(1 if bad else 0)
