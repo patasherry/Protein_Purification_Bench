@@ -519,6 +519,79 @@ const JUNK = [/NaN/, /undefined/, /\[object/, /\(, /, / {2}/, /(?<!\.)\.\.(?!\.)
     }
   });
 
+  await T.t('uv_wavelength_and_csv_path', async () => {
+    const mkAktaCsv = (uvName, pathCm) => {
+      const xs = Array.from({length: 601}, (_, i) => +(i * 0.05).toFixed(4));
+      const amp = 1000 / (0.5 * Math.sqrt(2 * Math.PI));
+      const ys = xs.map(x => +(amp * Math.exp(-0.5 * ((x - 15) / 0.5) ** 2)).toFixed(4));
+      const fr = [[10, 'T1'], [13, 'T2'], [17, 'T3'], [20, 'T4'], [23, 'Waste']];
+      const hasP = Array.isArray(pathCm) && pathCm.length > 0;
+      const h0 = ['Chrom.1', '', ...(hasP ? ['Chrom.1', ''] : []), 'Chrom.1', ''].join(',');
+      const h1 = [uvName, '', ...(hasP ? ['UV cell path length', ''] : []), 'Fraction', ''].join(',');
+      const h2r = ['ml', 'mAU', ...(hasP ? ['ml', 'cm'] : []), 'ml', 'Fraction'].join(',');
+      const rows = xs.map((x, i) => [x, ys[i], ...(hasP ? (i < pathCm.length ? [i * 10, pathCm[i]] : ['', '']) : []), ...(i < fr.length ? [fr[i][0], fr[i][1]] : ['', ''])].join(','));
+      return [h0, h1, h2r, ...rows].join('\n');
+    };
+    const withFresh = async fn => {
+      const {p: px, errs: ex, close: cx} = await open();
+      px.on('dialog', d => d.accept());
+      const hx = H(px);
+      const sumTbl = async () => { await hx.step('figure'); const rs = await hx.sumTable(); if (!rs.length) return {head: [], rows: []}; const head = rs[0];
+        return {head, rows: rs.slice(1).filter(r => r.length === head.length).map(r => Object.fromEntries(head.map((k, i) => [k, r[i]])))}; };
+      try { await fn(px, hx, sumTbl); } finally { errs.push(...ex); await cx(); }
+    };
+    await withFresh(async (px, hx, sumTbl) => {
+      await hx.newProject('UV 214 wavelength guard');
+      await hx.step('construct');
+      const seqLoc = px.locator('#protSeq').first();
+      await seqLoc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+      await seqLoc.fill('M' + 'AWY'.repeat(20));
+      await seqLoc.dispatchEvent('input');
+      await seqLoc.dispatchEvent('change');
+      await hx.wait(300);
+      await hx.addRun({name: 'pep_214.csv', mimeType: 'text/csv', buffer: Buffer.from(mkAktaCsv('UV 1_214', null))});
+      await hx.pool('T1-T3');
+      const svg214 = await hx.exportSvg(), boxes214 = await hx.svgBoxes(svg214);
+      T.check('uv214.yaxis_label', boxes214.texts.some(x => x.t === 'A214 (mAU)'), `exported SVG texts: ${boxes214.texts.map(x => x.t).join(' | ')}`);
+      T.check('uv214.svg_not_clipped', boxes214.clipped.length === 0, `clipped: ${boxes214.clipped.join(' | ')}`);
+      const t214 = await sumTbl(), mgK214 = col(t214, /^Protein \(mg\)$/), notes214 = await px.$eval('#sumNotes', e => e.innerText).catch(() => '');
+      T.check('uv214.withholds_a280_mg', t214.rows.length === 1 && (!mgK214 || !t214.rows[0][mgK214]), `rows: ${JSON.stringify(t214.rows)}`);
+      T.check('uv214.explains_not_280nm', /214 nm, not 280 nm/.test(notes214), `notes: ${notes214}`);
+    });
+    await withFresh(async (px, hx, sumTbl) => {
+      const xs = Array.from({length: 601}, (_, i) => +(i * 0.05).toFixed(4));
+      const amp = 1000 / (0.5 * Math.sqrt(2 * Math.PI));
+      const ys = xs.map(x => +(amp * Math.exp(-0.5 * ((x - 15) / 0.5) ** 2)).toFixed(4));
+      const fracs = [{x: 10, label: 'T1'}, {x: 13, label: 'T2'}, {x: 17, label: 'T3'}, {x: 20, label: 'T4'}, {x: 23, label: 'Waste'}];
+      const mkRun = (id, name, uvName) => ({id, name, file: name, inWf: true, xu: 'ml', shade: 'T1-T3', uvi: 0, uvs: [{name: uvName, yu: 'mAU', xs, ys}], fracs, integ: []});
+      const proj = {app: 'Protein Purification Bench', version: 2, name: 'Column numbers not wavelength', opt: {eps: '1'}, prep: {on: true}, runs: [
+        mkRun('r1', 'Step A', 'Superdex 200 UV'),
+        mkRun('r2', 'Step B', 'HiLoad 16/600 UV'),
+        mkRun('r3', 'Step C', 'Superdex 200 Increase 10/300 UV')
+      ]};
+      await px.setInputFiles('#projFile', {name: 'uv_col_names.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(proj))});
+      await hx.wait(900);
+      await hx.addRun({name: 'u5_prefix.csv', mimeType: 'text/csv', buffer: Buffer.from(mkAktaCsv('run200:10_UV', null))});
+      await hx.pool('T1-T3');
+      const tCol = await sumTbl(), mgKCol = col(tCol, /^Protein \(mg\)$/);
+      const mgAt = idx => tCol.rows[idx] && mgKCol ? num(tCol.rows[idx][mgKCol]) : null;
+      T.check('uvcol.s200_uv_reports_mg', mgAt(0) != null && T.near(mgAt(0), 5.0, 0.1) && mgAt(1) != null && T.near(mgAt(1), 5.0, 0.1), `rows 0-1: ${JSON.stringify(tCol.rows.slice(0, 2))}`);
+      T.check('uvcol.s200_10_300_reports_mg', mgAt(2) != null && T.near(mgAt(2), 5.0, 0.1), `Superdex 200 Increase 10/300 UV row: ${JSON.stringify(tCol.rows[2])}`);
+      T.check('uvcol.run200_prefix_reports_mg', mgAt(3) != null && T.near(mgAt(3), 5.0, 0.1), `run200:10_UV row: ${JSON.stringify(tCol.rows[3])}`);
+    });
+    await withFresh(async (px, hx, sumTbl) => {
+      await hx.newProject('CSV 1-point cm UV path');
+      await setOpt(px, 'o-eps', '1');
+      await hx.wait(200);
+      await hx.addRun({name: 'akta_1cm_path.csv', mimeType: 'text/csv', buffer: Buffer.from(mkAktaCsv('UV 1_280', [1.0]))});
+      await hx.pool('T1-T3');
+      const pathVal = await px.locator('.trace.run.sel [data-k="path"]').first().inputValue();
+      const tPath = await sumTbl(), mgKPath = col(tPath, /^Protein \(mg\)$/), mgPath = tPath.rows[0] && mgKPath ? num(tPath.rows[0][mgKPath]) : null;
+      T.check('uvpath_csv.1pt_cm_sets_10mm', pathVal === '10', `expected path 10, got "${pathVal}"`);
+      T.check('uvpath_csv.1pt_cm_1mg_not_5mg', mgPath != null && T.near(mgPath, 1.0, 0.02), `expected 1.00 mg (not 5.00 mg), got ${mgPath}`);
+    });
+  });
+
   if (EXP) T.check('expected_json_seen', true, Object.keys(EXP).slice(0, 10).join(','));
  /* the biochemist's fixtures exist: extend P1 with them once their schema settles */
   T.check('no page errors', !errs.length, errs.join(' | ')); await close(); T.done(); })();
