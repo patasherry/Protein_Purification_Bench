@@ -2034,11 +2034,11 @@ function uvWavelengthOf(h){
   const s = String(h || '').trim();
   if (!s) return null;
   if (/\b(time|min|sec|vol(?:ume)?|retention|cond(?:uctivity)?|temp(?:erature)?|pres(?:sure)?|flow|grad(?:ient)?|conc(?:entration)?|ph|index|idx|row|point|scan|frac(?:tion)?|tube|well|vial|peak|count|flag|status|note|annot(?:ation)?|path|cut_temp|pore|particle|diameter)\b|%\s*b\b|ms\/cm|°\s*c\b|\bbar\b|\bmpa\b|\bpsi\b|\bkda\b/i.test(s)) return null;
-  const cleaned = s.replace(/\bref(?:erence)?\s*[:=]?\s*\d{3}(?:\s*,\s*\d+)?(?:\s*nm)?/ig, '');
+  const cleaned = s.replace(/\bref(?:erence)?\s*[:=]?\s*\d{3}(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)?(?:\s*nm)?/ig, '');
   const valid = w => w >= 190 && w <= 900 ? w : null;
-  let m = cleaned.match(/(?:^|[^0-9])(\d{3})\s*nm(?![a-z0-9])/i);
+  let m = cleaned.match(/(?:^|[^0-9])(\d{3})(?:\.\d+)?\s*nm(?![a-z0-9])/i);
   if (m) return valid(+m[1]);
-  m = cleaned.match(/(?:\b(?:uv|abs(?:orb(?:ance)?)?|dad\w*)\s*(?:\d\s*[_:-]\s*|[,_:-]\s*)?|\bsig(?:nal)?\s*=\s*|\ba_?)(\d{3})(?!\d)/i);
+  m = cleaned.match(/(?:\b(?:uv|abs(?:orb(?:ance)?)?|dad\w*|pda\w*|tuv\w*)\s*(?:\d[\s_:-]+|[,_:-]\s*)?|\bsig(?:nal)?\s*=\s*|\ba_?)(\d{3})(?:\.\d+)?(?!\d)/i);
   if (m) {
     const after = cleaned.slice(m.index + m[0].length);
     if (!/^\s*(?:mm|µm|um|cm|ml|µl|ul|mg|µg|ug|kda|da|min|sec|hz|bar|mpa|psi|ms|°c)\b/i.test(after)) return valid(+m[1]);
@@ -2241,7 +2241,10 @@ function parseAkta(text, fname){
 /* what a UNICORN curve is, from its name and unit. UV path length (cm) and derived UV curves (UV_CUT_TEMP@100) are not traces */
 function curveKind(nm, yu){ yu = yu || '';
   const base = nm.replace(/^.*[:_](?=(UV|Cond|Conc|Fraction|Inject|Logbook|Run Log|Gradient|pH|Pres|Temp))/i, '');
-  return /^UV/i.test(base) ? (/path|@|cut_temp/i.test(base) || (yu && !/mau|au/i.test(yu)) ? 'other' : 'uv') : /flow/i.test(base) && /ml\/min/i.test(yu) ? 'flow' : /temp/i.test(base) && /°?c/i.test(yu) ? 'temp' : /^cond/i.test(base) ? 'cond' : /^(conc|gradient)|%\s*B/i.test(base) ? 'grad' : /^frac/i.test(base) ? 'frac' : /^inject/i.test(base) ? 'inj' : /log/i.test(base) ? 'log' : 'other'; }
+  if (/uv.*path/i.test(base) && /^(cm|mm)$/i.test(yu.trim())) return 'uvpath';
+  return (/^UV/i.test(base) || (/\bUV\b/i.test(base) && /^m?au$/i.test(yu.trim()))) ? (/path|@|cut_temp/i.test(base) || (yu && !/mau|au/i.test(yu)) ? 'other' : 'uv') : /flow/i.test(base) && /ml\/min/i.test(yu) ? 'flow' : /temp/i.test(base) && /°?c/i.test(yu) ? 'temp' : /^cond/i.test(base) ? 'cond' : /^(conc|gradient)|%\s*B/i.test(base) ? 'grad' : /^frac/i.test(base) ? 'frac' : /^inject/i.test(base) ? 'inj' : /log/i.test(base) ? 'log' : 'other'; }
+function uvPathMm(curves){ const c = curves.find(q => q.kind === 'uvpath' && /^(cm|mm)$/i.test((q.yu || '').trim()) && q.ys && q.ys.some(y => isFinite(y) && y > 0));
+  if (!c) return null; const v = c.ys.filter(y => isFinite(y) && y > 0).sort((a, b) => a - b), m = v[v.length >> 1] * (/^cm$/i.test(c.yu.trim()) ? 10 : 1); return m >= 0.5 ? +m.toFixed(3) : null; }
 function aktaFromCurves(curves, fname, extra){
   const uvs = curves.filter(c => c.kind === 'uv' && c.xs.length > 1); if (!uvs.length) return null;
   const pick = k => curves.find(c => c.kind === k && c.xs.length > 1) || null;
@@ -2258,13 +2261,13 @@ function aktaFromCurves(curves, fname, extra){
   /* the logged end of fractionation, worded loosely ("Fractionation stopped", "End fractionation", "Frac off"); the last such entry wins */
   const feEv = log.filter(e => /frac\w*[\s_:,.-]*(stop|end|off|finish|complet)|(stop|end|finish|complet)\w*[\s_:,.-]*frac/i.test(e.label) && !/start/i.test(e.label)).map(e => e.x), fracEnd = feEv.length ? Math.max(...feEv) : null;
   const med = c => { if (!c || c.ys.length < 3) return null; const v = c.ys.filter(y => y > 0).sort((a, b) => a - b); return v.length ? v[v.length >> 1] : null; };
-  const flowMed = med(pick('flow')), tempMed = med(pick('temp'));
+  const flowMed = med(pick('flow')), tempMed = med(pick('temp')), pathAuto = uvPathMm(curves);
   /* UNICORN logs the column it was told: "Base CV, 0.962 {ml}, HisTrap FF, 1 ml" */
   const cvl = log.map(e => /Base CV,\s*(?:Vc\s*=\s*)?([\d.]+)\s*\{ml\},\s*([^,]+)(?:,\s*([\d.]+)\s*ml)?/i.exec(e.label)).find(Boolean), colLog = cvl && !/^any$/i.test(cvl[2].trim()) ? `${cvl[2].trim()}${cvl[3] ? ` ${+cvl[3]} mL` : ''}` : '', cvLog = cvl ? +cvl[1] : null;
   const sat = uvs.reduce((s, c) => s + (c.sat || 0), 0), satMax = uvs.reduce((m, c) => c.sat && isFinite(c.satMax) ? Math.max(m, c.satMax) : m, -Infinity);
   const dupX = uvs.reduce((s, c) => s + (c.dupX || 0), 0), dupDiff = uvs.reduce((s, c) => s + (c.dupDiff || 0), 0);
   return {name: tidyName(fname), file: fname, flowAuto: flowMed, tempAuto: tempMed, colLog, cvLog, uvs: uvs.map(c => ({name: c.name, yu: c.yu, xs: c.xs, ys: c.ys})), grad: pick('grad'), cond: pick('cond'),
-    fracs: fr.map(e => ({x: e.x - shift, label: e.label})), fracEnd: fracEnd == null ? null : fracEnd - shift, phases, shift, injX, injShift: null, xu: uvs[0].xu, method, time: rt ? rt.t : null, timeStr: rt ? rt.str : '', saturated: sat, satMax: isFinite(satMax) ? satMax : NaN, dupX, dupDiff, ...(extra || {})};
+    fracs: fr.map(e => ({x: e.x - shift, label: e.label})), fracEnd: fracEnd == null ? null : fracEnd - shift, phases, shift, injX, injShift: null, xu: uvs[0].xu, method, time: rt ? rt.t : null, timeStr: rt ? rt.str : '', saturated: sat, satMax: isFinite(satMax) ? satMax : NaN, dupX, dupDiff, ...(pathAuto != null ? {path: String(pathAuto), pathFromFile: true} : null), ...(extra || {})};
 }
 /* ---------- UNICORN 7 result archive (.zip) ---------- */
 /* the archive and each curve inside it are zip files, the curves in zip64 form; their points are .NET float arrays */
@@ -2288,19 +2291,25 @@ async function isUnicornZip(f){ if (!/\.zip$/i.test(f.name)) return false; try {
 async function parseUnicornZip(buf, fname){
   const m = zipList(new Uint8Array(buf)), cx = [...m.keys()].filter(k => /(?:^|\/)[^/]*Chrom\.\d+\.Xml$/i.test(k)).sort()[0]; if (!cx) return null;
   const doc = new DOMParser().parseFromString(new TextDecoder().decode(await zipGet(m, cx)), 'text/xml'), kid = (el, t) => { const c = [...el.children].find(x => x.tagName === t); return c ? c.textContent : ''; };
-  const curves = [], lost = []; let path = null;
-  for (const c of doc.querySelectorAll('Curves > Curve')) { const nm = kid(c, 'Name'), yu = kid(c, 'AmplitudeUnit'), kind = curveKind(nm, yu); if (!['uv', 'cond', 'grad', 'flow', 'temp'].includes(kind)) continue;
+  const curves = [], lost = []; let path = null, uvInfo = null, normNote = '';
+  for (const c of doc.querySelectorAll('Curves > Curve')) { const nm = kid(c, 'Name'), yu = kid(c, 'AmplitudeUnit'), kind = curveKind(nm, yu); if (!['uv', 'uvpath', 'cond', 'grad', 'flow', 'temp'].includes(kind)) continue;
     const pts = [...c.querySelectorAll('CurvePoints > CurvePoint')], cp = pts.find(p => kid(p, 'IsFullResolution') === 'true') || pts[0], fn = cp ? kid(cp, 'BinaryCurvePointsFileName') : '';
     /* a curve the archive lists but whose points are absent or unreadable is reported, not dropped silently */
-    const inner = fn ? await zipGet(m, cx.slice(0, cx.lastIndexOf('/') + 1) + fn) || await zipGet(m, fn) : null; if (!inner) { lost.push({nm, kind}); continue; } const im = zipList(inner), type = async n => new TextDecoder().decode(await zipGet(im, n) || new Uint8Array()), xs = netFloats(await zipGet(im, 'CoordinateData.Volumes'), await type('CoordinateData.VolumesDataType')), ys = netFloats(await zipGet(im, 'CoordinateData.Amplitudes'), await type('CoordinateData.AmplitudesDataType'));
-    const n = Math.min(xs.length, ys.length); if (n < 2) { lost.push({nm, kind}); continue; }
-    if (kind === 'uv' && path == null) { const ui = c.querySelector('CurveUVInfo'); const pl = ui ? parseFloat(kid(ui, 'UVPathLength')) : NaN; if (pl > 0) path = pl; }
+    const inner = fn ? await zipGet(m, cx.slice(0, cx.lastIndexOf('/') + 1) + fn) || await zipGet(m, fn) : null; if (!inner) { if (kind !== 'uvpath') lost.push({nm, kind}); continue; } const im = zipList(inner), type = async n => new TextDecoder().decode(await zipGet(im, n) || new Uint8Array()), xs = netFloats(await zipGet(im, 'CoordinateData.Volumes'), await type('CoordinateData.VolumesDataType')), ys = netFloats(await zipGet(im, 'CoordinateData.Amplitudes'), await type('CoordinateData.AmplitudesDataType'));
+    const n = Math.min(xs.length, ys.length); if (n < (kind === 'uvpath' ? 1 : 2)) { if (kind !== 'uvpath') lost.push({nm, kind}); continue; }
+    if (kind === 'uv' && !uvInfo) { const ui = c.querySelector('CurveUVInfo'); if (ui && (parseFloat(kid(ui, 'UVPathLength')) > 0 || parseFloat(kid(ui, 'NominalUVPathLength')) > 0)) uvInfo = ui; }
     curves.push({name: nm, xu: kid(c, 'VolumeUnit') || 'ml', yu, kind, xs: xs.slice(0, n).map(v => Math.round(v*1e5)/1e5), ys: ys.slice(0, n), ev: []}); }
+  const pathCurveMm = uvPathMm(curves);
+  if (uvInfo) { const norm = /^true$/i.test(kid(uvInfo, 'IsUVValuesNormalizedToNominalUVPathLength').trim()), nom = parseFloat(kid(uvInfo, 'NominalUVPathLength')), rawP = parseFloat(kid(uvInfo, 'UVPathLength')), pUnit = kid(uvInfo, 'UVPathLengthUnit').trim();
+    let effP = norm && nom > 0 ? nom : rawP, physP = rawP > 0 ? rawP : NaN;
+    if (/^cm$/i.test(pUnit) || (!pUnit && pathCurveMm >= 0.5 && ((effP > 0 && effP < 0.5) || (physP > 0 && physP < 0.5 && Math.abs(physP*10 - pathCurveMm) < 0.05)))) { effP *= 10; if (physP > 0) physP *= 10; }
+    if (effP > 0) { path = +effP.toFixed(3); if (norm && nom > 0 && physP > 0 && Math.abs(path - +physP.toFixed(3)) > 1e-6) normNote = `UV normalized to ${path} mm nominal path (physical cell ${+physP.toFixed(3)} mm)`; } }
   for (const ec of doc.querySelectorAll('EventCurves > EventCurve')) { const t = ec.getAttribute('EventCurveType') || '', kind = /^frac/i.test(t) ? 'frac' : /^inject/i.test(t) ? 'inj' : /log/i.test(t) ? 'log' : ''; if (!kind) continue;
     curves.push({name: t, xu: 'ml', yu: '', kind, xs: [], ys: [], ev: [...ec.querySelectorAll('Event')].map(e => ({x: parseFloat(kid(e, 'EventVolume')), label: kid(e, 'EventText')})).filter(e => isFinite(e.x))}); }
   const ak = aktaFromCurves(curves, fname, path != null ? {path: String(path), pathFromFile: true} : null), uvLost = lost.find(c => c.kind === 'uv');
   if (!ak) return uvLost ? {bad: `its UV curve (${uvLost.nm}) has no readable data points`} : {bad: 'has no usable UV traces'};
   if (lost.length) ak.lost = lost.map(c => c.nm);
+  if (normNote) ak.normNote = normNote;
   return ak; }
 
 /* ---------- traces and runs ---------- */
@@ -2327,7 +2336,7 @@ function clearSourceDiag(src){ setSourceDiag(src, null); }
 function renderSourceDiag(diag){
   if (!diag) return '';
   return `<details class="cardtext source-diag" data-kind="${esc(diag.kind || '')}" open>
-    <summary class="warnc">Import warning: ${esc(diag.summary || 'incomplete source')}</summary>
+    <summary${diag.info ? '' : ' class="warnc"'}>${diag.info ? 'Import note' : 'Import warning'}: ${esc(diag.summary || 'incomplete source')}</summary>
     <p class="hint source-diag-msg">${esc(diag.msg || '')}</p>
   </details>`;
 }
@@ -2699,7 +2708,10 @@ let WF_WL, COND_N = 0;
 /* how many condition lines a run needs at a given panel width (the same wrap as under the trace) */
 function condLineCount(r, W){ if (r.prep || !opt.runCond || opt.runCond === 'none') return 0; const fs = fontSize(), cf = fs*0.75, full = opt.runCond === 'full', room = Math.max(10, Math.floor((W - (full ? fs*5.2 : fs*1.2))/(cf*0.52)));
   return Math.min(16, runCondLines(r, opt.runCond).reduce((t, x) => t + wrapWords(x, room).length, 0)); }
-const uvWl = uv => ((((uv && uv.name) || '').match(/UV\s*(?:\d[\s_-]+)?(2[2-9]\d|3\d\d|4\d\d)(?!\d)/i) || ((uv && uv.name) || '').match(/(?:^|[^\d])(2[2-9]\d|3\d\d|4\d\d)(?!\d)/)) || [])[1] || '';
+function uvWl(uv){ const s = String((uv && uv.name) || '').replace(/^.*[:_](?=UV)/i, '').replace(/\bref(?:erence)?\s*[:=]?\s*\d{3}(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)?(?:\s*nm)?/ig, ''); if (/\bpath\b|cut_temp/i.test(s)) return '';
+  let m = s.match(/(?:^|[^0-9])(\d{3})(?:\.\d+)?\s*nm(?![a-z0-9])/i); if (m && +m[1] >= 190 && +m[1] <= 900) return m[1];
+  m = s.match(/(?:\b(?:uv|abs(?:orb(?:ance)?)?|dad\w*|pda\w*|tuv\w*)\s*(?:\d[\s_:-]+|[,_:-]\s*)?|\bsig(?:nal)?\s*=\s*|\ba_?)(\d{3})(?:\.\d+)?(?!\d)/i);
+  return m && +m[1] >= 190 && +m[1] <= 900 && !/^\s*(?:mm|µm|um|cm|ml|µl|ul|mg|µg|ug|kda|da|min|sec|hz|bar|mpa|psi|ms|°c)\b/i.test(s.slice(m.index + m[0].length)) ? m[1] : ''; }
 function uvTitle(t, uv){ const w0 = WF_WL !== undefined ? WF_WL : uvWl(uv), wl = w0 ? [w0, w0] : null, base = /^(UV a|A)bsorbance \(mAU\)$/.test(t || '');
   return base && wl ? `A<tspan font-size="75%" dy="0.33em">${wl[1]}</tspan><tspan dy="-0.33em"> (mAU)</tspan>` : esc(t); }
 const kdaRound = v => v >= 10 ? String(Math.round(v)) : fmtAuto(v);
@@ -7702,16 +7714,19 @@ async function loadFiles(files){
         if (ak && ak.bad) bad.push(`${f.name} (a UNICORN result archive, but ${ak.bad}: export the result from UNICORN again, or export its curves as .csv)`);
         else if (ak) {
           ak.source = f.name;
-          if (ak.lost && ak.lost.length) {
-            lost.push(`${ak.lost.join(', ')} in ${f.name}`);
+          if ((ak.lost && ak.lost.length) || ak.normNote) {
+            const parts = [];
+            if (ak.lost && ak.lost.length) { lost.push(`${ak.lost.join(', ')} in ${f.name}`); parts.push({s: `${ak.lost.length} unreadable curve${ak.lost.length > 1 ? 's' : ''} omitted (${ak.lost.join(', ')})`, m: `Curves with no readable data points were left out: ${ak.lost.join('; ')}. Export the result from UNICORN again to include them.`}); }
+            if (ak.normNote) parts.push({s: ak.normNote, m: `${ak.normNote}. Beer-Lambert mass uses the nominal path length because UNICORN scaled the UV trace to it.`});
             setSourceDiag(f.name, {
               source: f.name,
               kind: 'unicorn',
-              lost: ak.lost.slice(),
-              summary: `${ak.lost.length} unreadable curve${ak.lost.length > 1 ? 's' : ''} omitted (${ak.lost.join(', ')})`,
-              msg: `Curves with no readable data points were left out: ${ak.lost.join('; ')}. Export the result from UNICORN again to include them.`
+              ...(ak.lost && ak.lost.length ? {lost: ak.lost.slice()} : null),
+              ...(ak.normNote ? {normNote: ak.normNote, info: !(ak.lost && ak.lost.length)} : null),
+              summary: parts.map(p => p.s).join('; '),
+              msg: parts.map(p => p.m).join(' ')
             });
-            delete ak.lost;
+            delete ak.lost; delete ak.normNote;
           } else {
             clearSourceDiag(f.name);
           }

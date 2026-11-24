@@ -130,6 +130,73 @@ async function peaks(p, h){ const t = await h.peakTable(); if (!t.length) return
     T.check('legacy res explains UNICORN Evaluation export', toasts.some(t => /legacy UNICORN 3-5 binary result/i.test(t) && /export.*\.asc.*\.csv from UNICORN Evaluation/i.test(t)), toasts.join(' | '));
   });
 
+  await T.t('nominal UV path normalization and uvpath curve', async () => {
+    const mkPathZip = (fileName, uvInfoXml, pathCm) => {
+      const xs = Array.from({length: 601}, (_, i) => i * 0.05);
+      const amp = 1000 / (0.5 * Math.sqrt(2 * Math.PI));
+      const ys = xs.map(x => amp * Math.exp(-0.5 * ((x - 15) / 0.5) ** 2));
+      const uvPts = storedZip([
+        {name: 'CoordinateData.VolumesDataType', data: 'System.Single[]\r\n'},
+        {name: 'CoordinateData.Volumes', data: singles(xs)},
+        {name: 'CoordinateData.AmplitudesDataType', data: 'System.Single[]\r\n'},
+        {name: 'CoordinateData.Amplitudes', data: singles(ys)}
+      ]);
+      const entries = [{name: 'Chrom.1_1_True', data: uvPts}];
+      let pathCurveXml = '';
+      if (pathCm != null) {
+        const pPts = storedZip([
+          {name: 'CoordinateData.VolumesDataType', data: 'System.Single[]\r\n'},
+          {name: 'CoordinateData.Volumes', data: singles([0])},
+          {name: 'CoordinateData.AmplitudesDataType', data: 'System.Single[]\r\n'},
+          {name: 'CoordinateData.Amplitudes', data: singles([pathCm])}
+        ]);
+        entries.push({name: 'Chrom.1_2_True', data: pPts});
+        pathCurveXml = '<Curve><Name>UV cell path length</Name><VolumeUnit>ml</VolumeUnit><AmplitudeUnit>cm</AmplitudeUnit><CurvePoints><CurvePoint><IsFullResolution>true</IsFullResolution><BinaryCurvePointsFileName>Chrom.1_2_True</BinaryCurvePointsFileName></CurvePoint></CurvePoints></Curve>';
+      }
+      const evXml = [[10, 'T1'], [13, 'T2'], [17, 'T3'], [20, 'T4'], [23, 'Waste']].map(([v, l]) => `<Event><EventVolume>${v}</EventVolume><EventText>${l}</EventText></Event>`).join('');
+      const xml = `<Chromatogram><Curves><Curve><Name>UV 1_280</Name><VolumeUnit>ml</VolumeUnit><AmplitudeUnit>mAU</AmplitudeUnit><CurvePoints><CurvePoint><IsFullResolution>true</IsFullResolution><BinaryCurvePointsFileName>Chrom.1_1_True</BinaryCurvePointsFileName></CurvePoint></CurvePoints>${uvInfoXml}</Curve>${pathCurveXml}</Curves><EventCurves><EventCurve EventCurveType="Fraction"><Events>${evXml}</Events></EventCurve></EventCurves></Chromatogram>`;
+      entries.unshift({name: 'Chrom.1.Xml', data: xml});
+      return {name: fileName, mimeType: 'application/zip', buffer: storedZip(entries)};
+    };
+    const withFresh = async fn => {
+      const {p: px, errs: ex, close: cx} = await open();
+      const hx = H(px);
+      const sumMg = async () => {
+        await hx.step('figure');
+        const rs = await hx.sumTable();
+        if (rs.length < 2) return NaN;
+        const idx = rs[0].findIndex(k => /^Protein \(mg\)$/.test(k));
+        return idx >= 0 ? num(rs[1][idx]) : NaN;
+      };
+      try { await fn(px, hx, sumMg); } finally { errs.push(...ex); await cx(); }
+    };
+    await withFresh(async (px, hx, sumMg) => {
+      await hx.newProject('Nominal UV path UNICORN');
+      await px.evaluate(() => { const el = document.getElementById('o-eps'); if (el) { el.value = '1'; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); } });
+      await hx.wait(200);
+      const normInfo = '<CurveUVInfo><IsUVValuesNormalizedToNominalUVPathLength>true</IsUVValuesNormalizedToNominalUVPathLength><UVPathLength>2</UVPathLength><NominalUVPathLength>10</NominalUVPathLength><IsSystemProvided>true</IsSystemProvided></CurveUVInfo>';
+      await hx.addRun(mkPathZip('norm_10mm_u7.zip', normInfo, 0.2));
+      await hx.pool('T1-T3');
+      const normPath = await field(px, 'path');
+      const diagTxt = await px.locator('.trace.run.sel .source-diag').textContent().catch(() => '');
+      const normMg = await sumMg();
+      T.check('nominal_uv_path_10mm', normPath === '10', `expected path 10, got "${normPath}"`);
+      T.check('nominal_uv_path_1mg_not_5mg', T.near(normMg, 1.0, 0.02), `expected 1.00 mg (not 5.00 mg), got ${normMg}`);
+      T.check('nominal_uv_path_diag_note', /UV normalized to 10 mm nominal path \(physical cell 2 mm\)/.test(diagTxt), `diag: ${diagTxt}`);
+    });
+    await withFresh(async (px, hx, sumMg) => {
+      await hx.newProject('Curve-only 1pt cm UV path UNICORN');
+      await px.evaluate(() => { const el = document.getElementById('o-eps'); if (el) { el.value = '1'; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); } });
+      await hx.wait(200);
+      await hx.addRun(mkPathZip('curve_1cm_u7.zip', '', 1.0));
+      await hx.pool('T1-T3');
+      const curvePath = await field(px, 'path');
+      const curveMg = await sumMg();
+      T.check('zip_uvpath_1pt_cm_10mm', curvePath === '10', `expected path 10, got "${curvePath}"`);
+      T.check('zip_uvpath_1pt_cm_1mg_not_5mg', T.near(curveMg, 1.0, 0.02), `expected 1.00 mg (not 5.00 mg), got ${curveMg}`);
+    });
+  });
+
   T.check('no page errors overall', !errs.length, errs.join(' | '));
   await close();
   T.done();
