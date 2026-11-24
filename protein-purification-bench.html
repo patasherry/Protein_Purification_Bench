@@ -4725,6 +4725,116 @@ function lanePurity(g, ln){
   const den = opt.purBase === 'tagged' ? tgt + con : tot;
   return {purity: den > 0 ? 100*tgt/den : null, tgt, con, tot, mws, tmws, cleaved, cleavedEst, est};
 }
+/* Cross-reference a run fraction with its assigned SDS-PAGE gel lane to compute target protein mass (mg) and specific recovery yield (%):
+   targetMass = (purityPct / 100) * totalFractionMass; yieldPct = (targetMass / refMass) * 100 (#1678). Returns null when required data are missing. */
+function calcFractionYield(run, fracIndex){
+  if (!run || !Array.isArray(run.fracs) || !run.fracs.length) return null;
+  const fi = typeof fracIndex === 'number' ? Math.trunc(fracIndex) : fracIdx(run, fracIndex);
+  if (!(fi >= 0 && fi < run.fracs.length)) return null;
+  const uv = uvOf(run); if (!uv || !uv.xs || uv.xs.length < 2) return null;
+  const seg = fracSegments(run, uv.xs[uv.xs.length - 1]).find(s => s.i === fi);
+  if (!seg || seg.waste || !(seg.b > seg.a)) return null;
+  const sset = shadeSet(run); let hit = null;
+  gels.forEach(g => {
+    if (!g || !g.pix) return;
+    gelLabels(g).forEach((lab, i) => {
+      const rawA = g.assign && g.assign[i];
+      let assigned = laneAssign(g, i) === run.id, exact = false, inSpan = false;
+      if (!assigned && typeof rawA === 'string' && rawA.startsWith(run.id + ':')) {
+        const sub = rawA.slice(run.id.length + 1).trim(), sfi = /^\d+$/.test(sub) ? +sub : fracIdx(run, sub, null, sset);
+        if (sfi === fi) { assigned = true; exact = true; inSpan = true; }
+      }
+      if (!assigned) return;
+      if (!inSpan) {
+        const t = String(lab || '').trim(); if (!t || MARKER_RE.test(t)) return;
+        const parts = t.split(RANGE_SPLIT_RE);
+        let ia = fracIdx(run, parts[0], null, sset), ib = parts.length > 1 ? fracIdx(run, parts[1], ia) : ia;
+        if (ia < 0 || ib < 0) return; if (ia > ib) [ia, ib] = [ib, ia];
+        if (fi < ia || fi > ib) return;
+        inSpan = true; exact = ia === fi && ib === fi;
+      }
+      if (!hit || (exact && !hit.exact)) hit = {g, lane: i, exact, label: String(lab || '').trim()};
+    });
+  });
+  if (!hit) return null;
+  const ln = gelBands(hit.g)[hit.lane];
+  if (!ln || ln.marker || !Array.isArray(ln.bands) || !ln.bands.length) return null;
+  let rawTgt = 0, rawCon = 0, hasProtTag = false;
+  ln.bands.forEach(b => {
+    const tr = tagRaw(hit.g, hit.lane, b); if (!tr || tr.kind === 'none') return;
+    if (tr.kind === 'target') { rawTgt += b.area; hasProtTag = true; }
+    else if (tr.kind === 'tagged') { hasProtTag = true; if (opt.tagCounts !== false) rawTgt += b.area; else rawCon += b.area; }
+    else if (tr.kind === 'contam') rawCon += b.area;
+  });
+  if (!hasProtTag || !(rawTgt > 0)) return null;
+  const pu = lanePurity(hit.g, ln);
+  const hasCon = rawCon > 0 || (opt.knownCount && pu && pu.con > 0) || (hit.g.tags || []).some(t => t.kind === 'contam' && (t.lane == null || t.lane === hit.lane));
+  if (opt.purBase === 'tagged' && !hasCon) return null;
+  const den = opt.purBase === 'tagged' ? rawTgt + Math.max(rawCon, pu ? pu.con : 0) : (ln.total || 0);
+  const purity = den > 0 ? 100 * rawTgt / den : null;
+  if (purity == null || !isFinite(purity) || !(purity > 0)) return null;
+  const purityFrac = purity / 100;
+  const ovRegs = (run.integ || []).map(r => ({a: Math.min(r.a, r.b), b: Math.max(r.a, r.b)})).filter(r => Math.min(seg.b, r.b) - Math.max(seg.a, r.a) > 1e-9);
+  let area = 0;
+  if (ovRegs.length) {
+    ovRegs.forEach(r => {
+      const rc = clipXY(uv.xs, uv.ys, r.a, r.b); if (rc.xs.length < 2) return;
+      const base = intBaseOf(rc.xs, rc.ys, opt.intBase), fc = clipXY(uv.xs, uv.ys, Math.max(seg.a, r.a), Math.min(seg.b, r.b));
+      if (fc.xs.length >= 2) area += trapArea(fc.xs, fc.ys, base);
+    });
+  } else {
+    const base = intBaseOf(uv.xs, uv.ys, opt.intBase), fc = clipXY(uv.xs, uv.ys, seg.a, seg.b);
+    if (fc.xs.length < 2) return null;
+    area = trapArea(fc.xs, fc.ys, base);
+  }
+  if (!isFinite(area) || !(area > 0)) return null;
+  const areaMl = xUnit(run) === 'min' ? (uvFlow(run) > 0 ? area * uvFlow(run) : null) : volMl(area, run);
+  const inPool = sset.has(fi), pr = run.shade ? poolRows(run) : null, mUv = massOf(area, run);
+  let totalMg = mUv;
+  if (inPool && pr && pr.measured && pr.mg != null && pr.mg > 0) {
+    totalMg = pr.area > 0 ? pr.mg * (area / pr.area) : (pr.vol > 0 ? pr.mg * ((seg.b - seg.a) / pr.vol) : mUv);
+  }
+  const targetMg = totalMg != null && isFinite(totalMg) && totalMg >= 0 ? totalMg * purityFrac : null;
+  let loadMg = null;
+  if (run.inWf && typeof sumRows === 'function') {
+    const sr = sumRows(), row = sr.find(x => x.r === run);
+    if (row && row.loadedAmt > 0 && ['mg', 'nd'].includes(sr.basis)) loadMg = row.loadedAmt;
+    else if (sr.length && row && sr[0] !== row && sr.mgOf) { const idx = sr.indexOf(row); if (idx > 0) loadMg = sr.kept(sr[idx - 1]) || sr.mgOf(sr[idx - 1]); }
+  }
+  const iRows = integRows(run), totRegArea = iRows.reduce((s, r) => s + Math.max(0, r.area || 0), 0);
+  const fullBase = intBaseOf(uv.xs, uv.ys, opt.intBase), totTraceArea = Math.max(0, trapArea(uv.xs, uv.ys, fullBase));
+  const refArea = totRegArea > 0 ? Math.max(totRegArea, area) : Math.max(totTraceArea, area);
+  let refMg = loadMg > 0 ? loadMg : null;
+  if (!(refMg > 0) && targetMg != null) {
+    const iMg = iRows.reduce((s, r) => s + (r.mg > 0 ? r.mg : 0), 0);
+    refMg = iMg > 0 ? Math.max(iMg, totalMg) : (inPool && pr && pr.mg > 0 ? pr.mg : massOf(refArea, run));
+  }
+  const yieldPct = targetMg != null && refMg > 0 ? 100 * targetMg / refMg : (refArea > 0 ? 100 * purityFrac * (area / refArea) : null);
+  if (yieldPct == null || !isFinite(yieldPct) || !(yieldPct > 0)) return null;
+  return {runId: run.id, fracIndex: fi, frac: fracName(run, fi), gelId: hit.g.id, lane: hit.lane, area, areaMl, purity, totalMg, mg: targetMg, targetMg, yield: yieldPct, yieldPct};
+}
+const fractionYield = calcFractionYield;
+function laneFracYield(g, laneI){
+  if (!g || !g.pix) return null;
+  const rawA = g.assign && g.assign[laneI];
+  let r = runs.find(x => x.id === laneAssign(g, laneI));
+  if (!r && typeof rawA === 'string' && rawA.includes(':')) {
+    const [rid, sub] = rawA.split(':'); r = runs.find(x => x.id === rid);
+    if (r) { const fi = /^\d+$/.test(sub.trim()) ? +sub.trim() : fracIdx(r, sub.trim(), null, shadeSet(r)); return calcFractionYield(r, fi); }
+  }
+  if (!r) return null;
+  const lab = String(gelLabels(g)[laneI] || '').trim(); if (!lab || MARKER_RE.test(lab)) return null;
+  const sset = shadeSet(r), parts = lab.split(RANGE_SPLIT_RE);
+  let ia = fracIdx(r, parts[0], null, sset), ib = parts.length > 1 ? fracIdx(r, parts[1], ia) : ia;
+  if (ia < 0 || ib < 0) return null; if (ia > ib) [ia, ib] = [ib, ia];
+  if (ia === ib) return calcFractionYield(r, ia);
+  const items = []; for (let k = ia; k <= ib; k++) { const y = calcFractionYield(r, k); if (y) items.push(y); }
+  if (!items.length) return null;
+  const sumOrNull = fn => items.every(x => fn(x) != null) ? items.reduce((s, x) => s + fn(x), 0) : null;
+  const mg = sumOrNull(x => x.mg), totalMg = sumOrNull(x => x.totalMg), yld = items.reduce((s, x) => s + x.yield, 0);
+  return {runId: r.id, fracIndex: ia, frac: lab, gelId: g.id, lane: laneI, area: items.reduce((s, x) => s + x.area, 0), areaMl: sumOrNull(x => x.areaMl), purity: items[0].purity, totalMg, mg, targetMg: mg, yield: yld, yieldPct: yld};
+}
+function runFractionYields(run){ return !run || !Array.isArray(run.fracs) ? [] : run.fracs.map((_, i) => calcFractionYield(run, i)).filter(Boolean); }
 /* Match detected ladder bands to the ladder sizes: try every order-preserving pairing and keep the one whose
    positions best follow a straight line against log(MW); strong unmatched bands are penalised. */
 /* ladder matching: the strongest bands in the ladder lane are matched in order to the ladder sizes, trying every way of
@@ -6706,20 +6816,20 @@ function renderBandTable(g){
   const lanes = gelBands(g), cal = calib(g), el = $('#bandTable');
   $('#g-bandUndo').disabled = !(g && g.bandHist && g.bandHist.length);
   if (!g.pix) { el.innerHTML = ''; return; }
-  const LLt = laneLinks(), anyT = (g.tags || []).some(t => isProt(t.kind)), anyG = (g.tags || []).some(t => t.kind === 'tagged') || !!cleavePlan(g), anyC = (g.tags || []).some(t => t.kind === 'contam');
-  const head = `<tr><th>Lane</th><th>Label</th><th>Goes with</th><th>Target (kDa)</th>${anyG ? '<th>Tagged (kDa)</th><th>Cleaved</th>' : ''}<th>Purity</th><th>Bands, strongest first: apparent MW (kDa) and % of lane</th></tr>`;
-  const rows = lanes.map(ln => { const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a);
+  const LLt = laneLinks(), anyT = (g.tags || []).some(t => isProt(t.kind)), anyG = (g.tags || []).some(t => t.kind === 'tagged') || !!cleavePlan(g), anyC = (g.tags || []).some(t => t.kind === 'contam'), fys = lanes.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean);
+  const head = `<tr><th>Lane</th><th>Label</th><th>Goes with</th><th>Target (kDa)</th>${anyG ? '<th>Tagged (kDa)</th><th>Cleaved</th>' : ''}<th>Purity</th>${anyFY ? '<th>Fraction (mg)</th><th>Fraction yield</th>' : ''}<th>Bands, strongest first: apparent MW (kDa) and % of lane</th></tr>`;
+  const rows = lanes.map((ln, idx) => { const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a), fy = fys[idx];
     const who = a === 'marker' ? 'Ladder' : r ? `<span title="${esc(r.name)}">${esc(shortRunName(r))}</span>` : '';
-    if (ln.marker) { const mk = g.marks.slice().sort((p, q) => p.y - q.y).map(m => m.kda).join(', '); return `<tr><td>${ln.i + 1}</td><td>${esc(ln.label)}</td><td>${who}</td><td></td>${anyG ? '<td></td><td></td>' : ''}<td></td><td style="text-align:left">${mk ? 'marked: ' + mk : 'not marked yet'}</td></tr>`; }
+    if (ln.marker) { const mk = g.marks.slice().sort((p, q) => p.y - q.y).map(m => m.kda).join(', '); return `<tr><td>${ln.i + 1}</td><td>${esc(ln.label)}</td><td>${who}</td><td></td>${anyG ? '<td></td><td></td>' : ''}<td></td>${anyFY ? '<td></td><td></td>' : ''}<td style="text-align:left">${mk ? 'marked: ' + mk : 'not marked yet'}</td></tr>`; }
     const pu = lanePurity(g, ln);
     const bs = ln.bands.slice().sort((p, q) => q.area - p.area).map(b => { const t = tagOf(g, ln.i, b), txt = `${esc(mwText(g, b.mw))} (${fmt(b.pct, 0)}%${b.sat ? ', saturated' : ''})`;
       const kn = t ? [] : knownShown(g, ln.i, b);
       const cls = (t ? (t.kind === 'target' ? ' t' : t.kind === 'tagged' ? ' g' : ' c') : kn.length ? ({contam: ' k', freetag: ' k', cleaved: ' kc', uncleaved: ' ku'})[kn[0].kind] || ' kl' : '') + (b.manual ? ' m' : '') + (b.sat ? ' sat' : '');
       const kt = kn.length ? ` <em class="kn">${kn[0].kind === 'label' ? '' : '≈ '}${esc(kn.slice(0, 2).map(k => k.name).join(' or '))}</em>` : '';
       return `<span class="bchip${cls}" role="button" tabindex="0" data-bl="${ln.i}" data-by="${b.yRot}" title="${b.sat ? 'Saturated: stain reached pixel minimum, intensity reading is low. ' : ''}${kn.length ? esc('Size matches ' + kn.map(k => k.name + ' (' + k.kda + ' kDa' + (k.app ? ', runs near ' + k.app : '') + ', ' + (k.src || 'your list') + ')').join(' or ') + ` within ±${fmt(kn.tol, 0)}%. A size match is not an identification. `) : ''}Click to cycle: unmarked, untagged target, tagged form, contaminant${b.manual ? ' (added by hand)' : ''}">${txt}${kt}<span class="bx" data-bdel="1" role="button" aria-label="Remove this band">×</span></span>`; }).join('');
-    return `<tr><td>${ln.i + 1}</td><td>${esc(ln.label)}</td><td>${who}</td><td>${pu && pu.mws.length ? pu.mws.map(m => esc(mwText(g, m))).join(', ') : ''}</td>${anyG ? `<td>${pu && pu.tmws.length ? pu.tmws.map(m => esc(mwText(g, m))).join(', ') : ''}</td><td${pu && pu.cleavedEst ? ' title="Estimated from bands matching the expected cleaved and uncleaved sizes"' : ''}>${pu && pu.cleaved != null ? (pu.cleavedEst ? '~' : '') + fmt(pu.cleaved, 0) + '%' : ''}</td>` : ''}<td><strong${LLt.get(g.id + ':' + ln.i) ? ` style="color:${lerpHex(LLt.get(g.id + ':' + ln.i).color, '#000000', 0.2)}"` : ''}>${pu && pu.purity != null ? fmt(pu.purity, 1) + '%' : ''}</strong>${pu && pu.needCon && anyC ? '<span title="No contaminant is marked for this lane">–</span>' : ''}</td><td style="text-align:left;white-space:normal">${bs || 'none detected'}</td></tr>`; }).join('');
+    return `<tr><td>${ln.i + 1}</td><td>${esc(ln.label)}</td><td>${who}</td><td>${pu && pu.mws.length ? pu.mws.map(m => esc(mwText(g, m))).join(', ') : ''}</td>${anyG ? `<td>${pu && pu.tmws.length ? pu.tmws.map(m => esc(mwText(g, m))).join(', ') : ''}</td><td${pu && pu.cleavedEst ? ' title="Estimated from bands matching the expected cleaved and uncleaved sizes"' : ''}>${pu && pu.cleaved != null ? (pu.cleavedEst ? '~' : '') + fmt(pu.cleaved, 0) + '%' : ''}</td>` : ''}<td><strong${LLt.get(g.id + ':' + ln.i) ? ` style="color:${lerpHex(LLt.get(g.id + ':' + ln.i).color, '#000000', 0.2)}"` : ''}>${pu && pu.purity != null ? fmt(pu.purity, 1) + '%' : ''}</strong>${pu && pu.needCon && anyC ? '<span title="No contaminant is marked for this lane">–</span>' : ''}</td>${anyFY ? `<td>${fy && fy.mg != null ? fmt(fy.mg, 2) : ''}</td><td>${fy && fy.yield != null ? fmt(fy.yield, 1) + '%' : ''}</td>` : ''}<td style="text-align:left;white-space:normal">${bs || 'none detected'}</td></tr>`; }).join('');
   const hint = `<tr><td colspan="6" class="empty-row">Click a band chip to cycle it through unmarked, untagged target, tagged form and contaminant for that lane only. × (or Delete) removes the band. Dashed chips were added by hand.</td></tr>`;
-  const cols = anyG ? 8 : 6;
+  const cols = (anyG ? 8 : 6) + (anyFY ? 2 : 0);
   const anySat = lanes.some(ln => !ln.marker && ln.bands.some(b => b.sat));
   const isDark = !!(g && !g.invert && gelRawMedian(g) < 64);
   const darkHint = isDark ? 'Dark background: check Invert (#g-invert) under Crop and contrast. ' : '';
@@ -6769,12 +6879,12 @@ $('#g-autoLadder').addEventListener('click', () => {
   render(); toast(`Matched ${r.n} of ${r.of} ladder sizes to ${r.found} detected bands. Check the kDa marks against the gel.`);
 });
 $('#bandCsv').addEventListener('click', () => {
-  const g = curGel(); if (!g) return; const q = csvQuote;
-  const lines = [['Gel','Lane','Label','Goes with','Band','Estimated size (kDa)','% of lane','Saturated','Marked as','Possible identity (size match)','Lane purity (%)','Purity basis','Cleaved in lane (%)','Position (fraction of trimmed height)'].join(',')];
-  gelBands(g).forEach(ln => { if (ln.marker) return; const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a);
+  const g = curGel(); if (!g) return; const q = csvQuote, bl = gelBands(g), fys = bl.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean);
+  const lines = [['Gel','Lane','Label','Goes with','Band','Estimated size (kDa)','% of lane','Saturated','Marked as','Possible identity (size match)','Lane purity (%)','Purity basis','Cleaved in lane (%)','Position (fraction of trimmed height)'].concat(anyFY ? ['Fraction protein (mg)','Fraction yield (%)'] : []).join(',')];
+  bl.forEach((ln, idx) => { if (ln.marker) return; const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a), fy = fys[idx];
     const pu = lanePurity(g, ln), basis = opt.purBase === 'tagged' ? 'target + marked contaminants' : 'all stain in lane';
     ln.bands.forEach((b, k) => { const t = tagOf(g, ln.i, b);
-      lines.push([q(g.name), ln.i + 1, q(ln.label), q(r ? r.name : ''), k + 1, b.mw == null ? '' : mwText(g, b.mw), b.pct.toFixed(2), b.sat ? 'yes' : '', t ? ({target: 'target (untagged)', tagged: 'tagged form', contam: 'contaminant'})[t.kind] : '', q(t ? '' : knownFor(g, ln.i, b).map(k => k.name).join(' / ')), pu && pu.purity != null ? pu.purity.toFixed(1) : '', pu && pu.purity != null ? q(basis) : '', pu && pu.cleaved != null ? pu.cleaved.toFixed(1) : '', ((b.yRot - g.crop.t)/(g.crop.b - g.crop.t)).toFixed(4)].join(',')); }); });
+      lines.push([q(g.name), ln.i + 1, q(ln.label), q(r ? r.name : ''), k + 1, b.mw == null ? '' : mwText(g, b.mw), b.pct.toFixed(2), b.sat ? 'yes' : '', t ? ({target: 'target (untagged)', tagged: 'tagged form', contam: 'contaminant'})[t.kind] : '', q(t ? '' : knownFor(g, ln.i, b).map(k => k.name).join(' / ')), pu && pu.purity != null ? pu.purity.toFixed(1) : '', pu && pu.purity != null ? q(basis) : '', pu && pu.cleaved != null ? pu.cleaved.toFixed(1) : '', ((b.yRot - g.crop.t)/(g.crop.b - g.crop.t)).toFixed(4)].concat(anyFY ? [fy && fy.mg != null ? fy.mg.toFixed(4) : '', fy && fy.yield != null ? fy.yield.toFixed(2) : ''] : []).join(',')); }); });
   if (lines.length < 2) return toast('No bands detected yet');
   saveFile(`bands_${safe(g.name)}.csv`, lines.join('\r\n'));
 });
