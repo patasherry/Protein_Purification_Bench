@@ -10312,7 +10312,7 @@ function cleanProject(d){
   if (!isO(d.struct)) d.struct = null; if (!isO(d.opt)) d.opt = null;
   if (d.opt) {
     if (!(numOr(d.opt.path, 0) > 0)) d.opt.path = DEF.path;
-    if (Array.isArray(d.opt.secCals)) d.opt.secCals.forEach(c => { if (c && typeof c === 'object' && !('unit' in c)) c.unit = 'mL'; });
+    if (Array.isArray(d.opt.secCals)) d.opt.secCals.forEach(c => { if (c && typeof c === 'object' && !c.unit) c.unit = 'mL'; });
     if (!('secStds' in d.opt) && (d.runs.some(r => r.secMode === 'on') || (Array.isArray(d.opt.secCals) && d.opt.secCals.length > 0))) d.opt.secStds = true;
   }
   if (!d.srcDiag || typeof d.srcDiag !== 'object' || Array.isArray(d.srcDiag)) d.srcDiag = {};
@@ -10322,7 +10322,8 @@ function cleanProject(d){
     if (!('parentConstructId' in d.prep)) d.prep.parentConstructId = null;
     if (!Array.isArray(d.prep.derivedConstructIds)) d.prep.derivedConstructIds = [];
     if (!d.prep.cMethod) d.prep.cMethod = 'plasmid';
-    if (!d.prep.cDetails || typeof d.prep.cDetails !== 'object') d.prep.cDetails = { digest: {}, overlap: {}, recomb: {} };
+    if (!d.prep.cDetails || typeof d.prep.cDetails !== 'object' || Array.isArray(d.prep.cDetails)) d.prep.cDetails = {};
+    ['digest', 'overlap', 'recomb'].forEach(k => { if (!d.prep.cDetails[k] || typeof d.prep.cDetails[k] !== 'object' || Array.isArray(d.prep.cDetails[k])) d.prep.cDetails[k] = {}; });
     canonClones(d.prep); canonCloning(d.prep);
   }
   return skipped; }
@@ -10333,9 +10334,9 @@ async function openProject(data, name, noUndo){
   const ng = []; failedGels = [];
   for (const sg of data.gels || []) { try { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = sg.image; });
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
-      const g = Object.assign(makeGel(sg.name, c), sg); delete g.image;
-      Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false}); processGel(g); ng.push(g); } catch (e) { failedGels.push(sg); toast(`Could not restore gel ${sg.name}`); } }
-  runs = data.runs.map(r => { if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return makeRun(r); }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); if (!Array.isArray(prep.manual)) prep.manual = []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} }; canonClones(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = data.nanodrop || []; ndMigrate(); assays = Array.isArray(data.assays) ? data.assays : [];
+      const defG = makeGel(sg.name || 'Gel', c), g = Object.assign({}, defG, sg); delete g.image;
+      Object.assign(g, {id: g.id || defG.id, name: g.name != null && g.name !== '' ? String(g.name) : defG.name, rot: g.rot ?? defG.rot, fine: g.fine ?? defG.fine, cl: g.cl ?? defG.cl, cr: g.cr ?? defG.cr, ct: g.ct ?? defG.ct, cb: g.cb ?? defG.cb, black: g.black ?? defG.black, white: g.white ?? defG.white, nLanes: g.nLanes ?? defG.nLanes, labels: g.labels ?? defG.labels, preset: g.preset && LADDERS[g.preset] ? g.preset : defG.preset, ladder: Array.isArray(g.ladder) ? g.ladder : defG.ladder, crop: g.crop && typeof g.crop === 'object' && !Array.isArray(g.crop) ? g.crop : defG.crop, marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' && !Array.isArray(g.edits) ? {added: Array.isArray(g.edits.added) ? g.edits.added : [], removed: Array.isArray(g.edits.removed) ? g.edits.removed : []} : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false}); processGel(g); ng.push(g); } catch (e) { failedGels.push(sg); toast(`Could not restore gel ${sg.name || ''}`); } }
+  runs = data.runs.map(r => { if (r.fracs && !Array.isArray(r.fracs)) r.fracs = [r.fracs]; else if (!Array.isArray(r.fracs)) r.fracs = []; return makeRun(r); }); traces = (data.traces || []).map((t, i, a) => Object.assign(t, {name: t.name != null && t.name !== '' ? String(t.name) : `Trace ${i + 1}`, color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)})); gels = ng; rawFiles = Array.isArray(data.rawFiles) ? data.rawFiles.filter(r => r && r.blobId && r.name).map(r => Object.assign({}, r)) : []; struct = data.struct || null; prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), data.prep && typeof data.prep === 'object' && !Array.isArray(data.prep) ? data.prep : {}); ['btw', 'skip', 'stepMeta', 'offs', 'titles', 'wfOff'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; }); ['btw', 'stepMeta', 'wfOff'].forEach(k => Object.keys(prep[k]).forEach(sub => { if (!prep[k][sub] || typeof prep[k][sub] !== 'object' || Array.isArray(prep[k][sub])) delete prep[k][sub]; })); prep.manual = Array.isArray(prep.manual) ? prep.manual.filter(m => m && typeof m === 'object' && !Array.isArray(m)) : []; if (!Array.isArray(prep.constructs)) prep.constructs = []; if (!Array.isArray(prep.primers)) prep.primers = []; if (!('parentConstructId' in prep)) prep.parentConstructId = null; if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = []; if (!prep.cMethod) prep.cMethod = 'plasmid'; if (!prep.cDetails || typeof prep.cDetails !== 'object' || Array.isArray(prep.cDetails)) prep.cDetails = {}; ['digest', 'overlap', 'recomb'].forEach(k => { if (!prep.cDetails[k] || typeof prep.cDetails[k] !== 'object' || Array.isArray(prep.cDetails[k])) prep.cDetails[k] = {}; }); canonClones(prep); canonCloning(prep); if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null; gels.forEach(g => { g._prepA = null; }); ndSamples = (data.nanodrop || []).filter(n => n && typeof n === 'object' && !Array.isArray(n)); ndMigrate(); assays = Array.isArray(data.assays) ? data.assays : [];
   srcDiag = (data.srcDiag && typeof data.srcDiag === 'object' && !Array.isArray(data.srcDiag)) ? Object.assign({}, data.srcDiag) : {};
   /* the project's settings apply, but calibrations and known proteins kept in this browser are merged rather than replaced */
   if (data.opt) { const dopt = data.opt, myCals = secCals().slice(), myKnown = Array.isArray(opt.known) ? opt.known.slice() : null, myQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : [], myQDel = Array.isArray(opt.myQuickDel) ? opt.myQuickDel.slice() : []; Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);
@@ -10344,8 +10345,11 @@ async function openProject(data, name, noUndo){
     opt.known = mergeKnown(myKnown, dopt.known); tidyLists(); tidyOpt(dopt, true); }
   else { opt.path = DEF.path; opt.known = mergeKnown(opt.known, null); tidyLists(); }
   syncUid();
+  { const seenT = new Set(); traces.forEach(t => { const k = t.id != null ? String(t.id) : ''; if (!k || seenT.has(k)) t.id = uid++; seenT.add(String(t.id)); }); }
+  { const seenM = new Set(); prep.manual.forEach(m => { const k = m.id != null ? String(m.id) : ''; if (!k || seenM.has(k)) m.id = 'm' + (uid++); seenM.add(String(m.id)); }); }
   { const seenA = new Set(); assays = assays.map(a => { const na = makeAssay(a); if (seenA.has(na.id)) na.id = 'a' + (uid++); seenA.add(na.id); return na; }); }
   ndUid = Math.max(uid, ndSamples.length + 1 + Date.now() % 1000);
+  { const seenN = new Set(); ndSamples.forEach(n => { const k = n.id != null ? String(n.id) : ''; if (!k || seenN.has(k)) n.id = 'nd' + (ndUid++); seenN.add(String(n.id)); }); }
   cur = data.cur || 'overlay'; marking = null; tagMode = ''; customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
   await agEnsureAdjImage();
   if (PROJ) initProjectDirectory(PROJ, data.directory);
@@ -11638,40 +11642,47 @@ async function switchActivePrep(prepId){
   wfSel = null; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null;
   if (target.data) {
     const d = target.data;
-    runs = (d.runs || []).map(r => { const rc = Object.assign({}, r); if (rc.fracs && !Array.isArray(rc.fracs)) rc.fracs = [rc.fracs]; else if (!Array.isArray(rc.fracs)) rc.fracs = []; return rc; });
-    traces = (d.traces || []).map((t, i, a) => Object.assign({}, t, {color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)}));
+    runs = (d.runs || []).map(r => { const rc = Object.assign({}, r); if (rc.fracs && !Array.isArray(rc.fracs)) rc.fracs = [rc.fracs]; else if (!Array.isArray(rc.fracs)) rc.fracs = []; return makeRun(rc); });
+    traces = (d.traces || []).map((t, i, a) => Object.assign({}, t, {name: t.name != null && t.name !== '' ? String(t.name) : `Trace ${i + 1}`, color: t.color || paletteColor(i, a.length), visible: t.visible !== false, cols: Array.isArray(t.cols) ? t.cols : ['X', 'Y'], xc: t.xc ?? 0, yc: t.yc ?? 1, offset: t.offset ?? 0, scale: t.scale ?? 1, xshift: t.xshift ?? 0, peaks: parsePeaks(t.peaks)}));
     const ng = [];
     for (const sg of (d.gels || [])) {
-      if (sg && sg.src) { const gc = Object.assign({}, sg); gc._prepA = null; gc._auto = null; ng.push(gc); }
+      if (sg && sg.src) {
+        const defG = makeGel(sg.name || 'Gel', sg.src), g = Object.assign({}, defG, sg);
+        Object.assign(g, {id: g.id || defG.id, name: g.name != null && g.name !== '' ? String(g.name) : defG.name, rot: g.rot ?? defG.rot, fine: g.fine ?? defG.fine, cl: g.cl ?? defG.cl, cr: g.cr ?? defG.cr, ct: g.ct ?? defG.ct, cb: g.cb ?? defG.cb, black: g.black ?? defG.black, white: g.white ?? defG.white, nLanes: g.nLanes ?? defG.nLanes, labels: g.labels ?? defG.labels, preset: g.preset && LADDERS[g.preset] ? g.preset : defG.preset, ladder: Array.isArray(g.ladder) ? g.ladder : defG.ladder, crop: g.crop && typeof g.crop === 'object' && !Array.isArray(g.crop) ? g.crop : defG.crop, marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' && !Array.isArray(g.edits) ? {added: Array.isArray(g.edits.added) ? g.edits.added : [], removed: Array.isArray(g.edits.removed) ? g.edits.removed : []} : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false});
+        g._prepA = null; g._auto = null; ng.push(g);
+      }
       else if (sg && sg.image) {
         try {
           const img = new Image();
           await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = sg.image; });
           const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
-          const g = Object.assign(makeGel(sg.name, c), sg); delete g.image;
-          Object.assign(g, {marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' ? g.edits : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false});
+          const defG = makeGel(sg.name || 'Gel', c), g = Object.assign({}, defG, sg); delete g.image;
+          Object.assign(g, {id: g.id || defG.id, name: g.name != null && g.name !== '' ? String(g.name) : defG.name, rot: g.rot ?? defG.rot, fine: g.fine ?? defG.fine, cl: g.cl ?? defG.cl, cr: g.cr ?? defG.cr, ct: g.ct ?? defG.ct, cb: g.cb ?? defG.cb, black: g.black ?? defG.black, white: g.white ?? defG.white, nLanes: g.nLanes ?? defG.nLanes, labels: g.labels ?? defG.labels, preset: g.preset && LADDERS[g.preset] ? g.preset : defG.preset, ladder: Array.isArray(g.ladder) ? g.ladder : defG.ladder, crop: g.crop && typeof g.crop === 'object' && !Array.isArray(g.crop) ? g.crop : defG.crop, marks: Array.isArray(g.marks) ? g.marks : [], assign: Array.isArray(g.assign) ? g.assign : [], tags: Array.isArray(g.tags) ? g.tags : [], edits: g.edits && typeof g.edits === 'object' && !Array.isArray(g.edits) ? {added: Array.isArray(g.edits.added) ? g.edits.added : [], removed: Array.isArray(g.edits.removed) ? g.edits.removed : []} : {added: [], removed: []}, rawHiClip: g.rawHiClip !== false, rawLoClip: g.rawLoClip !== false});
           processGel(g); g._prepA = null; g._auto = null; ng.push(g);
         } catch (e) {}
       }
     }
     gels = ng;
     struct = d.struct ? Object.assign({}, d.struct) : null;
-    ndSamples = (d.ndSamples || []).map(n => Object.assign({}, n));
+    ndSamples = (d.ndSamples || []).filter(n => n && typeof n === 'object' && !Array.isArray(n)).map(n => Object.assign({}, n));
     ndMigrate();
     assays = Array.isArray(d.assays) ? d.assays : [];
     rawFiles = (d.rawFiles || []).map(r => Object.assign({}, r));
     srcDiag = d.srcDiag ? Object.assign({}, d.srcDiag) : {};
-    prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), d.prep ? JSON.parse(JSON.stringify(d.prep)) : {});
+    prep = Object.assign(JSON.parse(JSON.stringify(PREP_DEF)), d.prep && typeof d.prep === 'object' && !Array.isArray(d.prep) ? JSON.parse(JSON.stringify(d.prep)) : {});
     prep.on = true;
-    ['btw', 'skip', 'stepMeta', 'offs', 'titles'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; });
-    if (!Array.isArray(prep.manual)) prep.manual = [];
+    ['btw', 'skip', 'stepMeta', 'offs', 'titles', 'wfOff'].forEach(k => { if (!prep[k] || typeof prep[k] !== 'object' || Array.isArray(prep[k])) prep[k] = {}; });
+    ['btw', 'stepMeta', 'wfOff'].forEach(k => Object.keys(prep[k]).forEach(sub => { if (!prep[k][sub] || typeof prep[k][sub] !== 'object' || Array.isArray(prep[k][sub])) delete prep[k][sub]; }));
+    prep.manual = Array.isArray(prep.manual) ? prep.manual.filter(m => m && typeof m === 'object' && !Array.isArray(m)) : [];
     if (!Array.isArray(prep.constructs)) prep.constructs = [];
     if (!Array.isArray(prep.primers)) prep.primers = [];
     if (!('parentConstructId' in prep)) prep.parentConstructId = null;
     if (!Array.isArray(prep.derivedConstructIds)) prep.derivedConstructIds = [];
     if (!prep.cMethod) prep.cMethod = 'plasmid';
-    if (!prep.cDetails || typeof prep.cDetails !== 'object') prep.cDetails = { digest: {}, overlap: {}, recomb: {} };
+    if (!prep.cDetails || typeof prep.cDetails !== 'object' || Array.isArray(prep.cDetails)) prep.cDetails = {};
+    ['digest', 'overlap', 'recomb'].forEach(k => { if (!prep.cDetails[k] || typeof prep.cDetails[k] !== 'object' || Array.isArray(prep.cDetails[k])) prep.cDetails[k] = {}; });
     canonClones(prep); canonCloning(prep);
+    if (prep.gb && !Array.isArray(prep.gb.feats)) prep.gb = null;
     if (d.opt) {
       const dopt = d.opt, myCals = secCals().slice(), myKnown = Array.isArray(opt.known) ? opt.known.slice() : null, myQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : [], myQDel = Array.isArray(opt.myQuickDel) ? opt.myQuickDel.slice() : [];
       Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);
@@ -11685,8 +11696,11 @@ async function switchActivePrep(prepId){
     }
     customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
     syncUid();
+    { const seenT = new Set(); traces.forEach(t => { const k = t.id != null ? String(t.id) : ''; if (!k || seenT.has(k)) t.id = uid++; seenT.add(String(t.id)); }); }
+    { const seenM = new Set(); prep.manual.forEach(m => { const k = m.id != null ? String(m.id) : ''; if (!k || seenM.has(k)) m.id = 'm' + (uid++); seenM.add(String(m.id)); }); }
     { const seenA = new Set(); assays = assays.map(a => { const na = makeAssay(a); if (seenA.has(na.id)) na.id = 'a' + (uid++); seenA.add(na.id); return na; }); }
     ndUid = Math.max(uid, ndSamples.length + 1 + Date.now() % 1000);
+    { const seenN = new Set(); ndSamples.forEach(n => { const k = n.id != null ? String(n.id) : ''; if (!k || seenN.has(k)) n.id = 'nd' + (ndUid++); seenN.add(String(n.id)); }); }
     curStep = d.curStep || 'construct';
     cur = d.cur || 'overlay';
     await agEnsureAdjImage();

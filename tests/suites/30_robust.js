@@ -735,4 +735,149 @@ await T.t('legacy-opt-preserve-and-known-sync', async () => {
   await close();
 });
 
+await T.t('legacy-non-numeric-stability', async () => {
+  const {p, errs, close} = await open(), h = H(p);
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const proj = {
+    app: 'HPLC Figure Bench',
+    version: 1,
+    runs: [
+      {
+        id: 'r1',
+        name: 'IMAC Run',
+        file: 'standard_like_name.csv',
+        inWf: true,
+        isStd: false,
+        pathFromFile: true,
+        path: '2',
+        uvs: [{name: 'UV', xs: [0, 5, 10], ys: [10, 100, 10]}],
+        fracs: []
+      },
+      {
+        id: 'r2',
+        name: 'SEC Standards',
+        inWf: false,
+        isStd: true,
+        pathFromFile: false,
+        secMode: 'on',
+        secCal: 'sc_legacy',
+        uvs: [{name: 'UV', xs: [8, 12, 16], ys: [5, 80, 5]}],
+        fracs: []
+      }
+    ],
+    traces: [
+      {rows: [[0, 10], [5, 50], [10, 15]]}
+    ],
+    gels: [
+      {
+        image: png1x1,
+        name: null,
+        white: null,
+        black: null,
+        rot: null,
+        fine: null,
+        nLanes: null,
+        labels: null,
+        crop: null,
+        edits: [],
+        marks: null,
+        assign: null,
+        tags: null
+      }
+    ],
+    nanodrop: [
+      {id: 'nd1', name: 'Sample A', a280: 1.2, runId: 'r1'},
+      {id: 'nd1', name: 'Sample B', a280: 2.4, runId: 'r1'}
+    ],
+    prep: {
+      name: 'Stability Protein',
+      manual: [
+        {id: 'm1', kind: 'column', name: 'Manual A', after: 'r1'},
+        {id: 'm1', kind: 'dialysis', name: 'Manual B', after: 'r1'}
+      ],
+      btw: {r1: null},
+      skip: null,
+      stepMeta: null,
+      wfOff: null,
+      titles: null,
+      cDetails: {digest: null, overlap: null, recomb: null},
+      cloning: null
+    },
+    opt: {
+      secStds: true,
+      secCals: [{
+        id: 'sc_legacy',
+        name: 'Legacy SEC',
+        col: 's200i',
+        v0: 8,
+        vt: 24,
+        stds: [
+          {name: 'Thyroglobulin', kda: 670, ve: 9},
+          {name: 'Ovalbumin', kda: 44, ve: 15}
+        ]
+      }]
+    }
+  };
+
+  await p.setInputFiles(SEL.importFile, {
+    name: 'legacy_non_numeric_stability.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(proj))
+  });
+  await p.waitForTimeout(3000);
+
+  const manSteps = await p.$$eval('#tl button[data-step^="man:"]', els => els.map(e => e.getAttribute('data-step')));
+  T.check('non-num.manual-unique-ids', manSteps.length === 2 && manSteps[0] !== manSteps[1], `manual steps: ${manSteps.join(', ')}`);
+
+  await h.step('run:r1');
+  await p.waitForTimeout(400);
+  const ndIds = await p.$$eval('#ndList [data-nd]', els => els.map(e => e.getAttribute('data-nd')));
+  T.check('non-num.nd-unique-ids', ndIds.length === 2 && ndIds[0] !== ndIds[1], `nd ids: ${ndIds.join(', ')}`);
+
+  const calText = await p.$eval('#sec-cal option', el => el.textContent).catch(e => e.message);
+  T.check('non-num.sec-cal-unit', typeof calText === 'string' && calText.includes('(mL)'), `calText: ${calText}`);
+
+  const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click(SEL.exportBtn)]);
+  const outPath = path.join(ROOT, 'results', 'legacy_non_numeric_stability_export.json');
+  await dl.saveAs(outPath);
+  const exp = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+
+  const expMan = (exp.prep && exp.prep.manual) || [];
+  T.check('non-num.export-manual-uids', expMan.length === 2 && !!expMan[0].id && !!expMan[1].id && expMan[0].id !== expMan[1].id, JSON.stringify(expMan.map(m => m.id)));
+
+  const expNd = exp.nanodrop || [];
+  T.check('non-num.export-nd-uids', expNd.length === 2 && !!expNd[0].id && !!expNd[1].id && expNd[0].id !== expNd[1].id, JSON.stringify(expNd.map(n => n.id)));
+
+  const r1 = (exp.runs || []).find(r => r.id === 'r1') || {};
+  const r2 = (exp.runs || []).find(r => r.id === 'r2') || {};
+  T.check('non-num.flags-r1', r1.pathFromFile === true && r1.isStd === false, `r1: pathFromFile=${r1.pathFromFile}, isStd=${r1.isStd}`);
+  T.check('non-num.flags-r2', r2.pathFromFile === false && r2.isStd === true, `r2: pathFromFile=${r2.pathFromFile}, isStd=${r2.isStd}`);
+
+  const ep = exp.prep || {};
+  const isPlainObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  T.check('non-num.prep-subobjects', isPlainObj(ep.wfOff) && isPlainObj(ep.skip) && isPlainObj(ep.stepMeta) && isPlainObj(ep.titles) && isPlainObj(ep.btw) && !('r1' in ep.btw && ep.btw.r1 === null), JSON.stringify({wfOff: ep.wfOff, btw: ep.btw}));
+  T.check('non-num.prep-cdetails', isPlainObj(ep.cDetails) && isPlainObj(ep.cDetails.digest) && isPlainObj(ep.cDetails.overlap) && isPlainObj(ep.cDetails.recomb), JSON.stringify(ep.cDetails));
+  T.check('non-num.prep-cloning', isPlainObj(ep.cloning) && Array.isArray(ep.cloning.stages), JSON.stringify(ep.cloning));
+
+  const sc = ((exp.opt && exp.opt.secCals) || []).find(c => c.id === 'sc_legacy') || {};
+  T.check('non-num.export-sec-unit', sc.unit === 'mL', `unit=${sc.unit}`);
+
+  const tr = (exp.traces || [])[0] || {};
+  T.check('non-num.trace-defaults', tr.id != null && typeof tr.name === 'string' && tr.name.length > 0 && Array.isArray(tr.cols) && tr.xc === 0 && tr.yc === 1 && tr.scale === 1 && Array.isArray(tr.peaks), JSON.stringify({id: tr.id, name: tr.name, cols: tr.cols, xc: tr.xc, yc: tr.yc, scale: tr.scale, peaks: tr.peaks}));
+
+  const g = (exp.gels || [])[0] || {};
+  T.check('non-num.gel-defaults', g.id != null && typeof g.name === 'string' && g.name.length > 0 && g.white === 255 && g.black === 0 && g.rot === 0 && g.fine === 0 && g.cl === 0 && g.cr === 0 && g.ct === 0 && g.cb === 0 && g.nLanes === 10 && typeof g.labels === 'string' && g.labels.length > 0 && isPlainObj(g.edits) && Array.isArray(g.edits.added) && Array.isArray(g.edits.removed) && Array.isArray(g.marks) && Array.isArray(g.assign) && Array.isArray(g.tags), JSON.stringify({id: g.id, name: g.name, white: g.white, black: g.black, nLanes: g.nLanes, edits: g.edits}));
+
+  await h.step('final');
+  await p.waitForTimeout(300);
+  if (await p.locator('#ndPanel.collapsed').count()) await p.click('#ndPanel h2');
+  await p.click('#ndList [data-nddel]');
+  await p.waitForTimeout(300);
+  const ndAfterDel = await p.$$eval('#ndList [data-nd]', els => els.length);
+  T.check('non-num.nd-delete-one', ndAfterDel === 1, `nd rows after deleting one: ${ndAfterDel}`);
+
+  T.check('non-num.no-error', !errs.length, errs.join(' | '));
+  await close();
+});
+
 T.done(); })();
