@@ -4765,6 +4765,15 @@ function lanePurity(g, ln){
   const den = opt.purBase === 'tagged' ? tgt + con : tot;
   return {purity: den > 0 ? 100*tgt/den : null, tgt, con, tot, mws, tmws, cleaved, cleavedEst, est};
 }
+/* Recovery calculations always use all stain in the assigned lane, independently of the display's marked-band purity basis. */
+function laneIntensityPurity(g, laneI){
+  if (!g || !g.pix) return null;
+  const ln = gelBands(g)[laneI]; if (!ln || ln.marker || !(ln.total > 0)) return null;
+  let tgt = 0;
+  ln.bands.forEach(b => { const t = tagRaw(g, laneI, b); if (!t || t.kind === 'none') return;
+    if (t.kind === 'target' || (t.kind === 'tagged' && opt.tagCounts !== false)) tgt += b.area; });
+  return tgt > 0 ? 100*tgt/ln.total : null;
+}
 /* Cross-reference a run fraction with its assigned SDS-PAGE gel lane to compute target protein mass (mg) and specific recovery yield (%):
    targetMass = (purityPct / 100) * totalFractionMass; yieldPct = (targetMass / refMass) * 100 (#1678). Returns null when required data are missing. */
 function calcFractionYield(run, fracIndex){
@@ -4799,19 +4808,7 @@ function calcFractionYield(run, fracIndex){
   if (!hit) return null;
   const ln = gelBands(hit.g)[hit.lane];
   if (!ln || ln.marker || !Array.isArray(ln.bands) || !ln.bands.length) return null;
-  let rawTgt = 0, rawCon = 0, hasProtTag = false;
-  ln.bands.forEach(b => {
-    const tr = tagRaw(hit.g, hit.lane, b); if (!tr || tr.kind === 'none') return;
-    if (tr.kind === 'target') { rawTgt += b.area; hasProtTag = true; }
-    else if (tr.kind === 'tagged') { hasProtTag = true; if (opt.tagCounts !== false) rawTgt += b.area; else rawCon += b.area; }
-    else if (tr.kind === 'contam') rawCon += b.area;
-  });
-  if (!hasProtTag || !(rawTgt > 0)) return null;
-  const pu = lanePurity(hit.g, ln);
-  const hasCon = rawCon > 0 || (opt.knownCount && pu && pu.con > 0) || (hit.g.tags || []).some(t => t.kind === 'contam' && (t.lane == null || t.lane === hit.lane));
-  if (opt.purBase === 'tagged' && !hasCon) return null;
-  const den = opt.purBase === 'tagged' ? rawTgt + Math.max(rawCon, pu ? pu.con : 0) : (ln.total || 0);
-  const purity = den > 0 ? 100 * rawTgt / den : null;
+  const purity = laneIntensityPurity(hit.g, hit.lane);
   if (purity == null || !isFinite(purity) || !(purity > 0)) return null;
   const purityFrac = purity / 100;
   const ovRegs = (run.integ || []).map(r => ({a: Math.min(r.a, r.b), b: Math.max(r.a, r.b)})).filter(r => Math.min(seg.b, r.b) - Math.max(seg.a, r.a) > 1e-9);
