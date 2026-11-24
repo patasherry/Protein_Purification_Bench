@@ -235,5 +235,78 @@ async function loadProjObj(p, h, obj, fname) {
     }
   });
 
+  await T.t('kinetics-methods-kcatkm-hill-k05-and-underdetermined-withheld', async () => {
+    const {p, close, errs} = await open();
+    try {
+      p.setDefaultTimeout(12000);
+      const h = H(p);
+      const mmEntries = [0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0].map((s, i) => ({
+        id: 'm' + i, conc: s, concUnit: 'mM', rawVals: [+((12 * s) / (0.4 + s)).toFixed(5)], rawUnit: 'U/mL'
+      }));
+      const hillEntries = [0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0].map((s, i) => ({
+        id: 'h' + i, conc: s, concUnit: 'mM', rawVals: [+(80 * Math.pow(s, 2.5) / (Math.pow(2.0, 2.5) + Math.pow(s, 2.5))).toFixed(5)], rawUnit: 'uM/s'
+      }));
+      const daEntries = [0.1, 0.25, 0.5, 1.0, 2.5].map((s, i) => ({
+        id: 'd' + i, conc: s, concUnit: 'mM', rawVals: [+(0.30 * s / (0.5 + s)).toFixed(5)], rawUnit: 'dA/min'
+      }));
+      await loadProjObj(p, h, {
+        app: 'Protein Purification Bench',
+        version: 1,
+        schemaVersion: 1,
+        name: 'Kinetics Rigor Methods',
+        opt: {protKda: 40},
+        prep: {on: true, name: 'Enzyme Prep'},
+        runs: [makeRun('r1', 'SEC_Run', 'SEC', 12, 'F1-F3')],
+        traces: [], gels: [], ndSamples: [],
+        assays: [
+          {
+            id: 'ak_mm', name: 'Kinase MM', mode: 'kinetics',
+            protocol: {substrate: 'ATP', buffer: '25 mM HEPES', pH: 7.5, tempC: 30},
+            fit: {model: 'mm', weight: 'none', enzConc_uM: 1.0},
+            display: {visible: true, placement: 'panel'},
+            entries: mmEntries
+          },
+          {
+            id: 'ak_hill', name: 'Allosteric Hill', mode: 'kinetics',
+            protocol: {substrate: 'ATP', buffer: '25 mM HEPES', pH: 7.5, tempC: 30},
+            fit: {model: 'hill', weight: 'none', enzConc_uM: 0.5},
+            display: {visible: true, placement: 'panel'},
+            entries: hillEntries
+          },
+          {
+            id: 'ak_1s', name: 'Single Conc', mode: 'kinetics',
+            protocol: {substrate: 'ATP', buffer: '25 mM HEPES', pH: 7.5, tempC: 30},
+            fit: {model: 'mm', weight: 'none', enzConc_uM: 1.0},
+            display: {visible: false, placement: 'panel'},
+            entries: [{id: 's0', conc: 1.0, concUnit: 'mM', rawVals: [5.0, 5.1, 4.9], rawUnit: 'U/mL'}]
+          },
+          {
+            id: 'ak_da', name: 'Uncalibrated Slope', mode: 'kinetics',
+            protocol: {substrate: 'NADH', buffer: '50 mM Tris', pH: 8.0, tempC: 25, wavelengthNm: 340},
+            fit: {model: 'mm', weight: 'none', enzConc_uM: 0.2},
+            display: {visible: false, placement: 'panel'},
+            entries: daEntries
+          }
+        ]
+      }, 'kinetics_rigor_methods.json');
+      await h.step('figure');
+      const mTxt = await h.methods();
+      T.check('kinetics-mm-kcatkm-after-r2', /Steady-state kinetics \(Kinase MM\): Km = 0\.40[\s\S]*?kcat = 200(?: ± [0-9.e+-]+)? s⁻¹ \(R² = 1\.0000[^)]*kcat\/Km = 5\.00e\+5/.test(mTxt), mTxt);
+      T.check('kinetics-hill-uses-k05-not-km', /Steady-state kinetics \(Allosteric Hill\): K₀\.₅ = 2\.00/.test(mTxt) && !/Steady-state kinetics \(Allosteric Hill\):[^\n]*kcat\/Km/.test(mTxt), mTxt);
+      T.check('kinetics-single-conc-withheld', !mTxt.includes('Steady-state kinetics (Single Conc):'), mTxt);
+      T.check('kinetics-uncalibrated-damin-withholds-kcat', /Steady-state kinetics \(Uncalibrated Slope\): Km = /.test(mTxt) && !/Steady-state kinetics \(Uncalibrated Slope\):[^\n]*kcat =/.test(mTxt), mTxt);
+
+      const svg = await h.exportSvg();
+      const boxes = await h.svgBoxes(svg);
+      const texts = boxes.texts.map(t => t.t.trim());
+      T.check('kinetics-svg-shows-kcatkm-and-hill-k05',
+        texts.some(t => t.includes('kcat/Km = 5.00e+5')) && texts.some(t => t.startsWith('K₀.₅ = 2.00 mM')) && boxes.clipped.length === 0,
+        JSON.stringify({texts, clipped: boxes.clipped}));
+      T.check('kinetics-rigor-no-page-errors', errs.length === 0, errs.join('; '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();

@@ -182,5 +182,84 @@ async function txt(root, sel) {
     }
   });
 
+  await T.t('kinetics-guardrails-distinct-s-damin-nms-and-weighted-r2', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(12000);
+      const jit = [0.12, -0.09, 0.10, -0.11, 0.08, 40.0];
+      const sds = [0.2, 0.2, 0.2, 0.2, 0.2, 40.0];
+      const sArr = [0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+      const proj = {
+        app: 'Protein Purification Bench',
+        version: 1,
+        schemaVersion: 1,
+        cur: 'workflow',
+        runs: [{id: 'r1', name: 'SEC', inWf: true, color: '#0072b2', uvs: [{name: 'UV 280', unit: 'mAU', xs: [0, 5, 10], ys: [0, 100, 0]}], fracs: [], shade: ''}],
+        traces: [], gels: [],
+        prep: {on: true, name: 'Kinetics Guardrails'},
+        assays: [
+          {
+            id: 'a_1s', name: 'One S Triplicate', mode: 'kinetics',
+            fit: {model: 'mm', weight: 'none', enzConc_uM: 0.1},
+            entries: [{conc: 1.0, concUnit: 'mM', rawVals: [10.0, 10.5, 9.5], rawUnit: 'U/mL'}]
+          },
+          {
+            id: 'a_2pt', name: 'Two Point Exact', mode: 'kinetics',
+            fit: {model: 'mm', weight: 'none'},
+            entries: [
+              {conc: 0.5, concUnit: 'mM', rawVals: [4.0], rawUnit: 'U/mL'},
+              {conc: 2.0, concUnit: 'mM', rawVals: [10.0], rawUnit: 'U/mL'}
+            ]
+          },
+          {
+            id: 'a_uncal', name: 'Uncalibrated dA/min', mode: 'kinetics',
+            fit: {model: 'mm', weight: 'none', enzConc_uM: 0.1},
+            entries: [0.1, 0.25, 0.5, 1.0, 2.5].map(s => ({conc: s, concUnit: 'mM', rawVals: [+(0.24 * s / (0.5 + s)).toFixed(5)], rawUnit: 'dA/min'}))
+          },
+          {
+            id: 'a_nms', name: 'Calibrated nM/s', mode: 'kinetics',
+            fit: {model: 'mm', weight: 'none', enzConc_uM: 0.05},
+            entries: [0.1, 0.25, 0.5, 1.0, 2.5].map(s => ({conc: s, concUnit: 'mM', rawVals: [+(500 * s / (0.5 + s)).toFixed(4)], rawUnit: 'nM/s'}))
+          },
+          {
+            id: 'a_wsd', name: 'Weighted Outlier', mode: 'kinetics',
+            fit: {model: 'mm', weight: 'sd'},
+            entries: sArr.map((s, i) => ({conc: s, concUnit: 'mM', rawVals: [100 * s / (1.0 + s) + jit[i]], rawSd: sds[i], rawUnit: 'uM/min'}))
+          }
+        ]
+      };
+      await p.setInputFiles('#projFile', {
+        name: 'kin_guardrails.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(proj))
+      });
+      await h.wait(500);
+
+      const c1 = p.locator('#assayPanel [data-assay-id="a_1s"]');
+      const fit1Txt = await txt(c1, '.assay-fit');
+      T.check('kin/refuses-single-distinct-s', fit1Txt.includes('Insufficient points') && !(await c1.locator('.af-vmax').count()), `fit="${fit1Txt}"`);
+
+      const c2 = p.locator('#assayPanel [data-assay-id="a_2pt"]');
+      const vmax2 = await txt(c2, '.af-vmax'), warn2 = await txt(c2, '.af-warn'), rmse2 = await txt(c2, '.af-rmse');
+      T.check('kin/zero-df-warns-and-withholds-se', !vmax2.includes('±') && warn2.includes('0 degrees of freedom') && rmse2.includes('n.d.'), `vmax="${vmax2}", warn="${warn2}", rmse="${rmse2}"`);
+
+      const c3 = p.locator('#assayPanel [data-assay-id="a_uncal"]');
+      T.check('kin/uncalibrated-damin-withholds-kcat', (await c3.locator('.af-vmax').count()) === 1 && (await c3.locator('.af-kcat').count()) === 0, `kcat="${await txt(c3, '.af-kcat')}"`);
+
+      const c4 = p.locator('#assayPanel [data-assay-id="a_nms"]');
+      const kcat4 = await txt(c4, '.af-kcat'), kcatKm4 = await txt(c4, '.af-kcatkm');
+      T.check('kin/nms-scales-kcat-and-kcatkm', kcat4.includes('10.00 s⁻¹') && kcatKm4.includes('2.00e+4'), `kcat="${kcat4}", kcatKm="${kcatKm4}"`);
+
+      const c5 = p.locator('#assayPanel [data-assay-id="a_wsd"]');
+      const r2Txt = await txt(c5, '.af-r2');
+      const r2Match = r2Txt.match(/-?\d+(?:\.\d+)?/);
+      const r2Val = r2Match ? +r2Match[0] : 0;
+      T.check('kin/weighted-r2-reflects-weights', r2Val > 0.999, `r2Txt="${r2Txt}"`);
+      T.check('kin/guardrails-no-errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();

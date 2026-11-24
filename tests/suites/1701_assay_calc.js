@@ -381,5 +381,49 @@ function baseProject(assays, extra) {
     }
   });
 
+  await T.t('kinetics-weighted-aicc-scale-invariance-and-engine-parity', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      const jit = [0.12, -0.09, 0.10, -0.11, 0.08, 40.0];
+      const sds = [0.2, 0.2, 0.2, 0.2, 0.2, 40.0];
+      const sArr = [0.2, 0.5, 1.0, 2.0, 5.0, 10.0];
+      const pts1 = sArr.map((s, i) => ({s, v: 100 * s / (1.0 + s) + jit[i], sd: sds[i]}));
+      const pts10 = sArr.map((s, i) => ({s, v: 100 * s / (1.0 + s) + jit[i], sd: sds[i] * 10}));
+      const entries1 = sArr.map((s, i) => ({conc: s, concUnit: 'mM', rawVals: [100 * s / (1.0 + s) + jit[i]], rawSd: sds[i], rawUnit: 'uM/min'}));
+
+      const proj = baseProject([
+        {
+          id: 'wsd1', name: 'Weighted SD 1x', kind: 'kinetics', mode: 'kinetics', rawUnit: 'uM/min',
+          kinetics: {substrate: 'S', unit: 'mM', vUnit: 'uM/min', points: pts1},
+          entries: entries1,
+          fit: {model: 'mm', weight: 'sd', enzConc_uM: 0.1}
+        },
+        {
+          id: 'wsd10', name: 'Weighted SD 10x', kind: 'kinetics', mode: 'kinetics', rawUnit: 'uM/min',
+          kinetics: {substrate: 'S', unit: 'mM', vUnit: 'uM/min', points: pts10},
+          fit: {model: 'mm', weight: 'sd', enzConc_uM: 0.1}
+        }
+      ]);
+
+      const calc = await loadProjectAndCalc(p, h, 'assay_weighted_aicc.json', proj);
+      const f1 = calc && calc.assays && calc.assays[0] && calc.assays[0].fit;
+      const f10 = calc && calc.assays && calc.assays[1] && calc.assays[1].fit;
+      T.check('weight.aicc-scale-invariant-under-sd-rescaling',
+        !!(f1 && f10 && f1.aicc != null && f10.aicc != null && T.near(f1.aicc, f10.aicc, 1e-6)),
+        `aicc(1x)=${f1 && f1.aicc}, aicc(10x)=${f10 && f10.aicc}`);
+
+      const uiAiccTxt = await p.locator('#assayPanel [data-assay-id="wsd1"] .af-aicc').textContent().catch(() => '');
+      const mAicc = (uiAiccTxt || '').match(/-?\d+(?:\.\d+)?/);
+      const uiAicc = mAicc ? +mAicc[0] : null;
+      T.check('weight.engine1-and-engine2-aicc-agree',
+        !!(f1 && f1.aicc != null && uiAicc != null && T.near(uiAicc, f1.aicc, 0.02)),
+        `engine1=${f1 && f1.aicc}, ui="${uiAiccTxt}"`);
+      T.check('weight.parity-no-page-errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
