@@ -7,3 +7,4 @@ tests/package-lock.json
 .DS_Store
 .env
 .env.*
+.ppb_board_prompt_*.md

@@ -155,4 +155,158 @@ assert '### Verified code pointers' in iss1['body'] and '`#saveSvg` (line ' in i
 assert '**No-gos (peer audit guardrails):**' in iss1['body'], iss1['body']
 assert board_posts and 'zero self-votes' in board_posts[0], "Decision post must be recorded"
 
+# 7. Gemini API fixes (2026-11-24): no retired 2.5 models, 503 retry, 404 on last model rests & raises RuntimeError, accurate rest reason, thought-part filtering
+import io, urllib.error, urllib.request
+assert all('2.5' not in m for m in mgr.GEMINI_MODELS + mgr.REVIEW_MODELS + mgr.FLASH_LITE_MODELS), (mgr.GEMINI_MODELS, mgr.REVIEW_MODELS)
+assert 'gemini-3.8-flash' in mgr.REVIEW_MODELS and 'gemini-3.5-flash-lite' in mgr.FLASH_LITE_MODELS
+
+# Thought-part filtering in _gem_extract_text
+_thought_payload = _json.dumps({
+    'candidates': [{'content': {'parts': [
+        {'thought': True, 'text': 'internal reasoning {"wrong": 1}'},
+        {'text': '  {"ok": true}  '},
+    ]}}]
+}).encode()
+assert mgr._gem_extract_text(_thought_payload, 'gemini-3.8-flash') == '{"ok": true}'
+
+_orig_urlopen, _orig_gap, _orig_retry_s, _orig_busy_s = urllib.request.urlopen, mgr.GEMINI_GAP, mgr.GEMINI_RETRY_S, mgr.GEMINI_BUSY_REST_S
+_orig_gem_state = {k: (dict(v) if isinstance(v, dict) else v) for k, v in mgr._gem.items()}
+try:
+    mgr.GEMINI_KEY = 'test-live-key'
+    mgr.GEMINI_GAP, mgr.GEMINI_RETRY_S, mgr.GEMINI_BUSY_REST_S = 0, 0, 1
+    mgr._gem.update({'last': 0.0, 'rest_until': {}, 'strikes': {}, 'why': {}})
+
+    # (a) 1-shot retry recovers from transient 503 without resting the model
+    _calls_503 = []
+    class _Resp:
+        def __init__(self, txt):
+            self._b = _json.dumps({'candidates': [{'content': {'parts': [{'text': txt}]}}]}).encode()
+        def read(self): return self._b
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def _mock_503_then_ok(req, timeout=150):
+        _calls_503.append(req.full_url)
+        if len(_calls_503) == 1:
+            raise urllib.error.HTTPError(req.full_url, 503, 'Service Unavailable', {}, io.BytesIO(b'{"error":{"message":"overloaded"}}'))
+        return _Resp('{"recovered": 1}')
+
+    urllib.request.urlopen = _mock_503_then_ok
+    assert mgr.ask_gemini('ping', ['gemini-flash-latest'], json_mode=True) == '{"recovered": 1}'
+    assert len(_calls_503) == 2 and 'gemini-flash-latest' not in mgr._gem['rest_until']
+
+    # (b) 404 on the LAST model in `models` rests it for 24h and raises RuntimeError (never raw HTTPError 404)
+    def _mock_404(req, timeout=150):
+        raise urllib.error.HTTPError(req.full_url, 404, 'Not Found', {}, io.BytesIO(b'{"error":{"message":"model not found"}}'))
+
+    urllib.request.urlopen = _mock_404
+    _err_404 = None
+    try:
+        mgr.ask_gemini('ping', ['gemini-retired-test'])
+    except Exception as e:
+        _err_404 = e
+    assert isinstance(_err_404, RuntimeError) and not isinstance(_err_404, urllib.error.HTTPError), repr(_err_404)
+    assert 'HTTP 404' in str(_err_404) and mgr._gem['rest_until'].get('gemini-retired-test', 0) > time.time() + 3600
+
+    # (c) Subsequent call on a resting 404 model reports the real HTTP 404 reason, NOT a false "free-tier rate limit"
+    try:
+        mgr.ask_gemini('ping', ['gemini-retired-test'])
+        assert False, 'expected RuntimeError'
+    except RuntimeError as e2:
+        assert 'HTTP 404' in str(e2) and 'free-tier rate limit' not in str(e2), str(e2)
+finally:
+    urllib.request.urlopen, mgr.GEMINI_GAP, mgr.GEMINI_RETRY_S, mgr.GEMINI_BUSY_REST_S = _orig_urlopen, _orig_gap, _orig_retry_s, _orig_busy_s
+    mgr.GEMINI_KEY = _orig_key
+    mgr._gem.clear(); mgr._gem.update(_orig_gem_state)
+
+# 8. Codex stdin piping + Antigravity read-only temp-file invocation + 4-seat board integration
+assert mgr.BOARD_CODEX is True and mgr.BOARD_AGY is True
+assert mgr.CAP['agy_board'] == 24 and mgr.CAP['codex'] >= 20
+
+_orig_run = mgr.run
+_seen_runs = []
+try:
+    def _fake_run(cmd, prompt, timeout=600, cwd=None, stdin=False):
+        pfiles = list(mgr.ROOT.glob('.ppb_board_prompt_*.md'))
+        _seen_runs.append({'cmd': cmd, 'prompt': prompt, 'stdin': stdin, 'pfile_exists_during_run': bool(pfiles),
+                           'pfile_content': pfiles[0].read_text(encoding='utf-8') if pfiles else ''})
+        return 'codex\n{"ok": "codex"}\ntokens used 10' if cmd[0] == 'codex' else '{"ok": "agy"}'
+    mgr.run = _fake_run
+    out_cx = mgr.ask_codex('big board prompt\nline 2')
+    assert out_cx == '{"ok": "codex"}'
+    assert _seen_runs[0]['cmd'][-1] == '-' and _seen_runs[0]['stdin'] is True and _seen_runs[0]['prompt'] == 'big board prompt\nline 2'
+
+    out_ag = mgr.ask_agy('multiline\nprompt with "quotes"')
+    assert out_ag == '{"ok": "agy"}'
+    ag_call = _seen_runs[1]
+    assert ag_call['cmd'][0] == 'agy' and '--dangerously-skip-permissions' not in ag_call['cmd']
+    assert '--model' in ag_call['cmd'] and 'gemini-3.8-flash' in ag_call['cmd']
+    assert ag_call['pfile_exists_during_run'] is True and 'multiline\nprompt with "quotes"' in ag_call['pfile_content']
+    assert list(mgr.ROOT.glob('.ppb_board_prompt_*.md')) == [], 'temp prompt file must be cleaned up after ask_agy'
+finally:
+    mgr.run = _orig_run
+
+# 9. 4-seat board_advisers + board_round resilient when Gemini REST fails (no duplicate compact retry on API exception; agy coding cap untouched)
+_orig_4 = (mgr.gh, mgr.rv.ask_model, mgr.ask_gemini, mgr.ask_codex, mgr.ask_agy, mgr.codex_exe, mgr.agy_exe, mgr.GEMINI_KEY, mgr.DRY)
+try:
+    mgr.GEMINI_KEY = 'test-live-key'
+    mgr.DRY = False
+    mgr.codex_exe = lambda: '/usr/bin/codex'
+    mgr.agy_exe = lambda: '/usr/bin/agy'
+    _gem_propose_attempts = []
+    _posts_4, _filed_4 = [], []
+    mgr.gh = lambda path, method='GET', body=None, **kw: (
+        (_filed_4.append({'number': 3100 + len(_filed_4), **body}) or _filed_4[-1]) if (method == 'POST' and path.endswith('/issues')) else
+        (_posts_4.append(body['body']) or {'id': 1}) if (method == 'POST' and f'/issues/{mgr.BOARD}/comments' in path) else []
+    )
+    def _fail_gem(q, models=None, json_mode=False, temp=None):
+        if 'This is the opening of the team meeting' in q:
+            _gem_propose_attempts.append(1)
+        raise RuntimeError('Gemini unavailable (server busy (503))')
+    mgr.ask_gemini = _fail_gem
+    mgr.rv.ask_model = lambda sys_p, q, **kw: _json.dumps(
+        {'audits': [{'id': 'P2', 'verdict': 'go', 'score': 4, 'why': 'Verified in code.', 'required_fixes': [], 'no_gos': []}]}
+        if 'independent, code-grounded peer auditor' in q else
+        {'homework': [
+            {'to': 'Local AI', 'by': 'Gemini', 'domain': 'SDS-PAGE gels and densitometry', 'question': 'HW1?'},
+            {'to': 'Gemini', 'by': 'Codex', 'domain': 'SDS-PAGE gels and densitometry', 'question': 'HW2?'},
+            {'to': 'Codex', 'by': 'agy', 'domain': 'SDS-PAGE gels and densitometry', 'question': 'HW3?'},
+            {'to': 'agy', 'by': 'Local AI', 'domain': 'SDS-PAGE gels and densitometry', 'question': 'HW4?'},
+        ]} if 'secretary of the Direction board' in q else
+        {'needs': [], 'answers_topic': True, 'missing': ''} if 'check plans for gaps' in q else
+        {'review': 'Local ok.', 'proposals': [{
+            'title': 'Guard empty lane profile in gels', 'where': ['gels'], 'why': 'Avoid NaN.',
+            'evidence': 'In `bandEnergy` and `#saveSvg`.', 'risk': 'Low.',
+            'change': 'In `gels`, guard zero-length lane array in `bandEnergy` before dividing.',
+            'check': 'tests/suites/25_gels.js: empty lane renders 0% via H(p).exportSvg()'
+        }]}
+    )
+    mgr.ask_codex = lambda q: _json.dumps(
+        {'1': 'Fact 1'} if 'Search the web for each question' in q else
+        {'audits': [{'id': 'P1', 'verdict': 'go', 'score': 4, 'why': 'Confirmed in gels.', 'required_fixes': [], 'no_gos': []}]}
+        if 'independent, code-grounded peer auditor' in q else
+        {'review': 'Codex ok.', 'proposals': [{
+            'title': 'Clamp fraction tick text in gels', 'where': ['gels'], 'why': 'Avoid clipping.',
+            'evidence': 'In `zoomCompose`.', 'risk': 'Low.',
+            'change': 'In `gels`, clamp inset label x inside rect in `zoomCompose`.',
+            'check': 'tests/suites/25_gels.js: H(p).svgBoxes(await H(p).exportSvg()) has empty clipped'
+        }]}
+    )
+    mgr.ask_agy = lambda q: _json.dumps(
+        {'audits': [
+            {'id': 'P1', 'verdict': 'go', 'score': 4, 'why': 'Checked protein-purification-bench.html.', 'required_fixes': [], 'no_gos': []},
+            {'id': 'P2', 'verdict': 'go', 'score': 4, 'why': 'Checked zoomCompose.', 'required_fixes': [], 'no_gos': []},
+        ]} if 'independent, code-grounded peer auditor' in q else
+        {'review': 'Antigravity ok.', 'proposals': []}
+    )
+    st4 = {'count': {}}
+    mgr.board_round(st4, topic='gel densitometry and zoom labels')
+    assert len(_gem_propose_attempts) == 1, f'API exception must NOT trigger compact-JSON retry, got {len(_gem_propose_attempts)}'
+    assert st4['count'].get('agy', 0) == 0 and st4['count'].get('agy_board', 0) >= 2, st4['count']
+    assert len(_filed_4) == 2, f'3 healthy seats should still adopt 2 proposals when Gemini fails, got {len(_filed_4)}'
+    assert 'Advisers (4): the local AI, Gemini, ChatGPT, Antigravity.' in _posts_4[0]
+    assert len(st4['board']['homework']) == 4, st4['board']['homework']
+finally:
+    (mgr.gh, mgr.rv.ask_model, mgr.ask_gemini, mgr.ask_codex, mgr.ask_agy, mgr.codex_exe, mgr.agy_exe, mgr.GEMINI_KEY, mgr.DRY) = _orig_4
+
 print("test_board: all asserts passed")

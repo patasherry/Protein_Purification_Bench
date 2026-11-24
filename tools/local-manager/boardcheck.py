@@ -137,7 +137,7 @@ def peer_decision(audits, author, n_advisers=2, go_score=4):
     """Judge a proposal strictly from non-author peer audits (zero self-votes).
     Returns (route, avg_score, votes, required_fixes, no_gos), where route is 'adopt', 'relay', 'probe', or 'reject'."""
     peers = [a for a in (audits or []) if isinstance(a, dict) and a.get('by') and a.get('by') != author]
-    need = max(1, (n_advisers or 2) - 1)
+    need = min(2, max(1, (n_advisers or 2) - 1))
     if not peers:
         return 'reject', 0.0, [], [], []
     votes, fixes, no_gos = [], [], []

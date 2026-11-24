@@ -54,7 +54,7 @@ AUTO_MAX, AUTO_QUEUE, AUTO_AVG = cfg.get('board_adopt_max', 2), cfg.get('board_q
 BOARD_GO = cfg.get('board_go_score', 4)  # every adviser's score at least this: the board's decision is enough, Patrick isn't asked
 DEBATE_ROUNDS = cfg.get('debate_rounds', 2)  # rounds of open debate between the proposals and the vote
 COPILOT_MODE = cfg.get('copilot_mode', 'off')  # off (Patrick has no Copilot credits): no Copilot jobs at all, and its turn goes to Claude Code. auto: the cloud agent, and the Copilot CLI while it is paused. cloud or cli: only that one
-CAP = {'codex_jobs': cfg.get('max_codex_jobs', 6), 'openclaw': cfg.get('max_openclaw_jobs', 8), 'antigravity': cfg.get('max_antigravity_jobs', 40), 'agy': cfg.get('max_agy_jobs', 20), 'copilot': cfg.get('max_copilot_jobs', 10), 'claude_jobs': cfg.get('max_claude_jobs', 1), 'claude': cfg.get('max_claude', 10), 'codex': cfg.get('max_codex', 10), 'gemini': cfg.get('max_gemini', 100), 'queue': cfg.get('max_queue', 20)}
+CAP = {'codex_jobs': cfg.get('max_codex_jobs', 6), 'openclaw': cfg.get('max_openclaw_jobs', 8), 'antigravity': cfg.get('max_antigravity_jobs', 40), 'agy': cfg.get('max_agy_jobs', 20), 'agy_board': cfg.get('max_agy_board', 24), 'copilot': cfg.get('max_copilot_jobs', 10), 'claude_jobs': cfg.get('max_claude_jobs', 1), 'claude': cfg.get('max_claude', 10), 'codex': cfg.get('max_codex', 25), 'gemini': cfg.get('max_gemini', 100), 'queue': cfg.get('max_queue', 20)}
 TRACK = cfg.get('tracking_issue', 17)
 CLOUD_STANDBY = cfg.get('cloud_standby_minutes', 20)  # the cloud copy works only when the PC manager has been quiet this long
 DIGEST_HOUR = cfg.get('digest_hour', 7)
@@ -189,8 +189,19 @@ def comments(n):
 
 
 # ---------- outside models ----------
+def codex_exe():
+    named = cfg.get('codex_exe')
+    if named:
+        return named if (os.path.isfile(named) or shutil.which(named)) else None
+    for name in ('codex', 'codex.cmd', 'codex.exe', 'codex.ps1', 'codex.bat'):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
 def run(cmd, prompt, timeout=600, cwd=None, stdin=False):
-    exe = shutil.which(cmd[0])
+    exe = codex_exe() if cmd[0] == 'codex' else agy_exe() if cmd[0] == 'agy' else shutil.which(cmd[0])
     if not exe:
         raise RuntimeError(f'{cmd[0]} is not installed or not on PATH')
     r = subprocess.run([exe] + cmd[1:] + ([] if stdin else [prompt]), input=prompt if stdin else None, cwd=cwd or ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=timeout)
@@ -213,60 +224,161 @@ CODEX_OPTS = codex_opts()
 
 
 def ask_codex(q):
-    out = run(['codex', 'exec', '--sandbox', 'read-only'] + CODEX_OPTS, q)
-    return out.split('\ncodex\n', 1)[-1].split('\ntokens used', 1)[0].strip()  # keep only the answer
+    # Pipe via `-` on stdin so 35k-char board prompts never hit Windows cmd.exe / CreateProcess length limits or non-TTY stdin hangs
+    out = run(['codex', 'exec', '--sandbox', 'read-only'] + CODEX_OPTS + ['-'], q, stdin=True)
+    return re.split(r'(?:^|\n)codex\n', out, maxsplit=1)[-1].split('\ntokens used', 1)[0].strip()  # keep only the answer
 
 
-GEMINI_MODELS = cfg.get('gemini_models', ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'])  # free tier per day: flash-lite 500, the others about 20 each, so the lite model goes first
+AGY_BOARD_MODEL = cfg.get('agy_board_model', cfg.get('agy_model', 'gemini-3.8-flash'))  # board seat model on Google AI Pro ('' uses sign-in default)
+AGY_BOARD_TIMEOUT = int(cfg.get('agy_board_seconds', 360))
+
+
+def ask_agy(q, model=None):
+    """Ask the local Antigravity CLI (agy) in read-only headless print mode (no --dangerously-skip-permissions).
+    Long or multiline prompts go into a gitignored temp file inside ROOT so Windows agy.cmd never hits cmd.exe limits."""
+    mdl = AGY_BOARD_MODEL if model is None else model
+    pfile = None
+    try:
+        if len(q) > 800 or '\n' in q or '"' in q:
+            pfile = ROOT / f'.ppb_board_prompt_{os.getpid()}_{threading.get_ident()}.md'
+            pfile.write_text(q, encoding='utf-8')
+            inst = (f'Read {pfile.name} in this repository root and follow its instructions carefully. '
+                    'You may inspect repository files in read-only mode if helpful, but do NOT edit, create, or delete any file '
+                    'and do NOT run shell commands. Print ONLY your final answer to stdout.')
+        else:
+            inst = q
+        cmd = (['agy', '-p', inst, '--output-format', 'text', '--print-timeout', f'{AGY_BOARD_TIMEOUT}s']
+               + (['--model', mdl] if mdl else []))
+        out = run(cmd, '', timeout=AGY_BOARD_TIMEOUT + 30, cwd=ROOT, stdin=True)
+    finally:
+        if pfile is not None:
+            pfile.unlink(missing_ok=True)
+    if out.startswith('[ERROR] agy '):
+        raise RuntimeError(out.splitlines()[0][:200])
+    return out
+
+
+FLASH_LITE_MODELS = ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite']
+GEMINI_MODELS = cfg.get('gemini_models', ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash'])  # free tier per day: flash-lite highest, flash models next; retired 2.5 IDs answered 404 on Patrick's key
 GEMINI_GAP = cfg.get('gemini_gap_seconds', 8)  # at least this long between calls, to stay under the free per-minute limit
-_gem = {'last': 0.0, 'rest_until': {}, 'strikes': {}}
+GEMINI_RETRY_S = cfg.get('gemini_retry_seconds', 4)  # 1-shot pause before retrying a transient 5xx (503 overloaded) on the same model
+GEMINI_BUSY_REST_S = cfg.get('gemini_busy_rest_seconds', 20)  # brief cooldown after repeated 5xx/timeout, short enough not to starve later steps
+_gem = {'last': 0.0, 'rest_until': {}, 'strikes': {}, 'why': {}}
+
+
+def _gem_extract_text(raw_bytes, model):
+    data = json.loads(raw_bytes)
+    cands = data.get('candidates') or []
+    if not cands:
+        block = (data.get('promptFeedback') or {}).get('blockReason') or 'no candidates'
+        raise ValueError(f'empty response from {model} ({block})')
+    parts = ((cands[0].get('content') or {}).get('parts')) or []
+    ans_parts = [p.get('text', '') for p in parts if isinstance(p, dict) and not p.get('thought') and p.get('text')]
+    if not ans_parts:
+        ans_parts = [p.get('text', '') for p in parts if isinstance(p, dict) and p.get('text')]
+    txt = ''.join(ans_parts).strip()
+    if not txt:
+        fin = cands[0].get('finishReason') or 'empty text'
+        raise ValueError(f'empty text from {model} ({fin})')
+    return txt
+
+
+def _gem_err_detail(e):
+    try:
+        raw = (e.read() or b'').decode('utf-8', 'replace')
+    except Exception:
+        return ''
+    return re.sub(r'\s+', ' ', raw).strip()[:400]
 
 
 def ask_gemini(q, models=None, json_mode=False, temp=None):
-    """Ask Gemini, pacing calls for the free tier. On "429 Too Many Requests" a model rests (2 min, then 15, then until tomorrow)
-    and the next model is tried. When every model rests, this fails at once, so the ladder and the board move on to ChatGPT."""
+    """Ask Gemini, pacing calls for the free tier. Retries transient 5xx once per model, rests 404/403 models for 24h
+    (including the last fallback model, never leaking raw HTTPError 404), and reports accurate per-model rest reasons."""
     if not GEMINI_KEY:
         raise RuntimeError('no GEMINI_API_KEY')
+    cand_models = list(dict.fromkeys(models or GEMINI_MODELS))
     payload = {'contents': [{'parts': [{'text': q}]}]}
     gen = ({'responseMimeType': 'application/json'} if json_mode else {}) | ({'temperature': float(temp)} if temp is not None else {})
     if gen:
         payload['generationConfig'] = gen
     body = json.dumps(payload).encode()
-    last_reason = 'free-tier rate limit'
-    for model in (models or GEMINI_MODELS):
+    now_ts = time.time()
+    # If every candidate model is resting only from a brief transient 5xx spike (<= GEMINI_BUSY_REST_S), wait it out once
+    if cand_models and all(_gem['rest_until'].get(m, 0) > now_ts for m in cand_models):
+        soonest = min(cand_models, key=lambda m: _gem['rest_until'].get(m, 0))
+        rem = _gem['rest_until'].get(soonest, 0) - now_ts
+        if 0 < rem <= max(0.0, float(GEMINI_BUSY_REST_S)) and 'server busy' in _gem['why'].get(soonest, ''):
+            time.sleep(rem)
+            _gem['rest_until'].pop(soonest, None)
+    last_reason = ''
+    skipped_reasons = []
+    for model in cand_models:
         if _gem['rest_until'].get(model, 0) > time.time():
+            w = _gem['why'].get(model, 'resting')
+            if w not in skipped_reasons:
+                skipped_reasons.append(w)
             continue
-        wait = _gem['last'] + GEMINI_GAP - time.time()
-        if wait > 0:
-            time.sleep(wait)
-        _gem['last'] = time.time()
-        req = urllib.request.Request(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', data=body,
-                                     headers={'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY})
-        try:
-            with urllib.request.urlopen(req, timeout=150) as r:
-                _gem['strikes'][model] = 0; _gem['used'] = model
-                return json.loads(r.read())['candidates'][0]['content']['parts'][0]['text'].strip()
-        except (TimeoutError, urllib.error.URLError) as e:
-            if isinstance(e, urllib.error.HTTPError) and e.code in (400, 403, 404) and (models or GEMINI_MODELS)[-1] != model:
-                _gem['rest_until'][model] = time.time() + 24 * 3600
-                last_reason = f'HTTP {e.code}'
-                log(f'Gemini {model}: not available on this key ({e.code}), using the next model')
-                continue
-            if isinstance(e, urllib.error.HTTPError) and e.code not in (429, 500, 502, 503, 504):
-                raise
-            if not isinstance(e, urllib.error.HTTPError) or e.code != 429:  # Google busy (5xx) or no answer in time: try the next model, and this one again after a minute
-                _gem['rest_until'][model] = time.time() + 60
+        for attempt in range(2):
+            wait = _gem['last'] + (GEMINI_RETRY_S if attempt else GEMINI_GAP) - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            _gem['last'] = time.time()
+            req = urllib.request.Request(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', data=body,
+                                         headers={'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY})
+            try:
+                with urllib.request.urlopen(req, timeout=150) as r:
+                    txt = _gem_extract_text(r.read(), model)
+                    _gem['strikes'][model] = 0
+                    _gem['rest_until'].pop(model, None)
+                    _gem['why'].pop(model, None)
+                    _gem['used'] = model
+                    return txt
+            except ValueError as ve:
+                last_reason = str(ve)[:120]
+                log(f'Gemini {model}: {last_reason}, trying the next model')
+                break
+            except (TimeoutError, urllib.error.URLError) as e:
+                if isinstance(e, urllib.error.HTTPError):
+                    detail = _gem_err_detail(e)
+                    low_det = detail.lower()
+                    if e.code == 400 and ('api_key_invalid' in low_det or 'api key not valid' in low_det):
+                        raise RuntimeError('Gemini API key invalid (HTTP 400)') from None
+                    if e.code in (403, 404) or (e.code == 400 and ('not found' in low_det or 'not supported' in low_det or 'no longer available' in low_det)):
+                        _gem['rest_until'][model] = time.time() + 24 * 3600
+                        _gem['why'][model] = f'HTTP {e.code} ({model} unavailable)'
+                        last_reason = _gem['why'][model]
+                        log(f'Gemini {model}: not available on this key ({e.code}), resting 24h and trying next model')
+                        break
+                    if e.code == 400:
+                        last_reason = f'HTTP 400 on {model}'
+                        log(f'Gemini {model}: bad request (400: {detail[:120]}), trying next model')
+                        break
+                    if e.code not in (429, 500, 502, 503, 504):
+                        raise RuntimeError(f'Gemini HTTP {e.code} on {model}: {detail[:160]}') from None
+                    if e.code == 429:
+                        m_delay = re.search(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"', detail)
+                        hint_s = float(m_delay.group(1)) if m_delay else 0.0
+                        daily = ('perday' in low_det or 'per_day' in low_det or 'limit: 0' in low_det)
+                        k = _gem['strikes'][model] = _gem['strikes'].get(model, 0) + 1
+                        now = dt.datetime.now()
+                        until_tmw = (dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(0, 30)) - now).total_seconds()
+                        rest = until_tmw if (daily or k >= 4) else max(hint_s, 60 if k == 1 else 180 if k == 2 else 900)
+                        _gem['rest_until'][model] = time.time() + rest
+                        _gem['why'][model] = 'daily quota reached (429)' if (daily or k >= 4) else 'free-tier rate limit (429)'
+                        last_reason = _gem['why'][model]
+                        log(f'Gemini {model}: rate limit (429), resting {max(1, int(rest / 60))} min')
+                        break
                 code = getattr(e, 'code', 'timeout')
-                last_reason = f'server busy ({code})'
-                log(f'Gemini {model}: {code}, trying the next model')
-                continue
-            k = _gem['strikes'][model] = _gem['strikes'].get(model, 0) + 1
-            now = dt.datetime.now()
-            rest = 120 if k == 1 else 900 if k == 2 else (dt.datetime.combine(now.date() + dt.timedelta(days=1), dt.time(0, 30)) - now).total_seconds()
-            _gem['rest_until'][model] = time.time() + rest
-            last_reason = 'free-tier rate limit (429)'
-            log(f'Gemini {model}: rate limit (429), resting {int(rest / 60)} min')
-    raise RuntimeError(f'Gemini unavailable ({last_reason})')
+                if attempt == 0 and isinstance(e, urllib.error.HTTPError) and e.code in (500, 502, 503, 504):
+                    log(f'Gemini {model}: {code}, retrying once after {GEMINI_RETRY_S}s')
+                    continue
+                _gem['rest_until'][model] = time.time() + GEMINI_BUSY_REST_S
+                _gem['why'][model] = f'server busy ({code})'
+                last_reason = _gem['why'][model]
+                log(f'Gemini {model}: {code}, resting {GEMINI_BUSY_REST_S}s and trying the next model')
+                break
+    reason = last_reason or ('; '.join(skipped_reasons[:2]) if skipped_reasons else 'no models configured')
+    raise RuntimeError(f'Gemini unavailable ({reason})')
 
 
 def call_local_model(system, user, json_mode=False, temp=None):
@@ -536,7 +648,7 @@ def ladder(s, i, text, ctx, force=False, show=None):
     ext_ran = False
     for name, cap, call, who in (('Gemini', 'gemini', ask_gemini, 'You cannot read the repository. Code from the app and the tests around the names in the question is below.'),
                                  ('ChatGPT (Codex, read-only)', 'codex', ask_codex, 'You are in the repository (read-only). Read AGENTS.md, docs/GOALS.md and the code you need before answering. Do not edit anything.')):
-        if (cap == 'gemini' and (not GEMINI_KEY or CLOUD or rv.MODEL == 'Gemini')) or (cap == 'codex' and not shutil.which('codex')) or not use(s, cap):
+        if (cap == 'gemini' and (not GEMINI_KEY or CLOUD or rv.MODEL == 'Gemini')) or (cap == 'codex' and not codex_exe()) or not use(s, cap):
             continue
         ext_ran = True
         try:
@@ -2226,7 +2338,7 @@ def small_job(s, i):
     k = str(i['number']); memo = s.setdefault('small', {})
     if k not in memo:
         try:
-            r = helper_json(ask_gemini(SMALL_JOB.format(title=i['title'], body=(i.get('body') or '')[:4000]), ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite']))
+            r = helper_json(ask_gemini(SMALL_JOB.format(title=i['title'], body=(i.get('body') or '')[:4000]), FLASH_LITE_MODELS))
             memo[k] = bool(r.get('small')) if r else False
             log(f'#{k}: {"small" if memo[k] else "not small"} for OpenClaw ({str(r.get("why", ""))[:100]})')
         except Exception as e:
@@ -2280,7 +2392,7 @@ def job_done_idle(j):
 def bg_worker(s, key):
     """Run one local coding worker (OpenClaw or Codex) on one job at a time, in the background, so the manager's passes keep going while it codes."""
     W, jobs = BG[key], _bg[key]
-    exe = agy_exe() if key == 'agy' else shutil.which(W['exe'])  # agy may be a shim, or named outright in the settings file
+    exe = agy_exe() if key == 'agy' else codex_exe() if key == 'codex' else shutil.which(W['exe'])  # agy/codex may be npm shims, or named outright in the settings file
     if CLOUD or not exe or not cfg.get(key + '_jobs_on', key != 'openclaw'):  # OpenClaw is off unless openclaw_jobs_on is true: it failed every job (#500, #514, #515)
         return
     tried = s.setdefault('ag_tried' if key == 'agy' else f'{key}_tried', {})
@@ -2420,7 +2532,7 @@ def codex_jobs(s):
 
 # ---------- AI lead review: PRs that change a reported number, reviewed by the AI the owner picks ----------
 REVIEW_MARK = '<!-- ai-lead-review '
-REVIEW_MODELS = cfg.get('review_models', ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest'])  # strongest first; the free tier allows no Pro or Argon calls (0/0), so list them in the settings file only on a paid key
+REVIEW_MODELS = cfg.get('review_models', ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite'])  # strongest first; the free tier allows no Pro or Argon calls (0/0), so list them in the settings file only on a paid key
 REVIEW_AG_MODEL = cfg.get('review_antigravity_model', '')  # empty: the agent's own model, which its quota covers (Argon is 0/0 on the free tier)
 LEAD_REVIEW = """You are the lead reviewer of Protein Purification Bench, a single-file HTML app a biochemistry graduate student (Patrick) uses for real protein purification data.
 This pull request may change a number the app reports, or comes from a board idea. It has passed the tests and the automatic gate, and the change was approved by {approval}.
@@ -2692,16 +2804,22 @@ def ux_scope(s):
     log(f'ux: "{sc}" reported in #{n}, on the board\'s agenda')
 
 
-# ---------- direction board: the local model, Gemini and ChatGPT discuss where to go, Patrick decides ----------
+# ---------- direction board: the local model, Gemini, ChatGPT and Antigravity discuss where to go, Patrick decides ----------
 BOARD_MARK = '<!-- direction-round -->'
 BOARD_PROPOSE_EACH = cfg.get('board_propose_each', 2)  # deeper, code-grounded proposals per seat instead of 3 shallow ones
-BOARD_AGY_VERIFY = cfg.get('board_agy_verify', False)  # optional read-only agy CLI finalist check (off by default to save AI Pro quota)
+BOARD_CODEX = cfg.get('board_codex', True)  # ChatGPT (Codex CLI, read-only) sits on both boards by default
+BOARD_AGY = cfg.get('board_agy', True)      # Antigravity (agy CLI, read-only, AI Pro quota) sits on both boards by default
+BOARD_AGY_VERIFY = cfg.get('board_agy_verify', False)  # optional extra 1-call agy CLI finalist check (off by default since Antigravity sits on the board)
 ROLE_LOCAL = ('YOUR SPECIALIST LENS (Scientific, Numerical & Data-Integrity Auditor): prioritize formula and unit bugs '
               '(mAU vs AU, mL vs min, mg/mL vs ug/mL, off-by-one fraction bounds, extinction/MW math), state or provenance leaks across saves/exports, '
               'and edge-case parsing bugs visible in the code.')
 ROLE_GEMINI = ('YOUR SPECIALIST LENS (Workflow, Format & Figure-Geometry Architect): prioritize lab workflow friction, multi-step state persistence, '
                'exported SVG geometry bugs (clipped labels, overlapping badges, dark-mode figure leaks measurable with exportSvg/svgBoxes/fits), '
                'and real instrument format edge cases.')
+ROLE_CODEX = ('YOUR SPECIALIST LENS (Cross-Section State, Edge-Case & Test-Harness Auditor): prioritize cross-section state coupling, '
+              'backward compatibility of saved projects and settings (`hplc-fig-opt`, `hfb-projects`), parser corner cases, and airtight UI Playwright checks.')
+ROLE_AGY = ('YOUR SPECIALIST LENS (Live-Repo Implementation & Regression Auditor): verify exact symbols, DOM `#id`s, and test suite assertions '
+            'directly against `protein-purification-bench.html` and `tests/suites/`, catching subtle UI/state bugs and avoiding work already on `main`.')
 PROPOSE = """You are {who}, an AI adviser on Protein Purification Bench, a single-file HTML app a biochemistry graduate student (Patrick) uses for real protein purification data.
 This is the opening of the team meeting{topic}. First review the work in progress below: what is going well, what is stuck or keeps being sent back, and what your earlier proposals led to.
 Then propose up to 2 high-conviction directions (quality over quantity; 1 is fine) and make the case for each with critical thinking:
@@ -2813,16 +2931,23 @@ def board_topic_code(topic):
 
 
 _gsearch = {'off_until': 0}  # Gemini search refused with 429: the free key has no search quota, so stop asking for a day
+GSEARCH_MODELS = ('gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite')
+
+
+def gemini_search_ready():
+    return bool(GEMINI_KEY and cfg.get('homework_web_search', True) and time.time() >= _gsearch['off_until'])
 
 
 def ask_gemini_search(q):
     """Gemini with Google Search grounding, for board homework: (text with its web sources listed, ok). Google does not offer
     search on every free key, so a refusal just means the homework is answered from PubMed and the adviser's own knowledge."""
-    if not GEMINI_KEY or not cfg.get('homework_web_search', True) or time.time() < _gsearch['off_until']:
+    if not gemini_search_ready():
         return '', False
     body = json.dumps({'contents': [{'parts': [{'text': q}]}], 'tools': [{'google_search': {}}]}).encode()
     refused = 0
-    for model in ('gemini-flash-latest', 'gemini-flash-lite-latest'):  # the 2.5 models answer 404 on Patrick's key (2026-11-14)
+    for model in GSEARCH_MODELS:
+        if _gem['rest_until'].get(model, 0) > time.time():
+            continue
         wait = _gem['last'] + GEMINI_GAP - time.time()
         if wait > 0:
             time.sleep(wait)
@@ -2832,14 +2957,18 @@ def ask_gemini_search(q):
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
                 c = json.loads(r.read())['candidates'][0]
-            txt = ''.join(x.get('text', '') for x in c.get('content', {}).get('parts', [])).strip()
+            txt = ''.join(x.get('text', '') for x in c.get('content', {}).get('parts', []) if not x.get('thought')).strip()
             web = [g.get('web', {}) for g in (c.get('groundingMetadata') or {}).get('groundingChunks', [])]
             src = '\n'.join(f'- {w.get("title", "")}: {w.get("uri", "")}' for w in web if w.get('uri'))[:2000]
             return (txt[:3000] + ('\nSources:\n' + src if src else '')), True
         except Exception as e:
-            refused += getattr(e, 'code', 0) == 429
+            code = getattr(e, 'code', 0)
+            if code in (403, 404):
+                _gem['rest_until'][model] = time.time() + 86400
+                _gem['why'][model] = f'HTTP {code} ({model} unavailable)'
+            refused += code in (429, 403, 404)
             log(f'board homework: Gemini search on {model} unavailable ({str(e)[:80]})')
-    if refused == 2:  # both models out of search quota (on 2026-11-14 the free key had none): PubMed and Wikipedia carry the homework
+    if refused >= len(GSEARCH_MODELS):  # all search models refused on this key: PubMed, Wikipedia and ChatGPT carry the homework
         _gsearch['off_until'] = time.time() + 86400
         log('board homework: Gemini search is not available on this key, skipped for a day')
     return '', False
@@ -2849,7 +2978,7 @@ def codex_research(s, items):
     """ChatGPT (the Codex CLI, whose web search is on by default) researches all of a meeting's homework questions in one
     run, to spare the ChatGPT allowance: {"1": "facts with source links", ...}. {} when it is off, missing or fails.
     homework_codex: false in the settings file turns it off."""
-    if not items or not cfg.get('homework_codex', True) or not shutil.which('codex') or not use(s, 'codex'):
+    if not items or not cfg.get('homework_codex', True) or GEMINI_KEY == 'fake-test-key' or not codex_exe() or not use(s, 'codex'):
         return {}
     qs = '\n'.join(f'{i + 1}. {h["question"]}' for i, h in enumerate(items))
     try:
@@ -2867,7 +2996,7 @@ def codex_research(s, items):
 def ask_board_prose(adv, prompt):
     """Plain-prose adviser call for homework reports (avoids json_mode=True wrapping prose in JSON, and spares REVIEW_MODELS quota)."""
     if adv[2] == 'gemini' and GEMINI_KEY:
-        return ask_gemini(prompt, ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite'], json_mode=False)
+        return ask_gemini(prompt, FLASH_LITE_MODELS + ['gemini-flash-latest'], json_mode=False)
     if adv[0] == 'the local AI':
         return call_local_model('You are a concise scientific researcher. Answer in plain prose paragraphs, not JSON.', prompt, json_mode=False)
     return adv[1](prompt)
@@ -2875,12 +3004,12 @@ def ask_board_prose(adv, prompt):
 
 def board_do_homework(s, who, ask, state_key='board'):
     """Research and answer the homework set at the last meeting. Returns [(item, answer)] and clears the list."""
-    b = s.setdefault(state_key, {}); items = (b.pop('homework', []) or [])[:3]; out = []
+    b = s.setdefault(state_key, {}); items = (b.pop('homework', []) or [])[:max(4, len(who))]; out = []
     gpt = codex_research(s, items)
     for i, h in enumerate(items):
         terms = h.get('search') or bm.keywords(h['question'])
         papers, wiki = bm.pubmed(terms), bm.wikipedia(bm.keywords(h['question'], 4))
-        web, ok = ask_gemini_search(f'Research question for a protein purification figure app: {h["question"]} Give the key facts in under 250 words.') if use(s, 'gemini') else ('', False)
+        web, ok = ask_gemini_search(f'Research question for a protein purification figure app: {h["question"]} Give the key facts in under 250 words.') if (gemini_search_ready() and use(s, 'gemini')) else ('', False)
         if gpt.get(str(i + 1)):
             web, ok = (web + '\n\n' if web else '') + 'ChatGPT web research:\n' + str(gpt[str(i + 1)])[:2500], True
         adv = next((w for w in who if w[0] == h['to']), who[0])
@@ -2932,21 +3061,23 @@ def board_set_homework(s, who, meeting):
     except Exception:
         app_txt = ''
     cap_hint = bl.capability_digest(app_txt, include_data_model=False, cap=1800)
-    nxt = ''
-    try:
-        nxt_d = bm.pick_domain(parsed_doms, s.get('board', {}).get('dom_seen', {})) if parsed_doms else None
-        nxt = nxt_d['name'] if nxt_d else ''
-        prompt = bm.HOMEWORK.format(
-            domains='; '.join(doms) or 'any', aim=bm.aim_text(nxt), advisers=', '.join(w[0] for w in who),
-            meeting=(f'{cap_hint}\n\n' if cap_hint else '') + meeting[-7500:]
-            + '\n\nEarlier homework (do not repeat):\n' + '\n'.join(s.get('board', {}).get('hw_done', [])[-20:]),
-        )
-        raw = ask_gemini(prompt, ['gemini-flash-lite-latest', 'gemini-flash-latest'], json_mode=True) if (sec[2] == 'gemini' and GEMINI_KEY) else sec[1](prompt)
-        r = helper_json(raw)
-    except Exception as e:
-        log(f'board: no homework set ({str(e)[:80]})')
-        r = {}
-    hw = bm.clean_homework((r or {}).get('homework'), [w[0] for w in who], doms, s.get('board', {}).get('hw_done', []), default_domain=nxt, ensure_all=bool(r))
+    nxt_d = bm.pick_domain(parsed_doms, s.get('board', {}).get('dom_seen', {})) if parsed_doms else None
+    nxt = nxt_d['name'] if nxt_d else ''
+    prompt = bm.HOMEWORK.format(
+        domains='; '.join(doms) or 'any', aim=bm.aim_text(nxt), advisers=', '.join(w[0] for w in who),
+        meeting=(f'{cap_hint}\n\n' if cap_hint else '') + meeting[-7500:]
+        + '\n\nEarlier homework (do not repeat):\n' + '\n'.join(s.get('board', {}).get('hw_done', [])[-20:]),
+    )
+    r = {}
+    for cand in ([sec] + [w for w in who if w[0] != sec[0]]):
+        try:
+            raw = ask_gemini(prompt, FLASH_LITE_MODELS + ['gemini-flash-latest'], json_mode=True) if (cand[2] == 'gemini' and GEMINI_KEY) else cand[1](prompt)
+            r = helper_json(raw)
+            if r:
+                break
+        except Exception as e:
+            log(f'board: homework secretary {cand[0]} failed ({str(e)[:80]})')
+    hw = bm.clean_homework((r or {}).get('homework'), [w[0] for w in who], doms, s.get('board', {}).get('hw_done', []), limit=max(3, len(who)), default_domain=nxt, ensure_all=bool(r))
     s.setdefault('board', {})['homework'] = hw
     return hw
 
@@ -3010,7 +3141,7 @@ def dup_of(p, mem):
     if not GEMINI_KEY:
         return (close[0][0], 'nearly the same words') if best >= 0.8 else None
     try:
-        r = helper_json(ask_gemini(DUP_Q.format(title=p.get('title', ''), change=p.get('change', '')[:600], cands='\n'.join(f'- {k}: {t[:200]}' for k, t in close)), ['gemini-flash-lite-latest', 'gemini-flash-latest'], json_mode=True)) or {}
+        r = helper_json(ask_gemini(DUP_Q.format(title=p.get('title', ''), change=p.get('change', '')[:600], cands='\n'.join(f'- {k}: {t[:200]}' for k, t in close)), FLASH_LITE_MODELS + ['gemini-flash-latest'], json_mode=True)) or {}
     except Exception:
         r = {}
     return (str(r.get('of') or close[0][0]), str(r.get('why', ''))[:200]) if r.get('duplicate') is True else None
@@ -3103,16 +3234,15 @@ def valid_check(p):
 
 def agy_smoke_verify(s, p):
     """Optional 1-call read-only `agy -p` verification on a finalist proposal (`board_agy_verify: true`, off by default)."""
-    if not BOARD_AGY_VERIFY or CLOUD or DRY or not shutil.which('agy') or not use(s, 'agy'):
+    if not BOARD_AGY_VERIFY or CLOUD or DRY or not agy_exe() or not use(s, 'agy_board'):
         return {}
     prompt = (
         'Read-only verification for the Direction board. Do NOT edit, create or commit any file.\n'
         f'Inspect protein-purification-bench.html and tests/ for this proposed job:\nTitle: {p["title"]}\nChange: {p["change"]}\nCheck: {p["check"]}\n'
         'Answer with ONE JSON object only: {"already_done": true or false, "bad_premise": true or false, "why": "one sentence", "pointer": "exact function/line if helpful"}'
     )
-    cmd = ['agy', '-p', prompt, '--output-format', 'text', '--print-timeout', '180s'] + (['--model', AGY_MODEL] if AGY_MODEL else [])
     try:
-        return helper_json(run(cmd, '', timeout=200, stdin=True)) or {}
+        return helper_json(ask_agy(prompt)) or {}
     except Exception as e:
         log(f'board: agy verify skipped ({str(e)[:80]})')
         return {}
@@ -3124,13 +3254,18 @@ def board_cohere(s, adopted, others, topic, dups):
     q = bc.COHERE.format(topic=f' on the topic "{topic[:300]}"' if topic else '', adopted='\n'.join(map(row, adopted)),
                          other='\n'.join(list(map(row, others)) + [f'- dropped: {d}' for d in dups]) or '- none',
                          topic_q=(f'Together, do the adopted proposals do what the topic asks ("{topic[:300]}")?' if topic else 'There is no topic: answer true.'))
-    try:
-        if GEMINI_KEY and use(s, 'gemini'):
-            return helper_json(ask_gemini(q, ['gemini-flash-lite-latest', 'gemini-flash-latest'], json_mode=True)) or {}
-        if not CLOUD:
+    if GEMINI_KEY and use(s, 'gemini'):
+        try:
+            got = helper_json(ask_gemini(q, FLASH_LITE_MODELS + ['gemini-flash-latest'], json_mode=True))
+            if got:
+                return got
+        except Exception as e:
+            log(f'board: Gemini coherence check unavailable ({str(e)[:80]}), falling back')
+    if not CLOUD:
+        try:
             return helper_json(call_local_model('You check plans for gaps. Answer only with JSON.', q, json_mode=True)) or {}
-    except Exception as e:
-        log(f'board: coherence check skipped ({str(e)[:100]})')
+        except Exception as e:
+            log(f'board: coherence check skipped ({str(e)[:100]})')
     return {}
 
 
@@ -3141,19 +3276,26 @@ def board_advisers(s, creative=False):
     loc_sys = ('You are an inventive biochemistry workflow designer on the Creative Direction Board. Return ONE JSON object.'
                if creative else 'You are a careful, critical scientific code auditor. Return ONE JSON object.')
     if CLOUD:
-        who = [('Gemini Flash', lambda q, audit=False: ask_gemini(q, ['gemini-flash-latest', 'gemini-2.5-flash'], json_mode=True, temp=0.2 if audit else gen_temp), 'gemini'),
-               ('Gemini Flash Lite', lambda q, audit=False: ask_gemini(q, ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite'], json_mode=True, temp=0.2 if audit else max(0.35, gen_temp - 0.1)), 'gemini')]
+        who = [('Gemini Flash', lambda q, audit=False: ask_gemini(q, ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash'], json_mode=True, temp=0.2 if audit else gen_temp), 'gemini'),
+               ('Gemini Flash Lite', lambda q, audit=False: ask_gemini(q, FLASH_LITE_MODELS, json_mode=True, temp=0.2 if audit else max(0.35, gen_temp - 0.1)), 'gemini')]
     else:
         # Seat 1: local Qwen3.8:27b (rv.ask_model already injects LOCAL_AI_BRIEF.md + REVIEW_LESSONS.md in system).
         # Seat 2: Gemini on REVIEW_MODELS (gemini-flash-latest first, NOT gemini-flash-lite-latest!).
+        # Seat 3: ChatGPT via Codex CLI (read-only, stdin), on by default (board_codex: true).
+        # Seat 4: Antigravity via agy CLI (read-only, AI Pro quota, separate agy_board cap), on by default (board_agy: true).
+        cli_ok = GEMINI_KEY != 'fake-test-key'  # offline 2-seat unit tests set fake-test-key to avoid spawning local CLIs
         who = ([('the local AI', lambda q, audit=False: call_local_model(loc_sys, q, json_mode=True, temp=0.2 if audit else loc_temp), None),
                 ('Gemini', lambda q, audit=False: ask_gemini(q, REVIEW_MODELS, json_mode=True, temp=0.2 if audit else gen_temp), 'gemini')]
-               + ([('ChatGPT', lambda q, audit=False: ask_codex(q), 'codex')] if cfg.get('board_codex', False) else []))
+               + ([('ChatGPT', lambda q, audit=False: ask_codex(q), 'codex')] if BOARD_CODEX and cli_ok else [])
+               + ([('Antigravity', lambda q, audit=False: ask_agy(q), 'agy_board')] if BOARD_AGY and cli_ok else []))
     if not CLOUD and LOCAL_ROLE == 'coder' and rv.MODEL == 'Gemini':  # the local model only writes code now; its seat would just be Gemini twice
         who = [w for w in who if w[0] != 'the local AI']
-    who = [w for w in who if (w[2] != 'codex' or shutil.which('codex')) and (w[2] is None or ((w[2] != 'gemini' or GEMINI_KEY) and s['count'].get(w[2], 0) + 3 <= CAP[w[2]] and use(s, w[2])))]
+    who = [w for w in who
+           if (w[2] != 'codex' or codex_exe())
+           and (w[2] != 'agy_board' or agy_exe())
+           and (w[2] is None or ((w[2] != 'gemini' or GEMINI_KEY) and s['count'].get(w[2], 0) + 3 <= CAP[w[2]] and use(s, w[2])))]
     if len(who) == 1 and GEMINI_KEY and not any(w[0] == 'Gemini Flash Lite' for w in who) and s['count'].get('gemini', 0) + 3 <= CAP['gemini'] and use(s, 'gemini'):
-        who.append(('Gemini Flash Lite', lambda q, audit=False: ask_gemini(q, ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite'], json_mode=True, temp=0.2 if audit else 0.35), 'gemini'))
+        who.append(('Gemini Flash Lite', lambda q, audit=False: ask_gemini(q, FLASH_LITE_MODELS, json_mode=True, temp=0.2 if audit else 0.35), 'gemini'))
     return who
 
 
@@ -3205,7 +3347,7 @@ def board_round(s, topic='', asked=True):
     hw_prefix = ('Homework answers from the last meeting (read these first, and build on them):\n'
                  + '\n\n'.join(f'{h["to"]} on "{h["question"]}": {a}' for h, a in reports) + '\n\n') if reports else ''
     ctx_for = lambda name: hw_prefix + prefix + (ctx_lean if name == 'the local AI' else ctx_full)
-    role_for = lambda name: (ROLE_LOCAL if name == 'the local AI' else ROLE_GEMINI if 'Gemini' in name else '')
+    role_for = lambda name: (ROLE_LOCAL if name == 'the local AI' else ROLE_CODEX if name == 'ChatGPT' else ROLE_AGY if name == 'Antigravity' else ROLE_GEMINI if 'Gemini' in name else '')
     # Step 1 (Diverge): role-separated proposals with pre-audit path, code-citation, within-round, and duplicate gates
     reviews, tracked, known_secs = [], repo_files(), app_sections()
     fake, dups, no_check = [], [], []
@@ -3214,14 +3356,13 @@ def board_round(s, topic='', asked=True):
         lens = (role_for(name) + '\n\n') if role_for(name) else ''
         my_ctx = ctx_for(name)
         r = ask(name, f, lens + focus + PROPOSE.format(who=name, topic=tp, ctx=my_ctx))
-        if not r:
-            # 1-shot compact JSON retry if a seat hit token/JSON formatting limits on the full prompt
+        if not r and notes and notes[-1] == f'{name}: returned empty or invalid JSON':
+            # 1-shot compact JSON retry ONLY when a seat returned empty/invalid JSON, never when its API/CLI raised an error
+            notes.pop()
             compact_ctx = (f'{cap_blk}\n\n{led_blk}\n\n'
                            + (f'Focus code (`{fname}`):\n```js\n{fcode[:4500]}\n```\n\n' if fcode else '')
                            + 'Sections (`docs/CODEMAP.md`): ' + ', '.join(f'`{x}`' for x in known_secs[:35]))
             r = ask(name, f, focus + PROPOSE.format(who=name, topic=tp, ctx=compact_ctx))
-            if r and notes and notes[-1] == f'{name}: returned empty or invalid JSON':
-                notes.pop()
         if r.get('review'):
             reviews.append((name, str(r['review'])[:800]))
         for p in (r.get('proposals') or [])[:BOARD_PROPOSE_EACH]:
@@ -3311,7 +3452,7 @@ def board_round(s, topic='', asked=True):
     unaudited = [p for p in props if not p['out'] and not audits[p['id']] and p['by'] != 'Gemini Flash Lite']
     if unaudited and GEMINI_KEY and GEMINI_KEY != 'fake-test-key' and use(s, 'gemini'):
         fb_name = 'Gemini Flash Lite'
-        fb = ask(fb_name, lambda q, audit=True: ask_gemini(q, ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite'], json_mode=True, temp=0.2),
+        fb = ask(fb_name, lambda q, audit=True: ask_gemini(q, FLASH_LITE_MODELS, json_mode=True, temp=0.2),
                  CROSS_AUDIT.format(who=fb_name, topic=tp, items='\n\n'.join(fmt_audit_item(p) for p in unaudited)), audit=True)
         for a in (fb.get('audits') or []):
             m = isinstance(a, dict) and re.match(r'P\d+', str(a.get('id', '')))
@@ -3442,7 +3583,7 @@ def board_round(s, topic='', asked=True):
         voters = ', '.join(n for n, _, _ in scores[p['id']])
         sc = [x[1] for x in scores[p['id']]]
         dec = decisions.get(p['id'], 'adopt')
-        strong = dec == 'adopt' and len(sc) >= max(1, len(who) - 1) and min(sc) >= BOARD_GO
+        strong = dec == 'adopt' and len(sc) >= min(2, max(1, len(who) - 1)) and min(sc) >= BOARD_GO
         to_relay = (dec == 'relay' and not rt.is_light(p['title']) and relayed < BOARD_RELAY_MAX)
         relayed += to_relay
         prereq_num = pid_to_issue.get(waits_map.get(p['id'], ''))
@@ -3666,13 +3807,16 @@ def creative_set_homework(s, who, doms, app_txt=''):
         dom_a=da, dom_b=db, advisers=', '.join(w[0] for w in who),
         earlier=earlier_blk,
     )
-    try:
-        raw = ask_gemini(prompt, ['gemini-flash-lite-latest', 'gemini-flash-latest'], json_mode=True) if (sec[2] == 'gemini' and GEMINI_KEY) else sec[1](prompt)
-        r = helper_json(raw)
-    except Exception as e:
-        log(f'creative board: no homework set ({str(e)[:80]})')
-        r = {}
-    hw = bm.clean_homework((r or {}).get('homework'), [w[0] for w in who], [d['name'] for d in doms] + [f'{da} + {db}'], cb.get('hw_done', []), default_domain=f'{da} + {db}', ensure_all=bool(r))
+    r = {}
+    for cand in ([sec] + [w for w in who if w[0] != sec[0]]):
+        try:
+            raw = ask_gemini(prompt, FLASH_LITE_MODELS + ['gemini-flash-latest'], json_mode=True) if (cand[2] == 'gemini' and GEMINI_KEY) else cand[1](prompt)
+            r = helper_json(raw)
+            if r:
+                break
+        except Exception as e:
+            log(f'creative board: homework secretary {cand[0]} failed ({str(e)[:80]})')
+    hw = bm.clean_homework((r or {}).get('homework'), [w[0] for w in who], [d['name'] for d in doms] + [f'{da} + {db}'], cb.get('hw_done', []), limit=max(3, len(who)), default_domain=f'{da} + {db}', ensure_all=bool(r))
     cb['homework'] = hw
     return hw
 
@@ -3743,11 +3887,10 @@ def creative_round(s, topic='', board_num=0):
     raw_pitches, vision_notes, dropped = [], [], []
     for name, f, _ in who:
         r = ask(name, f, cb_mod.CREATIVE_PROPOSE.format(who=name, topic=tp, pair_focus=pair_focus, each=CREATIVE_EACH, ctx=full_ctx))
-        if not r:
+        if not r and notes and notes[-1] == f'{name}: empty or invalid JSON':
+            notes.pop()
             compact_ctx = f'{cap_blk}\n\n{led_blk}\n\nApp sections: ' + ', '.join(f'`{x}`' for x in known_secs[:35])
             r = ask(name, f, cb_mod.CREATIVE_PROPOSE.format(who=name, topic=tp, pair_focus=pair_focus, each=CREATIVE_EACH, ctx=compact_ctx))
-            if r and notes and notes[-1] == f'{name}: empty or invalid JSON':
-                notes.pop()
         if r.get('vision_note'):
             vision_notes.append((name, bl.trim_prose(r['vision_note'], 650)))
         for p in (r.get('pitches') or [])[:CREATIVE_EACH]:
@@ -3819,7 +3962,7 @@ def creative_round(s, topic='', board_num=0):
     unreviewed = [p for p in raw_pitches if not critiques[p['id']] and p['by'] != 'Gemini Flash Lite']
     if unreviewed and GEMINI_KEY and GEMINI_KEY != 'fake-test-key' and use(s, 'gemini'):
         fb_name = 'Gemini Flash Lite'
-        fb = ask(fb_name, lambda q, audit=True: ask_gemini(q, ['gemini-flash-lite-latest', 'gemini-2.5-flash-lite'], json_mode=True, temp=0.2),
+        fb = ask(fb_name, lambda q, audit=True: ask_gemini(q, FLASH_LITE_MODELS, json_mode=True, temp=0.2),
                  cb_mod.CREATIVE_CRITIQUE.format(who=fb_name, topic=tp, items=f'{cap_blk}\n\n' + '\n\n'.join(fmt_c(p) for p in unreviewed)), audit=True)
         for c in (fb.get('critiques') or []):
             m = isinstance(c, dict) and re.match(r'C\d+', str(c.get('id', '')))
@@ -3865,7 +4008,7 @@ def creative_workshop_card(s, idx, pitch, note, mode, cnum):
     ctx = f'{cap_blk}\n\nRelated repository excerpts:\n{snip}'
     req_note = note or ('Walk through concrete edge cases, exact data-model fields, and low-clutter UI placement for this pitch.')
     answers, updates = [], []
-    for name, f, cap in who[:2]:
+    for name, f, cap in who[:4]:
         if cap and not use(s, cap):
             continue
         q = cb_mod.CREATIVE_WORKSHOP.format(
@@ -4133,7 +4276,7 @@ def advise(s):
         try:
             if GEMINI_KEY and use(s, 'gemini'):  # Gemini first (free), then ChatGPT, and Claude only when neither is there
                 rec, who = ask_gemini(ADVISE.format(n=n, title=i['title'], body=body + '\n\nCode excerpts:\n' + code_for(body)), REVIEW_MODELS), 'Gemini'
-            elif shutil.which('codex') and use(s, 'codex'):
+            elif codex_exe() and use(s, 'codex'):
                 rec, who = ask_codex(ADVISE.format(n=n, title=i['title'], body=body)), 'ChatGPT (Codex, read-only)'
             elif shutil.which('claude') and use(s, 'claude'):
                 rec, who = ask_claude(ADVISE.format(n=n, title=i['title'], body=body)), 'Claude Code (read-only)'
@@ -4373,6 +4516,7 @@ def agent_checks():
     checks = (('GitHub (token)', lambda: gh(f'repos/{REPO}')['full_name']),
               ('Local model (Ollama)', lambda: rv.ask_model('You are a test.', q)),
               ('Gemini (REST API)', lambda: ask_gemini(q)),
+              ('Antigravity CLI (read-only)', lambda: ask_agy(q)),
               ('Claude Code (read-only)', lambda: ask_claude(q)),
               ('ChatGPT (Codex, read-only)', lambda: ask_codex(q)),
               ('Copilot CLI', lambda: run(['copilot', '-s', '-p'], q, timeout=300)))[:None if COPILOT_MODE != 'off' else -1]
