@@ -445,6 +445,60 @@ const files = {
     }
   });
 
+  /* #1090, #1304, #1306: construct sequence link, construct/primer lineage schemas, and method-specific record templates in one project */
+  await T.t('construct_records_lineage_and_sequence_link', async () => {
+    const P = await open(), h = H(P.p);
+    try {
+      await h.newProject('Construct Records & Lineage');
+      await P.p.click('#tl [data-step="construct"]');
+      await h.wait(250);
+
+      const btn = P.p.locator('#gbGoProt');
+      T.check('seq-link.button-visible-and-text', await btn.isVisible() && (await btn.innerText()).trim() === 'Enter protein sequence');
+      await btn.click(); await h.wait(200);
+      T.check('seq-link.protSeq-focused', await P.p.evaluate(() => document.activeElement?.id === 'protSeq') && await P.p.locator('#protPanel').isVisible());
+
+      const parentIn = P.p.locator('#pr-parentConstructId'), derivedIn = P.p.locator('#pr-derivedConstructIds');
+      T.check('lineage.inputs-visible', await parentIn.isVisible() && await derivedIn.isVisible());
+      await parentIn.fill('c-parent-1'); await parentIn.dispatchEvent('change');
+      await derivedIn.fill('c-derived-1, c-derived-2'); await derivedIn.dispatchEvent('change');
+
+      const selExists = await P.p.evaluate(() => !!document.querySelector('#pr-cMethod'));
+      const noticeText = await P.p.evaluate(() => document.querySelector('#pr-cTemplateNotice')?.textContent || '');
+      T.check('template.selector-and-notice', selExists && noticeText.includes('records rather than scientific validation'), noticeText);
+      const isShown = m => P.p.evaluate(k => { const el = document.querySelector(`[data-cmethod="${k}"]`); return !!(el && !el.hidden && getComputedStyle(el).display !== 'none'); }, m);
+      T.check('template.digest-hidden-initially', !(await isShown('digest')));
+
+      await P.p.selectOption('#pr-cMethod', 'digest'); await h.wait(200);
+      T.check('template.digest-visible', await isShown('digest'));
+      await P.p.fill('#pr-cEnz', 'NdeI, XhoI'); await P.p.dispatchEvent('#pr-cEnz', 'change');
+
+      await P.p.selectOption('#pr-cMethod', 'overlap'); await h.wait(200);
+      T.check('template.overlap-visible-digest-hidden', await isShown('overlap') && !(await isShown('digest')));
+      await P.p.fill('#pr-cOverlap', '25'); await P.p.dispatchEvent('#pr-cOverlap', 'change');
+
+      await P.p.selectOption('#pr-cMethod', 'digest'); await h.wait(150);
+      T.check('template.digest-value-persists', (await P.p.inputValue('#pr-cEnz')) === 'NdeI, XhoI');
+      await P.p.selectOption('#pr-cMethod', 'overlap'); await h.wait(150);
+      T.check('template.overlap-value-persists', (await P.p.inputValue('#pr-cOverlap')) === '25');
+
+      await P.p.selectOption('#pr-cMethod', 'recomb'); await h.wait(150);
+      T.check('template.recomb-visible', await isShown('recomb'));
+      await P.p.fill('#pr-cRecomb', 'attB1, attB2'); await P.p.dispatchEvent('#pr-cRecomb', 'change');
+
+      await h.addRun(path.join(DATA, 'standins', 'imac_histrap_1ml_step.csv'));
+      const [dl] = await Promise.all([P.p.waitForEvent('download', {timeout: 10000}), P.p.click('#projSave')]);
+      const projData = JSON.parse(fs.readFileSync(await dl.path(), 'utf-8'));
+      const pr = projData.prep;
+      T.check('schema.lineage-and-lists', pr.parentConstructId === 'c-parent-1' && JSON.stringify(pr.derivedConstructIds) === '["c-derived-1","c-derived-2"]' && Array.isArray(pr.constructs) && Array.isArray(pr.primers), JSON.stringify(pr));
+      T.check('schema.method-specific-preserved', pr.cMethod === 'recomb' && pr.cEnz === 'NdeI, XhoI' && pr.cOverlap === '25' && pr.cRecomb === 'attB1, attB2' &&
+        pr.cDetails?.digest?.enzymes === 'NdeI, XhoI' && pr.cDetails?.overlap?.overlapBp === '25' && pr.cDetails?.recomb?.sites === 'attB1, attB2', JSON.stringify(pr.cDetails));
+      errs.push(...P.errs);
+    } finally {
+      await P.close();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

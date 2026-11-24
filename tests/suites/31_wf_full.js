@@ -120,6 +120,122 @@ const {open, H, suite, src} = require('../lib/harness');
       errs.push(...a2.errs);
     } finally { await a2.close(); }
   });
+
+  /* #950 & #1327: stacked and grid text-panel content-driven padding tested in one shared project */
+  await T.t('text-panel-content-padding-stack-and-grid', async () => {
+    const ap = await open({width: 1400, height: 1000}), {p: pp} = ap, hp = H(pp);
+    try {
+      await hp.newProject('Padding');
+      await pp.click('#tl [data-addmenu]'); await pp.click('#tl [data-addstep="man:batch"]'); await hp.wait(300);
+      await pp.locator('#man-resin').fill('Ni-NTA agarose'); await pp.locator('#man-buffer').fill('50 mM Tris pH 8.0'); await hp.wait(200);
+      await hp.addRun(src('his'));
+      await hp.step('figure');
+      const setOpt = async (sel, v) => {
+        await pp.evaluate(([s, v]) => { const el = document.querySelector(s); if (!el) return; if (el.type === 'radio') el.checked = true; else el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }, [sel, v]);
+        await hp.wait(500);
+      };
+      await setOpt('#wf-stack', 'stack');
+      const measureStack = () => pp.evaluate(() => {
+        const svg = document.querySelector('#paper svg'); if (!svg) return {err: 'no figure'};
+        const k = svg.getScreenCTM().d, gs = [...svg.querySelectorAll('g[data-wfp]')], i = gs.findIndex(g => /^m\d+$/.test(g.dataset.wfp));
+        if (i < 0 || i === gs.length - 1) return {err: 'bad index'};
+        const parts = [...gs[i].querySelectorAll('text, path')].map(e => e.getBoundingClientRect()).filter(r => r.height > 0), nx = gs[i + 1].querySelector('svg');
+        if (!parts.length || !nx) return {err: 'nothing to measure'};
+        return {gap: (nx.getScreenCTM().f - Math.max(...parts.map(r => r.bottom))) / k, chartH: nx.height.baseVal.value};
+      });
+      const a = await measureStack();
+      T.check('950.stack.fits_content', !a.err && a.gap > 0 && a.gap < 0.6 * a.chartH, JSON.stringify(a));
+      await setOpt('#o-wfPad', '30');
+      const b = await measureStack();
+      T.check('950.margin.applies', !b.err && b.gap - a.gap > 15 && b.gap - a.gap < 35, JSON.stringify({a, b}));
+      await setOpt('#o-wfPad', '');
+
+      await hp.addRun(src('q'));
+      await hp.step('figure');
+      await setOpt('#wf-grid', 'grid');
+      const g = await pp.evaluate(() => {
+        const svg = document.querySelector('#paper svg'), gs = svg ? [...svg.querySelectorAll('g[data-wfp]')] : [], i = gs.findIndex(el => /^m\d+$/.test(el.dataset.wfp));
+        if (i < 0) return {err: 'no text panel'};
+        const own = gs[i].querySelector('svg'), others = gs.filter((_, j) => j !== i).map(el => el.querySelector('svg')).filter(Boolean);
+        return own && others.length ? {panels: gs.length, textH: own.height.baseVal.value, chartH: Math.max(...others.map(c => c.height.baseVal.value))} : {err: 'missing svg'};
+      });
+      T.check('950.grid.text_panel_fits_content', !g.err && g.panels >= 3 && g.textH < 0.8 * g.chartH, JSON.stringify(g));
+      errs.push(...ap.errs);
+    } finally { await ap.close(); }
+  });
+
+  /* #411 (#947 & #1252): arrow-note and construct plasmid placeholders fit across desktop & mobile widths in one browser */
+  await T.t('responsive-placeholders-arrow-and-construct', async () => {
+    const ar = await open({width: 1400, height: 900}), {p: pr} = ar, hr = H(pr);
+    pr.setDefaultTimeout(10000);
+    try {
+      await hr.newProject('Workflow condition placeholder');
+      await hr.addRun([src('his'), src('s200')]);
+      const measureInput = sel => pr.locator(sel).evaluate(input => {
+        const style = getComputedStyle(input), ph = getComputedStyle(input, '::placeholder');
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.font = `${ph.fontStyle} ${ph.fontWeight} ${ph.fontSize} ${ph.fontFamily}`;
+        const available = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const needed = ctx.measureText(input.placeholder).width;
+        const r = input.getBoundingClientRect(), tool = input.parentElement.getBoundingClientRect();
+        return {placeholder: input.placeholder, value: input.value, overflow: style.textOverflow, available, needed, insideTool: r.left >= tool.left && r.right <= tool.right, insideVp: r.left >= 0 && r.right <= innerWidth};
+      });
+
+      await hr.step('figure');
+      for (const width of [1400, 947, 390]) {
+        await pr.setViewportSize({width, height: 900}); await hr.wait(150);
+        const title = pr.locator('#paper svg text').filter({hasText: /^[A-Z]\s+IMAC/}).first();
+        await title.scrollIntoViewIfNeeded();
+        const r = await title.boundingBox();
+        await pr.mouse.click(r.x + 20, r.y + r.height + 40);
+        await pr.locator('#wfA').waitFor({state: 'visible'});
+        const m = await measureInput('#wfA');
+        T.check(`411.${width}.arrow-placeholder-fits`, !m.value && m.placeholder === 'e.g. SUMO protease, 4 °C overnight' && m.available >= m.needed && m.overflow === 'clip' && m.insideTool && m.insideVp && !(await hr.hScroll()), JSON.stringify(m));
+        await pr.keyboard.press('Escape');
+      }
+
+      await hr.step('construct');
+      for (const width of [390, 360, 320]) {
+        await pr.setViewportSize({width, height: 900}); await hr.wait(150);
+        await pr.locator('#pr-name').waitFor({state: 'visible'});
+        const m = await measureInput('#pr-name');
+        T.check(`411.${width}.plasmid-placeholder-fits`, m.placeholder === 'e.g. pET28-SUMO-NADK' && m.available >= m.needed && m.insideVp && !(await hr.hScroll()), JSON.stringify(m));
+      }
+      errs.push(...ar.errs);
+    } finally { await ar.close(); }
+  });
+
+  /* #769: 8-step workflow redraw reuses cached Gaussian fits instead of refitting every peak twice */
+  await T.t('eight-step-gaussian-refit-cache', async () => {
+    const fsMod = require('fs'), {crowdedRunCsv} = require('../data/gen_crowded_workflow');
+    const gaussPaths = svg => (svg.match(/<path d="[^"]*"[^>]*fill-opacity="0\.18"/g) || []).map(x => x.slice(9, x.indexOf('"', 9)));
+    const paperSvg = pg => pg.$eval('#paper svg', e => e.outerHTML).catch(() => '');
+    const redraw = (pg, id, v, n) => pg.evaluate(([id, v, n]) => { const el = document.getElementById(id); if (!el) return -1; el.value = v; const ts = [];
+      for (let i = 0; i <= n; i++) { const t = performance.now(); el.dispatchEvent(new Event('input', {bubbles: true})); if (i) ts.push(performance.now() - t); }
+      ts.sort((a, b) => a - b); return Math.round(ts[ts.length >> 1] * 10) / 10; }, [id, v, n]);
+
+    const aw = await open(), {p: pw} = aw, hw = H(pw);
+    try {
+      await hw.newProject('Eight crowded steps');
+      await pw.setInputFiles('#file', Array.from({length: 8}, (_, k) => ({name: `wf769_step${k + 1}.csv`, mimeType: 'text/csv', buffer: Buffer.from(crowdedRunCsv(k))})));
+      await hw.wait(3000);
+      const steps = (await hw.timeline()).filter(x => x.k.startsWith('run:'));
+      T.check('769.eight-runs', steps.length === 8, `${steps.length} runs`);
+      for (const s of steps) { await hw.step(s.k); await pw.evaluate(() => document.getElementById('intAuto')?.click()); await hw.wait(350); }
+      await hw.step('figure'); await hw.wait(600);
+      const g0 = gaussPaths(await paperSvg(pw));
+      const tG = await redraw(pw, 'o-intMethod', 'gauss', 5), tT = await redraw(pw, 'o-intMethod', 'trap', 5); await redraw(pw, 'o-intMethod', 'gauss', 0);
+      T.check('769.redraw-reuses-fits', g0.length >= 8 && tG >= 0 && tT >= 0 && tG <= 1.5 * tT + 30, `Gauss=${tG}ms Trap=${tT}ms peaks=${g0.length}`);
+      const g1 = gaussPaths(await paperSvg(pw)), gx = gaussPaths(await hw.exportSvg());
+      T.check('769.screen-and-export-match', g1.join('|') === g0.join('|') && gx.join('|') === g1.join('|'));
+      await redraw(pw, 'o-intBase', 'zero', 0); const gz = gaussPaths(await paperSvg(pw));
+      T.check('769.baseline-edit-refits-and-restores', gz.length > 0 && gz.join('|') !== g1.join('|') && gaussPaths(await hw.exportSvg()).join('|') === gz.join('|'));
+      await redraw(pw, 'o-intBase', 'line', 0);
+      T.check('769.baseline-back', gaussPaths(await paperSvg(pw)).join('|') === g1.join('|'));
+      errs.push(...aw.errs);
+    } finally { await aw.close(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close(); T.done();
 })();

@@ -465,5 +465,58 @@ async function fresh(id, fn){
     T.check(id + '/spectra', r.paths === 2, `${r.paths} spectrum paths`);
   });
 
+  // Deduplicated unit conversions (ng/µL, µg/µL), unsupported-unit quarantine (#1064, #1518), and A260/A280 ratio warning (#1457)
+  await fresh('units-quarantine-and-ratio-warn', async (p, h) => {
+    await h.newProject('Units quarantine and ratio');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.pool('A1-A3');
+    await h.step('final');
+    const rowsOf = () => p.$$eval('.ndr', rows => rows.map(r => ({
+      name: r.querySelector('input[data-ndk="name"]')?.value?.trim(),
+      val: r.querySelector('.nd-v')?.textContent?.trim() || '',
+      warn: r.querySelector('.nd-unit')?.textContent?.trim() || '',
+      flags: [...r.querySelectorAll('.nd-flags span')].filter(e => e.getClientRects().length).map(e => e.textContent.trim())
+    })));
+    const loadNd = async (name, mimeType, text, expectedCount) => {
+      await p.setInputFiles('#ndFile', {name, mimeType, buffer: Buffer.from(text)});
+      await p.waitForFunction(n => document.querySelectorAll('.ndr').length === n, expectedCount);
+    };
+
+    // 1. Unsupported unit (12.5 pmol/µL) quarantined from group stats & summary CSV
+    await loadNd('nd_pmol.tsv', 'text/tab-separated-values', 'Sample Name\tSample Type\tConcentration\tUnits\tA280\tA260/A280\nSample pmol\tProtein A280\t12.5\tpmol/µL\t1.000\t0.57', 1);
+    const row0 = p.locator('.ndr').first();
+    await row0.locator('summary').click();
+    await row0.locator('select[data-ndk="runId"]').selectOption({index: 1});
+    await p.locator('input[data-ndr="ndVol"]').fill('10');
+    await p.locator('input[data-ndr="ndVol"]').dispatchEvent('change');
+    await p.waitForTimeout(200);
+    T.check('nd/quarantine/group_stats_excluded', (await p.locator('.ndg-h .ndg-s').textContent()).trim() === '' && (await p.locator('.ndg-h .ndg-mg').first().textContent()).trim() === '', 'unsupported unit excluded from group stats/mass');
+
+    await h.step('figure'); await p.waitForTimeout(250);
+    const [d1] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#sumCsv')]);
+    const csv1 = fs.readFileSync(await d1.path(), 'utf8').split(/\r?\n/).map(l => l.split(','));
+    T.check('nd/quarantine/csv_excluded', (csv1[1][6] || '') === '' && (csv1[1][10] || '') === '', JSON.stringify(csv1[1]));
+
+    // Adding valid 2.0 mg/mL reading to same run populates stats/CSV using only the valid reading
+    await h.step('final');
+    await loadNd('nd_valid.tsv', 'text/tab-separated-values', 'Sample Name\tSample Type\tConcentration\tUnits\tA280\tA260/A280\nSample valid_mg\tProtein A280\t2.0\tmg/mL\t1.000\t0.57', 2);
+    await p.locator('.ndr').nth(1).locator('summary').click();
+    await p.locator('.ndr').nth(1).locator('select[data-ndk="runId"]').selectOption({index: 1});
+    await p.waitForTimeout(250);
+    T.check('nd/quarantine/group_stats_only_valid', (await p.locator('.ndg-h .ndg-s').textContent()).trim() === '2.00 mg/mL' && (await p.locator('.ndg-h .ndg-mg').first().textContent()).trim() === '20.00 mg', 'valid reading used');
+
+    // 2. ng/µL -> mg/mL and µg/µL (Units col + header) -> mg/mL without unit warning
+    await loadNd('nd_ng.csv', 'text/csv', 'Date,Sample Name,Protein (ng/µL),A280,A260/A280,Sample Type\n10/24/2026 10:00:00 AM,Sample ng_uL,1000.0,1.000,0.50,1 Abs = 1 mg / mL', 3);
+    await loadNd('nd_ugul_col.tsv', 'text/tab-separated-values', 'Sample Name\tSample Type\tConcentration\tUnits\tA280\tA260/A280\nSample units_ugul\tProtein A280\t5.0\tug/uL\t1.000\t1.43', 4);
+    await loadNd('nd_ugul_head.tsv', 'text/tab-separated-values', 'Sample Name\tSample Type\tProtein (µg/µL)\tA280\tA260/A280\nSample head_ugul\tProtein A280\t5.0\t1.000\t0.57', 5);
+    const rs = await rowsOf();
+    const byName = n => rs.find(x => x.name === n);
+    T.check('nd/unit/ng_uL', !!byName('Sample ng_uL') && byName('Sample ng_uL').val.startsWith('1.00 mg/mL'), JSON.stringify(byName('Sample ng_uL')));
+    T.check('nd/unit/ug_uL_units_col', !!byName('Sample units_ugul') && byName('Sample units_ugul').val.startsWith('5.00 mg/mL') && !byName('Sample units_ugul').warn, JSON.stringify(byName('Sample units_ugul')));
+    T.check('nd/unit/ug_uL_header', !!byName('Sample head_ugul') && byName('Sample head_ugul').val.startsWith('5.00 mg/mL') && !byName('Sample head_ugul').warn, JSON.stringify(byName('Sample head_ugul')));
+    T.check('nd/ratio_0.7_warns', !!byName('Sample units_ugul') && byName('Sample units_ugul').flags.some(t => /outside expected range for pure protein/i.test(t)), JSON.stringify(byName('Sample units_ugul')));
+    T.check('nd/ratio_2.0_quiet', !!byName('Sample ng_uL') && !byName('Sample ng_uL').flags.some(t => /outside expected range/i.test(t)), JSON.stringify(byName('Sample ng_uL')));
+  });
+
   T.done();
 })();

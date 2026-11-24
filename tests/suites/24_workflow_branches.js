@@ -1,5 +1,5 @@
 // Workflow branches: a step can come from an earlier step (Comes from), so one fraction goes to one next step and another fraction to a second.
-const {open, H, suite, src, DATA, path} = require('../lib/harness');
+const {open, H, suite, src, DATA, path, fs} = require('../lib/harness');
   const openFolds = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
 (async () => { const T = suite('24_workflow_branches');
   const boxes = p => p.$$eval('#paper svg g[data-wfp]', gs => gs.map(g => { const b = g.getBoundingClientRect(); return {id: g.dataset.wfp, l: b.left, r: b.right, t: b.top, b: b.bottom}; }));
@@ -343,6 +343,63 @@ const {open, H, suite, src, DATA, path} = require('../lib/harness');
       T.check('side-branch manual: Q branching from nc:<IMAC> resolves to uncleaved tagged form',
         fc >= 0 && body.length === 3 && body[2][fc] === 'tagged', JSON.stringify(body));
       T.check('no page errors', !errs.length, errs.join(' | '));
+    } finally { await close(); }
+  });
+
+  /* #1538: manual purification steps on a parallel branch compute Step yield (%) against their parent step, not preceding sibling */
+  await T.t('manual_step_branch_yield', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await h.newProject('Branch manual step yield');
+      await h.gb(src('gb'));
+      await h.addRun(src('his')); await h.pool('T1-T6');
+      await h.addRun(path.join(DATA, 'science/sec_inject2.csv')); await h.suggest();
+      const runsTl = (await h.timeline()).filter(x => x.k.startsWith('run:'));
+      await h.step(runsTl[1].k);
+      await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep="man:batch"]'); await h.wait(400);
+      await p.selectOption('#ssFrom', runsTl[0].k.slice(4)); await h.wait(300);
+      await p.fill('#man-vol', '1.0'); await p.dispatchEvent('#man-vol', 'change');
+      await p.fill('#man-conc', '1.57'); await p.dispatchEvent('#man-conc', 'change'); await h.wait(400);
+      await h.step('figure'); await h.wait(400);
+      const tb = await h.sumTable(), hd = tb[0] || [];
+      const syc = hd.indexOf('Step yield (%)'), ylc = hd.indexOf('Yield (%)');
+      const manRow = tb.slice(1).find(r => /Batch binding/.test(r[0] || ''));
+      T.check('manual row rendered in summary table', !!manRow && syc >= 0 && ylc >= 0, JSON.stringify(tb));
+      T.check('manual branch step yield is 50% of IMAC parent (not >800% of sibling SEC)', !!manRow && Math.abs(parseFloat(manRow[syc]) - 50) <= 1 && Math.abs(parseFloat(manRow[ylc]) - 50) <= 1, JSON.stringify(manRow));
+      const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#sumCsv')]);
+      const csvMan = fs.readFileSync(await dl.path(), 'utf8').split(/\r?\n/).find(l => /Batch binding/.test(l)) || '';
+      T.check('summary CSV manual step yield matches 50.0%', /,50\.0,50\.0,/.test(csvMan), csvMan);
+      T.check('manual branch: no page errors', !errs.length, errs.join(' | '));
+    } finally { await close(); }
+  });
+
+  /* #1540: unverified-yield warnings (y.odd) in branched workflow captions and Methods text name that branch's offending step */
+  await T.t('branch_scoped_odd_yield_warning', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await h.newProject('Branch odd yield');
+      await h.gb(src('gb'));
+      await h.addRun(path.join(DATA, 'science/sec_inject2.csv')); await h.suggest();
+      await h.addRun(src('q')); await h.suggest();
+      await h.addRun(src('his')); await h.pool('T1-T6');
+      const tl = (await h.timeline()).filter(x => x.k.startsWith('run:'));
+      await h.step(tl[2].k);
+      await p.selectOption('#ssFrom', tl[0].k.slice(4)); await h.wait(400);
+      await h.step('figure');
+      await p.evaluate(() => {
+        const el = document.getElementById('o-wfYield');
+        if (el && !el.checked) { el.checked = true; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      await h.wait(400);
+      const res = (await h.methods()).split('Results: ')[1] || '';
+      const aexLine = (res.split('The Anion exchange pool held')[1] || '').split('The IMAC pool held')[0];
+      const imacLine = res.split('The IMAC pool held')[1] || '';
+      T.check('Branch A (Anion exchange) Methods warning names anion exchange step', /This amount is unverified, because the anion exchange step yield/i.test(aexLine), aexLine || res);
+      T.check('Branch B (IMAC) Methods warning names IMAC step (not Branch A anion exchange)', /This amount is unverified, because the imac step yield/i.test(imacLine) && !/anion exchange/i.test(imacLine), imacLine || res);
+      const svgAll = (await h.svgTexts()).map(x => x.t).join(' ');
+      const imacCap = (svgAll.split(/Final pool \([^)]*IMAC\):/)[1] || '').split(/Final pool/)[0];
+      T.check('Branch B (IMAC) SVG yield caption names imac step yield (not anion exchange)', /imac step yield/i.test(imacCap) && !/anion exchange/i.test(imacCap), imacCap || svgAll);
+      T.check('odd yield: no page errors', !errs.length, errs.join(' | '));
     } finally { await close(); }
   });
 

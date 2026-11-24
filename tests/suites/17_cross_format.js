@@ -152,5 +152,42 @@ async function testFormat(filename, desc) {
       await close();
     }
   });
+
+  /* #1197: quoted CSV headings with commas/escaped quotes, unbalanced inch marks, quoted ÄKTA fractions, and tidy long-format CSV */
+  await T.t('quoted_csv_and_tidy_akta', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      const rows = n => Array.from({length: n}, (_, i) => [(i * 0.1).toFixed(1), (50 * Math.exp(-((i - 20) ** 2) / 40)).toFixed(3), (10 + i * 0.05).toFixed(2)]);
+      const card = name => p.locator('.trace:not(.run)').filter({has: p.locator(`input[data-k=name][value="${name}"]`)}).first();
+      const opts = (c, k) => c.locator(`select[data-k=${k}] option`).allTextContents();
+      const sel = (c, k) => c.locator(`select[data-k=${k}] option:checked`).textContent();
+      const load = async (name, text) => { await p.setInputFiles('#file', {name: name + '.csv', mimeType: 'text/csv', buffer: Buffer.from(text)}); await h.wait(700); };
+
+      await p.click('#homeQuick'); await h.wait(600);
+      await load('quoted_comma', ['Time (min),"UV, 280 nm (mAU)","Cond, mS/cm",Note', ...rows(40).map(r => r.join(',') + ',"lot 5, A"')].join('\n'));
+      const c1 = card('quoted_comma');
+      T.check('comma_channels_and_plotted', (await c1.count()) === 1 && JSON.stringify(await opts(c1, 'yc')) === JSON.stringify(['Time (min)', 'UV, 280 nm (mAU)', 'Cond, mS/cm', 'Note']) && (await sel(c1, 'xc')) === 'Time (min)' && (await sel(c1, 'yc')) === 'UV, 280 nm (mAU)');
+
+      await load('escaped_quote', ['"Time; min";"Sample ""A"" signal (mAU)";"pH; probe"', ...rows(40).map(r => r.map(v => v.replace('.', ',')).join(';'))].join('\n'));
+      const c2 = card('escaped_quote');
+      T.check('semicolon_escaped_quote_channels', JSON.stringify(await opts(c2, 'yc')) === JSON.stringify(['Time; min', 'Sample "A" signal (mAU)', 'pH; probe']) && (await sel(c2, 'yc')) === 'Sample "A" signal (mAU)');
+
+      await load('inch_mark', ['Time (min),Signal 1" cell (mAU),Cond', ...rows(40).map(r => r.join(','))].join('\n'));
+      T.check('unbalanced_quote_unchanged', JSON.stringify(await opts(card('inch_mark'), 'yc')) === JSON.stringify(['Time (min)', 'Signal 1" cell (mAU)', 'Cond']));
+
+      await p.reload(); await h.wait(400); await h.newProject('quoted ÄKTA and tidy CSV');
+      const quotedFractions = ['UV 1_280\t\tFraction\t', 'mL\tmAU\tmL\tFraction', '0\t1\t0\t" ""F1"""', '1\t2\t1\t" ""F2"""', '2\t1\t2\t" ""F3"""'].join('\n');
+      await p.setInputFiles('#file', {name: 'quoted_fractions.asc', mimeType: 'text/plain', buffer: Buffer.from(quotedFractions)}); await h.wait(600);
+      const tidy = ['mL,CV,Channel,Value', '0,0,UV280,1', '0,0,Cond,5', '0,0,Conc B,0', '1,1,UV280,2', '1,1,Cond,6', '1,1,Conc B,25', '2,2,UV280,1', '2,2,Cond,7', '2,2,Conc B,50'].join('\n');
+      await p.setInputFiles('#file', {name: 'tidy_akta.csv', mimeType: 'text/csv', buffer: Buffer.from(tidy)}); await h.wait(600);
+      const d = await saved(p), rf = (d.runs || []).find(x => x.file === 'quoted_fractions'), rt = (d.runs || []).find(x => x.file === 'tidy_akta');
+      T.check('akta_fraction_label_unquoted', !!rf && JSON.stringify(rf.fracs.map(f => f.label)) === '["F1","F2","F3"]', JSON.stringify(rf && rf.fracs));
+      T.check('tidy_akta_pivots_uv_and_cond', !!rt && rt.uvs.length === 1 && !!rt.cond && rt.uvs[0].xs.length === 3 && rt.cond.xs.length === 3, JSON.stringify(rt && {uvs: rt.uvs, cond: rt.cond}));
+      T.check('quoted_csv/no-errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();

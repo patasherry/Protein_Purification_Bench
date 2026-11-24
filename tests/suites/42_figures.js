@@ -508,6 +508,138 @@ const {open, H, suite, src, fs, path} = require('../lib/harness');
     } finally { await q.close(); }
   });
 
+  /* #1187, #1285, #46: SVG/PNG export grouping at 390 px, descending/reset X-axis reorder warnings, toast non-overlap & 2-run count */
+  await T.t('export_grouping_axis_reorder_and_run_toasts', async () => {
+    const {p: pf, errs: ef, close: cf} = await open({width: 390, height: 844}), hf = H(pf);
+    try {
+      await pf.click('#homeQuick'); await hf.wait(800);
+      const grp = await pf.evaluate(() => {
+        const g = id => document.getElementById(id), box = id => g(id).getBoundingClientRect();
+        const svgGrp = g('copySvg').parentElement, png = g('savePng').parentElement;
+        const adjacent = (a, b) => Math.abs(a.top - b.top) < 4 ? a.right <= b.left + 1 : a.bottom <= b.top + 1;
+        const copy = box('copySvg'), save = box('saveSvg'), pngB = box('savePng'), dpi = box('o-dpi');
+        return {
+          same: svgGrp === g('saveSvg').parentElement && !svgGrp.contains(g('savePng')),
+          pngPair: png.contains(g('o-dpi')) && png !== svgGrp,
+          vis: ['copySvg', 'saveSvg', 'savePng', 'o-dpi'].every(i => box(i).width > 0),
+          orderOk: adjacent(copy, save) && adjacent(pngB, dpi) && !(pngB.left > copy.right && pngB.right < save.left && Math.abs(pngB.top - copy.top) < 4),
+          noOverflow: document.documentElement.scrollWidth <= innerWidth
+        };
+      });
+      T.check('svg_group.grouped_and_ordered_390px', grp.same && grp.pngPair && grp.vis && grp.orderOk && grp.noOverflow, JSON.stringify(grp));
+
+      // #1285: descending & reset X-axis reorder diagnostics vs ascending
+      await pf.setViewportSize({width: 1200, height: 860});
+      await pf.click('#homeBtn').catch(() => {}); await hf.wait(350);
+      await hf.newProject('Axis reorder and run status');
+      const peak = t => (100 * Math.exp(-((t - 5) ** 2) / 0.5)).toFixed(3);
+      const mkCsv = xs => ['Time (min),UV 280 (mAU)', ...xs.map(t => `${t.toFixed(1)},${peak(t)}`)].join('\n');
+      const loadTr = async (name, text) => { await pf.setInputFiles('#file', {name, mimeType: 'text/csv', buffer: Buffer.from(text)}); await hf.wait(500); };
+      const diagOf = async nm => {
+        const c = pf.locator('.trace:not(.run)').filter({has: pf.locator(`input[data-k=name][title="${nm}"]`)}).locator('.source-diag');
+        return (await c.count()) ? {s: (await c.first().locator('summary').textContent()) || '', m: (await c.first().locator('.source-diag-msg').textContent()) || ''} : null;
+      };
+      await loadTr('reversed_time.csv', mkCsv(Array.from({length: 100}, (_, i) => (99 - i) / 10)));
+      const rDown = await diagOf('reversed_time');
+      T.check('axis_reorder.reversed', !!rDown && /Time \(min\)/.test(rDown.s) && /entirely in descending order/.test(rDown.s) && /99 descending transitions/.test(rDown.m) && /source rows are kept/.test(rDown.m), JSON.stringify(rDown));
+
+      await loadTr('reset_time.csv', mkCsv(Array.from({length: 50}, (_, i) => i / 10).concat(Array.from({length: 50}, (_, i) => i / 10))));
+      const rReset = await diagOf('reset_time');
+      T.check('axis_reorder.reset', !!rReset && /1 descending transition/.test(rReset.s) && /goes down once \(at line 52\)/.test(rReset.m) && !/each of its/.test(rReset.m), JSON.stringify(rReset));
+
+      const up = Array.from({length: 100}, (_, i) => i / 10); up.splice(40, 0, up[40]);
+      await loadTr('ascending_time.csv', mkCsv(up));
+      T.check('axis_reorder.ascending_quiet', (await pf.locator('.trace:not(.run) input[data-k=name][title="ascending_time"]').count()) === 1 && !(await diagOf('ascending_time')));
+
+      // #46 & #942: run toast count (1st vs 2nd run) & #intPanel heading non-overlap
+      await hf.addRun(src('his'));
+      const t1 = (await hf.toasts()).join(' | ');
+      T.check('count/first-run-no-total', /Loaded 1 ÄKTA run/.test(t1) && !/runs loaded in all/.test(t1), t1);
+
+      for (const w of [800, 1200]) {
+        await pf.setViewportSize({width: w, height: 400}); await hf.wait(150);
+        const ov = await pf.evaluate(() => {
+          const hd = document.querySelector('#intPanel .intp-head'), ts = document.querySelector('#toast');
+          if (!hd || !ts) return false;
+          window.scrollTo(0, hd.getBoundingClientRect().top + window.scrollY - window.innerHeight + hd.offsetHeight);
+          const hB = hd.getBoundingClientRect(), tB = ts.getBoundingClientRect();
+          return !(tB.bottom <= hB.top || tB.top >= hB.bottom || tB.right <= hB.left || tB.left >= hB.right);
+        });
+        T.check(`run_status_no_overlap_${w}`, !ov, `width=${w}`);
+      }
+      await pf.setViewportSize({width: 1200, height: 860});
+      await hf.addRun(src('q'));
+      const t2 = (await hf.toasts()).join(' | ');
+      T.check('count/second-run-says-2', /Loaded 1 ÄKTA run/.test(t2) && /2 runs loaded in all/.test(t2), t2);
+      errs.push(...ef);
+    } finally { await cf(); }
+  });
+
+  /* #1316 & #1544: chromatogram tick/label/inset non-overlap in exported SVG and FIG_SCREEN scope isolation in #wfFullModal */
+  await T.t('chromatogram_overlap_and_fig_screen_scope', async () => {
+    const {fits} = require('../lib/harness');
+    const setOpt = (pg, id, v) => pg.evaluate(([id, v]) => {
+      const el = document.getElementById(id); if (!el) return false;
+      if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+      el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true}));
+      return true;
+    }, [id, v]);
+    const findOverlaps = texts => {
+      const hits = [];
+      for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
+        const a = texts[i], b = texts[j], w = Math.min(a.right, b.right) - Math.max(a.x, b.x), h = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+        if (w > 0 && h > 0 && w * h > 0.2 * Math.min(a.w * a.h, b.w * b.h)) hits.push(`"${a.t}" vs "${b.t}"`);
+      }
+      return hits;
+    };
+
+    const {p: pc, errs: ec, close: cc} = await open(), hc = H(pc);
+    try {
+      // 1. HPLC overlay inward ticks + peak labels in Quick mode
+      await pc.click('#homeQuick'); await hc.wait(600);
+      await setOpt(pc, 'o-ticksOut', false); await setOpt(pc, 'o-showPeaks', true); await hc.wait(300);
+      const mOv = await hc.svgBoxes(await hc.exportSvg());
+      T.check('overlay-ticks/no-overlap-or-clip', findOverlaps(mOv.texts).length === 0 && mOv.clipped.length === 0, JSON.stringify({ov: findOverlaps(mOv.texts), clip: mOv.clipped}));
+
+      // 2. ÄKTA IMAC zoom inset + IEX gradient zoom inset + #1544 FIG_SCREEN scope in one project
+      await pc.click('#homeBtn').catch(() => {}); await hc.wait(350);
+      await hc.newProject('Chrom overlap & FIG_SCREEN');
+      await hc.addRun(src('his'));
+      await setOpt(pc, 'o-ticksOut', true); await setOpt(pc, 'o-zoomInset', true); await hc.wait(400);
+      const svgImac = await hc.exportSvg(), mImac = await hc.svgBoxes(svgImac, '.zoom-inset-bg');
+      const insetFits = await pc.evaluate(svgText => {
+        const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-9999px;top:0'; host.innerHTML = svgText; document.body.appendChild(host);
+        try {
+          const bg = host.querySelector('.zoom-inset-bg'); if (!bg) return false;
+          const br = bg.getBoundingClientRect();
+          return [...host.querySelectorAll('#zoom-inset text')].every(el => { const r = el.getBoundingClientRect(), t = el.textContent.trim(); return !t || (r.left >= br.left - 2 && r.right <= br.right + 2 && r.top >= br.top - 2 && r.bottom <= br.bottom + 2); });
+        } finally { host.remove(); }
+      }, svgImac);
+      T.check('akta-zoom/no-overlap-and-inset-fits', findOverlaps(mImac.texts).length === 0 && mImac.clipped.length === 0 && insetFits, JSON.stringify({ov: findOverlaps(mImac.texts), clip: mImac.clipped, insetFits}));
+
+      await hc.dropFiles(src('gel')); // Gel on run 1 for #1544 empty-gel-slot check
+      await hc.addRun(src('q'));
+      await setOpt(pc, 'o-ticksOut', false); await setOpt(pc, 'o-intLabel', 've');
+      const b = await pc.evaluate(() => document.querySelector('#paper svg').getBoundingClientRect());
+      await pc.mouse.move(b.left + b.width * 0.35, b.top + b.height * 0.5); await pc.mouse.down();
+      await pc.mouse.move(b.left + b.width * 0.65, b.top + b.height * 0.5, {steps: 8}); await pc.mouse.up(); await hc.wait(300);
+      await setOpt(pc, 'o-zoomWinA', '8'); await setOpt(pc, 'o-zoomWinB', '22'); await setOpt(pc, 'o-zoomInset', true); await hc.wait(400);
+      const mGrad = await hc.svgBoxes(await hc.exportSvg(), '.zoom-inset-bg');
+      T.check('akta-grad/no-overlap-and-fits', findOverlaps(mGrad.texts).length === 0 && mGrad.texts.every(t => fits(t, mGrad.root, 2)), JSON.stringify(findOverlaps(mGrad.texts)));
+
+      // #1544: screen-only empty-gel helper slot appears on #paper but never leaks into #wfFullModal or exported SVG
+      await hc.step('figure');
+      await setOpt(pc, 'o-noGelSlot', true); await hc.wait(400);
+      const paperTxt = await pc.evaluate(() => [...document.querySelectorAll('#paper svg text')].map(t => t.textContent.trim()).join(' | '));
+      await pc.click('#wfFullView'); await hc.wait(300);
+      const modalTxt = await pc.evaluate(() => [...document.querySelectorAll('#wfFullModal svg text')].map(t => t.textContent.trim()).join(' | '));
+      await pc.click('#wfFullModalClose'); await hc.wait(150);
+      const wfSvg = await hc.exportSvg();
+      T.check('fig_screen_scope/preview_vs_modal_and_export', paperTxt.includes('no gel for this step') && !modalTxt.includes('no gel for this step') && !wfSvg.includes('no gel for this step'));
+      errs.push(...ec);
+    } finally { await cc(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

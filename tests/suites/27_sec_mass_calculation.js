@@ -3,7 +3,7 @@ const {pooledNdRun, pooledNdReading} = require('../data/gen_pooled_nd');
 const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : null; };
 
 (async () => {
-  const T = suite('27_sec_mass');
+  const T = suite('27_sec_mass_calculation');
   const {p, errs, close} = await open(), h = H(p);
   p.on('dialog', d => d.accept());
 
@@ -200,6 +200,46 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
       T.check('ul_pool_no_page_errors', !qe.length, qe.join(' | '));
     } finally {
       await qclose();
+    }
+  });
+
+  await T.t('peak_mass_beer_lambert_pathlength', async () => {
+    const {p: pb, errs: eb, close: bclose} = await open(), hb = H(pb);
+    pb.on('dialog', d => d.accept());
+    try {
+      pb.setDefaultTimeout(15000);
+      const ensureVisible = loc => loc.evaluate(e => {
+        for (let cur = e; cur && cur !== document.body; cur = cur.parentElement) {
+          if (cur.tagName === 'DETAILS') cur.open = true;
+          if (cur.classList && cur.classList.contains('collapsed')) cur.classList.remove('collapsed');
+        }
+      });
+      await hb.newProject('Beer-Lambert pathlength scaling');
+      await pb.click('#tl [data-addmenu]'); await pb.click('#tl [data-addstep=run]');
+      await pb.setInputFiles('#file', {name: 'recovery_synth.csv', mimeType: 'text/csv', buffer: Buffer.from(pooledNdRun())});
+      await hb.wait(1200);
+      const runStep = (await hb.timeline()).find(x => /^run:/.test(x.k));
+      if (runStep) await hb.step(runStep.k);
+      await pb.click('#moreBtn').catch(() => {});
+      const extInp = pb.locator('#o-extinction');
+      T.check('extinction_input_present', await extInp.count() > 0, 'extinction coefficient input #o-extinction exists');
+      await ensureVisible(extInp);
+      await extInp.fill('1.0'); await extInp.dispatchEvent('input'); await extInp.dispatchEvent('change');
+      const pathInp = pb.locator('.trace.run.sel [data-k="path"]');
+      await ensureVisible(pathInp);
+      await pathInp.fill('10'); await pathInp.dispatchEvent('input'); await pathInp.dispatchEvent('change'); await hb.wait(200);
+      await pb.click('#intAuto'); await hb.wait(400);
+      const pt10 = await hb.peakTable(), mgCol = (pt10[0] || []).findIndex(c => /^Protein \(mg\)/i.test(c)), areaCol = (pt10[0] || []).findIndex(c => /^Area/i.test(c));
+      const p1_10 = pt10.slice(1).find(r => /^P1$/i.test(r[0]));
+      const area1 = p1_10 ? num(p1_10[areaCol]) : null, mg10 = p1_10 && mgCol >= 0 ? num(p1_10[mgCol]) : null;
+      T.check('p1_mass_matches_beer_lambert_10mm', mg10 != null && area1 != null && Math.abs(mg10 - area1 / 1000) <= 0.02, `P1(10mm)=${mg10}, area=${area1}`);
+      await ensureVisible(pathInp);
+      await pathInp.fill('2'); await pathInp.dispatchEvent('input'); await pathInp.dispatchEvent('change'); await hb.wait(250);
+      const pt2 = await hb.peakTable(), p1_2 = pt2.slice(1).find(r => /^P1$/i.test(r[0])), mg2 = p1_2 && mgCol >= 0 ? num(p1_2[mgCol]) : null;
+      T.check('p1_mass_scaled_with_pathlength_2mm', mg2 != null && area1 != null && Math.abs(mg2 - (area1 / 1000) / 0.2) <= 0.02, `P1(2mm)=${mg2}, area=${area1}`);
+      T.check('beer_lambert_no_page_errors', !eb.length, eb.join(' | '));
+    } finally {
+      await bclose();
     }
   });
 
