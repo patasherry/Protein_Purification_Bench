@@ -853,4 +853,130 @@ await T.t('band-controls-no-overlap', async () => {
   }
 });
 
+/* #1734: spliced non-adjacent lanes always draw line.gel-splice even unframed, and purBase='tagged' + edits.removed + crop/contrast provenance is disclosed without SVG clipping */
+await T.t('splice-divider-and-gel-provenance', async () => {
+  const a = await open(), {p} = a, h = H(p);
+  const setCtrl = async (sel, val) => {
+    await p.evaluate(([s, v]) => {
+      const el = document.querySelector(s);
+      if (!el) throw new Error('missing ' + s);
+      if (el.type === 'checkbox') el.checked = !!v;
+      else el.value = String(v);
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+      el.dispatchEvent(new Event('change', {bubbles: true}));
+    }, [sel, val]);
+    await h.wait(250);
+  };
+  try {
+    await h.newProject('Gel Splice Provenance');
+    await setCtrl('#o-gelAutoCrop', false);
+    await h.gb(src('gb'));
+    await h.addRun(src('his'));
+    await h.suggest();
+    const pngUrl = await p.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 300; c.height = 360;
+      const x = c.getContext('2d'), im = x.createImageData(300, 360);
+      for (let y = 0; y < 360; y++) for (let col = 0; col < 300; col++) {
+        const ln = Math.floor(col / 100), dx = Math.abs(col % 100 - 50), w = Math.exp(-0.5 * (dx / 22) ** 8);
+        const bs = ln === 0 ? [[50, 80, 4], [95, 80, 4], [140, 80, 4], [185, 80, 4], [235, 80, 4], [285, 80, 4]]
+          : ln === 1 ? [[115, 95, 6], [210, 60, 6]]
+          : [[115, 140, 6], [185, 55, 6], [255, 45, 6]];
+        const dark = bs.reduce((s, [mu, hh, z]) => s + hh * Math.exp(-0.5 * ((y - mu) / z) ** 2), 0) * w;
+        const v = Math.max(0, Math.round(242 - dark)), j = 4 * (300 * y + col);
+        im.data[j] = im.data[j + 1] = im.data[j + 2] = v; im.data[j + 3] = 255;
+      }
+      x.putImageData(im, 0, 0); return c.toDataURL('image/png');
+    });
+    await p.setInputFiles('#gelFile', {name: 'synth_splice.png', mimeType: 'image/png', buffer: Buffer.from(pngUrl.split(',')[1], 'base64')});
+    await h.wait(900);
+    await setCtrl('#g-n', 3);
+    await setCtrl('#g-labels', 'M, FT, Pool');
+    await setCtrl('#g-black', 20);
+    await h.wait(300);
+    await p.evaluate(() => document.getElementById('g-autoLadder').click());
+    await h.wait(350);
+    const runId = await p.$eval('#la2 option:last-child', o => o.value);
+    await setCtrl('#la0', 'marker');
+    await setCtrl('#la1', '');
+    await setCtrl('#la2', runId);
+
+    const poolChips = p.locator('#bandTable tr').filter({hasText: 'Pool'}).last().locator('.bchip');
+    T.check('splice-provenance.three-pool-bands', await poolChips.count() >= 3, 'pool chips: ' + (await poolChips.count()));
+    await poolChips.nth(0).click(); await h.wait(150);
+    await poolChips.nth(1).click(); await h.wait(100);
+    await poolChips.nth(1).click(); await h.wait(100);
+    await poolChips.nth(1).click(); await h.wait(200);
+
+    await setCtrl('#o-gelFrame', false);
+    await setCtrl('#o-purRow', true);
+    await setCtrl('#o-purBase', 'tagged');
+
+    await h.step('figure');
+    await h.wait(500);
+    const svgWf = await h.exportSvg(), boxesWf = await h.svgBoxes(svgWf, 'line.gel-splice');
+    T.check('splice-provenance.unframed-splice-divider', /<line[^>]*class="gel-splice"/.test(svgWf) && !!boxesWf.box && boxesWf.box.h > 8 && boxesWf.clipped.length === 0,
+      JSON.stringify({hasLine: /<line[^>]*class="gel-splice"/.test(svgWf), box: boxesWf.box, clipped: boxesWf.clipped}));
+    T.check('splice-provenance.workflow-marked-label-unclipped', boxesWf.texts.some(t => t.t.trim() === 'Purity (marked)') && boxesWf.clipped.length === 0,
+      JSON.stringify({texts: boxesWf.texts.map(t => t.t.trim()), clipped: boxesWf.clipped}));
+
+    await p.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) b.open = true; });
+    await h.wait(250);
+    const m1 = await h.methods();
+    T.check('splice-provenance.methods-marked-bands',
+      /Purity was \d+% of marked bands by SDS-PAGE densitometry \(unmarked lane stain excluded\)\./.test(m1) && !/\[[^\]]*marked[^\]]*\]/i.test(m1),
+      m1);
+
+    const assum1 = await p.$$eval('#sumAssumptionsList li', ls => ls.map(li => li.textContent.trim()));
+    T.check('splice-provenance.assumptions-disclosures',
+      assum1.some(t => /marked bands only/i.test(t)) &&
+      assum1.some(t => /spliced.*dividing line/i.test(t)) &&
+      assum1.some(t => /focused vertical mass window/i.test(t)) &&
+      assum1.some(t => /linear display contrast adjusted; densitometry read from raw optical density/.test(t)),
+      JSON.stringify(assum1));
+
+    await p.evaluate(() => document.querySelector('.trace.gelc[data-kind=gel] .thead').click());
+    await h.wait(350);
+    const delBtn = p.locator('#bandTable tr').filter({hasText: 'Pool'}).last().locator('.bchip').nth(2).locator('[data-bdel]');
+    await delBtn.click();
+    await h.wait(300);
+
+    await h.step('figure');
+    await h.wait(400);
+    const m2 = await h.methods();
+    const assum2 = await p.$$eval('#sumAssumptionsList li', ls => ls.map(li => li.textContent.trim()));
+    T.check('splice-provenance.methods-and-assumptions-removed-band',
+      /Purity was \d+% of marked bands by SDS-PAGE densitometry \(unmarked lane stain excluded\); 1 detected band was manually excluded\./.test(m2) &&
+      assum2.some(t => /1 detected gel band was manually excluded/i.test(t)),
+      JSON.stringify({m2, assum2}));
+    T.check('splice-provenance.no-errors', !a.errs.length, a.errs.join(' | '));
+  } finally {
+    await a.close();
+  }
+});
+
+/* #1734: standalone narrow (opt.w = 1.1 in) calibrated and uncalibrated gels export 'Purity (marked)' without left/right SVG clipping */
+await T.t('marked-purity-narrow-and-uncalibrated-svg-unclipped', async () => {
+  const a = await start(), {p} = a, h = H(p);
+  try {
+    const im = await image(p);
+    const tags = [{kind: 'target', lane: 1, y: 120.5 / 360}, {kind: 'contam', lane: 1, y: 230.5 / 360}, {kind: 'target', lane: 2, y: 120.5 / 360}, {kind: 'contam', lane: 2, y: 230.5 / 360}];
+    await load(p, project(gel(im, {tags}), {purRow: true, purBase: 'tagged', w: 1.1}));
+    await h.wait(350);
+    const svgCal = await h.exportSvg(), boxesCal = await h.svgBoxes(svgCal);
+    T.check('marked-purity.narrow-calibrated-unclipped',
+      boxesCal.texts.some(t => t.t.trim() === 'Purity (marked)') && boxesCal.clipped.length === 0,
+      JSON.stringify({texts: boxesCal.texts.map(t => ({t: t.t.trim(), x: Math.round(t.x), r: Math.round(t.right)})), rootW: Math.round(boxesCal.root.w), clipped: boxesCal.clipped}));
+
+    await load(p, project(gel(im, {marks: [], tags}), {purRow: true, purBase: 'tagged', w: 1.1}));
+    await h.wait(350);
+    const svgUncal = await h.exportSvg(), boxesUncal = await h.svgBoxes(svgUncal);
+    T.check('marked-purity.narrow-uncalibrated-unclipped',
+      boxesUncal.texts.some(t => t.t.trim() === 'Purity (marked)') && boxesUncal.clipped.length === 0,
+      JSON.stringify({texts: boxesUncal.texts.map(t => ({t: t.t.trim(), x: Math.round(t.x), r: Math.round(t.right)})), rootW: Math.round(boxesUncal.root.w), clipped: boxesUncal.clipped}));
+    T.check('marked-purity.no-errors', !a.errs.length, a.errs.join(' | '));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
