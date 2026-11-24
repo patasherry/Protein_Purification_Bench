@@ -55,7 +55,9 @@ jobs:
           git config --global user.email "ppb-manager@users.noreply.github.com"
           python tools/local-manager/manager.py --cloud
       - name: Keep the manager's memory for the next pass
-        if: always()
+        # GitHub issues read-only cache tokens on workflow_run triggers (2026-06-26 policy), so cache writes succeed only on
+        # schedule and workflow_dispatch runs; <!-- cloud-state --> on #17 bridges finished Antigravity jobs between saves.
+        if: always() && github.event_name != 'workflow_run'
         uses: actions/cache/save@v4
         with:
           path: |
