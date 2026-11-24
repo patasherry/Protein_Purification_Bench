@@ -577,6 +577,8 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .nd-v{font-size:12.5px;font-weight:600;white-space:nowrap}
 .ndr .xbtn{width:24px;height:24px;border-radius:6px}
 .ndr .xbtn:hover{background:var(--hover)}
+.ndr-m{grid-column:1/-1;display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:2px 0 2px 4px}
+.ndr-m input[type=number]{flex:1 1 5.2em;width:0;min-height:24px;padding:2px 5px;font-size:11.5px}
 .ndr-2{grid-column:1/-1;display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding-left:4px}
 .nd-flags{display:flex;gap:6px;flex-wrap:wrap;margin-right:auto;min-width:0}
 .nd-edit > summary{list-style:none;cursor:pointer;font-size:11.5px;color:var(--muted);padding:1px 6px;border-radius:5px}
@@ -9747,7 +9749,7 @@ function ndConcRaw(s){ const dil = numOr(s.dil, 1) || 1;
   const E = ndEpsFor(s.runId);
   if (E && s.a280 != null) return {v: s.a280/E.e*dil, unit: 'mg/mL', src: E.src === 'set' ? 'your A280' : `${E.src} ε`, kda: E.kda};
   if (s.conc != null) return {v: s.conc*dil, unit: 'mg/mL', src: 'instrument'};
-  return {v: s.a280*dil, unit: 'mg/mL', src: '1 Abs = 1 mg/mL'}; }
+  return {v: s.a280 != null ? s.a280 * dil : null, unit: 'mg/mL', src: '1 Abs = 1 mg/mL'}; }
 /* minutes become mL with the flow, as in massOf and poolRows; no flow gives no volume */
 const ndPoolVol = r => { const p = r && poolRows(r); return p ? p.volMl : null; };
 /* one step: replicate readings averaged within a stage (the pool, and the final sample after concentration or dialysis) */
@@ -9773,7 +9775,7 @@ function renderND(){
   $('#ndWrap').hidden = !NDS.length; if (!hasSpec) $('#ndSpecOpts').hidden = true;
   if (!NDS.length) { el.innerHTML = ''; return; }
   const meta = s => { const c = ndConc(s), crude = CRUDE_RE.test(s.name) && s.kind !== 'nucleic', f = r280Flag(s.r280);
-    const val = c.v == null ? '' : crude ? `A₂₈₀ ${fmt(s.a280, 2)}` : `${fmt(c.v, c.unit === 'ng/µL' ? 1 : 2)} ${c.unit}`;
+    const val = c.v == null ? '' : (crude && s.a280 != null) ? `A₂₈₀ ${fmt(s.a280, 2)}` : `${fmt(c.v, c.unit === 'ng/µL' ? 1 : 2)} ${c.unit}`;
     const r = s.r280 == null ? '' : `<span class="nd-r ${f}" title="A260/A280. About 0.57 for pure protein. NAD(P)-binding proteins can read 0.6 to 0.9 from bound nucleotide alone. Above 0.8 points to nucleic acid">${f ? '▲ ' : ''}260/280 ${fmt(s.r280, 2)}</span>`;
     const pw = ndPureOff(s) ? `<span class="nd-r hi nd-pure" title="A280/A260 ${fmt(1/s.r280, 2)}, outside 1.5 to 2.5. The concentration may be unreliable">▲ ratio outside expected range for pure protein</span>` : '';
     const a340 = s.a340 ?? ((s.base === '340' || /340/.test(String(s.base))) ? s.baseA : null);
@@ -9781,8 +9783,9 @@ function renderND(){
     const cb = c.raw != null ? `<span class="nd-r" title="Corrected for nucleic acid by the NanoDrop. Uncorrected: ${fmt(c.raw, 2)} mg/mL${s.imp && s.imp.a280 != null ? `. ${esc(s.imp.name)} adds A280 ${fmt(s.imp.a280, 3)}` : ''}">corrected</span>` : '';
     const uw = s.unitWarn && c.v != null && /instrument/.test(c.src) ? `<span class="nd-r hi nd-unit" title="The file gives this concentration in ${esc(s.unitWarn)}, a unit this app does not convert. The number is kept as read and shown as ${c.unit}: check it before use">▲ Review required: ${esc(s.unitWarn)}</span>` : '';
     const tw = s.tied && !s.runId ? `<span class="nd-r hi nd-tied" title="Multiple workflow steps have equal matching scores. Review required: select a step to assign this reading and include it in totals">▲ Review required: select step</span>` : '';
-    return {val, src: crude ? 'crude sample, not converted' : c.src, r: tw + uw + tb + r + pw + cb, r230: s.kind !== 'nucleic' ? ((sc => sc != null && sc > 0.05 ? `<span class="nd-r mid" title="A340 is ${fmt(100*sc, 0)}% of A280, so light scattering from aggregates or particles adds to A280">scatter ${fmt(sc, 2)}</span>` : '')(s.a280 > 0 && (s.baseA ?? s.a340) != null ? (s.baseA ?? s.a340)/s.a280 : null)) : s.r230 != null && s.r230 < 1.8 ? `<span class="nd-r mid" title="A260/A230. Low values point to imidazole, DTT, Tris or a mismatched blank">260/230 ${fmt(s.r230, 2)}</span>` : ''}; };
-  const live = el.contains(document.activeElement) && el._n === NDS.length;
+    return {val, src: (crude && s.a280 != null) ? 'crude sample, not converted' : c.src, r: tw + uw + tb + r + pw + cb, r230: s.kind !== 'nucleic' ? ((sc => sc != null && sc > 0.05 ? `<span class="nd-r mid" title="A340 is ${fmt(100*sc, 0)}% of A280, so light scattering from aggregates or particles adds to A280">scatter ${fmt(sc, 2)}</span>` : '')(s.a280 > 0 && (s.baseA ?? s.a340) != null ? (s.baseA ?? s.a340)/s.a280 : null)) : s.r230 != null && s.r230 < 1.8 ? `<span class="nd-r mid" title="A260/A230. Low values point to imidazole, DTT, Tris or a mismatched blank">260/230 ${fmt(s.r230, 2)}</span>` : ''}; };
+  const flagsHtml = (s, m) => `${m.r}${m.r230}${numOr(s.dil, 1) !== 1 ? `<span class="nd-r">diluted ×${fmt(s.dil, 0)}</span>` : ''}${s.stage === 'final' ? '<span class="nd-r">final</span>' : ''}`;
+  const live = (el._keep || el.contains(document.activeElement)) && el._n === NDS.length;
   const groups = steps.map(r => ({r, ss: NDS.filter(s => s.runId === r.id)})).filter(g => g.ss.length).concat([{r: null, ss: NDS.filter(s => !steps.some(r => r.id === s.runId))}]).filter(g => g.ss.length);
   const stat = x => x ? `${fmt(x.m, 2)}${x.sd != null ? ` ± ${fmt(x.sd, 2)}` : ''} mg/mL${x.n > 1 ? `, n ${x.n}` : ''}` : '';
   const head = g => { if (!g.r) return `<div class="ndg-h"><span class="ndg-t">No step</span></div>`; const k = steps.indexOf(g.r) + 1, st = ndForRun(g.r), F = protForms(), p = poolRows(g.r);
@@ -9791,27 +9794,34 @@ function renderND(){
       <span class="joined"><input type="number" step="any" min="0" data-ndr="ndVol" value="${g.r.ndVol ?? ''}" placeholder="${st && st.pv && st.pvAuto ? fmt(st.pv, 1) : 'pool'}" aria-label="Pool volume in mL" title="Pool volume. Left blank, it is the volume of the pooled fractions"><span class="unit">mL</span></span>
       <span class="ndg-mg">${st && st.pmg != null ? `${fmt(st.pmg, 2)} mg` : ''}</span></div>
       ${st && st.F ? `<div class="ndg-c"><span class="ndg-lab">Final ${stat(st.F)}</span><span class="joined"><input type="number" step="any" min="0" data-ndr="ndFinalVol" value="${g.r.ndFinalVol ?? ''}" placeholder="vol" aria-label="Final volume in mL"><span class="unit">mL</span></span><span class="ndg-mg">${st.fmg != null ? `${fmt(st.fmg, 2)} mg` : '<span class="warnc">needs volume</span>'}</span></div>` : ''}</div>`; };
-  if (live) { el.querySelectorAll('[data-nd]').forEach(row => { const s = NDS.find(x => x.id === row.dataset.nd); if (!s) return; const m = meta(s); row.querySelector('.nd-v').textContent = m.val; });
-    groups.forEach(g => { if (!g.r) return; const h = el.querySelector(`[data-ndrun="${g.r.id}"]`), st = ndForRun(g.r); if (!h) return; const ps = h.querySelector('.ndg-s'), fs = h.querySelector('.ndg-lab'); if (ps) ps.textContent = st && st.P ? stat(st.P) : ''; if (fs) fs.textContent = st && st.F ? `Final ${stat(st.F)}` : ''; const mg = h.querySelectorAll('.ndg-mg'); if (mg[0]) mg[0].textContent = st && st.pmg != null ? `${fmt(st.pmg, 2)} mg` : ''; if (mg[1]) mg[1].innerHTML = st && st.fmg != null ? `${fmt(st.fmg, 2)} mg` : (st && st.F ? '<span class="warnc">needs volume</span>' : ''); }); return; }
+  if (live) { el.querySelectorAll('[data-nd]').forEach(row => { const s = NDS.find(x => x.id === row.dataset.nd); if (!s) return; const m = meta(s), nv = row.querySelector('.nd-v'), nf = row.querySelector('.nd-flags'); if (nv) { nv.textContent = m.val; nv.title = m.src; } if (nf) nf.innerHTML = flagsHtml(s, m); });
+    groups.forEach(g => { if (!g.r) return; const h = el.querySelector(`[data-ndrun="${g.r.id}"]`), st = ndForRun(g.r); if (!h) return; if (!h.contains(document.activeElement) && !!(st && st.F) !== !!h.querySelector('.ndg-lab')) { h.outerHTML = head(g); return; } const ps = h.querySelector('.ndg-s'), fs = h.querySelector('.ndg-lab'); if (ps) ps.textContent = st && st.P ? stat(st.P) : ''; if (fs) fs.textContent = st && st.F ? `Final ${stat(st.F)}` : ''; const mg = h.querySelectorAll('.ndg-mg'); if (mg[0]) mg[0].textContent = st && st.pmg != null ? `${fmt(st.pmg, 2)} mg` : ''; if (mg[1]) mg[1].innerHTML = st && st.fmg != null ? `${fmt(st.fmg, 2)} mg` : (st && st.F ? '<span class="warnc">needs volume</span>' : ''); }); return; }
   el._n = NDS.length;
   el.innerHTML = groups.map(g => `<div class="ndg">${head(g)}${g.ss.map(s => { const m = meta(s); return `<div class="ndr" data-nd="${s.id}">
       <input type="text" data-ndk="name" value="${esc(s.name)}" aria-label="Sample name"><span class="nd-v" title="${esc(m.src)}">${m.val}</span><button type="button" class="xbtn" data-nddel="${s.id}" aria-label="Remove ${esc(s.name)}">×</button>
-      <div class="ndr-2"><span class="nd-flags">${m.r}${m.r230}${numOr(s.dil, 1) !== 1 ? `<span class="nd-r">diluted ×${fmt(s.dil, 0)}</span>` : ''}${s.stage === 'final' ? '<span class="nd-r">final</span>' : ''}</span>
+      ${s.manual ? `<div class="ndr-m"><input type="number" step="any" min="0" data-ndk="a280" value="${s.a280 != null ? s.a280 : ''}" placeholder="A280" aria-label="A280 (10 mm)"><input type="number" step="any" min="0" data-ndk="conc" value="${s.conc != null ? s.conc : ''}" placeholder="mg/mL" aria-label="Concentration (mg/mL)"><input type="number" step="0.01" min="0" data-ndk="r280" value="${s.r280 != null ? s.r280 : ''}" placeholder="260/280" aria-label="A260/A280"></div>` : ''}
+      <div class="ndr-2"><span class="nd-flags">${flagsHtml(s, m)}</span>
         <details class="nd-edit"><summary>Edit</summary><div class="nd-edit-b"><select data-ndk="runId" aria-label="Step"><option value="">${s.tied && !s.runId ? 'Select step…' : 'No step'}</option>${steps.map((r, k) => { const p = poolRows(r); return `<option value="${r.id}"${r.id === s.runId ? ' selected' : ''}>${k + 1} · ${esc(p ? p.label : shortRunName(r))}</option>`; }).join('')}</select>
         <select data-ndk="stage" aria-label="Stage"><option value="pool"${s.stage !== 'final' ? ' selected' : ''}>Pool</option><option value="final"${s.stage === 'final' ? ' selected' : ''}>Final</option></select>
         <label class="nd-dil" title="Dilution factor before measuring">×<input type="number" step="any" min="1" data-ndk="dil" value="${s.dil ?? 1}" aria-label="Dilution factor"></label>
         ${s.spec ? `<label class="eye" title="Show in the spectra figure"><input type="checkbox" data-ndk="show" ${s.hide ? '' : 'checked'}>plot</label>` : ''}</div></details></div></div>`; }).join('')}</div>`).join('');
 }
-$('#ndList').addEventListener('input', e => { const t = e.target;
-  if (t.dataset.ndr) { const h = t.closest('[data-ndrun]'), r = h && runs.find(x => x.id === h.dataset.ndrun); if (!r) return; r[t.dataset.ndr] = t.type === 'number' ? (t.value === '' ? '' : +t.value) : t.value; if (t.tagName === 'SELECT') $('#ndList')._n = -1; renderND(); render(); return; }
-  const row = t.closest('[data-nd]'), k = t.dataset.ndk; if (!row || !k) return; const s = ndSamples.find(x => x.id === row.dataset.nd); if (!s) return;
-  if (k === 'show') s.hide = !t.checked; else if (k === 'dil') s.dil = numOr(t.value, 1) || 1; else { s[k] = t.value; if (k === 'runId') delete s.tied; }
-  if (t.tagName === 'SELECT') $('#ndList')._n = -1; renderND(); render(); });
+const onNdEdit = e => { const t = e.target, el = $('#ndList'), chg = e.type === 'change', sel = t.tagName === 'SELECT';
+  if (t.dataset.ndr) { const h = t.closest('[data-ndrun]'), r = h && runs.find(x => x.id === h.dataset.ndrun); if (!r) return; const nv = t.type === 'number' ? (t.value === '' ? '' : +t.value) : t.value; if (chg && r[t.dataset.ndr] === nv) return; r[t.dataset.ndr] = nv; if (sel) el._n = -1; el._keep = !sel; try { renderND(); render(); } finally { el._keep = false; } return; }
+  const row = t.closest('[data-nd]'), k = t.dataset.ndk; if (!row || !k) return; const s = ndSamples.find(x => x.id === row.dataset.nd); if (!s) return; const v = t.value;
+  if (k === 'show') { if (chg && s.hide === !t.checked) return; s.hide = !t.checked; }
+  else if (k === 'dil') { const d = numOr(v, 1) || 1; if (chg && s.dil === d) return; s.dil = d; }
+  else if (k === 'a280') { const n = numOr(v, null); if (chg && s.a280 === n) return; s.a280 = n; if (n != null) { s.conc = null; const ci = row.querySelector('[data-ndk="conc"]'); if (ci && ci !== t) ci.value = ''; } }
+  else if (k === 'conc') { const n = numOr(v, null); if (chg && s.conc === n) return; s.conc = n; s.unit = 'mg/mL'; if (n != null) { s.a280 = null; const ai = row.querySelector('[data-ndk="a280"]'); if (ai && ai !== t) ai.value = ''; } }
+  else if (k === 'r280') { const n = numOr(v, null); if (chg && s.r280 === n) return; s.r280 = n; }
+  else { if (chg && s[k] === v) return; s[k] = v; if (k === 'runId') delete s.tied; }
+  if (sel) el._n = -1; el._keep = !sel; try { renderND(); render(); } finally { el._keep = false; } };
+$('#ndList').addEventListener('input', onNdEdit); $('#ndList').addEventListener('change', onNdEdit);
 $('#ndList').addEventListener('click', e => { const b = e.target.closest('[data-nddel]'); if (!b) return; ndSamples = ndSamples.filter(x => x.id !== b.dataset.nddel); $('#ndList')._n = -1; renderND(); render(); });
 $('#ndAdd').addEventListener('click', () => $('#ndFile').click());
 $('#ndFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) addNanoDrop(parseNanoDrop(decode(await f.arrayBuffer())), f.name); });
-$('#ndManual').addEventListener('click', () => { const r = curRun(); ndSamples.push(ndNew({name: 'Sample ' + (ndSamples.length + 1), a280: 1, runId: r && r.inWf ? r.id : '', manual: true})); $('#ndList')._n = -1; renderND(); render();
-  const i = $('#ndList').querySelector(`[data-nd="${ndSamples[ndSamples.length - 1].id}"] input`); if (i) { i.focus(); i.select(); } });
+$('#ndManual').addEventListener('click', () => { const r = curRun(); ndSamples.push(ndNew({name: 'Sample ' + (ndSamples.length + 1), a280: null, runId: r && r.inWf ? r.id : '', manual: true})); $('#ndList')._n = -1; renderND(); render();
+  const i = $('#ndList').querySelector(`[data-nd="${ndSamples[ndSamples.length - 1].id}"] input[data-ndk="a280"]`); if (i) i.focus(); });
 /* spectra figure: absorbance (10 mm equivalent) against wavelength, 230, 260, 280 and 340 nm marked, raw or scaled to A280 = 1 */
 /* the Concentrated step's figure: its NanoDrop spectra with the concentration, volume and mg; with no spectra, its panel */
 function buildConcFig(r){ const sp = ndFinalOf(r).filter(x => x.spec), info = ncLines(r).map(x => typeof x === 'string' ? x : x.t);
