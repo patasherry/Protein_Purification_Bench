@@ -37,7 +37,7 @@ for w in wiki[:3]:
 print('\n3. Gemini with Google Search:')
 if not key:
     print('   no Gemini key: neither gemini_key in', conf, 'nor the GEMINI_API_KEY environment variable')
-for model in ('gemini-flash-latest', 'gemini-flash-lite-latest'):
+for model in ('gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite'):
     if not key:
         break
     body = json.dumps({'contents': [{'parts': [{'text': Q + ' Answer in two sentences.'}]}], 'tools': [{'google_search': {}}]}).encode()

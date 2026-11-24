@@ -76,6 +76,11 @@ r_split, avg_split, _, _, _ = bc.peer_decision([
     {'by': 'ChatGPT', 'verdict': 'go_with_fixes', 'score': 3, 'why': 'borderline'}
 ], author='Gemini', n_advisers=3, go_score=4)
 check('3-seat split 4 and 3 routes to relay', r_split == 'relay' and avg_split == 3.5, (r_split, avg_split))
+r_four, avg_four, _, _, _ = bc.peer_decision([
+    {'by': 'ChatGPT', 'verdict': 'go', 'score': 4, 'why': 'verified in code'},
+    {'by': 'Antigravity', 'verdict': 'go_with_fixes', 'score': 4, 'why': 'checked suite'},
+], author='the local AI', n_advisers=4, go_score=4)
+check('4-seat board adopts when 2 independent peers score 4+ even if 1 peer seat timed out', r_four == 'adopt' and avg_four == 4.0, (r_four, avg_four))
 pc = bc.probe_card({'title': 'Clamp negative absorbance in NanoDrop table', 'change': 'Update renderNanoDrop.', 'check': 'tests/suites/test_nanodrop_units.js'})
 check('probe_card prefixes Test probe and keeps original', pc['title'].startswith('Test probe: ') and pc['probe'] is True and pc['orig']['title'] == 'Clamp negative absorbance in NanoDrop table', pc)
 

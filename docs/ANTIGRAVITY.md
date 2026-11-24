@@ -124,3 +124,12 @@ The label clears itself once a pull request appears or another worker takes the 
 
 Nothing waits on you. The stall guard hands any `for-antigravity` job that nobody starts within
 `antigravity_stall_minutes` (45) back to the `queued` label instead.
+
+## Direction Board & Creative Direction Board discussions
+
+On the PC, the local manager (`tools/local-manager/manager.py`) automatically connects your signed-in **`agy` CLI** as the **Antigravity** adviser seat on both the Polishing Board (`#222`) and the Creative Direction Board (`#1630`), alongside the local AI, Gemini, and ChatGPT (`Codex`):
+
+- Enabled by default (`"board_agy": true` in `~/.ppb-reviewer.json`; set `false` to turn off).
+- Runs in read-only headless print mode (`agy -p` without `--dangerously-skip-permissions`, reading long prompts from a temporary `.ppb_board_prompt_*.md` file so Windows `cmd.exe` length limits never truncate board context).
+- Defaults to `gemini-3.8-flash` (`"agy_board_model"`, matching `"agy_model"`; set `""` to use your Google AI Pro sign-in's flagship default) and uses its own daily cap (`"max_agy_board": 24`) so board rounds never consume `"max_agy_jobs"` coding-job quota.
+

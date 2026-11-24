@@ -157,8 +157,9 @@ def clean_homework(items, advisers, domains, earlier=(), limit=3, default_domain
     """The homework the secretary returned, kept to real advisers and real domains, one question per adviser, none repeated."""
     doms, seen, out = {d.lower(): d for d in domains}, {q.lower() for q in earlier}, []
     norm = lambda x: re.sub(r'^the\s+', '', re.sub(r'[^a-z0-9 ]', '', str(x).lower())).strip()
+    alias = {'codex': 'chatgpt', 'openai': 'chatgpt', 'chatgpt codex': 'chatgpt', 'agy': 'antigravity', 'google antigravity': 'antigravity', 'antigravity cli': 'antigravity'}
     def real(x):  # "Local AI", "the local AI" and "local ai" are one adviser (only Gemini ever got homework when names had to match exactly)
-        n = norm(x)
+        n = alias.get(norm(x), norm(x))
         return next((a for a in advisers if norm(a) == n), None) or next((a for a in advisers if n and (n in norm(a) or norm(a) in n)), None)
     for h in items if isinstance(items, list) else []:
         if not isinstance(h, dict):

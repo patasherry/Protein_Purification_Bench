@@ -82,4 +82,12 @@ check('domain_checks lists existing checks from domain suites', 'tests/suites/' 
 wrapped = '{"adviser": "Gemini", "domain": "Upstream", "homework_response": "Benchling stores promoters as sequence parts with typed links."}'
 check('clean_report_text unwraps accidental JSON homework objects into prose',
       bm.clean_report_text(wrapped) == 'Benchling stores promoters as sequence parts with typed links.', bm.clean_report_text(wrapped))
+hw4 = bm.clean_homework([
+    {'to': 'Local AI', 'by': 'Gemini', 'domain': doms[0]['name'], 'question': 'Q1?'},
+    {'to': 'Gemini', 'by': 'Codex', 'domain': doms[0]['name'], 'question': 'Q2?'},
+    {'to': 'Codex', 'by': 'agy', 'domain': doms[0]['name'], 'question': 'Q3?'},
+    {'to': 'agy', 'by': 'Local AI', 'domain': doms[0]['name'], 'question': 'Q4?'},
+], ['the local AI', 'Gemini', 'ChatGPT', 'Antigravity'], [doms[0]['name']], limit=4)
+check('clean_homework maps Codex/agy aliases and keeps all 4 board seats when limit=4',
+      [h['to'] for h in hw4] == ['the local AI', 'Gemini', 'ChatGPT', 'Antigravity'], hw4)
 sys.exit(1 if bad else 0)
