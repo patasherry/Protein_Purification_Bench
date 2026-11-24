@@ -1822,6 +1822,10 @@ button,input,select,textarea{font-family:inherit}
         <div class="btns"><button type="button" class="mini" id="sumMore" hidden></button><button type="button" class="mini" id="sumCsv">Save table (CSV)</button></div></div>
       <div class="tablewrap"><table class="itab" id="sumTable"></table></div>
       <p class="hint" id="sumBasis"></p>
+      <div id="fracYieldBox" hidden>
+        <div class="intp-head"><strong>Fraction Yield</strong></div>
+        <div class="tablewrap"><table class="itab" id="fracYieldTable"></table></div>
+      </div>
       <ul class="hint sumnotes" id="sumNotes" hidden></ul>
       <details class="cardtext" id="sumAssumptions" hidden><summary id="sumAssumptionsSum">Assumptions and notes</summary><ul class="hint sumnotes" id="sumAssumptionsList"></ul></details>
       <details class="methods" id="methodsBox" open><summary>Methods text</summary>
@@ -6445,7 +6449,7 @@ function render(){
   else { $('#o-xmin').placeholder = 'auto'; $('#o-xmax').placeholder = 'auto'; }
   if (kind === 'gel' && f) { const cp = cleavePlan(f.gel), el = $('#cleaveInfo'); $('#o-tagKda').placeholder = (TAG_PRESETS[opt.tagPreset] || [])[1] ? String(TAG_PRESETS[opt.tagPreset][1]) : 'kDa';
     el.textContent = cp ? `Looking for cleaved ${fmt(cp.P, 1)} kDa, uncleaved ${fmt(cp.P + cp.T, 1)} kDa and free ${cp.tagName} ${fmt(cp.T, 1)} kDa (±${numOr(opt.knownTol, 7)}%). Tags often run off their calculated size, so adjust the tag size to what you see on your gels.` : 'Enter the protein size, or mark its band as the target, and the expected sizes appear here.'; }
-  $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData()); if (kind === 'workflow') renderSumTable();
+  $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData() && !hasFracYieldData()); if (kind === 'workflow') renderSumTable();
   const ip = $('#intPanel'); ip.hidden = kind !== 'run'; if (kind === 'run' && f) renderIntTable(f.run);
   $('#bandPanel').hidden = kind !== 'gel'; if (kind === 'gel' && f) renderBandTable(f.gel);
   updatePrompt();
@@ -7352,6 +7356,7 @@ function hasAssaySummaryData(){
   const rows = sumRows();
   return !!assaySummaryInfo(rows, sumDisplay(rows));
 }
+function hasFracYieldData(){ return runs.some(r => r.inWf && runFractionYields(r).length); }
 function renderSumTable(){
   syncWfLayoutMore();
   const rows = sumRows(), molB = ['mgmol', 'ndmol'].includes(rows.basis), mg = rows.some(x => x.p.mg != null), nd = rows.some(x => x.nd), cL = prep.on ? numOr(prep.cultureL, 0) : 0, cG = prep.on ? numOr(prep.pellet, 0) : 0, perL = cL > 0 && rows.some(x => rows.mgOf(x) > 0), perG = cG > 0 && rows.some(x => rows.mgOf(x) > 0);
@@ -7408,6 +7413,21 @@ function renderSumTable(){
     const mb = $('#sumMore'); mb.hidden = !extra.some(Boolean); mb.textContent = tb.classList.contains('all') ? 'Fewer columns' : `${extra.filter(Boolean).length} more columns`; }
   const nEl = $('#sumNotes'); if (nEl) { nEl.innerHTML = notes.map(t => `<li>${esc(t)}</li>`).join(''); nEl.hidden = !notes.length; }
   const aBox = $('#sumAssumptions'), aSum = $('#sumAssumptionsSum'), aList = $('#sumAssumptionsList'); if (aBox && aSum && aList) { const pk = wfCtx(); if (aBox._proj !== pk || !assumptions.length) { aBox._proj = pk; aBox.open = false; } aSum.textContent = `Assumptions and notes (${assumptions.length})`; aList.innerHTML = assumptions.map(t => `<li>${esc(t)}</li>`).join(''); aBox.hidden = !assumptions.length; }
+  const fyBox = $('#fracYieldBox'), fyTbl = $('#fracYieldTable');
+  if (fyBox && fyTbl) {
+    const wfFy = [];
+    runs.filter(r => r.inWf).forEach(r => { const list = runFractionYields(r); if (list.length) wfFy.push({r, list}); });
+    if (!wfFy.length) { fyBox.hidden = true; fyTbl.innerHTML = ''; }
+    else {
+      fyBox.hidden = false;
+      const multi = wfFy.length > 1, hasMl = wfFy.every(({list}) => list.every(fy => fy.areaMl != null));
+      fyTbl.innerHTML = `<tr>${multi ? '<th>Step</th>' : ''}<th>Fraction</th><th>${hasMl ? 'UV area (mAU·mL)' : 'UV area'}</th><th>Gel purity (%)</th><th>Mass (mg)</th></tr>` +
+        wfFy.flatMap(({r, list}) => {
+          const sName = stepTitle(r) !== r.name ? stepTitle(r) : shortRunName(r);
+          return list.map(fy => `<tr>${multi ? `<td>${esc(sName)}</td>` : ''}<td${multi ? ' style="text-align:left"' : ''}>${esc(fy.frac)}</td><td>${fy.areaMl != null ? fmtAuto(fy.areaMl) : fy.area != null ? fmtAuto(fy.area) : ''}</td><td>${fy.purity != null ? fmt(fy.purity, 1) : ''}</td><td>${fy.mg != null ? fmt(fy.mg, 2) : ''}</td></tr>`);
+        }).join('');
+    }
+  }
 }
 function wfCtx(){ try { return PROJ ? PROJ.id + ':' + ((PROJ.directory && PROJ.directory.activePrepId) || '') : MODE; } catch (e) { return ''; } }
 function wfLayoutNonDef(){ return numOr(opt.wfH, DEF.wfH) !== DEF.wfH || (opt.wfTitle || DEF.wfTitle) !== DEF.wfTitle || String(opt.wfPad == null ? '' : opt.wfPad).trim() !== '' || opt.wfLetters === false || opt.wfArrows === false || !!opt.noGelSlot || opt.wfFit === false; }
@@ -9377,7 +9397,7 @@ function refreshPaperFig(){
   const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
   if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
   const kind = f ? f.kind : 'none';
-  $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData());
+  $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData() && !hasFracYieldData());
   if (kind === 'workflow') renderSumTable();
   const mt = $('#methodsText'); if (mt) { const t = methodsText(); if (mt.value !== t) mt.value = t; }
   if (PROJ && typeof renderSteps === 'function') renderSteps();
