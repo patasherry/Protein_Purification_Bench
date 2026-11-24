@@ -568,5 +568,81 @@ async function fresh(id, fn){
     T.check(id + '/fits_390px', noOverflow390, 'manual inputs fit within .ndr at 390px width without horizontal overflow');
   });
 
+  // #1738: Replicate ± SD (n) in #sumTable .ndc and #methodsText, and Rayleigh λ⁻⁴ (~2.17 × A340) scatter tooltip
+  await fresh('replicate_sd_and_scatter', async (p, h) => {
+    const id = 'nd/replicate_sd_and_scatter';
+    await h.newProject('Replicate SD and Rayleigh scatter');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.pool('A1-A3');
+    await h.step('final');
+
+    const tripTsv = 'Sample Name\tA280\tA340\tA260/A280\nPool rep 1\t1.90\t0.01\t0.57\nPool rep 2\t2.00\t0.01\t0.57\nPool rep 3\t2.10\t0.01\t0.57';
+    await p.setInputFiles(SEL.nd, {name: 'pool_triplicate.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(tripTsv)});
+    await p.locator(SEL.row).nth(2).waitFor();
+    for (let i = 0; i < 3; i++) {
+      const r = p.locator(SEL.row).nth(i);
+      const isOpen = await r.locator('.nd-edit').evaluate(e => e.open);
+      if (!isOpen) await r.locator(SEL.edit).click();
+      await r.locator(SEL.run).selectOption({index: 1});
+    }
+    await p.locator(SEL.poolVolume).fill('2');
+    await p.locator(SEL.poolVolume).dispatchEvent('change');
+    await p.waitForTimeout(250);
+
+    await h.step('figure');
+    await p.waitForTimeout(250);
+    const sumMore = p.locator('#sumMore');
+    if (await sumMore.isVisible()) {
+      const isAll = await p.$eval('#sumTable', t => t.classList.contains('all'));
+      if (!isAll) await sumMore.click();
+    }
+    const ndcCell = p.locator('#sumTable tr:not(:first-child) td.ndc').first();
+    const ndcVis = await ndcCell.isVisible();
+    const ndcTxt = (await ndcCell.textContent()).trim();
+    const ndcTitle = (await ndcCell.getAttribute('title')) || '';
+    T.check(id + '/sumtable_ndc_sd_and_title',
+      ndcVis && ndcTxt === '2.00 ± 0.10' && parseFloat(ndcTxt) === 2 && ndcTitle === 'Mean ± SD (n = 3)',
+      `vis=${ndcVis} text="${ndcTxt}" title="${ndcTitle}"`);
+
+    const mBox = p.locator('#methodsBox');
+    if (!(await mBox.evaluate(e => e.open))) await mBox.locator('summary').click();
+    await p.waitForTimeout(200);
+    const mTxt = await h.methods();
+    T.check(id + '/methods_pool_sd_and_count',
+      mTxt.includes('held 4.00 mg in 2.0 mL (2.00 mg/mL)') &&
+      mTxt.includes('± 0.10 SD (mean of 3 readings)') &&
+      !/\[[^\]]+\]/.test(mTxt.split('Results:')[1] || ''),
+      mTxt);
+
+    await h.step('final');
+    const scatTsv = 'Sample Name\tA280\tA340\tA260/A280\nScattered Sample\t1.00\t0.25\t0.57';
+    await p.setInputFiles(SEL.nd, {name: 'scattered.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(scatTsv)});
+    await p.locator(SEL.row).nth(3).waitFor();
+    const scatRow = p.locator(SEL.row).filter({has: p.locator('input[data-ndk="name"][value="Scattered Sample"]')});
+    const scatBadge = scatRow.locator('.nd-flags span').filter({hasText: /^scatter\s+0\.25$/});
+    const scatVis = (await scatBadge.count()) === 1 && (await scatBadge.isVisible());
+    const scatTitle = scatVis ? ((await scatBadge.getAttribute('title')) || '') : '';
+    T.check(id + '/rayleigh_scatter_tooltip',
+      scatVis && scatTitle.includes('λ⁻⁴') && scatTitle.includes('2.17') && scatTitle.includes('1.17') && scatTitle.includes('20,000 × g'),
+      `vis=${scatVis} title="${scatTitle}"`);
+
+    const rawNd = fs.readFileSync(path.join(DATA, 'nd/nd_replicates_sd.csv'));
+    const nd3 = rawNd.toString('utf16le').replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean).slice(0, 4).join('\n');
+    await h.addConc({name: 'nd_replicates_sd.csv', mimeType: 'text/tab-separated-values', buffer: Buffer.from(nd3, 'utf8')}, 0.5);
+    await h.step('figure');
+    await p.waitForTimeout(250);
+    if (await sumMore.isVisible()) {
+      const isAll2 = await p.$eval('#sumTable', t => t.classList.contains('all'));
+      if (!isAll2) await sumMore.click();
+    }
+    const concNdc = p.locator('#sumTable tr.manrow td.ndc').first();
+    const concNdcTxt = (await concNdc.textContent()).trim();
+    const concNdcTitle = (await concNdc.getAttribute('title')) || '';
+    T.check(id + '/conc_row_ndc_sd_and_title',
+      concNdcTxt === '1.00 ± 0.10' && concNdcTitle === 'Mean ± SD (n = 3)',
+      `text="${concNdcTxt}" title="${concNdcTitle}"`);
+  });
+
   T.done();
 })();
+
