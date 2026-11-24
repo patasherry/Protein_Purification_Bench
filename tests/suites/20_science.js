@@ -476,6 +476,49 @@ const JUNK = [/NaN/, /undefined/, /\[object/, /\(, /, / {2}/, /(?<!\.)\.\.(?!\.)
     T.check('p8.has_total', timelineHtml.includes('Total 4.20 mg') || timelineHtml.includes('Total 4.2 mg'), 'Expected "Total 4.20 mg" or "Total 4.2 mg" in timeline card, got: ' + timelineHtml);
   });
 
+  await T.t('p9_sec_methods_and_results_sizing', async () => {
+    const {p: p9, errs: errs9, close: close9} = await open(), h9 = H(p9); p9.on('dialog', d => d.accept());
+    const open9 = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+    const set9 = async (sel, v) => { const l = p9.locator(sel).first(); await open9(l); await l.fill(String(v)); await l.dispatchEvent('change'); await h9.wait(150); };
+    const setRun9 = async (k, v) => { const l = p9.locator(`.trace.run.sel [data-k=${k}]`).first(); await open9(l); await l.fill(String(v)); await l.dispatchEvent('change'); await h9.wait(200); };
+    const methods9 = async () => { await h9.step('figure'); await p9.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) b.open = true; }); await h9.wait(350); return h9.methods(); };
+    try {
+      await h9.newProject('SEC methods sizing');
+      await h9.step('transform'); await set9('#pr-trMethod', 'heat shock');
+      await h9.step('expr'); await set9('#pr-medium', 'LB');
+      await h9.addRun(F.sec); await h9.suggest();
+      for (const [k, v] of Object.entries({path: 2, mCol: 'Superdex 200 Increase 10/300 GL', mBufA: '20 mM HEPES pH 7.5, 150 mM NaCl', mFlow: 0.5, mTemp: 4})) await setRun9(k, v);
+      const secStep = (await h9.timeline()).find(x => /^run:/.test(x.k));
+      await h9.step(secStep.k); await h9.wait(300);
+      if (/More options/i.test(await p9.locator('#moreBtn').textContent().catch(() => ''))) { await p9.click('#moreBtn').catch(() => {}); await h9.wait(250); }
+      await open9(p9.locator('#o-secStds')); await p9.locator('#o-secStds').check({force: true}); await h9.wait(300);
+      await set9('#sec-v0', '8'); await set9('#sec-vt', '24');
+      const ve = ['10.0', '12.5', '14.5', '16.0'], stdRows = p9.locator('#secStdList input[placeholder^="Ve"]');
+      for (let i = 0; i < Math.min(4, await stdRows.count()); i++) { await stdRows.nth(i).fill(ve[i]); await stdRows.nth(i).dispatchEvent('change'); await h9.wait(120); }
+      await set9('#o-secMono', '49.2');
+      await p9.click('#intAuto').catch(() => {}); await h9.wait(500);
+      const mOn = await methods9(), [methPart, resPart = ''] = mOn.split(/\n\nResults:\s*/);
+      T.check('p9_sec.methods_cal_kit_stds', /calibrated with Bio-Rad gel filtration standard \(Thyroglobulin, 670 kDa; γ-globulin, 158 kDa; Ovalbumin, 44 kDa; Myoglobin, 17 kDa;/.test(methPart), methPart);
+      T.check('p9_sec.methods_v0_vt_r2', methPart.includes('V₀ = 8 mL') && methPart.includes('Vt = 24 mL') && /linear fit of log₁₀\(MW\) vs Kav, R² = 0\.99\d\)/.test(methPart), methPart);
+      T.check('p9_sec.results_ve_kav_mw_oligomer', /On SEC, the pooled peak eluted at Ve = 12\.00 mL \(Kav = 0\.25\), corresponding to an apparent mass of \d+ kDa \(\d+\.\d× the 49 kDa monomer\)\./.test(resPart), resPart);
+      const badOn = JUNK.filter(re => re.test(mOn));
+      const brOn = mOn.match(/\[[^\]]+\]/g) || [];
+      T.check('p9_sec.no_junk_or_brackets_when_on', !badOn.length && !brOn.length, `junk=${badOn.map(String).join(',')} brackets=${brOn.join(' ')}`);
+      await h9.step(secStep.k); await h9.wait(250);
+      const veExtrap = ['12.5', '14.0', '15.5', '17.0'];
+      for (let i = 0; i < Math.min(4, await stdRows.count()); i++) { await stdRows.nth(i).fill(veExtrap[i]); await stdRows.nth(i).dispatchEvent('change'); await h9.wait(120); }
+      const mEx = await methods9(), resEx = mEx.split(/\n\nResults:\s*/)[1] || '';
+      T.check('p9_sec.results_extrapolated', /apparent mass of ~\d+(?:\.\d+)? kDa \(\d+\.\d× the 49 kDa monomer\) \(extrapolated outside the calibrated standard range\)\./.test(resEx), resEx);
+      await h9.step(secStep.k); await h9.wait(250);
+      await open9(p9.locator('#o-secStds')); await p9.locator('#o-secStds').uncheck({force: true}); await h9.wait(350);
+      const mOff = await methods9();
+      T.check('p9_sec.silent_when_unchecked', !/\bKav\b|apparent mass|calibrated with|\d+\s*kDa\b/i.test(mOff), mOff);
+      errs.push(...errs9);
+    } finally {
+      await close9();
+    }
+  });
+
   if (EXP) T.check('expected_json_seen', true, Object.keys(EXP).slice(0, 10).join(','));
  /* the biochemist's fixtures exist: extend P1 with them once their schema settles */
   T.check('no page errors', !errs.length, errs.join(' | ')); await close(); T.done(); })();
