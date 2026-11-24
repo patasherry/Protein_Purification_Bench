@@ -429,8 +429,8 @@ body.proj #panel > #moreOpts{order:4}
 body.proj #panel[data-sec="1"] > #secPanel{order:5}
 body.proj #panel > .optsec{order:6}
 #protPanel .subhead,[data-sub="pcon"] .subhead{margin:6px 0 -2px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);grid-column:1/-1}
-[data-sub="pcon"] > .subhead + *{margin-top:4px}
-body:not(.searching) #protPanel.notag .tagf,#protPanel .tablewrap:has(> :empty),body.searching #protUse + .subhead:not(:has(+ .row > label:not(.srchmiss))),body.searching #protPanel > .row + .subhead:not(:has(~ label:not(.srchmiss):not([hidden]))),body.searching [data-sub="pcon"] .subhead:not(:has(~ .row:not([style*="none"]) label:not(.srchmiss))){display:none}
+[data-sub="pcon"] > .subhead + *{margin-top:4px} #panel #cysOxWrap{font-size:12px;min-height:24px;gap:6px;margin-block:-3px}
+body:not(.searching) #protPanel.notag .tagf,#protPanel .tablewrap:has(> :empty),body.searching #protUse + .subhead:not(:has(+ .row > label:not(.srchmiss))),body.searching #protPanel > #epsWarn + .subhead:not(:has(~ label:not(.srchmiss):not([hidden]))),body.searching [data-sub="pcon"] .subhead:not(:has(~ .row:not([style*="none"]) label:not(.srchmiss))){display:none}
 body:not(.proj) #panel[data-kind="struct"] > #protPanel,body:not(.proj) #panel[data-kind="nd"] > #ndPanel{order:-1}
 #panel > .grp:first-child{order:-2}
 #stepSheet{padding-bottom:6px;gap:8px} #stepFoot{padding-block:10px 12px;gap:8px}
@@ -950,6 +950,7 @@ button,input,select,textarea{font-family:inherit}
       <p class="hint warnc" id="protNote" hidden></p>
       <div class="tablewrap"><table class="itab" id="protTable"></table></div>
       <p class="hint" id="protEps"></p>
+      <label class="check" id="cysOxWrap" hidden><input type="checkbox" id="o-cysOx" data-opt="cysOx">Disulfides oxidized (+125 M⁻¹cm⁻¹ per cystine)</label>
       <button type="button" class="btn" id="protUse" style="justify-self:start" title="Sets the protein and tag sizes for gel matching and the SEC monomer mass">Use for gel and SEC</button>
       <p class="subhead">Extinction &amp; mass overrides</p>
       <div class="row">
@@ -962,6 +963,7 @@ button,input,select,textarea{font-family:inherit}
         </label>
         <label class="f" title="Extinction &amp; mass overrides: custom A280 (1 mg/mL) extinction coefficient">Custom A280 (1 mg/mL)<input type="number" step="any" min="0" id="o-eps" data-opt="eps" placeholder="optional"></label>
       </div>
+      <p class="hint warnc" id="epsWarn" hidden></p>
       <p class="subhead">3D structure (optional)</p>
       <label class="f" title="3D structure (optional): load a PDB entry or .cif/.pdb file">PDB entry<span class="joined"><input type="text" id="pdbCode" maxlength="4" placeholder="e.g. 3PFN" autocomplete="off" spellcheck="false" aria-label="PDB code"><button type="button" class="btn" id="pdbGet">Load</button></span></label>
       <input type="file" id="pdbFile" accept=".cif,.mmcif,.pdb,.ent" hidden>
@@ -1353,6 +1355,7 @@ button,input,select,textarea{font-family:inherit}
         <label class="f">UV flow cell path (mm)<input type="number" step="any" min="0.1" id="o-path" data-opt="path"></label>
         <label class="f">Extinction coefficient (1 mg/mL)<input type="number" step="any" min="0" id="o-extinction" data-opt="extinction" placeholder="optional"></label>
       </div>
+      <p class="hint warnc" id="extWarn" hidden></p>
       <label class="check"><input type="checkbox" id="o-intFill" data-opt="intFill">Shade integrated areas</label>
       <p class="hint">Drag across the chromatogram to integrate a region, or click Detect peaks under the figure. Gaussian fit splits overlapping peaks over one shared baseline. Standard ÄKTA U9-M/U9-L and start UV cells are 2 mm (0.2 cm).</p>
     </section>
@@ -1870,7 +1873,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   secStds:false, targetName:'', taggedName:'', targetArrow:false, tagCounts:true, gelPos:'below', gelAlign:'center', gelScale:100, laneMark:'fill', gelView:'focus', ndNorm:'raw', ndFrom:240, ndCorr:true, ndFig:'conc', ndA340Warn:0.1, gelSpan:2.5, gelFocusKda:'', gelGap:0, gelSide:60, runGel:true, connectors:true, linkFrom:'axis', laneColors:true, laneAlpha:0.55,
   rxlabel:'Volume (mL)', rylabel:'Absorbance (mAU)', y2grad:'Buffer B (%)', y2cond:'Conductivity (mS/cm)',
   secCals: null, secMono:'', secLabel:'mw', secMarks:'void', ovPeakText:'x', ovSecCal:'',
-  intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', extinction:'', epsMode:'auto', path:2,
+  intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', extinction:'', epsMode:'auto', cysOx:false, path:2,
   wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
   preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600};
@@ -1945,6 +1948,7 @@ const r2 = v => Math.round(v*100)/100;
 function arrMin(a){ let m=Infinity; for (let i=0;i<a.length;i++) if (a[i]<m) m=a[i]; return m; }
 function arrMax(a){ let m=-Infinity; for (let i=0;i<a.length;i++) if (a[i]>m) m=a[i]; return m; }
 function numOr(v, d){ return (v === '' || String(v).trim() === '' || v === null || v === undefined || !isFinite(+v)) ? d : +v; }
+const manEps = () => { const a = numOr(opt.eps, 0), b = numOr(opt.extinction, 0); return a > 0 ? a : b > 0 ? b : 0; };
 function lerpHex(a, b, t){
   const pa = [1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb = [1,3,5].map(i=>parseInt(b.substr(i,2),16));
   return '#' + pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join('');
@@ -2579,7 +2583,9 @@ function peakMass(peak, run){
   if (!run && peak && Array.isArray(peak.integ)) return peakMasses(peak);
   const area = typeof peak === 'number' ? peak : (peak && peak.area != null ? peak.area : null);
   const p = numOr(run && run.path, 0) || (typeof effPathMm === 'function' ? effPathMm(run) : (numOr(opt.path, 0) || DEF.path || 2));
-  const ext = numOr(opt.extinction, numOr(opt.eps, 0)) || (run && typeof ndEpsFor === 'function' && ndEpsFor(run.id) ? ndEpsFor(run.id).e : 0);
+  const man = manEps();
+  if (man > 100) { if (typeof peak === 'object' && peak !== null) peak.mg = null; return null; }
+  const ext = man || (run && typeof ndEpsFor === 'function' && ndEpsFor(run.id) ? ndEpsFor(run.id).e : 0);
   if (!(ext > 0) || !(p > 0)) return null;
   let a = area;
   if (a == null && peak && run && run.uvs) {
@@ -2722,7 +2728,7 @@ function secLabel(info, kind){
 }
 /* mg from a UV area needs the 280 nm curve and volume on the x axis (minutes are turned into mL with the flow). massWhy says what is missing, '' when nothing. A path not in the file is assumed (opt.path, 2 mm) and flagged by pathAssumed */
 const uvFlow = run => numOr(run && run.mFlow, numOr(run && run.flowAuto, 0));
-const massWhy = run => { if (!run) return 'no run'; if (!run.uvs || !run.uvs.length) return (run.integ && run.integ.length) ? '' : 'no UV trace'; const w = uvWl(uvOf(run)); return w && w !== '280' ? `the selected UV curve is ${w} nm, not 280 nm` : xUnit(run) === 'min' && !(uvFlow(run) > 0) ? 'the x axis is in minutes and the flow rate is not known (enter it under Flow)' : ''; };
+const massWhy = run => { if (!run) return 'no run'; if (!run.uvs || !run.uvs.length) return (run.integ && run.integ.length) ? '' : 'no UV trace'; const w = uvWl(uvOf(run)); if (w && w !== '280') return `the selected UV curve is ${w} nm, not 280 nm`; if (xUnit(run) === 'min' && !(uvFlow(run) > 0)) return 'the x axis is in minutes and the flow rate is not known (enter it under Flow)'; const man = manEps(); return man > 100 ? `the entered coefficient (${Math.round(man).toLocaleString('en-US')}) looks like molar ε₂₈₀ (M⁻¹cm⁻¹), not A₂₈₀ of 1 mg/mL` : ''; };
 const pathAssumed = run => !!run && !(numOr(run.path, 0) > 0);
 const effPathMm = run => { const rp = numOr(run && run.path, 0); if (rp > 0) return rp; const op = numOr(opt.path, 0); return op > 0 ? op : DEF.path; };
 const massOf = (area, run) => { if (run && massWhy(run)) return null; return peakMass(area, run); };
@@ -6890,7 +6896,7 @@ function onGel(el){
   } else render();
 }
 /* numbers typed into a field are held to its min and max, and to a sensible ceiling, so a stray 1e6 cannot freeze the page */
-const SANE_MAX = {w: 40, h: 40, wfW: 40, wfH: 20, wfPad: 72, wfGelH: 20, fs: 72, lw: 10, stack: 1000, runPad: 500, gelGap: 400, peakMax: 200, peakDec: 4, prom: 100, intProm: 100, path: 100, eps: 100, extinction: 100, tagTol: 10, knownTol: 25, knownMin: 50, bandSens: 60, gelSide: 90, tagKda: 500, protKda: 2000, sbValue: 1e6, nLanes: 30};
+const SANE_MAX = {w: 40, h: 40, wfW: 40, wfH: 20, wfPad: 72, wfGelH: 20, fs: 72, lw: 10, stack: 1000, runPad: 500, gelGap: 400, peakMax: 200, peakDec: 4, prom: 100, intProm: 100, path: 100, tagTol: 10, knownTol: 25, knownMin: 50, bandSens: 60, gelSide: 90, tagKda: 500, protKda: 2000, sbValue: 1e6, nLanes: 30};
 function saneNum(el, v, key){
   if (v === '' || !isFinite(v)) return v === '' ? '' : null;
   const lo = el.min !== '' ? +el.min : -Infinity, hi = Math.min(el.max !== '' ? +el.max : Infinity, SANE_MAX[key] != null ? SANE_MAX[key] : Infinity);
@@ -6926,7 +6932,7 @@ function onOpt(e){
     syncControls();
   }
   if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); runs.forEach(insetClear); }
-  if (k === 'peakDec' || k === 'path') renderList();
+  if (['peakDec', 'path', 'eps', 'extinction'].includes(k)) renderList();
   if (k === 'runCond') syncControls();
   render();
 }
@@ -6944,7 +6950,8 @@ $('#panel').addEventListener('input', e => { if (e.target.type === 'range') rang
 $('#gelSizeReset').addEventListener('click', () => { opt.gelScale = 100; saveOpt(); syncControls(); rangeVals(); render(); });
 document.querySelectorAll('details.sub[data-sub]').forEach(d => { try { const v = localStorage.getItem('hfb-sub-' + d.dataset.sub); if (v === '1') d.open = true; else if (v === '0') d.open = false; } catch (e) {}
   d.addEventListener('toggle', () => { try { localStorage.setItem('hfb-sub-' + d.dataset.sub, d.open ? '1' : '0'); } catch (e) {} }); });
-$('#panel').addEventListener('change', e => { if (e.target.type === 'radio') onOpt(e); });
+$('#panel').addEventListener('change', e => { if (e.target.type === 'radio' || e.target.id === 'o-cysOx') onOpt(e); });
+$('#panel').addEventListener('click', e => { const b = e.target.closest('[data-epsconv]'); if (!b) return; const man = manEps(), mw = epsMwDa(); if (!(man > 100) || !(mw > 0)) return; const v = +(man/mw).toFixed(3); if (numOr(opt.eps, 0) > 100) opt.eps = v; if (numOr(opt.extinction, 0) > 100) opt.extinction = v; saveOpt(); syncControls(); renderList(); render(); });
 $('#o-dpi').addEventListener('change', onOpt);
 $('#resetRange').addEventListener('click', () => { const ro = rangeObj(); RANGE.forEach(k => ro[k] = ''); ro.zoomWinA = ''; ro.zoomWinB = ''; syncControls(); render(); });
 $('#zoomPeak').addEventListener('click', () => { const ro = rangeObj(); const rs = curRun() ? [curRun()] : traces; for (const r of rs) { let pk = null; if (r.integ && r.integ.length) { const q = r.integ[r.integ.length-1]; pk = {a: q.a, b: q.b}; } else if (r.peaks && r.peaks.length) { const p = r.peaks.find(x => x.label) || r.peaks.slice().sort((p1,p2)=>p2.prom-p1.prom)[0]; if (p) { const pr = processTrace(r); const idx = peakApex(pr.xs, pr.ys, p.x); let l = idx, r_idx = idx; while(l > 0 && pr.ys[l] > pr.ys[idx]*0.1) l--; while(r_idx < pr.ys.length-1 && pr.ys[r_idx] > pr.ys[idx]*0.1) r_idx++; pk = {a: pr.xs[l], b: pr.xs[r_idx]}; } } if (pk && pk.a != null && pk.b != null) { const w = pk.b - pk.a; ro.xmin = pk.a - w*0.1; ro.xmax = pk.b + w*0.1; syncControls(); render(); return; } } });
@@ -7610,7 +7617,7 @@ $('#methodsCopy').addEventListener('click', () => { const ta = $('#methodsText')
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(() => { toast('Methods copied'); const b = $('#methodsCopy'); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy methods'; }, 1500); }, fb); else fb(); });
 $('#sumMore').addEventListener('click', () => { $('#sumTable').classList.toggle('all'); renderSumTable(); });
 $('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRows(), disp = sumDisplay(rows), actInfo = assaySummaryInfo(rows, disp); if (!rows.length && !actInfo) return toast('Set pooled fractions first');
-  const fn = (o, mg) => { if (o && o.prep === 'manual') { const clv = isCleavedStep(o), F = protForms(), fm = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : (clv ? 'untagged' : 'tagged'), noTag = fm === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset], f = F.length && !noTag ? (fm === 'tagged' && F[1] ? F[1] : F[0]) : null, kda = numOr(opt.eps, 0) > 0 ? (numOr(opt.protKda, 0) || null) : (f && f.a280 ? f.mass/1000 : null); return [kda > 0 ? (clv ? 'cleaved' : 'tagged') : '', kda > 0 && mg > 0 ? sig2(1000*mg/kda) : '']; } const E = o && ndEpsFor(o.id); return [E && E.kda > 0 ? (ndForm(o) === 'tagged' ? 'tagged' : 'cleaved') : '', E && E.kda > 0 && mg > 0 ? sig2(1000*mg/E.kda) : '']; };
+  const fn = (o, mg) => { if (o && o.prep === 'manual') { const clv = isCleavedStep(o), F = protForms(), fm = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : (clv ? 'untagged' : 'tagged'), noTag = fm === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset], f = F.length && !noTag ? (fm === 'tagged' && F[1] ? F[1] : F[0]) : null, man = manEps(), kda = man > 100 ? null : man > 0 ? (numOr(opt.protKda, 0) || null) : (f && f.a280 ? f.mass/1000 : null); return [kda > 0 ? (clv ? 'cleaved' : 'tagged') : '', kda > 0 && mg > 0 ? sig2(1000*mg/kda) : '']; } const E = o && ndEpsFor(o.id); return [E && E.kda > 0 ? (ndForm(o) === 'tagged' ? 'tagged' : 'cleaved') : '', E && E.kda > 0 && mg > 0 ? sig2(1000*mg/E.kda) : '']; };
   const actCsv = s => !actInfo ? [] : !s || s.unassayed ? ['', '', '', '', '', '', ...(actInfo.hasKcat ? [''] : []), ''] : [s.totalU != null ? s.totalU.toFixed(3) : '', s.uPerMl != null ? s.uPerMl.toFixed(3) : '', s.nkatPerMl != null ? s.nkatPerMl.toFixed(2) : '', s.sa != null ? s.sa.toFixed(3) : '', s.fold != null ? s.fold.toFixed(2) : '', s.yieldPct != null ? s.yieldPct.toFixed(1) : '', ...(actInfo.hasKcat ? [s.kcat != null ? s.kcat.toFixed(2) : ''] : []), s.rawYieldPct != null ? s.rawYieldPct.toFixed(1) : ''];
   const standCsv = s => ['', q(s.label), q('assay'), s.volMl != null ? s.volMl.toFixed(2) : '', '', s.protMg > 0 ? s.protMg.toFixed(3) : '', '', '', '', '', '', '', '', '', rows.basis || '', '', '', '', '', '', '', '', '', '', '', '', '', '', ...actCsv(s)].join(',');
   const hdr = 'Step,Run,Pool,Pool volume from fractions (mL),A280 area (mAU*mL),Protein from area (mg),NanoDrop mg/mL,NanoDrop SD,NanoDrop n,NanoDrop volume used (mL),NanoDrop mg,A280 of 1 mg/mL used,Yield (%),Step yield (%),Yield basis,Purity (%),mg per L culture,mg per g cells,Column,Buffer A,Buffer B,Flow (mL/min),Temperature (C),Gradient,Sample loaded,Extinction basis,Form,Protein (nmol)' + (actInfo ? ',Total activity (U),Activity (U/mL),Activity (nkat/mL),Specific activity (U/mg),Purification fold,Activity yield (%)' + (actInfo.hasKcat ? ',Apparent kcat (s^-1)' : '') + ',Activity yield unadjusted (%)' : '');
@@ -7621,7 +7628,7 @@ $('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRow
   saveFile('purification_summary.csv', [hdr].concat(body).join('\r\n')); });
 /* integration table */
 function renderIntTable(run){
-  const rows = integRows(run), pool = poolRows(run), hasMg = numOr(opt.extinction, numOr(opt.eps, 0)) > 0, gs = opt.intMethod === 'gauss', u = xUnit(run);
+  const rows = integRows(run), pool = poolRows(run), hasMg = manEps() > 0, gs = opt.intMethod === 'gauss', u = xUnit(run);
   const clean = typeof cleanSeq === 'function' ? cleanSeq : s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
   const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq)), hasTheo = hasSeq && (uvFlow(run) > 0);
   const sec = isSec(run), fit = sec ? secFit(secCalFor(run)) : null, hasKav = !!(fit && fit.useKav), hasMw = !!(fit && fit.mw), hasOl = hasMw && secMono() > 0;
@@ -8007,8 +8014,9 @@ const cleanSeq = s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().repla
 function seqMass(s){ if (!s) return 0; let m = 18.01524; for (const c of s) m += AA_MASS[c] ?? 110; return m; }
 const seqUnknowns = s => { let u = 0; for (const c of s) if (!(c in AA_MASS)) u++; return u; };
 const seqCys = s => { let n = 0; for (const c of s) if (c === 'C') n++; return n; };
-const cysNote = n => n >= 2 ? 'assuming reduced cysteines' : '';
-const seqA280 = s => { let w = 0, y = 0; for (const c of s) { if (c === 'W') w++; else if (c === 'Y') y++; } const m = seqMass(s); return m ? (5500*w + 1490*y)/m : null; };
+const cysNote = n => n >= 2 ? (opt.cysOx ? 'assuming all cysteines oxidized to cystine' : 'assuming reduced cysteines') : '';
+/* Pace et al. (1995) Protein Sci. 4:2411-2423: ε280 = 5500*nW + 1490*nY (+ 125*nCystine when disulfides are oxidized) */
+const seqA280 = s => { let w = 0, y = 0, cys = 0; for (const c of s) { if (c === 'W') w++; else if (c === 'Y') y++; else if (c === 'C') cys++; } const m = seqMass(s); return m ? (5500*w + 1490*y + (opt.cysOx ? 125*Math.floor(cys/2) : 0))/m : null; };
 /* isoelectric point with the Bjellqvist pK set (ExPASy), by bisection on the net charge */
 const PK_POS = {K: 10.0, R: 12.0, H: 5.98}, PK_NEG = {D: 4.05, E: 4.45, C: 9.0, Y: 10.0}, PK_NT = {A: 7.59, M: 7.0, S: 6.93, P: 8.36, T: 6.82, V: 7.44, E: 7.7}, PK_CT = {D: 4.55, E: 4.75};
 function seqPI(s){
@@ -8115,6 +8123,7 @@ function protForms(){
   ];
   return out.map(x => Object.assign(x, {mass: seqMass(x.seq), pi: seqPI(x.seq), a280: seqA280(x.seq), unk: seqUnknowns(x.seq)}));
 }
+const epsMwDa = () => { const F = protForms(), f = opt.epsMode === 'tagged' && F[1] ? F[1] : F[0]; return (f && f.mass > 0) ? f.mass : (numOr(opt.protKda, 0) > 0 ? +opt.protKda * 1000 : 0); };
 function renderProt(){
   const put = (sel, v) => { const e = $(sel); if (e && e !== document.activeElement && e.value !== v) e.value = v; };
   put('#pdbCode', opt.pdbCode || ''); put('#protSeq', opt.protSeq || ''); put('#tagSeq', opt.tagSeq || '');
@@ -8132,10 +8141,13 @@ function renderProt(){
   const pe = struct ? struct.ents.filter(isProtEnt) : [], ew = $('#protEntWrap'); ew.hidden = pe.length < 2;
   if (pe.length > 1) { const h = pe.map(e => `<option value="${e.id}"${e.id === struct.ent ? ' selected' : ''}>${esc(e.desc || 'Entity ' + e.id)} (chain${e.chains.length > 1 ? 's' : ''} ${esc(e.chains.join(', '))})</option>`).join(''); const sl = $('#protEnt'); if (sl._h !== h) { sl._h = h; sl.innerHTML = h; } }
   const F = protForms();
-  $('#protTable').innerHTML = F.length ? `<tr><th>Form</th><th title="Residues">aa</th><th>kDa</th><th>pI</th><th title="A280 of a 1 mg/mL solution, 1 cm path, cysteines reduced">A₂₈₀</th></tr>` +
+  $('#protTable').innerHTML = F.length ? `<tr><th>Form</th><th title="Residues">aa</th><th>kDa</th><th>pI</th><th title="A280 of a 1 mg/mL solution, 1 cm path, ${opt.cysOx ? 'cystines oxidized' : 'cysteines reduced'}">A₂₈₀</th></tr>` +
     F.map(x => `<tr><td${x.t ? ` title="${esc(x.t)}"` : ''}>${esc(x.k)}${x.unk ? `<br><span class="warnc" style="font-size:0.85em">(approximate: ${x.unk} unknown residue${x.unk > 1 ? 's' : ''} counted as average)</span>` : ''}</td><td>${x.seq.length}</td><td>${x.unk ? '≈ ' : ''}${fmt(x.mass/1000, 1)}</td><td>${x.unk ? '≈ ' : ''}${fmt(x.pi, 2)}</td><td>${x.a280 ? (x.unk ? '≈ ' : '') + fmt(x.a280, 2) : '<span title="No Trp or Tyr">none</span>'}</td></tr>`).join('') : '';
+  const cw = $('#cysOxWrap'); if (cw) cw.hidden = !F.some(x => seqCys(x.seq) >= 2);
   $('#protUse').hidden = !F.length;
-  $('#protEps').textContent = F.length ? F.slice(0, 2).map(x => { const t = x.a280 ? `${x.k}: ε₂₈₀ ${Math.round(x.a280*x.mass).toLocaleString('en-US')} M⁻¹cm⁻¹, E1% ${fmt(x.a280*10, 2)}, A₂₈₀ of 1 mg/mL ${fmt(x.a280, 3)}${(c => c >= 2 ? ` (${cysNote(c)}; with all ${2*Math.floor(c/2)} of ${c} Cys as cystine, ε₂₈₀ ${Math.round(x.a280*x.mass + 125*Math.floor(c/2)).toLocaleString('en-US')} M⁻¹cm⁻¹, Pace et al., 1995)` : '')(seqCys(x.seq))}` : ''; return x.unk ? (t ? t + ` ` : `${x.k}: `) + `(approximate: ${x.unk} unknown residue${x.unk > 1 ? 's' : ''} counted as average)` : t; }).filter(Boolean).join('. ') + (F.some(x => x.a280 || x.unk) ? '.' : '') : '';
+  $('#protEps').textContent = F.length ? F.slice(0, 2).map(x => { const t = x.a280 ? `${x.k}: ε₂₈₀ ${Math.round(x.a280*x.mass).toLocaleString('en-US')} M⁻¹cm⁻¹, E1% ${fmt(x.a280*10, 2)}, A₂₈₀ of 1 mg/mL ${fmt(x.a280, 3)}${(c => c >= 2 ? (opt.cysOx ? ` (${cysNote(c)}, +${125*Math.floor(c/2)} M⁻¹cm⁻¹ for ${Math.floor(c/2)} cystine${Math.floor(c/2) > 1 ? 's' : ''}; reduced ε₂₈₀ ${Math.round(x.a280*x.mass - 125*Math.floor(c/2)).toLocaleString('en-US')} M⁻¹cm⁻¹, Pace et al., 1995)` : ` (${cysNote(c)}; with all ${2*Math.floor(c/2)} of ${c} Cys as cystine, ε₂₈₀ ${Math.round(x.a280*x.mass + 125*Math.floor(c/2)).toLocaleString('en-US')} M⁻¹cm⁻¹, Pace et al., 1995)`) : '')(seqCys(x.seq))}` : ''; return x.unk ? (t ? t + ` ` : `${x.k}: `) + `(approximate: ${x.unk} unknown residue${x.unk > 1 ? 's' : ''} counted as average)` : t; }).filter(Boolean).join('. ') + (F.some(x => x.a280 || x.unk) ? '.' : '') : '';
+  { const man = manEps(), mw = epsMwDa(), wh = man > 100 ? `${esc(Math.round(man).toLocaleString('en-US'))} looks like a molar ε₂₈₀ (M⁻¹cm⁻¹), not A₂₈₀ of 1 mg/mL — Beer-Lambert mass is withheld.${mw > 0 ? ` <button type="button" class="linkbtn" data-epsconv="1">Convert ÷ MW → ${fmt(man/mw, 2)}</button>` : ' Divide by MW (Da) to get A₂₈₀ of 1 mg/mL.'}` : man > 10 ? `Unit check: ${esc(fmtAuto(man))} is used as A₂₈₀ of 1 mg/mL (most proteins are 0.3–3.5; check this is not mM⁻¹cm⁻¹ or E1%).` : '';
+    ['#epsWarn', '#extWarn'].forEach(sel => { const w = $(sel); if (!w) return; if (w._h !== wh) { w._h = wh; w.innerHTML = wh; } w.hidden = !wh; }); }
   if (struct) { const m = auMass(struct), np = struct.chains.length;
     const big = struct.ents.filter(e => e.fw >= 500 && !/water/i.test(e.type)), cut = t => t.length > 26 ? t.slice(0, 24).trim() + '…' : t;
     const parts = big.slice(0, 4).map(e => `${e.n > 1 ? e.n + ' × ' : ''}${fmt(e.fw/1000, 1)} kDa${e.desc ? ' ' + cut(e.desc) : ''}`).join(' + ') + (big.length > 4 ? ' + …' : '');
@@ -8143,7 +8155,8 @@ function renderProt(){
   else $('#auInfo').textContent = '';
   const pv = $('#protView'); if (pv) { pv.hidden = !(PROJ && curStep === 'construct' && struct); if (!pv.hidden) pv.querySelectorAll('[data-pview]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.pview === 'struct') === (cur === 'struct')))); }
   /* say plainly when the table is not the loaded entry, or the gel and SEC still use an older size */
-  const note = $('#protNote'), main = struct && struct.ents.find(e => e.id === struct.ent), mine = cleanSeq(opt.protSeq), msg = [];
+  const note = $('#protNote'), main = struct && struct.ents.find(e => e.id === struct.ent), mine = cleanSeq(opt.protSeq), man = manEps(), fNote = opt.epsMode === 'tagged' && F[1] ? F[1] : F[0], msg = [];
+  if (mine && !(man > 0 && man <= 100) && fNote && fNote.a280 === 0) msg.push(`${fNote.k === 'Tagged' ? 'This tagged sequence' : F.length > 1 && F[1].a280 > 0 ? 'The untagged sequence' : 'This sequence'} has no Trp or Tyr (ε₂₈₀ = 0), so A₂₈₀ cannot quantify it; use A₂₀₅ or a dye-binding assay.`);
   if (main && mine && mine !== main.seq) msg.push(`The table uses your pasted sequence, not ${esc(struct.code)}. <button type="button" class="linkbtn" id="protTake">Use ${esc(struct.code)}</button>`);
   if (F.length && +opt.protKda > 0 && Math.abs(opt.protKda - F[0].mass/1000) > 0.15) msg.push(`Gel and SEC still use ${fmt(+opt.protKda, 1)} kDa. <button type="button" class="linkbtn" id="protApply">Update to ${fmt(F[0].mass/1000, 1)}</button>`);
   const h = msg.join(' '); if (note._h !== h) { note._h = h; note.innerHTML = h; } note.hidden = !h;
@@ -9869,12 +9882,22 @@ function isCleavedStep(r){ const L = prep.on ? wfList() : runs.filter(x => x.inW
     cur = p; } return false; }
 const ndForm = r => { if (!r) return 'untagged'; if (r.ndForm) return r.ndForm; if (!r.inWf || !runs.includes(r)) return 'untagged'; return isCleavedStep(r) ? 'untagged' : 'tagged'; };
 function ndEpsFor(runId){
-  if (numOr(opt.eps, 0) > 0) return {e: +opt.eps, kda: numOr(opt.protKda, 0) || null, src: 'set'};
+  const man = manEps();
+  if (man > 100) return null;
+  if (man > 0) return {e: man, kda: numOr(opt.protKda, 0) || null, src: 'set'};
   const r = runId ? runs.find(x => x.id === runId) : null, F = protForms();
   const form = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : ndForm(r);
   const noTag = form === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset];
   if (F.length && !noTag) { const f = form === 'tagged' && F[1] ? F[1] : F[0]; if (f.a280) return {e: f.a280, kda: f.mass/1000, cys: seqCys(f.seq), src: form === 'tagged' && F[1] ? 'tagged' : 'untagged'}; }
   return null; }
+function ndTrpLess(runId){
+  if (!cleanSeq(opt.protSeq) || manEps() > 0) return false;
+  const r = runId ? runs.find(x => x.id === runId) : null, F = protForms();
+  if (!F.length) return false;
+  const form = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : ndForm(r);
+  if (form === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset]) return false;
+  const f = form === 'tagged' && F[1] ? F[1] : F[0];
+  return !!(f && f.a280 === 0); }
 /* the methods phrase for the A280 coefficient, said only when a reading of this run was actually converted with it (not for instrument, A205 or typed concentrations) */
 const epPhrase = E => E ? `, A280 of ${fmt(E.e, 2)} for 1 mg/mL of the ${E.src === 'set' ? 'protein' : E.src + ' form'}${cysNote(E.cys) ? ', ' + cysNote(E.cys) : ''}` : '';
 const ndEpsUsed = (r, ss) => { const E = r && ndEpsFor(r.id); return E && (ss || ndFinalOf(r)).filter(s => !s.unitWarn).some(s => s.kind !== 'nucleic' && s.a280 != null && (s.kind === 'protein' || s.conc == null)) ? E : null; };
@@ -9885,8 +9908,11 @@ function ndConc(s){ const c0 = ndConcRaw(s); if (opt.ndCorr !== false && s.corr 
 function ndConcRaw(s){ const dil = numOr(s.dil, 1) || 1;
   if (s.kind === 'nucleic') return {v: s.conc != null ? s.conc*dil : null, unit: 'ng/µL', src: 'instrument'};
   if (s.kind !== 'protein' && s.conc != null) return {v: s.conc*dil, unit: 'mg/mL', src: s.kind === 'a205' ? 'A205, instrument' : 'instrument'};
+  const man = manEps();
+  if (man > 100 && s.a280 != null) return {v: null, unit: 'mg/mL', src: 'molar ε₂₈₀ (>100) — convert ÷ MW'};
   const E = ndEpsFor(s.runId);
   if (E && s.a280 != null) return {v: s.a280/E.e*dil, unit: 'mg/mL', src: E.src === 'set' ? 'your A280' : `${E.src} ε`, kda: E.kda};
+  if (ndTrpLess(s.runId) && s.kind !== 'a205' && !(s.conc != null && s.a280 == null)) return {v: null, unit: 'mg/mL', src: 'sequence has no Trp or Tyr'};
   if (s.conc != null) return {v: s.conc*dil, unit: 'mg/mL', src: 'instrument'};
   return {v: s.a280 != null ? s.a280 * dil : null, unit: 'mg/mL', src: '1 Abs = 1 mg/mL'}; }
 /* minutes become mL with the flow, as in massOf and poolRows; no flow gives no volume */
@@ -14333,7 +14359,7 @@ function buildStepFig(k){
 $('#optReset').addEventListener('click', () => { const keep = {known: opt.known, secCals: opt.secCals, ovSecCal: opt.ovSecCal};
   if (Array.isArray(opt.myQuick)) keep.myQuick = opt.myQuick; if (Array.isArray(opt.myQuickDel)) keep.myQuickDel = opt.myQuickDel;
   /* the protein and its tag are data, not settings: they survive a reset */
-  ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'tagPos', 'tagPreset', 'protKda', 'tagKda', 'eps', 'epsMode', 'secMono', 'targetName', 'taggedName'].forEach(k => { keep[k] = opt[k]; }); Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), keep);
+  ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'tagPos', 'tagPreset', 'protKda', 'tagKda', 'eps', 'extinction', 'epsMode', 'cysOx', 'secMono', 'targetName', 'taggedName'].forEach(k => { keep[k] = opt[k]; }); Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), keep);
   saveOpt(); syncControls(); renderKnown(); render(); toast('Settings restored to the defaults'); });
 
 /* ---------- export ---------- */
