@@ -643,6 +643,54 @@ async function fresh(id, fn){
       `text="${concNdcTxt}" title="${concNdcTitle}"`);
   });
 
+  await fresh('extinction-sync-and-trpless-guard', async (p, h) => {
+    await h.newProject('Extinction sync and Trp-less');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.pool('A1-A3');
+    const rStep = (await h.timeline()).find(x => /^run:/.test(x.k));
+    if (rStep) await h.step(rStep.k);
+    const pkBtn = p.locator('#moreWhat [data-more-sec="Peak integration"]');
+    if ((await pkBtn.count()) > 0 && await pkBtn.isVisible()) { await pkBtn.click(); await h.wait(200); }
+    await p.fill('#o-extinction', '2.0');
+    await p.dispatchEvent('#o-extinction', 'input');
+    await p.dispatchEvent('#o-extinction', 'change');
+    await h.wait(200);
+
+    await h.step('final');
+    await p.setInputFiles('#ndFile', {name: 'nd_ext.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from('Sample Name\tA280\tA260/A280\nPool A1-A3\t3.00\t0.57')});
+    await p.locator('.ndr').first().waitFor();
+    const concBeforeReset = (await p.locator('.ndr .nd-v').first().textContent()).trim();
+    if (!(await p.locator('#optReset').isVisible())) { await p.click('#moreBtn'); await h.wait(200); }
+    await p.click('#optReset');
+    await h.wait(250);
+    const concAfterReset = (await p.locator('.ndr .nd-v').first().textContent()).trim();
+    T.check('nd/extinction-sync', concBeforeReset === '1.50 mg/mL' && concAfterReset === '1.50 mg/mL', `before="${concBeforeReset}" after="${concAfterReset}"`);
+
+    if (rStep) await h.step(rStep.k);
+    if (!(await p.locator('#o-extinction').isVisible())) {
+      const b2 = p.locator('#moreWhat [data-more-sec="Peak integration"]');
+      if ((await b2.count()) > 0 && await b2.isVisible()) await b2.click();
+      else if (await p.locator('#moreBtn').isVisible()) await p.click('#moreBtn');
+      await h.wait(200);
+    }
+    await p.fill('#o-extinction', '');
+    await p.dispatchEvent('#o-extinction', 'input');
+    await p.dispatchEvent('#o-extinction', 'change');
+    await h.wait(200);
+
+    await h.step('construct');
+    await p.fill('#protSeq', 'MAGSKLLPEDGHHGSS');
+    await p.dispatchEvent('#protSeq', 'input');
+    await p.dispatchEvent('#protSeq', 'change');
+    await h.wait(300);
+
+    await h.step('final');
+    await p.setInputFiles('#ndFile', {name: 'nd_a205.tsv', mimeType: 'text/tab-separated-values', buffer: Buffer.from('Sample Name\tSample Type\tA205\tConcentration\tUnits\nPool A1-A3 A205\tProtein A205\t15.0\t0.48\tmg/mL')});
+    await p.waitForFunction(() => document.querySelectorAll('.ndr').length === 2);
+    const vals = await p.$$eval('.ndr', rs => Object.fromEntries(rs.map(r => [r.querySelector('input[data-ndk="name"]')?.value?.trim(), r.querySelector('.nd-v')?.textContent?.trim() || ''])));
+    T.check('nd/trpless-withholds-a280-keeps-a205', vals['Pool A1-A3'] === '' && vals['Pool A1-A3 A205'] === '0.48 mg/mL', JSON.stringify(vals));
+  });
+
   T.done();
 })();
 
