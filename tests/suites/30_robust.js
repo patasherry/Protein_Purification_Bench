@@ -880,4 +880,168 @@ await T.t('legacy-non-numeric-stability', async () => {
   await close();
 });
 
+await T.t('schema-migration-roundtrip', async () => {
+  const {p, errs, close} = await open(), h = H(p);
+  const png1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const legacyIn = {
+    app: 'HPLC Figure Bench',
+    version: 1,
+    runs: [
+      {
+        id: 'r1',
+        name: 'IMAC Step',
+        inWf: true,
+        pathFromFile: true,
+        isStd: false,
+        path: '2',
+        uvs: [{name: 'UV', xs: [0, 5, 10], ys: [10, 120, 10]}],
+        fracs: [{x: 3, label: 'T1'}, {x: 7, label: 'T2'}],
+        shade: 'T1'
+      },
+      {
+        id: 'r1',
+        name: 'Superdex 200 SEC',
+        inWf: true,
+        secMode: 'on',
+        secCal: 'sc1',
+        injX: 1.25,
+        poolConc: 1.8,
+        poolFinalVol: 1.2,
+        ndFinalVol: 0.9,
+        pathFromFile: false,
+        isStd: false,
+        uvs: [{name: 'UV', xs: [8, 12, 16], ys: [5, 90, 5]}],
+        fracs: [{x: 10, label: 'F1'}, {x: 14, label: 'F2'}],
+        shade: 'F1'
+      }
+    ],
+    traces: [
+      {id: 1, name: 'HPLC A', rows: [[0, 1], [1, 10], [2, 1]], xu: 'min', yu: 'mAU', source: 'hplc_a.csv'},
+      {id: 1, name: 'HPLC B', rows: [[0, 2], [1, 20], [2, 2]], xu: 'min', yu: 'mAU', source: 'hplc_b.csv'}
+    ],
+    gels: [
+      {image: png1x1, name: 'Custom Ladder Gel', preset: 'custom', ladder: '180, 120, 80, 50, 30, 15'},
+      {id: 'g1', image: png1x1, name: 'Tagged Gel', preset: 'prplus', ladder: '250, 130, 100, 70, 55, 35, 25, 15, 10', invert: true, color: true, runId: 'r1'}
+    ],
+    nanodrop: [
+      {id: 'nd1', name: 'Concentrated Pool', a280: 1.6, conc: 1.8, runId: 'r1', stage: 'final'},
+      {id: 'nd1', name: 'Analytical Read', a280: 0.9, runId: 'r1', stage: 'pool'}
+    ],
+    assays: [
+      {id: 'a1', name: 'Kinase Assay A', runId: 'r1', replicates: [10, 12]},
+      {id: 'a1', name: 'Kinase Assay B', runId: 'r1', replicates: [20, 22]}
+    ],
+    prep: {
+      name: 'Schema Protein',
+      strain: 'BL21(DE3)',
+      manual: [{id: 'm1', kind: 'dialysis', name: 'Dialysis A', after: 'r1'}],
+      constructs: [{id: 'c10', name: 'pET28-WT'}, {id: 'c10', name: 'pET28-Mut'}],
+      primers: [{id: 'pr14', name: 'Fwd'}, {id: 'pr14', name: 'Rev'}]
+    },
+    opt: {
+      secStds: true,
+      secCals: [
+        {id: 'sc1', name: 'S200 Cal A', col: 's200i', v0: 8, vt: 24, stds: [{name: 'Thyroglobulin', kda: 670, ve: 9}, {name: 'Ovalbumin', kda: 44, ve: 15}]},
+        {id: 'sc1', name: 'S200 Cal B', col: 's200i', v0: 8.2, vt: 24, stds: []}
+      ]
+    }
+  };
+
+  await p.setInputFiles(SEL.importFile, {
+    name: 'Schema_Migration_Test_project.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(legacyIn))
+  });
+  await p.waitForTimeout(3000);
+
+  await p.click('#tl [data-addmenu]');
+  await p.waitForTimeout(250);
+  await p.click('#tl [data-addstep="man:column"]');
+  await p.waitForTimeout(400);
+  await h.step('expr');
+  await p.waitForTimeout(300);
+
+  const tmpDir = require('os').tmpdir();
+  const exportOnce = async tag => {
+    const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click(SEL.exportBtn)]);
+    const out = path.join(tmpDir, `ppb_schema_mig_${process.pid}_${tag}.json`);
+    await dl.saveAs(out);
+    return {out, json: JSON.parse(fs.readFileSync(out, 'utf8'))};
+  };
+
+  const e1 = await exportOnce('1');
+  const d1 = e1.json;
+
+  T.check('schema.version-integer', Number.isInteger(d1.schemaVersion) && d1.schemaVersion >= 1, `schemaVersion=${d1.schemaVersion}`);
+
+  const uniqOk = arr => Array.isArray(arr) && arr.length >= 2 && arr.every(x => x && x.id != null && String(x.id).trim() !== '') && new Set(arr.map(x => String(x.id))).size === arr.length;
+  const calPairs = (d1.opt && Array.isArray(d1.opt.secCals) ? d1.opt.secCals : []).filter(c => c && /^S200 Cal [AB]$/.test(c.name));
+  const newMan = ((d1.prep && d1.prep.manual) || []).find(m => m.id !== 'm1');
+  const newManNum = newMan && /^m(\d+)$/.exec(String(newMan.id)) ? +RegExp.$1 : 0;
+
+  T.check('schema.no-uid-collisions',
+    uniqOk(d1.runs) && uniqOk(d1.traces) && uniqOk(d1.gels) && uniqOk(d1.nanodrop) && uniqOk(d1.assays) &&
+    uniqOk(d1.prep && d1.prep.manual) && uniqOk(d1.prep && d1.prep.constructs) && uniqOk(d1.prep && d1.prep.primers) &&
+    uniqOk(calPairs) && newManNum > 14,
+    JSON.stringify({
+      runs: (d1.runs || []).map(x => x.id),
+      traces: (d1.traces || []).map(x => x.id),
+      gels: (d1.gels || []).map(x => x.id),
+      nd: (d1.nanodrop || []).map(x => x.id),
+      assays: (d1.assays || []).map(x => x.id),
+      manual: ((d1.prep && d1.prep.manual) || []).map(x => x.id),
+      constructs: ((d1.prep && d1.prep.constructs) || []).map(x => x.id),
+      primers: ((d1.prep && d1.prep.primers) || []).map(x => x.id),
+      secCals: calPairs.map(x => x.id)
+    }));
+
+  const gCustom = (d1.gels || []).find(g => g.name === 'Custom Ladder Gel') || {};
+  const gTagged = (d1.gels || []).find(g => g.name === 'Tagged Gel') || {};
+  const trA = (d1.traces || []).find(t => t.name === 'HPLC A') || {};
+  const rSec = (d1.runs || []).find(r => r.name === 'Superdex 200 SEC') || {};
+  const ndConc = (d1.nanodrop || []).find(n => n.name === 'Concentrated Pool') || {};
+  const scA = calPairs.find(c => c.name === 'S200 Cal A') || {};
+
+  T.check('schema.entity-codecs-preserved',
+    gCustom.ladder === '180, 120, 80, 50, 30, 15' && gCustom.preset === 'custom' &&
+    gTagged.invert === true && gTagged.color === true &&
+    trA.xu === 'min' && trA.yu === 'mAU' && trA.source === 'hplc_a.csv' &&
+    rSec.injShift === 1.25 && rSec.injX === 1.25 && rSec.poolConc === 1.8 && rSec.ndFinalVol === 0.9 &&
+    ndConc.stage === 'conc' && scA.unit === 'mL',
+    JSON.stringify({gCustomLadder: gCustom.ladder, gTagged: [gTagged.invert, gTagged.color], trA: [trA.xu, trA.yu, trA.source], rSec: [rSec.injShift, rSec.poolConc, rSec.ndFinalVol], ndStage: ndConc.stage, scUnit: scA.unit}));
+
+  await p.click(SEL.home);
+  await p.waitForTimeout(600);
+  await p.setInputFiles(SEL.importFile, e1.out);
+  await p.waitForTimeout(3000);
+
+  const e2 = await exportOnce('2');
+  const d2 = e2.json;
+
+  const missingKeys = (a, b, pfx = '') => {
+    const out = [];
+    if (!a || typeof a !== 'object') return out;
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b) || b.length < a.length) out.push(`${pfx}[len ${Array.isArray(b) ? b.length : 'non-arr'} < ${a.length}]`);
+      else a.forEach((v, i) => out.push(...missingKeys(v, b[i], `${pfx}[${i}]`)));
+      return out;
+    }
+    if (!b || typeof b !== 'object' || Array.isArray(b)) { out.push(pfx || '<root>'); return out; }
+    for (const k of Object.keys(a)) {
+      if (!(k in b)) out.push(pfx ? `${pfx}.${k}` : k);
+      else out.push(...missingKeys(a[k], b[k], pfx ? `${pfx}.${k}` : k));
+    }
+    return out;
+  };
+  const dropped = missingKeys(d1, d2);
+  T.check('schema.no-keys-dropped', dropped.length === 0, `dropped keys: ${dropped.slice(0, 12).join(', ')}`);
+
+  const stripClock = x => { const c = JSON.parse(JSON.stringify(x)); delete c.saved; return c; };
+  const s1 = JSON.stringify(stripClock(d1)), s2 = JSON.stringify(stripClock(d2));
+  T.check('schema.migrate-idempotent', s1 === s2, s1 === s2 ? 'ok' : `len ${s1.length} vs ${s2.length}`);
+
+  T.check('schema.no-error', !errs.length, errs.join(' | '));
+  await close();
+});
+
 T.done(); })();
