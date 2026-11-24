@@ -551,7 +551,9 @@ input[list]::-webkit-calendar-picker-indicator{display:none!important}
 .itab input{width:5.6em;padding:2px 5px;font-size:12px;text-align:right;min-height:24px}
 .itab tr.pool td{font-weight:600}
 .delta-badge{display:inline-block;font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:1px 6px;color:var(--muted);background:var(--soft);margin-left:4px;vertical-align:middle;font-variant-numeric:tabular-nums}
-.delta-badge.amber,.delta-badge.warn{border-color:var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);font-weight:600}
+.delta-badge.amber,.delta-badge.warn{border-color:var(--warn);color:#6e4400;background:rgba(138,90,0,.12);font-weight:600}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .delta-badge.amber,:root:not([data-theme="light"]) .delta-badge.warn{color:var(--warn);background:rgba(226,180,92,.12)}}
+:root[data-theme="dark"] .delta-badge.amber,:root[data-theme="dark"] .delta-badge.warn{color:var(--warn);background:rgba(226,180,92,.12)}
 .linkbtn{font:inherit;border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer}
 #pdbStatus a{color:var(--accent)}
 #protTable td:first-child{white-space:normal}
@@ -2758,22 +2760,22 @@ function theoFormFor(run){
   const F = typeof protForms === 'function' ? protForms() : [];
   if (!F.length) return null;
   const form = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : (typeof ndForm === 'function' ? ndForm(run) : 'untagged');
-  const f = form === 'tagged' && F[1] ? F[1] : F[0];
+  const noTag = form === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && typeof TAG_PRESETS !== 'undefined' && TAG_PRESETS[opt.tagPreset], f = noTag ? null : (form === 'tagged' && F[1] ? F[1] : F[0]);
   if (!f || !f.a280 || !f.mass) return null;
   return {mass: f.mass, a280: f.a280, eps: Math.round(f.a280 * f.mass)};
 }
 function theoPeakMass(area, run){
-  if (!run || area == null || isNaN(area)) return null;
+  if (!run || area == null || isNaN(area) || massWhy(run)) return null;
   const clean = typeof cleanSeq === 'function' ? cleanSeq : s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
   const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq));
   if (!hasSeq) return null;
-  const flow = uvFlow(run);
-  if (!(flow > 0)) return null;
+  const flow = uvFlow(run), needFlow = xUnit(run) === 'min';
+  if (needFlow && !(flow > 0)) return null;
   const p = effPathMm(run) / 10;
   if (!(p > 0)) return null;
   const tf = theoFormFor(run);
   if (!tf || !(tf.eps > 0)) return null;
-  const a = xUnit(run) === 'min' ? area * flow : volMl(area, run);
+  const a = needFlow ? area * flow : volMl(area, run);
   return (a * tf.mass) / (tf.eps * p);
 }
 function theoBadge(theo, nd){
@@ -7642,9 +7644,9 @@ $('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRow
   saveFile('purification_summary.csv', [hdr].concat(body).join('\r\n')); });
 /* integration table */
 function renderIntTable(run){
-  const rows = integRows(run), pool = poolRows(run), hasMg = manEps() > 0, gs = opt.intMethod === 'gauss', u = xUnit(run);
+  const rows = integRows(run), pool = poolRows(run), man = manEps(), E = ndEpsFor(run.id), hasEps = (man > 0 && man <= 100) || (!(man > 100) && !!(E && E.e > 0)), hasMg = (!massWhy(run) && hasEps) || !!(pool && pool.measured), gs = opt.intMethod === 'gauss', u = xUnit(run);
   const clean = typeof cleanSeq === 'function' ? cleanSeq : s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
-  const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq)), hasTheo = hasSeq && (uvFlow(run) > 0);
+  const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq)), hasTheo = !massWhy(run) && hasSeq && !!theoFormFor(run) && (u !== 'min' || uvFlow(run) > 0);
   const sec = isSec(run), fit = sec ? secFit(secCalFor(run)) : null, hasKav = !!(fit && fit.useKav), hasMw = !!(fit && fit.mw), hasOl = hasMw && secMono() > 0;
   /* A260/A280 at each peak when the run recorded both wavelengths */
   const c280 = run.uvs.find(u => /280/.test(u.name)), c260 = run.uvs.find(u => /260/.test(u.name)), rat = !!(c280 && c260);
@@ -7664,7 +7666,7 @@ function renderIntTable(run){
   const poolTheo = pool ? theoPeakMass(pool.area, run) : null, poolNdUg = pool && pool.measured && pool.mg != null ? pool.mg * 1000 : null;
   const pr = pool ? `<tr class="pool" title="UV area across the pooled fractions, same baseline as the regions"><td><span class="sw" style="background:${esc(opt.poolColor)}"></span>Pool ${esc(pool.label)}</td><td>${fmt(pool.a, 2)}</td><td>${fmt(pool.b, 2)}</td>${blank(1 + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0) + 1)}${gs ? '<td></td>' : ''}<td>${fmtAuto(pool.area)}</td><td></td>${hasMg ? `<td>${pool.mg == null ? '' : fmt(pool.mg, 2)}</td>` : ''}${hasTheo ? `<td>${theoCell(poolTheo, poolNdUg)}</td>` : ''}${rat ? '<td></td>' : ''}${gs ? '<td></td>' : ''}<td></td></tr>` : '';
   const note = sec && !hasMw && opt.secStds ? `<tr><td colspan="${cols}" class="empty-row">Add a column calibration under Size exclusion (SEC) to see apparent molecular weights and oligomer states.</td></tr>` : '';
-  const mgWhy = hasMg ? massWhy(run) : '', mgNote = mgWhy ? `<tr><td colspan="${cols}" class="empty-row">No protein mg: ${esc(mgWhy)}.</td></tr>` : hasMg && pathAssumed(run) ? `<tr><td colspan="${cols}" class="empty-row">Protein mg use an assumed UV path of ${esc(fmtAuto(effPathMm()))} mm. Enter the real path on the run card.</td></tr>` : '';
+  const mgWhy = (hasEps || man > 100) && !hasMg ? massWhy(run) : '', mgNote = mgWhy ? `<tr><td colspan="${cols}" class="empty-row">No protein mg: ${esc(mgWhy)}.</td></tr>` : hasEps && !massWhy(run) && pathAssumed(run) ? `<tr><td colspan="${cols}" class="empty-row">Protein mg use an assumed UV path of ${esc(fmtAuto(effPathMm()))} mm. Enter the real path on the run card.</td></tr>` : '';
   const scaleNote = hasMg && rows.some(r => r.scaled && r.mg != null) ? `<tr><td colspan="${cols}" class="empty-row">≈ Peak masses overlapping the pool are rescaled using the pool NanoDrop mass (concentration × measured volume), including any loss during concentration.</td></tr>` : '';
   $('#intTable').innerHTML = head + (body + pr || `<tr><td colspan="${cols}" class="empty-row">No regions yet. Drag across the chromatogram, or click Detect peaks.</td></tr>`) + note + mgNote + scaleNote;
   /* FWHM, fit quality and A260/A280 wait behind More columns */
@@ -7680,21 +7682,21 @@ $('#intAuto').addEventListener('click', () => { const r = curRun(); if (!r) retu
 $('#intClear').addEventListener('click', () => { const r = curRun(); if (!r) return; r.integ = []; render(); });
 $('#intCsv').addEventListener('click', () => {
   const clean = typeof cleanSeq === 'function' ? cleanSeq : s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
-  const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq));
+  const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq)), man = manEps();
+  const hasTheoRun = r => !massWhy(r) && hasSeq && !!theoFormFor(r) && (xUnit(r) !== 'min' || uvFlow(r) > 0), anyTheo = runs.some(hasTheoRun);
   const q = csvQuote, cols = ['Run','Region','Start','End','Apex or center','X unit','Height (mAU)','Area (mAU*x unit)','% of regions','Protein (mg)','Baseline','Method','FWHM','Fit R2','SEC calibration','Kav','Apparent MW (kDa)','Oligomer (MW / monomer)','Scale'];
-  if (hasSeq) cols.push('theo_mass_ug');
+  if (anyTheo) cols.push('theo_mass_ug');
   const lines = [cols.join(',')];
-  runs.forEach(r => { const u = xUnit(r), cal = isSec(r) ? secCalFor(r) : null;
-    integRows(r).forEach(x => { const si = x.sec || {};
-      const row = [q(r.name), x.name, x.a.toFixed(3), x.b.toFixed(3), x.apex.toFixed(3), u, x.height.toFixed(2), x.area.toFixed(3), x.pct == null ? '' : x.pct.toFixed(2), x.mg == null ? '' : x.mg.toFixed(4), opt.intBase === 'zero' ? 'zero' : 'valley to valley', x.gauss ? 'Gaussian fit' : 'trapezoid', x.fwhm == null ? '' : x.fwhm.toFixed(3), x.r2 == null ? '' : x.r2.toFixed(4),
-        cal ? q(cal.name) : '', si.kav == null ? '' : si.kav.toFixed(4), si.void ? 'void' : si.mw == null ? '' : (si.extrap ? '~' : '') + si.mw.toFixed(1), si.ratio == null ? '' : si.ratio.toFixed(2), x.mg == null ? '' : x.scaled ? 'NanoDrop-scaled' : 'Beer-Lambert'];
-      if (hasSeq) row.push(x.theoMass == null ? '' : fmt(x.theoMass, 1));
+  runs.forEach(r => { const u = xUnit(r), cal = isSec(r) ? secCalFor(r) : null, p = poolRows(r), E = ndEpsFor(r.id), hasEps = (man > 0 && man <= 100) || (!(man > 100) && !!(E && E.e > 0)), hasMg = (!massWhy(r) && hasEps) || !!(p && p.measured), hasTheo = hasTheoRun(r);
+    integRows(r).forEach(x => { const si = x.sec || {}, mg = hasMg ? x.mg : null, tm = hasTheo ? x.theoMass : null;
+      const row = [q(r.name), x.name, x.a.toFixed(3), x.b.toFixed(3), x.apex.toFixed(3), u, x.height.toFixed(2), x.area.toFixed(3), x.pct == null ? '' : x.pct.toFixed(2), mg == null ? '' : mg.toFixed(4), opt.intBase === 'zero' ? 'zero' : 'valley to valley', x.gauss ? 'Gaussian fit' : 'trapezoid', x.fwhm == null ? '' : x.fwhm.toFixed(3), x.r2 == null ? '' : x.r2.toFixed(4),
+        cal ? q(cal.name) : '', si.kav == null ? '' : si.kav.toFixed(4), si.void ? 'void' : si.mw == null ? '' : (si.extrap ? '~' : '') + si.mw.toFixed(1), si.ratio == null ? '' : si.ratio.toFixed(2), mg == null ? '' : x.scaled ? 'NanoDrop-scaled' : 'Beer-Lambert'];
+      if (anyTheo) row.push(tm == null ? '' : fmt(tm, 1));
       lines.push(row.join(',')); });
-    const p = poolRows(r);
     if (p) {
-      const pTheo = theoPeakMass(p.area, r);
-      const row = [q(r.name), q('Pool ' + p.label), p.a.toFixed(3), p.b.toFixed(3), '', u, '', p.area.toFixed(3), '', p.mg == null ? '' : p.mg.toFixed(4), opt.intBase === 'zero' ? 'zero' : 'line across pool', 'trapezoid', '', '', '', '', '', '', p.mg == null ? '' : p.measured ? 'NanoDrop' : 'Beer-Lambert'];
-      if (hasSeq) row.push(pTheo == null ? '' : fmt(pTheo, 1));
+      const pMg = hasMg ? p.mg : null, pTheo = hasTheo ? theoPeakMass(p.area, r) : null;
+      const row = [q(r.name), q('Pool ' + p.label), p.a.toFixed(3), p.b.toFixed(3), '', u, '', p.area.toFixed(3), '', pMg == null ? '' : pMg.toFixed(4), opt.intBase === 'zero' ? 'zero' : 'line across pool', 'trapezoid', '', '', '', '', '', '', pMg == null ? '' : p.measured ? 'NanoDrop' : 'Beer-Lambert'];
+      if (anyTheo) row.push(pTheo == null ? '' : fmt(pTheo, 1));
       lines.push(row.join(','));
     }
   });

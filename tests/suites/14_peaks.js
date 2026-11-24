@@ -625,6 +625,122 @@ async function poolDipSameSpan() {
   }
 }
 
+async function seqDerivedPeakMassAndWlGuard() {
+  const {src} = require('../lib/harness');
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    await h.newProject('Seq peak mass mL');
+    await h.gb(src('gb'));
+    await h.addRun(src('his'));
+    await h.pool('T1-T6');
+    await detect(p);
+
+    const pt0 = await h.peakTable(), head0 = pt0[0] || [];
+    const mgCol0 = head0.findIndex(c => /^Protein \(mg\)$/i.test(c));
+    const peakRows0 = pt0.slice(1).filter(r => r.length === head0.length && /^P\d+$/i.test(r[0]));
+    const poolRow0 = pt0.slice(1).find(r => r.length === head0.length && /^Pool\b/i.test(r[0]));
+    T.check(
+      'seq_ml_mass/int_table_protein_mg_shown',
+      mgCol0 >= 0 && peakRows0.length > 0 && peakRows0.every(r => num(r[mgCol0]) > 0) && !!poolRow0 && num(poolRow0[mgCol0]) > 0,
+      `headers=${JSON.stringify(head0)}, peaks=${JSON.stringify(peakRows0)}, pool=${JSON.stringify(poolRow0)}`
+    );
+
+    if (await p.locator('#intMore').isVisible()) {
+      await p.click('#intMore');
+      await h.wait(300);
+    }
+    const pt1 = await h.peakTable(), head1 = pt1[0] || [];
+    const mgCol1 = head1.findIndex(c => /^Protein \(mg\)$/i.test(c));
+    const theoCol1 = head1.findIndex(c => /^Theo\. mass$/i.test(c));
+    const peakRows1 = pt1.slice(1).filter(r => r.length === head1.length && /^P\d+$/i.test(r[0]));
+    const poolRow1 = pt1.slice(1).find(r => r.length === head1.length && /^Pool\b/i.test(r[0]));
+    T.check(
+      'seq_ml_mass/theo_mass_matches_mg_x1000',
+      theoCol1 >= 0 && mgCol1 >= 0 && peakRows1.length > 0 &&
+        peakRows1.every(r => /µg$/.test(r[theoCol1]) && num(r[theoCol1]) > 0 && Math.abs(num(r[theoCol1]) - num(r[mgCol1]) * 1000) <= 5.5) &&
+        !!poolRow1 && /µg$/.test(poolRow1[theoCol1]) && Math.abs(num(poolRow1[theoCol1]) - num(poolRow1[mgCol1]) * 1000) <= 5.5,
+      `headers=${JSON.stringify(head1)}, peaks=${JSON.stringify(peakRows1)}, pool=${JSON.stringify(poolRow1)}`
+    );
+
+    const [dlMl] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click('#intCsv')]);
+    const csvMl = fs.readFileSync(await dlMl.path(), 'utf8').trim().split(/\r?\n/).map(r => r.split(','));
+    const cMgIdx = csvMl[0].indexOf('Protein (mg)'), cTheoIdx = csvMl[0].indexOf('theo_mass_ug');
+    const cP1 = csvMl.find(r => r[1] === 'P1');
+    T.check(
+      'seq_ml_mass/csv_theo_matches_mg_x1000',
+      cMgIdx >= 0 && cTheoIdx >= 0 && !!cP1 && +cP1[cMgIdx] > 0 && Math.abs(+cP1[cTheoIdx] - +cP1[cMgIdx] * 1000) <= 0.2,
+      `csv header=${JSON.stringify(csvMl[0])}, P1=${JSON.stringify(cP1)}`
+    );
+
+    await h.step('figure');
+    await h.wait(400);
+    const st = await h.sumTable(), sh = st[0] || [];
+    const sMgCol = sh.findIndex(c => /^Protein \(mg\)$/i.test(c));
+    const sRow = st.slice(1).find(r => r.length === sh.length && sMgCol >= 0 && num(r[sMgCol]) > 0);
+    T.check(
+      'seq_ml_mass/matches_sum_table',
+      sMgCol >= 0 && !!sRow && !!poolRow0 && mgCol0 >= 0 && Math.abs(num(poolRow0[mgCol0]) - num(sRow[sMgCol])) < 0.005,
+      `intTable pool mg=${poolRow0 && poolRow0[mgCol0]}, sumTable mg=${sRow && sRow[sMgCol]}`
+    );
+  } finally {
+    T.check('seq_ml_mass/no_page_errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+
+  const {p: p2, errs: errs2, close: close2} = await open(), h2 = H(p2);
+  try {
+    const lines260 = ['Chrom.1,,Chrom.1,', 'UV 1_260,,Fraction,', 'mL,mAU,mL,Fraction'];
+    for (let i = 0; i <= 200; i++) {
+      const x = +(i / 10).toFixed(1);
+      const y = +(500 * Math.exp(-0.5 * Math.pow((x - 10) / 1.0, 2))).toFixed(4);
+      lines260.push(`${x},${y},${i % 10 === 0 ? x : ''},${i % 10 === 0 ? '"F' + (i / 10 + 1) + '"' : ''}`);
+    }
+    await h2.newProject('Non-280 nm mass guard');
+    await h2.gb(src('gb'));
+    await p2.click('#tl [data-addmenu]');
+    await p2.click('#tl [data-addstep=run]');
+    await p2.setInputFiles('#file', {name: 'uv260_synth.csv', mimeType: 'text/csv', buffer: Buffer.from(lines260.join('\n'))});
+    await h2.wait(800);
+
+    const runCond = p2.locator('.trace.run.sel details.runcond').first();
+    await runCond.evaluate(d => { d.open = true; });
+    const flowInp = runCond.locator('input[data-k="mFlow"]').first();
+    await flowInp.fill('1');
+    await flowInp.dispatchEvent('change');
+    await h2.wait(300);
+
+    await detect(p2);
+    const pt260 = await h2.peakTable(), head260 = pt260[0] || [];
+    T.check(
+      'seq_ml_mass/non280_withholds_mg_and_theo',
+      head260.findIndex(c => /^Protein \(mg\)/i.test(c)) === -1 && head260.findIndex(c => /^Theo\. mass/i.test(c)) === -1,
+      `260 nm headers=${JSON.stringify(head260)}`
+    );
+
+    await setOpt(p2, 'o-eps', '1.0');
+    await h2.wait(300);
+    const pt260Eps = await h2.peakTable(), head260Eps = pt260Eps[0] || [];
+    T.check(
+      'seq_ml_mass/non280_with_manual_eps_withholds_mg_and_theo',
+      head260Eps.findIndex(c => /^Protein \(mg\)/i.test(c)) === -1 && head260Eps.findIndex(c => /^Theo\. mass/i.test(c)) === -1,
+      `260 nm + manual eps headers=${JSON.stringify(head260Eps)}`
+    );
+
+    const [dl260] = await Promise.all([p2.waitForEvent('download', {timeout: 10000}), p2.click('#intCsv')]);
+    const csv260 = fs.readFileSync(await dl260.path(), 'utf8').trim().split(/\r?\n/).map(r => r.split(','));
+    const csv260MgIdx = csv260[0].indexOf('Protein (mg)'), csv260TheoIdx = csv260[0].indexOf('theo_mass_ug');
+    const csv260P1 = csv260.find(r => r[1] === 'P1');
+    T.check(
+      'seq_ml_mass/non280_csv_withholds_mg_and_theo',
+      csv260TheoIdx === -1 && csv260MgIdx >= 0 && !!csv260P1 && csv260P1[csv260MgIdx] === '',
+      `260 nm CSV header=${JSON.stringify(csv260[0])}, P1=${JSON.stringify(csv260P1)}`
+    );
+  } finally {
+    T.check('seq_ml_mass/non280_no_page_errors', !errs2.length, errs2.join(' | '));
+    await close2();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -637,5 +753,6 @@ async function poolDipSameSpan() {
   await T.t('uv_path_cell_selector', uvPathCellSelector);
   await T.t('theo_peak_mass', theoPeakMassTest);
   await T.t('pool_dip_same_span', poolDipSameSpan);
+  await T.t('seq_derived_peak_mass_and_wl_guard', seqDerivedPeakMassAndWlGuard);
   T.done();
 })();
