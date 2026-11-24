@@ -1916,9 +1916,11 @@ let opt = Object.assign({}, DEF), savedOpt = null;
 try { const s = JSON.parse(localStorage.getItem('hplc-fig-opt') || 'null'); if (s && typeof s === 'object' && !Array.isArray(s)) { Object.assign(opt, s); savedOpt = s; } } catch(e) {}
 opt.xmin = opt.xmax = opt.ymin = opt.ymax = '';
 /* the tidier defaults reach settings saved before them once. tidy15: a sequence is untagged unless a tag is chosen, but settings and projects saved under the old His-SUMO default keep it */
-const tidyOpt = s => { if (!opt.tidy13) { opt.wfYield = false; opt.secStds = false; opt.tidy13 = true; } if (!opt.tidy14) { opt.noGelSlot = false; if (numOr(opt.wfGelH, 1.8) === 1.8) opt.wfGelH = 1.3; opt.tidy14 = true; } if (!opt.tidy15) { if (s && !('tagPreset' in s)) opt.tagPreset = 'sumo'; opt.tidy15 = true; } if (!(numOr(opt.path, 0) > 0)) opt.path = DEF.path; }; tidyOpt(savedOpt);
+const tidyOpt = (s, proj) => { if (!opt.tidy13) { if (!(proj && s && s.wfYield)) opt.wfYield = false; if (!(proj && s && s.secStds)) opt.secStds = false; opt.tidy13 = true; } if (!opt.tidy14) { if (!(proj && s && s.noGelSlot)) opt.noGelSlot = false; if (!(proj && s && s.wfGelH != null && s.wfGelH !== '') && numOr(opt.wfGelH, 1.8) === 1.8) opt.wfGelH = 1.3; opt.tidy14 = true; } if (!opt.tidy15) { if (s && !('tagPreset' in s)) opt.tagPreset = 'sumo'; opt.tidy15 = true; } if (!(numOr(opt.path, 0) > 0)) opt.path = DEF.path; }; tidyOpt(savedOpt);
 /* known proteins and SEC calibrations from saved settings or a project file: drop entries that are not objects, and built-in proteins take their current sizes and notes */
-function tidyKnown(L){ L = Array.isArray(L) ? L.filter(k => k && typeof k === 'object' && !Array.isArray(k)) : []; L.forEach(k => { const d = KNOWN_DEFAULT.find(x => x.name === k.name && x.kind === k.kind); if (d) { k.kda = d.kda; k.ctx = d.ctx; k.src = d.src; if (d.app) k.app = d.app; else delete k.app; } }); return L; }
+const findKnownDef = k => k && KNOWN_DEFAULT.find(x => x.name === k.name && (!k.kind || k.kind === x.kind || (x.kind === 'contam' && k.kind === 'contaminant')));
+function tidyKnown(L){ L = Array.isArray(L) ? L.filter(k => k && typeof k === 'object' && !Array.isArray(k)) : []; L.forEach(k => { const d = findKnownDef(k); if (d) { k.kind = d.kind; k.kda = d.kda; k.ctx = d.ctx; k.src = d.src; k.on = 'on' in k ? !!k.on : d.on; if (d.app != null) k.app = d.app; else delete k.app; } }); return L; }
+function mergeKnown(mine, theirs){ const cl = L => Array.isArray(L) ? L.map(k => k && typeof k === 'object' && !Array.isArray(k) ? Object.assign({}, k) : k) : [], mk = tidyKnown(Array.isArray(mine) ? cl(mine) : KNOWN_DEFAULT.map(k => Object.assign({}, k))), pk = tidyKnown(cl(theirs)), same = (a, b) => a.name === b.name && +a.kda === +b.kda && (a.kind || 'contam') === (b.kind || 'contam'), out = [], push = k => { if (!out.some(x => same(x, k))) out.push(k); }; mk.forEach(m => { const p = pk.find(x => same(x, m)); push(p || m); }); pk.forEach(push); KNOWN_DEFAULT.forEach(d => { if (!out.some(x => x.name === d.name && x.kind === d.kind)) out.push(Object.assign({}, d)); }); return out; }
 function tidyLists(){ opt.known = Array.isArray(opt.known) ? tidyKnown(opt.known) : KNOWN_DEFAULT.map(k => Object.assign({}, k)); secCals(); }
 tidyLists();
 function saveOpt(){ try { localStorage.setItem('hplc-fig-opt', JSON.stringify(opt)); } catch(e) {} }
@@ -6607,7 +6609,8 @@ function syncControls(){
     else if (el.type === 'radio') el.checked = el.value === String(v);
     else el.value = v;
   });
-  if (g) { document.querySelectorAll('[data-gel]').forEach(el => { const v = g[el.dataset.gel]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; }); renderLaneTable(); renderKnown(); }
+  renderKnown();
+  if (g) { document.querySelectorAll('[data-gel]').forEach(el => { const v = g[el.dataset.gel]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; }); renderLaneTable(); }
 }
 let gelRaf = 0;
 function onGel(el){
@@ -9995,8 +9998,8 @@ async function openProject(data, name, noUndo){
   if (data.opt) { const dopt = data.opt, myCals = secCals().slice(), myKnown = Array.isArray(opt.known) ? opt.known.slice() : null, myQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : [], myQDel = Array.isArray(opt.myQuickDel) ? opt.myQuickDel.slice() : []; Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);
     { const pq = Array.isArray(opt.myQuick) ? opt.myQuick : [], del = new Set([...(myQDel || []), ...(Array.isArray(opt.myQuickDel) ? opt.myQuickDel : [])]); opt.myQuickDel = [...del]; opt.myQuick = myQ.concat(pq.filter(q => !myQ.some(m => m.id === q.id))).filter(q => !del.has(q.id)); }
     const pc = secCals(); opt.secCals = pc.concat(myCals.filter(c => !pc.some(x => x.id === c.id)));
-    if (myKnown) { const pk = tidyKnown(dopt.known); opt.known = myKnown.concat(pk.filter(k => !myKnown.some(m => m.name === k.name && +m.kda === +k.kda))); } tidyLists(); tidyOpt(dopt); }
-  else { opt.path = DEF.path; }
+    opt.known = mergeKnown(myKnown, dopt.known); tidyLists(); tidyOpt(dopt, true); }
+  else { opt.path = DEF.path; opt.known = mergeKnown(opt.known, null); tidyLists(); }
   syncUid();
   { const seenA = new Set(); assays = assays.map(a => { const na = makeAssay(a); if (seenA.has(na.id)) na.id = 'a' + (uid++); seenA.add(na.id); return na; }); }
   ndUid = Math.max(uid, ndSamples.length + 1 + Date.now() % 1000);
@@ -11331,10 +11334,11 @@ async function switchActivePrep(prepId){
       Object.assign(opt, JSON.parse(JSON.stringify(DEF)), dopt);
       { const pq = Array.isArray(opt.myQuick) ? opt.myQuick : [], del = new Set([...(myQDel || []), ...(Array.isArray(opt.myQuickDel) ? opt.myQuickDel : [])]); opt.myQuickDel = [...del]; opt.myQuick = myQ.concat(pq.filter(q => !myQ.some(m => m.id === q.id))).filter(q => !del.has(q.id)); }
       const pc = secCals(); opt.secCals = pc.concat(myCals.filter(c => !pc.some(x => x.id === c.id)));
-      if (myKnown) { const pk = tidyKnown(dopt.known); opt.known = myKnown.concat(pk.filter(k => !myKnown.some(m => m.name === k.name && +m.kda === +k.kda))); }
-      tidyLists(); tidyOpt(dopt);
+      opt.known = mergeKnown(myKnown, dopt.known);
+      tidyLists(); tidyOpt(dopt, true);
     } else {
       QKEYS.forEach(k => { opt[k] = DEF[k]; });
+      opt.known = mergeKnown(opt.known, null); tidyLists();
     }
     customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
     syncUid();

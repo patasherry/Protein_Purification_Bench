@@ -672,4 +672,113 @@ await T.t('imac-warnings', async () => { const {p, errs, close} = await open(), 
   await close();
 });
 
+await T.t('legacy-opt-preserve-and-known-sync', async () => {
+  const {p, errs, close} = await open(), h = H(p);
+  await h.newProject('Startup Baseline');
+  await h.dropFiles(F.his);
+  const [dl0] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click(SEL.exportBtn)]);
+  const startPath = path.join(ROOT, 'results', 'startup_baseline_export.json');
+  await dl0.saveAs(startPath);
+  const startJson = JSON.parse(fs.readFileSync(startPath, 'utf8'));
+  const startKnown = (startJson.opt && Array.isArray(startJson.opt.known)) ? startJson.opt.known : [];
+
+  const legacyProj = {
+    app: 'HPLC Figure Bench',
+    version: 1,
+    runs: [{
+      id: 'r1',
+      name: 'Superdex 200 Increase',
+      secMode: 'on',
+      secCal: 'cal_s200',
+      inWf: true,
+      fracs: [{x: 10, label: 'F1'}, {x: 12, label: 'F2'}],
+      shade: 'F1',
+      uvs: [{name: 'UV', xs: [8, 10, 11, 12, 16], ys: [5, 40, 120, 35, 5]}],
+      integ: [{a: 9.5, b: 12.5}],
+      poolConc: 2.0,
+      poolFinalVol: 1.5
+    }],
+    prep: {name: 'Opt Preserve Test', cultureL: 1.0},
+    opt: {
+      secStds: true,
+      wfYield: true,
+      noGelSlot: true,
+      wfGelH: 1.8,
+      tidy13: false,
+      tidy14: false,
+      secCals: [{
+        id: 'cal_s200',
+        name: 'Superdex 200',
+        col: 's200i',
+        unit: 'mL',
+        v0: 8.0,
+        vt: 24.0,
+        stds: [{name: 'Thyroglobulin', kda: 670, ve: 9.0}, {name: 'Ovalbumin', kda: 44, ve: 15.0}]
+      }],
+      known: [
+        {name: 'DnaK', kda: 70.0, kind: 'contam', on: false, ctx: 'any', src: 'stale chaperone', app: 99},
+        {name: 'SlyD', kda: 20.0, on: true, ctx: 'post', src: 'stale slyd'},
+        {name: 'His-SUMO tag', kda: 11.0, app: 99, kind: 'contaminant', on: true, ctx: 'any', src: 'stale sumo'},
+        {name: 'Custom Marker', kda: 33.5, kind: 'label', on: true, src: 'added by you'}
+      ]
+    }
+  };
+
+  await p.click(SEL.home);
+  await p.waitForTimeout(600);
+  await p.setInputFiles(SEL.importFile, {
+    name: 'legacy_opt_preserve.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(legacyProj))
+  });
+  await p.waitForTimeout(3000);
+
+  const uiOpts = await p.evaluate(() => ({
+    secStds: !!(document.querySelector('#o-secStds') && document.querySelector('#o-secStds').checked),
+    wfYield: !!(document.querySelector('#o-wfYield') && document.querySelector('#o-wfYield').checked),
+    noGelSlot: !!(document.querySelector('#o-noGelSlot') && document.querySelector('#o-noGelSlot').checked),
+    knownRows: [...document.querySelectorAll('#knownList .krow')].map(r => ({
+      name: r.querySelector('[data-kf="name"]').value,
+      kda: +r.querySelector('[data-kf="kda"]').value,
+      on: r.querySelector('[data-kf="on"]').checked,
+      src: r.getAttribute('title') || ''
+    }))
+  }));
+
+  T.check('legacy-opt.ui-secStds', uiOpts.secStds === true, `#o-secStds checked=${uiOpts.secStds}`);
+  T.check('legacy-opt.ui-wfYield', uiOpts.wfYield === true, `#o-wfYield checked=${uiOpts.wfYield}`);
+  T.check('legacy-opt.ui-noGelSlot', uiOpts.noGelSlot === true, `#o-noGelSlot checked=${uiOpts.noGelSlot}`);
+  T.check('legacy-opt.ui-known-rendered', uiOpts.knownRows.length >= startKnown.length, `rendered ${uiOpts.knownRows.length} known rows`);
+
+  const [dl1] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click(SEL.exportBtn)]);
+  const outPath = path.join(ROOT, 'results', 'legacy_opt_preserve_export.json');
+  await dl1.saveAs(outPath);
+  const exp = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+  const eopt = exp.opt || {};
+  const eknown = Array.isArray(eopt.known) ? eopt.known : [];
+
+  T.check('legacy-opt.export-secStds', eopt.secStds === true, `secStds=${eopt.secStds}`);
+  T.check('legacy-opt.export-wfYield', eopt.wfYield === true, `wfYield=${eopt.wfYield}`);
+  T.check('legacy-opt.export-noGelSlot', eopt.noGelSlot === true, `noGelSlot=${eopt.noGelSlot}`);
+  T.check('legacy-opt.export-wfGelH', eopt.wfGelH === 1.8, `wfGelH=${eopt.wfGelH}`);
+
+  const metaMismatch = [];
+  startKnown.forEach(sk => {
+    const matches = eknown.filter(k => k && k.name === sk.name);
+    if (matches.length !== 1) { metaMismatch.push(`${sk.name}: count=${matches.length}`); return; }
+    const m = matches[0];
+    if (m.kda !== sk.kda || m.ctx !== sk.ctx || m.src !== sk.src || m.app !== sk.app || ('app' in m) !== ('app' in sk)) {
+      metaMismatch.push(`${sk.name}: got ${JSON.stringify({kda: m.kda, ctx: m.ctx, src: m.src, app: m.app})} vs ${JSON.stringify({kda: sk.kda, ctx: sk.ctx, src: sk.src, app: sk.app})}`);
+    }
+  });
+  T.check('legacy-opt.known-default-metadata', metaMismatch.length === 0 && startKnown.length > 0, metaMismatch.join(' | ') || 'ok');
+
+  const dnak = eknown.find(k => k && k.name === 'DnaK' && k.kind === 'contam');
+  const custom = eknown.find(k => k && k.name === 'Custom Marker');
+  T.check('legacy-opt.known-on-preserved', !!dnak && dnak.on === false, `DnaK=${JSON.stringify(dnak)}`);
+  T.check('legacy-opt.known-custom-preserved', !!custom && custom.kda === 33.5, `custom=${JSON.stringify(custom)}`);
+  T.check('legacy-opt.no-error', !errs.length, errs.join(' | '));
+  await close();
+});
+
 T.done(); })();
