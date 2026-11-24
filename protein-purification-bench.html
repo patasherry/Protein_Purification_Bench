@@ -1523,6 +1523,11 @@ button,input,select,textarea{font-family:inherit}
           </select>
         </label>
       </div>
+      <div id="recoveryMatrix" hidden>
+        <p class="subhead">Recovery Matrix</p>
+        <div class="tablewrap"><table class="itab mono" id="recoveryMatrixTable"></table></div>
+        <p class="hint">Recovered pure mass is the estimated peak mass multiplied by the target band's share of all stain in its assigned gel lane.</p>
+      </div>
       </details>
       <details class="sub" data-sub="gcleave"><summary>5. Cleaved and uncleaved protein<span class="st" id="st-cleave"></span></summary>
       <label class="check"><input type="checkbox" id="o-cleaveDetect" data-opt="cleaveDetect">Look for cleaved protein, uncleaved fusion and free tag</label>
@@ -4774,6 +4779,19 @@ function laneIntensityPurity(g, laneI){
     if (t.kind === 'target' || (t.kind === 'tagged' && opt.tagCounts !== false)) tgt += b.area; });
   return tgt > 0 ? 100*tgt/ln.total : null;
 }
+function recoveryMatrixRows(g){
+  const used = new Set(), out = [];
+  gelBands(g).forEach(ln => { const rid = laneAssign(g, ln.i), run = runs.find(r => r.id === rid); if (!run || used.has(rid)) return;
+    used.add(rid); const purity = laneIntensityPurity(g, ln.i);
+    integRows(run).forEach(p => out.push({name: p.name, mg: p.mg, purity, recovered: p.mg != null && purity != null ? p.mg*purity/100 : null}));
+  });
+  return out;
+}
+function renderRecoveryMatrix(g){
+  const box = $('#recoveryMatrix'), table = $('#recoveryMatrixTable'); if (!box || !table) return;
+  const rows = g && g.pix ? recoveryMatrixRows(g) : []; box.hidden = !rows.length;
+  table.innerHTML = rows.length ? '<tr><th>Peak Name</th><th>Estimated Mass (mg)</th><th>Gel Purity (%)</th><th>Recovered Pure Mass (mg)</th></tr>' + rows.map(r => `<tr><td>${esc(r.name)}</td><td>${r.mg == null ? '–' : fmt(r.mg, 2)}</td><td>${r.purity == null ? '–' : fmt(r.purity, 1) + '%'}</td><td>${r.recovered == null ? '–' : fmt(r.recovered, 2)}</td></tr>`).join('') : '';
+}
 /* Cross-reference a run fraction with its assigned SDS-PAGE gel lane to compute target protein mass (mg) and specific recovery yield (%):
    targetMass = (purityPct / 100) * totalFractionMass; yieldPct = (targetMass / refMass) * 100 (#1678). Returns null when required data are missing. */
 function calcFractionYield(run, fracIndex){
@@ -6980,7 +6998,7 @@ $('#clearAll').addEventListener('click', () => { traces.forEach(t => t.peaks = [
 function renderBandTable(g){
   const lanes = gelBands(g), cal = calib(g), el = $('#bandTable');
   $('#g-bandUndo').disabled = !(g && g.bandHist && g.bandHist.length);
-  if (!g.pix) { el.innerHTML = ''; return; }
+  if (!g.pix) { el.innerHTML = ''; renderRecoveryMatrix(g); return; }
   const LLt = laneLinks(), anyT = (g.tags || []).some(t => isProt(t.kind)), anyG = (g.tags || []).some(t => t.kind === 'tagged') || !!cleavePlan(g), anyC = (g.tags || []).some(t => t.kind === 'contam'), fys = lanes.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean);
   const head = `<tr><th>Lane</th><th>Label</th><th>Goes with</th><th>Target (kDa)</th>${anyG ? '<th>Tagged (kDa)</th><th>Cleaved</th>' : ''}<th>Purity</th>${anyFY ? '<th>Fraction (mg)</th><th>Fraction yield</th>' : ''}<th>Bands, strongest first: apparent MW (kDa) and % of lane</th></tr>`;
   const rows = lanes.map((ln, idx) => { const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a), fy = fys[idx];
@@ -7002,6 +7020,7 @@ function renderBandTable(g){
   const r2 = ladderRSquared(g), fit = r2 == null ? '' : `<tr><td colspan="${cols}" class="empty-row">Ladder calibration linear fit R&sup2;: ${fmt(r2, 3)}</td></tr>`;
   el.innerHTML = head + rows + fit + (note ? `<tr><td colspan="${cols}" class="empty-row">${note}</td></tr>` : '');
   const bdh = $('#bandDarkHint'); if (bdh) bdh.hidden = !isDark;
+  renderRecoveryMatrix(g);
 }
 document.querySelectorAll('[data-tagmode]').forEach(b => b.addEventListener('click', () => { tagMode = b.dataset.tagmode; if (tagMode) marking = null; render(); }));
 function chipAct(e){
@@ -10188,14 +10207,14 @@ document.querySelectorAll('#panel > .grp').forEach(sec => { const h = sec.queryS
 const ADV = {'sub:rwin': ['o-fracEvery', 'o-runPad'], 'sub:rgel': ['o-gelAlign', 'o-gelGap', 'o-gelSide', 'o-linkFrom', 'o-laneMark', 'o-laneAlpha', 'gelSizeReset', 'gelOffReset'], 'sub:rpool': ['o-poolColor'],
   'Peak integration': ['o-intProm', 'o-path', 'o-eps', 'o-intFill'], 'Processing': ['o-baseline', 'o-smooth'], 'Peak labels': ['o-peakRot', 'o-peakDec', 'o-prom', 'o-peakColor', 'o-peakMax'],
   'Window': ['o-zoomInsetPos', 'o-zoomInsetSize'], 'Axes': ['o-ticksOut', 'o-y2grad', 'o-y2cond', 'o-sbValue', 'o-sbUnit'], 'Figure style': ['o-lw', 'o-font', 'o-bg'], 'Layout': ['o-stack'],
-  'sub:gcrop': ['o-gelAutoCrop', 'o-gelFrame'], 'sub:gbands': ['o-targetArrow', 'o-tagShow', 'o-purRow', 'o-tagCounts', 'o-bandLabels', 'o-purBase', 'o-tagTol', 'o-bandSens'], 'sub:gknown': ['o-knownTol', 'o-knownMin', 'o-knownCount']};
+  'sub:gcrop': ['o-gelAutoCrop', 'o-gelFrame'], 'sub:gbands': ['o-targetArrow', 'o-tagShow', 'o-purRow', 'o-tagCounts', 'o-bandLabels', 'o-purBase', 'o-tagTol', 'o-bandSens', 'recoveryMatrix'], 'sub:gknown': ['o-knownTol', 'o-knownMin', 'o-knownCount']};
 const moreBoxes = [];
 Object.entries(ADV).forEach(([key, ids]) => {
   const host = key.startsWith('sub:') ? document.querySelector(`#panel details.sub[data-sub="${key.slice(4)}"]`) : [...document.querySelectorAll('#panel > .grp')].find(g => { const h = g.querySelector(':scope > h2'); return h && h.firstChild && h.firstChild.textContent.trim() === key; });
   if (!host) return;
   const d = document.createElement('details'), body = document.createElement('div'); d.className = 'more'; d.dataset.more = key; body.className = 'morebody';
   const sm = document.createElement('summary'); sm.textContent = 'More options'; d.append(sm, body);
-  ids.forEach(id => { const e = document.getElementById(id), w = e && (e.tagName === 'BUTTON' ? e : e.closest('label')); if (w && host.contains(w)) { const p = w.parentElement; body.appendChild(w); if (p && p !== host && !p.id && p.matches('.row, .checks') && !p.children.length) p.remove(); } });
+  ids.forEach(id => { const e = document.getElementById(id), w = e && (e.tagName === 'BUTTON' ? e : e.closest('label') || e); if (w && host.contains(w)) { const p = w.parentElement; body.appendChild(w); if (p && p !== host && !p.id && p.matches('.row, .checks') && !p.children.length) p.remove(); } });
   if (!body.children.length) return;
   host.appendChild(d); moreBoxes.push(d);
   try { if (localStorage.getItem('hfb-more-' + key) === '1') d.open = true; } catch (e) {}

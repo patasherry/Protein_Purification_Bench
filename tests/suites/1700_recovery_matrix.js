@@ -37,6 +37,16 @@ async function show(loc) {
   await loc.evaluate(el => { for (let p = el; p && p !== document.body; p = p.parentElement) if (p.tagName === 'DETAILS') p.open = true; });
 }
 
+async function addPeakRegion(p) {
+  const box = await p.locator('#paper svg').boundingBox();
+  if (!box) throw new Error('run figure did not render');
+  await p.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await p.mouse.down();
+  await p.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.5, {steps: 8});
+  await p.mouse.up();
+  await p.waitForTimeout(400);
+}
+
 async function clickBandNear(p, y, times) {
   const chips = p.locator('#bandTable tr', {hasText: 'F2'}).locator('.bchip');
   for (let i = 0; i < times; i++) {
@@ -59,6 +69,9 @@ async function clickBandNear(p, y, times) {
       await h.step(run.k);
       await p.click('#moreBtn').catch(() => {});
       const baseline = p.locator('#o-intBase'); await show(baseline); await baseline.selectOption('zero'); await baseline.dispatchEvent('change');
+      const eps = p.locator('#o-extinction'); await show(eps); await eps.fill('2'); await eps.dispatchEvent('change');
+      await addPeakRegion(p);
+      T.check('peak_region_added', await p.locator('#intTable tr').count() > 1, 'dragging across the run should add an integration region');
 
       const gel = await gelPng(p);
       await p.setInputFiles('#gelFile', {name: 'lane_intensity.png', mimeType: 'image/png', buffer: gel});
@@ -89,6 +102,16 @@ async function clickBandNear(p, y, times) {
       const markedColumn = marked.headers.findIndex(h => /^Purity$/i.test(h));
       const markedPurity = markedColumn >= 0 ? number(marked.cells[markedColumn]) : null;
       T.check('marked_band_setting_is_exercised', markedPurity != null && markedPurity > 60, `marked purity=${markedPurity}; ${JSON.stringify(marked)}`);
+
+      const matrix = await p.evaluate(() => {
+        const rows = [...document.querySelectorAll('#recoveryMatrixTable tr')].map(tr => [...tr.cells].map(td => td.textContent.trim()));
+        return {headers: rows[0] || [], cells: rows.slice(1)};
+      });
+      const [peakCol, massCol, purityCol, recoveredCol] = ['Peak Name', 'Estimated Mass (mg)', 'Gel Purity (%)', 'Recovered Pure Mass (mg)'].map(h => matrix.headers.indexOf(h));
+      const matrixRow = matrix.cells.find(row => row[peakCol] === 'P1');
+      const estimated = matrixRow && number(matrixRow[massCol]), purity = matrixRow && number(matrixRow[purityCol]), recovered = matrixRow && number(matrixRow[recoveredCol]);
+      // Recovery uses target stain as a share of all lane stain, not the marked-only display setting above.
+      T.check('recovery_matrix_lists_peak_mass_purity_and_recovered_mass', peakCol >= 0 && massCol >= 0 && purityCol >= 0 && recoveredCol >= 0 && estimated > 0 && Math.abs(purity - 40) < 4 && Math.abs(recovered - estimated * purity / 100) < 0.02, JSON.stringify(matrix));
 
       await h.step('figure');
       await h.wait(400);
