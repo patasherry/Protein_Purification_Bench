@@ -856,6 +856,112 @@ ORIGIN
     }
   });
 
+  /* ================= 15. Molar ε280 (>100) guardrail & Convert ÷ MW ================= */
+  await T.t('15_molar_eps_guardrail_and_convert', async () => {
+    const seq18 = 'M' + 'AWYEKLVSDG'.repeat(15) + 'AKLVSD';
+    const mw18 = calcMW(seq18);
+    const {p: p15, errs: errs15, close: close15} = await open(), h15 = H(p15);
+    try {
+      await h15.newProject('Molar eps guardrail');
+      await h15.step('construct');
+      await p15.fill('#protSeq', seq18);
+      await p15.dispatchEvent('#protSeq', 'input');
+      await p15.dispatchEvent('#protSeq', 'change');
+      await h15.wait(300);
+
+      await h15.addRun(path.join(DATA, 'chrom', 'imac_HisTrap_FF_1mL_step_u7.csv'));
+      await h15.pool('T1-T3');
+      await h15.addConc(path.join(DATA, 'nd', 'nd_one_protein_a280.csv'), 0.5);
+      await h15.wait(300);
+
+      await h15.step('construct');
+      await p15.fill('#o-eps', '33460');
+      await p15.dispatchEvent('#o-eps', 'input');
+      await p15.dispatchEvent('#o-eps', 'change');
+      await h15.wait(300);
+
+      const rawVal = await p15.$eval('#o-eps', e => e.value);
+      T.check('15_molar_eps.not_clamped_to_100', rawVal === '33460', `expected #o-eps to stay '33460', got '${rawVal}'`);
+
+      await h15.step('figure');
+      await h15.wait(300);
+      const [dl] = await Promise.all([p15.waitForEvent('download', {timeout: 8000}).catch(() => null), p15.click('#sumCsv')]);
+      const csvTxt = dl ? fs.readFileSync(await dl.path(), 'utf8').replace(/^\uFEFF/, '') : '';
+      const csvRows = csvTxt ? csvTxt.trim().split(/\r?\n/).map(l => { const o = []; let c = '', q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { o.push(c); c = ''; } else c += ch; } o.push(c); return o; }) : [];
+      const hd = csvRows[0] ? csvRows[0] : [];
+      const iAreaMg = hd.indexOf('Protein from area (mg)'), iNdMgMl = hd.indexOf('NanoDrop mg/mL'), iUsed = hd.indexOf('A280 of 1 mg/mL used');
+      const dataRows = csvRows.slice(1);
+      const areaWithheld = iAreaMg >= 0 && dataRows.length > 0 && dataRows.every(r => (r[iAreaMg] || '') === '');
+      const ndWithheld = iNdMgMl >= 0 && dataRows.length > 0 && dataRows.every(r => (r[iNdMgMl] || '') === '');
+      const usedWithheld = iUsed >= 0 && dataRows.length > 0 && dataRows.every(r => (r[iUsed] || '') === '');
+      T.check('15_molar_eps.withholds_beer_lambert_and_nd', areaWithheld && ndWithheld && usedWithheld, `expected Beer-Lambert & NanoDrop mg/mL withheld at 33460, got rows=${JSON.stringify(dataRows.map(r => [r[iAreaMg], r[iNdMgMl], r[iUsed]]))}`);
+
+      await h15.step('construct');
+      await h15.wait(200);
+      const convBtn = p15.locator('#epsWarn [data-epsconv]');
+      const hasConv = (await convBtn.count()) > 0 && await convBtn.isVisible();
+      if (hasConv) { await convBtn.click(); await h15.wait(300); }
+      const epsAfter = num(await p15.$eval('#o-eps', e => e.value));
+      await h15.step('figure');
+      await h15.wait(250);
+      const stAfter = await h15.sumTable(), stHd = stAfter[0] ? stAfter[0] : [], mgCol = stHd.findIndex(c => /^Protein \(mg\)/i.test(c));
+      const mgRestored = mgCol >= 0 && stAfter.slice(1).some(r => r.length === stHd.length && (num(r[mgCol]) || 0) > 0);
+      T.check('15_molar_eps.convert_sets_a280', hasConv && epsAfter !== null && Math.abs(epsAfter - 33460 / mw18) <= 0.005 && mgRestored, `hasConv=${hasConv} epsAfter=${epsAfter} exp=${(33460 / mw18).toFixed(3)} mgRestored=${mgRestored}`);
+      errs.push(...errs15);
+    } finally { await close15(); }
+  });
+
+  /* ================= 16. Opt-in oxidized cystines (Pace 1995) & Trp-less guard ================= */
+  await T.t('16_cys_oxidized_and_trp_less_guard', async () => {
+    const cysSeq = 'MCWAKCWAKCAGC' + 'GSAEKL'.repeat(6);
+    const mwCys = calcMW(cysSeq);
+    const noWySeq = 'MAGSKLLPEDGHHGSSKLLPED';
+    const {p: p16, errs: errs16, close: close16} = await open(), h16 = H(p16);
+    try {
+      await h16.newProject('CysOx and Trp-less');
+      await h16.step('construct');
+      await p16.fill('#protSeq', cysSeq);
+      await p16.dispatchEvent('#protSeq', 'input');
+      await p16.dispatchEvent('#protSeq', 'change');
+      await h16.wait(300);
+
+      const readTableA280 = () => p16.$$eval('#protTable tr', rs => {
+        if (rs.length < 2) return null;
+        const cells = [...rs[1].cells].map(c => c.textContent.trim());
+        return parseFloat(cells[cells.length - 1]);
+      });
+      const redA280 = await readTableA280();
+      const cysBox = p16.locator('#o-cysOx');
+      const hasCysBox = (await cysBox.count()) > 0 && await cysBox.isVisible();
+      if (hasCysBox) { await cysBox.check(); await h16.wait(300); }
+      const oxA280 = await readTableA280();
+      const oxEps = await p16.$eval('#protEps', e => e.textContent.trim());
+
+      const styleBtn = p16.locator('#moreWhat [data-more-sec="Figure style"]');
+      if ((await styleBtn.count()) > 0 && await styleBtn.isVisible()) { await styleBtn.click(); await h16.wait(250); }
+      const rstBtn = p16.locator('#optReset');
+      if ((await rstBtn.count()) > 0 && await rstBtn.isVisible()) { await rstBtn.click(); await h16.wait(300); }
+      const keptChecked = hasCysBox && await cysBox.isChecked();
+      const keptA280 = await readTableA280();
+      T.check('16_cys_ox.increases_a280_and_survives_reset',
+        hasCysBox && redA280 !== null && oxA280 !== null && Math.abs((oxA280 - redA280) - 250 / mwCys) <= 0.015 && /oxidized/.test(oxEps) && keptChecked && keptA280 === oxA280,
+        `hasCysBox=${hasCysBox} red=${redA280} ox=${oxA280} expDelta=${(250 / mwCys).toFixed(4)} kept=${keptChecked}/${keptA280} eps="${oxEps}"`);
+
+      if (hasCysBox && await cysBox.isChecked()) { await cysBox.uncheck(); await h16.wait(200); }
+      await p16.fill('#protSeq', noWySeq);
+      await p16.dispatchEvent('#protSeq', 'input');
+      await p16.dispatchEvent('#protSeq', 'change');
+      await h16.wait(300);
+      const noteVis = await p16.locator('#protNote').isVisible();
+      const noteTxt = await p16.$eval('#protNote', e => e.textContent.trim()).catch(() => '');
+      const epsTxt = await p16.$eval('#protEps', e => e.textContent.trim()).catch(() => '');
+      T.check('16_trp_less.warns_in_protnote_not_proteps',
+        noteVis && /no Trp or Tyr/i.test(noteTxt) && !epsTxt.includes('M⁻¹cm⁻¹'),
+        `noteVis=${noteVis} note="${noteTxt}" eps="${epsTxt}"`);
+      errs.push(...errs16);
+    } finally { await close16(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
