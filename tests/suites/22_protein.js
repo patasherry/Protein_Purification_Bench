@@ -1057,6 +1057,44 @@ ORIGIN
     }
   });
 
+  await T.t('16_fasta_file_import', async () => {
+    const {p: p16, errs: errs16, close: close16} = await open();
+    const h16 = H(p16);
+    try {
+      await h16.newProject('FASTA Import');
+      await p16.locator('#toast').evaluate(e => e.replaceChildren());
+      const expAa = 'MAWYAEAAWYAEAAWYAEA';
+      const fastaContent = `>sp|P00001|SYNTH_PROT Synthetic test protein\n${expAa.slice(0, 10)}\n${expAa.slice(10)}\n`;
+      await p16.setInputFiles('#file', {
+        name: 'target_prot.fasta',
+        mimeType: 'text/plain',
+        buffer: Buffer.from(fastaContent)
+      });
+      await h16.wait(500);
+      const toasts = await h16.toasts();
+      const gotSeq = await p16.$eval('#protSeq', e => e.value.trim());
+      const rows = await p16.$$eval('#protTable tr', trs => trs.map(r => [...r.cells].map(c => c.textContent.trim())));
+      T.check('16_fasta.loads_without_error', toasts.some(t => /Loaded protein sequence from target_prot\.fasta/i.test(t)) && !toasts.some(t => /Could not read|no columns of numbers/i.test(t)), `toasts: ${toasts.join(' | ')}`);
+      T.check('16_fasta.populates_seq_and_table', gotSeq === expAa && rows.length >= 2 && rows[1][1] === String(expAa.length), `seq="${gotSeq}" rows=${JSON.stringify(rows)}`);
+
+      await p16.locator('#toast').evaluate(e => e.replaceChildren());
+      const dnaFasta = '>dna_cds Synthetic nucleotide record\nATGGCTTGGTACGCTGAAGCTGCTTGGTACGCTGAAGCTTAA\n';
+      await p16.setInputFiles('#file', {
+        name: 'coding_seq.fa',
+        mimeType: 'text/plain',
+        buffer: Buffer.from(dnaFasta)
+      });
+      await h16.wait(400);
+      const dnaToasts = await h16.toasts();
+      const seqAfterDna = await p16.$eval('#protSeq', e => e.value.trim());
+      T.check('16_fasta.warns_on_nucleotide_fasta', dnaToasts.some(t => /nucleotide FASTA/i.test(t)) && seqAfterDna === expAa, `toasts: ${dnaToasts.join(' | ')} seq="${seqAfterDna}"`);
+
+      errs.push(...errs16);
+    } finally {
+      await close16();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

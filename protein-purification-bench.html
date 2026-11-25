@@ -933,7 +933,7 @@ button,input,select,textarea{font-family:inherit}
         <div class="btns">
           <button class="btn primary" id="pick" type="button">Choose data files</button>
           <button class="btn" id="pickGel" type="button">Add gel image</button>
-          <input type="file" id="file" multiple accept=".csv,.zip,.txt,.asc,.tsv,.dat,.arw,.xy,.json,.cif,.mmcif,.pdb,.ent,.gb,.gbk,.genbank,.ape,.dna,text/*" hidden>
+          <input type="file" id="file" multiple accept=".csv,.zip,.txt,.asc,.tsv,.dat,.arw,.xy,.json,.cif,.mmcif,.pdb,.ent,.gb,.gbk,.genbank,.ape,.dna,.fasta,.fa,.faa,text/*" hidden>
           <input type="file" id="gelFile" multiple accept="image/*,.tif,.tiff" hidden>
         </div>
       </div>
@@ -2139,9 +2139,102 @@ function parseEZStart(text){
   for (let c=0;c<channels;c++) for (let i=0;i<n;i++) rows[i].push(vals[c*n+i]);
   return {rows, cols: ['Time (min)', ...Array.from({length: channels}, (_, i) => `Channel ${i+1}`)], xc: 0, yc: 1, saturated: sat, satMax: isFinite(satMax) ? satMax : NaN};
 }
-function parseText(text){
+function parseEmpowerArw(text, fname){
+  const lines = text.split(/\r\n|\n|\r/), isArwExt = /\.arw$/i.test(String(fname || ''));
+  const nonEmpty = [];
+  for (let i = 0; i < lines.length && nonEmpty.length < 80; i++) if (lines[i].trim()) nonEmpty.push({i, s: lines[i]});
+  if (!nonEmpty.length) return null;
+  const empKey = s => /^(samplename|sample\s+name|samplesetname|sample\s+set\s+name|vial|inj|injection|injectionvolume|channel|channelname|channel\s+name|channelid|channel\s+id|channeldescr(?:iption)?|channel\s+descr(?:iption)?|processedchanneldescr\.?|processed\s+channel\s+descr\.?|dateacquired|date\s+acquired|acqmethod(?:set)?|acq\s+method(?:\s+set)?|runtime|run\s+time|systemname|system\s+name|dataname|wavelength)$/i.test(s.replace(/:$/, '').trim());
+  const normKey = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  let meta = null, dataFrom = 0;
+  for (let p = 0; p < Math.min(nonEmpty.length - 1, 12); p++) {
+    for (const d of ['\t', ',', ';']) {
+      const hk = splitFields(nonEmpty[p].s, d).map(clean);
+      if (hk.length < (isArwExt ? 2 : 3)) continue;
+      const hits = hk.filter(empKey).length;
+      const hasCore = hk.some(k => /^(samplename|sample\s+name)$/i.test(k)) && hk.some(k => /^(vial|inj|injection|channel|channel\s*name|channel\s*descr(?:iption)?|processed\s*channel\s*descr\.?|acq\s*method(?:\s*set)?|date\s*acquired)$/i.test(k));
+      if (!hasCore || hits < Math.min(hk.length, isArwExt ? 2 : 3)) continue;
+      if (hk.some(k => /^(time|retention\s*time|volume)\b/i.test(k)) && hk.length <= 3) continue;
+      const vk = splitFields(nonEmpty[p + 1].s, d).map(clean);
+      if (hk.length > 2 && vk.length === 2 && vk.every(v => !isNaN(toNum(v, false)))) { meta = {}; dataFrom = nonEmpty[p].i + 1; break; }
+      meta = {};
+      hk.forEach((k, idx) => { const nk = normKey(k); if (nk && vk[idx] != null && vk[idx] !== '') meta[nk] = vk[idx]; });
+      dataFrom = nonEmpty[p + 1].i + 1; break;
+    }
+    if (meta) break;
+  }
+  if (!meta) {
+    const kv = {}; let kvHits = 0, lastKv = -1;
+    for (let p = 0; p < Math.min(nonEmpty.length, 30); p++) {
+      const L = nonEmpty[p].s;
+      let k = '', v = '';
+      for (const d of ['\t', ',', ';']) {
+        const fs = splitFields(L, d).map(clean).filter((_, idx, a) => idx < a.length - 1 || a[idx] !== '');
+        if (fs.length === 2 && empKey(fs[0])) { k = fs[0]; v = fs[1]; break; }
+      }
+      if (!k) {
+        const m = /^\s*"?([A-Za-z][A-Za-z0-9 .]{1,28}?)"?\s*:\s*(.+?)\s*$/.exec(L);
+        if (m && empKey(m[1])) { k = m[1]; v = clean(m[2]); }
+      }
+      if (k) { kv[normKey(k)] = v; kvHits++; lastKv = nonEmpty[p].i; }
+      else if (kvHits) break;
+    }
+    if (kvHits >= 2 && (kv.samplename || kv.channel || kv.channelname || kv.channeldescription || kv.processedchanneldescr)) { meta = kv; dataFrom = lastKv + 1; }
+  }
+  if (!meta) return null;
+  let best = null;
+  const tail = lines.slice(dataFrom), sample = tail.length > 6000 ? tail.slice(0, 3000).concat(tail.slice(-3000)) : tail;
+  for (const d of ['\t', ',', ';', 'ws']) for (const dc of (d === ',' ? [false] : [false, true])) {
+    let cnt = 0, sc = 0;
+    for (const L of sample) { if (!L.trim()) continue; let k = 0, bad = 0; for (const f of splitLine(L, d)) { if (!isNaN(toNum(f, dc))) k++; else if (f.trim()) bad++; } if (k >= 2) { cnt++; sc += k - bad; } }
+    if (!best || sc > best.sc) best = {d, dc, cnt, sc};
+  }
+  if (!best || best.cnt < 2) throw new Error('has no data points');
+  const {d, dc} = best, runsN = []; let cr = null;
+  for (let i = dataFrom; i < lines.length; i++) {
+    const L = lines[i]; if (!L.trim()) { cr = null; continue; }
+    const rawFs = splitFields(L, d); while (rawFs.length > 2 && !rawFs[rawFs.length - 1].trim()) rawFs.pop();
+    const infos = rawFs.map(f => toNumInfo(f, dc)), nums = infos.map(q => q ? q.v : NaN);
+    let k = 0; for (const v of nums) if (!isNaN(v)) k++;
+    if (k >= 2) { if (!cr) { cr = {start: i, rows: [], sats: []}; runsN.push(cr); } cr.rows.push(nums); cr.sats.push(infos.map(q => !!(q && q.sat))); cr.end = i; } else cr = null;
+  }
+  const run = runsN.length ? runsN.reduce((a, b) => b.rows.length > a.rows.length ? b : a) : null;
+  if (!run || run.rows.length < 2) throw new Error('has no data points');
+  if (run.rows[0].length !== 2) return null;
+  let subHdr = null;
+  for (let j = run.start - 1; j >= Math.max(dataFrom, run.start - 3); j--) {
+    if (!lines[j].trim()) continue;
+    const fs = splitFields(lines[j], d).map(clean);
+    if (fs.length === 2 && fs.every(f => f && isNaN(toNum(f, dc)))) { subHdr = fs; break; }
+  }
+  const smp = meta.samplename || '';
+  const chRaw = [meta.processedchanneldescr, meta.channeldescription, meta.channel, meta.channelname].filter(Boolean);
+  const chLabel = chRaw[0] || '';
+  const chAll = chRaw.concat([meta.wavelength ? (/nm/i.test(meta.wavelength) ? meta.wavelength : meta.wavelength + ' nm') : '', (subHdr && subHdr[1]) || '']).filter(Boolean).join(' ');
+  let wl = null;
+  for (const s of chRaw.concat([chAll])) { const w = uvWavelengthOf(s) || (+uvWl({name: s}) || null); if (w) { wl = w; break; } }
+  if (!wl && meta.wavelength) { const wm = String(meta.wavelength).match(/(\d{3})(?:\.\d+)?/); if (wm && +wm[1] >= 190 && +wm[1] <= 900) wl = +wm[1]; }
+  const isAlreadyMau = /\bmau\b/i.test(chAll);
+  const isNonUv = !wl && /\b(flr|fluor(?:escence)?|ri|refractive|cond(?:uctivity)?|elsd|cad|pressure|temp(?:erature)?)\b/i.test(chAll);
+  const isUv = !isNonUv && (wl != null || /\b(uv|tuv|pda|dad|abs(?:orb(?:ance)?)?|248[79]|299[68]|au)\b/i.test(chAll) || !chAll);
+  let maxAbs = 0;
+  for (const r of run.rows) { const ay = Math.abs(r[1]); if (isFinite(ay) && ay > maxAbs) maxAbs = ay; }
+  const scale = isUv && !isAlreadyMau && maxAbs <= 5 ? 1000 : 1;
+  const rows = scale === 1 ? run.rows : run.rows.map(r => [r[0], r[1] * scale]);
+  const cols = ['Time (min)', 'Absorbance (mAU)'];
+  const baseName = String(fname || '').replace(/\.[^.]+$/, '');
+  const traceName = smp && chLabel ? (smp.toLowerCase().includes(chLabel.toLowerCase()) ? smp : `${smp} (${chLabel})`) : smp ? smp : chLabel ? (baseName ? `${baseName} (${chLabel})` : chLabel) : undefined;
+  const satByCol = [0, 1].map(c => run.sats.reduce((s, sr) => s + (sr[c] ? 1 : 0), 0));
+  let satMax = -Infinity;
+  rows.forEach((r, idx) => { const sr = run.sats[idx]; if (sr[1] && isFinite(r[1])) satMax = Math.max(satMax, Math.abs(r[1])); });
+  const cl = cleanXY(rows.map(r => r[0]), rows.map(r => r[1]));
+  return Object.assign({rows, cols, xc: 0, yc: 1, uvCols: wl ? [{col: 1, wl, name: chLabel || `${wl} nm`}] : [], skipped: 0, retained: {start: run.start + 1, end: run.end + 1, count: rows.length}, discarded: [], saturated: satByCol[1] + satByCol[0], satByCol, satMax: isFinite(satMax) ? satMax : NaN, dupX: cl.dupX, dupDiff: cl.dupDiff},
+    traceName ? {name: traceName} : null, wl ? {uvWl: String(wl)} : null);
+}
+function parseText(text, fname){
   const lines = text.split(/\r\n|\n|\r/);
   const ez = parseEZStart(text); if (ez) return ez;
+  const arw = parseEmpowerArw(text, fname); if (arw) return arw;
   const sample = lines.length > 6000 ? lines.slice(0,3000).concat(lines.slice(-3000)) : lines;
   let best = null;
   for (const d of ['\t', ',', ';', 'ws']) for (const dc of (d === ',' ? [false] : [false, true])) {
@@ -2180,7 +2273,7 @@ function parseText(text){
   }));
   const retained = {start: run.start + 1, end: run.end + 1, count: run.rows.length};
   let ncol = 0; for (const r of run.rows) if (r.length > ncol) ncol = r.length;
-  const isHeader = fs => fs.length >= 2 && fs.filter(f => f && isNaN(toNum(f,dc))).length >= Math.min(2, fs.length);
+  const isHeader = fs => fs.length >= 2 && fs.length <= ncol + 1 && fs.filter(f => f && isNaN(toNum(f,dc))).length >= Math.min(2, fs.length);
   let names = null, above = null, j = run.start - 1;
   for (; j >= Math.max(0, run.start-4); j--) { if (!lines[j].trim()) continue; const fs = splitFields(lines[j], d).map(clean); if (isHeader(fs)) { names = fs; break; } }
   if (names) for (let k = j-1; k >= Math.max(0, j-2); k--) { if (!lines[k].trim()) continue; const fs = splitFields(lines[k], d).map(clean); if (fs.length === names.length && fs.some(f => f && isNaN(toNum(f,dc)))) above = fs; break; }
@@ -2478,7 +2571,7 @@ function makeTrace(name, p, ex){
   const mx = (p.cols[xc] || '').match(/\(([^)]+)\)/), my = (p.cols[yc] || '').match(/\(([^)]+)\)/);
   const id = p && p.id != null && String(p.id).trim() !== '' ? p.id : nextUid();
   return Object.assign({}, ENTITY_CODECS.Trace.def, {id, name, color: paletteColor(traces.length, traces.length+1), rows: p.rows, cols: p.cols,
-    xc, yc, peaks: [], ex: !!ex, xu: mx ? mx[1] : null, yu: my ? my[1] : null, source: p.source || null});
+    xc, yc, peaks: [], ex: !!ex, xu: mx ? mx[1] : null, yu: my ? my[1] : null, source: p.source || null}, p.uvWl ? {uvWl: String(p.uvWl)} : null);
 }
 function makeRun(p){ const id = p && p.id != null && String(p.id).trim() !== '' ? p.id : nextUid('r');
   const r = Object.assign({}, ENTITY_CODECS.Run.def, {id, integ: [], fracs: []}, p, {id});
@@ -2845,7 +2938,7 @@ let WF_WL, COND_N = 0;
 /* how many condition lines a run needs at a given panel width (the same wrap as under the trace) */
 function condLineCount(r, W){ if (r.prep || !opt.runCond || opt.runCond === 'none') return 0; const fs = fontSize(), cf = fs*0.75, full = opt.runCond === 'full', room = Math.max(10, Math.floor((W - (full ? fs*5.2 : fs*1.2))/(cf*0.52)));
   return Math.min(16, runCondLines(r, opt.runCond).reduce((t, x) => t + wrapWords(x, room).length, 0)); }
-function uvWl(uv){ const s = String((uv && uv.name) || '').replace(/^.*[:_](?=UV)/i, '').replace(/\bref(?:erence)?\s*[:=]?\s*\d{3}(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)?(?:\s*nm)?/ig, ''); if (/\bpath\b|cut_temp/i.test(s)) return '';
+function uvWl(uv){ if (uv && uv.uvWl) return String(uv.uvWl); const s = String((uv && uv.name) || '').replace(/^.*[:_](?=UV)/i, '').replace(/\bref(?:erence)?\s*[:=]?\s*\d{3}(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)?(?:\s*nm)?/ig, ''); if (/\bpath\b|cut_temp/i.test(s)) return '';
   let m = s.match(/(?:^|[^0-9])(\d{3})(?:\.\d+)?\s*nm(?![a-z0-9])/i); if (m && +m[1] >= 190 && +m[1] <= 900) return m[1];
   m = s.match(/(?:\b(?:uv|abs(?:orb(?:ance)?)?|dad\w*|pda\w*|tuv\w*)\s*(?:\d[\s_:-]+|[,_:-]\s*)?|\bsig(?:nal)?\s*=\s*|\ba_?)(\d{3})(?:\.\d+)?(?!\d)/i);
   return m && +m[1] >= 190 && +m[1] <= 900 && !/^\s*(?:mm|µm|um|cm|ml|µl|ul|mg|µg|ug|kda|da|min|sec|hz|bar|mpa|psi|ms|°c)\b/i.test(s.slice(m.index + m[0].length)) ? m[1] : ''; }
@@ -3118,7 +3211,7 @@ function yLabelText(){
   if (opt.normalize && opt.ylabel === DEF.ylabel) return 'Normalized absorbance';
   if (opt.ylabel === DEF.ylabel) {
     const visList = traces.filter(t => t.visible);
-    const wls = new Set(visList.map(t => t.cols && uvWavelengthOf(t.cols[t.yc])).filter(Boolean));
+    const wls = new Set(visList.map(t => (t.cols && uvWavelengthOf(t.cols[t.yc])) || (t.uvWl ? +t.uvWl : 0)).filter(Boolean));
     if (wls.size > 1) {
       const yus = new Set(visList.map(t => t.yu || '').filter(Boolean));
       return yus.size === 1 ? `Absorbance (${[...yus][0]})` : opt.ylabel;
@@ -8091,7 +8184,7 @@ paper.addEventListener('click', e => {
 });
 
 /* ---------- loading ---------- */
-const isImage = f => /^image\//.test(f.type) || /\.(tif|tiff|png|jpe?g|bmp|gif|webp)$/i.test(f.name);
+const isImage = f => !/\.(arw|asc|csv|tsv|txt|dat|xy|f(?:asta|aa|a))$/i.test(f.name) && (/^image\//.test(f.type) || /\.(tif|tiff|png|jpe?g|bmp|gif|webp)$/i.test(f.name));
 function loadScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
 let tiffP = null;
 function tiffLib(){ if (!tiffP) tiffP = loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js').catch(() => {}).then(() => loadScript('https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js')).catch(e => { tiffP = null; throw e; }); return tiffP; }
@@ -8312,6 +8405,25 @@ function genericBlockDiag(srcName, nm, parsed){
   }
   return null;
 }
+async function loadFastaFile(f){
+  const text = decode(await f.arrayBuffer()), lines = text.split(/\r\n|\n|\r/);
+  let hdr = '', recs = 0; const body = [];
+  for (const L of lines) {
+    if (/^\s*>/.test(L)) { recs++; if (recs === 1) hdr = L.replace(/^\s*>\s*/, '').trim(); continue; }
+    if (recs <= 1) body.push(L);
+  }
+  const seq = cleanSeq(body.join(''));
+  if (!seq) { toast(`Could not read a protein sequence from ${f.name}.`); return; }
+  if (seq.length >= 24 && (seq.match(/[ACGTU]/g) || []).length / seq.length >= 0.9) {
+    toast(`${f.name} looks like a nucleotide FASTA sequence (${seq.length} nt, >= 90% A/C/G/T/U). Load a protein FASTA (.faa/.fasta) or a GenBank plasmid (.gb) instead.`);
+    return;
+  }
+  opt.protSeq = seq; opt.protSrc = '';
+  const el = $('#protSeq'); if (el) el.value = seq;
+  saveOpt(); syncControls(); renderProt(); render();
+  const label = hdr ? hdr.split(/\s+/)[0] : '';
+  toast(`Loaded protein sequence from ${f.name} (${seq.length} aa${label ? `, ${label}` : ''})${recs > 1 ? `. Read first of ${recs} FASTA records` : ''}.`);
+}
 async function loadFiles(files){
   const proj = files.find(f => /\.json$/i.test(f.name)); if (proj && MODE !== 'quick') { const prev = PROJ; let d = null; try { d = JSON.parse(await proj.text()); } catch (e) { toast(`Could not open ${proj.name}`); } if (d) await importAsProject(d, proj.name);
     if (!PROJ || PROJ === prev) return; files = files.filter(f => f !== proj); if (!files.length) return; }
@@ -8319,6 +8431,7 @@ async function loadFiles(files){
   keepRaw(files);
   const gbf = files.filter(f => /\.(gb|gbk|genbank|ape|dna)$/i.test(f.name)); for (const f of gbf) await loadGenBank(f); files = files.filter(f => !gbf.includes(f)); if (!files.length) return;
   const sf = files.filter(f => /\.(cif|mmcif|pdb|ent)$/i.test(f.name)); for (const f of sf) await loadStructFile(f); files = files.filter(f => !sf.includes(f)); if (!files.length) return;
+  const faf = files.filter(f => /\.(fasta|fa|faa)$/i.test(f.name)); for (const f of faf) await loadFastaFile(f); files = files.filter(f => !faf.includes(f)); if (!files.length) return;
   const imgs = files.filter(isImage), data = files.filter(f => !isImage(f));
   const added = [], newRuns = [], bad = [], lost = [];
   for (const f of data) {
@@ -8364,17 +8477,17 @@ async function loadFiles(files){
         ak.source = f.name;
         newRuns.push(makeRun(ak));
       } else {
-        const parsed = parseText(text);
-        const diag = genericDiag(f.name, nm, parsed);
+        const parsed = parseText(text, f.name), tBase = parsed.name || nm;
+        const diag = genericDiag(f.name, tBase, parsed);
         if (diag) setSourceDiag(f.name, diag); else clearSourceDiag(f.name);
         if (parsed.uvCols && parsed.uvCols.length > 1) {
           const wlCounts = {}; parsed.uvCols.forEach(u => { wlCounts[u.wl] = (wlCounts[u.wl] || 0) + 1; });
           parsed.uvCols.forEach((u, idx) => {
             const chLabel = wlCounts[u.wl] > 1 ? u.name : `${u.wl} nm`;
-            added.push({name: `${nm} (${chLabel})`, parsed: Object.assign({}, parsed, {yc: u.col, skipped: idx ? 0 : parsed.skipped, discarded: idx ? [] : parsed.discarded}), source: f.name});
+            added.push({name: `${tBase} (${chLabel})`, parsed: Object.assign({}, parsed, {yc: u.col, skipped: idx ? 0 : parsed.skipped, discarded: idx ? [] : parsed.discarded}), source: f.name});
           });
         } else {
-          added.push({name: nm, parsed, source: f.name});
+          added.push({name: tBase, parsed, source: f.name});
         }
       }
     } catch (err) { bad.push(f.size === 0 ? `${f.name} (the file is empty)` : err.message === 'has no data points' ? `${f.name} (a chromatogram file, but has no data points: check that data was exported)` : `${f.name} (no columns of numbers found)`); }
@@ -8439,7 +8552,7 @@ let pasteN = 1;
 $('#pasteAdd').addEventListener('click', () => {
   const txt = $('#pasteText').value; if (!txt.trim()) { toast('Paste two or more columns first'); return; }
   try {
-    const nm = 'Pasted trace ' + (pasteN++), parsed = parseText(txt);
+    const baseNm = 'Pasted trace ' + (pasteN++), parsed = parseText(txt), nm = parsed.name || baseNm;
     const diag = genericDiag(nm, nm, parsed);
     if (diag) setSourceDiag(nm, diag);
     addParsed([{name: nm, parsed, source: nm}]);
