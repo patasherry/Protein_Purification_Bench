@@ -77,7 +77,7 @@ In the **Protein** section, paste your untagged protein sequence or load a 4-cha
     *   *How it changes reported numbers:* Changes reported numbers by withholding (leaving blank) protein mass and concentration values for pre-cleavage samples until either the fusion tag sequence or a manual extinction coefficient is provided, preventing erroneous masses based on untagged extinction coefficients.
 
 **6. Exports and backups**
-Below the figure, click **"Copy SVG"**, **"Save SVG"**, **"Save PNG"** (at 300, 600, or 1200 dpi), or **"Save all (ZIP)"** to bundle all figures and CSV tables. Below each table, click **"Save table (CSV)"** or **"Copy methods"**. In the top bar, click **"Export file"** to download a `.json` backup of your project, **"Open file"** to load a saved `.json` project, or **"Save as project"** to turn a quick figure into a saved project.
+Below the figure, click **"Copy SVG"**, **"Save SVG"**, **"Save PNG"** (at 300, 600, or 1200 dpi), or **"Save all (ZIP)"** to bundle all figures and CSV tables. Below each table, click **"Save table (CSV)"** or **"Copy methods"**. In the top bar, click **"Export project"** to download a `.json` backup of your project, **"Open project (.json)"** to load a saved `.json` project, or **"Save as project"** to turn a quick figure into a saved project.
 
 **7. Troubleshooting**
 Status messages and hints explain missing inputs or unverified numbers. For example, if UV protein mass cannot be calculated for a run, the summary notes explain why—such as `"the x axis is in minutes and the flow rate is not known (enter it under Flow)"` or `"the selected UV curve is 260 nm, not 280 nm"`.
@@ -153,7 +153,7 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 
 *   **Browser Storage:** Saves figure preferences, SEC calibrations, and custom contaminant lists in `localStorage` (`hplc-fig-opt`), and saves projects automatically in `IndexedDB` (`hfb-projects`).
 *   **Host Integration:** Uses cloud database and asset storage when hosted in an environment providing `window.claude`.
-*   **Project Backups:** Export and import complete projects as `.json` files via **"Export project"** and **"Open file"** (both in the header).
+*   **Project Backups:** Export and import complete projects as `.json` files via **"Export project"** and **"Open project (.json)"** (in the header and on the home screen; dropping instrument data or gel images directly on the home screen opens Quick-Figure mode automatically).
 
 ## External Libraries and Network Dependencies
 
