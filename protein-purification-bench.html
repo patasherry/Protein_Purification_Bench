@@ -21,18 +21,18 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#6c7280;
-    --accent:#95a4f3; --accent-ink:#0d1020; --accent-soft:#1f2747; --field:#10131c; --paper:#ffffff; --paper-edge:#2c3346;
-    --soft:#1a1f2d; --warn:#e2b45c; --hover:#1c2232; --well:#10131b; --paper-ink:#4d5468;
+    --bg:#0e1015; --panel:#14171f; --card:#1b1f2a; --ink:#f2f2f7; --muted:#a4a8b4; --faint:#9096a8; --line:#262c3c; --line2:#6c7280;
+    --accent:#409cff; --accent-ink:#0d1020; --accent-soft:#16304f; --field:#12151d; --paper:#ffffff; --paper-edge:#2c3346;
+    --soft:#212634; --warn:#e2b45c; --hover:#252b3b; --well:#11141c; --paper-ink:#4d5468;
     --t-ok:#5fd0a8; --t-tag:#cf9bdc; --t-con:#ff8a85; --t-known:#f0b35c;
     --shadow:0 1px 1px rgba(0,0,0,.4),0 10px 30px -8px rgba(0,0,0,.6); --sb:#353d52; --edge:rgba(0,0,0,.55);
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#6c7280;
-  --accent:#95a4f3; --accent-ink:#0d1020; --accent-soft:#1f2747; --field:#10131c; --paper:#ffffff; --paper-edge:#2c3346;
-  --soft:#1a1f2d; --warn:#e2b45c; --hover:#1c2232; --well:#10131b; --paper-ink:#4d5468;
+  --bg:#0e1015; --panel:#14171f; --card:#1b1f2a; --ink:#f2f2f7; --muted:#a4a8b4; --faint:#9096a8; --line:#262c3c; --line2:#6c7280;
+  --accent:#409cff; --accent-ink:#0d1020; --accent-soft:#16304f; --field:#12151d; --paper:#ffffff; --paper-edge:#2c3346;
+  --soft:#212634; --warn:#e2b45c; --hover:#252b3b; --well:#11141c; --paper-ink:#4d5468;
   --t-ok:#5fd0a8; --t-tag:#cf9bdc; --t-con:#ff8a85; --t-known:#f0b35c;
   --shadow:0 1px 1px rgba(0,0,0,.4),0 10px 30px -8px rgba(0,0,0,.6); --sb:#353d52; --edge:rgba(0,0,0,.55);
 }
@@ -43,7 +43,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 ::selection{background:var(--accent-soft)}
 /* header */
 /* projects: home, project bar, step timeline */
-.home{max-width:1180px;margin:4px auto 36px;display:grid;gap:12px;font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+.home{max-width:1180px;margin:4px auto 36px;display:grid;gap:12px;color:var(--ink)}
 .home-intro{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px;padding:2px}
 .home-intro h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 .home-intro p{margin:0;color:var(--muted);font-size:12.5px;max-width:70ch}
@@ -85,7 +85,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projlist{display:flex;flex-direction:column}
 .proj-header{display:grid;grid-template-columns:28px minmax(180px,2fr) 75px minmax(110px,1.2fr) minmax(130px,1.3fr) 115px 95px minmax(105px,auto);align-items:center;gap:6px 10px;padding:7px 12px;background:var(--panel,#f8fafc);border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;user-select:none}
 .proj-header span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.projlist .empty-p{color:var(--muted);margin:0;padding:16px 14px}
+.projlist .empty-p{color:var(--muted);margin:0;padding:24px 14px;text-align:center;grid-column:1/-1}
 .home-cb-wrap{display:grid;place-items:center;padding:2px;cursor:pointer}
 .home-cb{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer}
 .home-kind-badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;letter-spacing:.02em;flex:none;line-height:1.3}
@@ -145,7 +145,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .pdot{width:8px;height:8px;border-radius:50%;background:var(--line2)}
 .pdot.done{background:var(--accent)}
 .pdot.warn{background:var(--warn)}
-@media (max-width:860px){
+@media (max-width:880px){
   .proj-header{grid-template-columns:28px minmax(140px,2fr) minmax(100px,1.2fr) 105px minmax(90px,auto)}
   .proj-header .ph-type,.proj-header .ph-mod{display:none}
   .pcard,.fcard{grid-template-columns:28px minmax(140px,2fr) minmax(100px,1.2fr) 105px minmax(90px,auto)}
@@ -168,8 +168,8 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;flex:1 1 260px}
 .projbar .pb-sep{color:var(--line2);font-size:18px} .projbar .pb-lab{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .proj-settings{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
-.proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted)}
-.proj-settings-body{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%} .projname-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+.proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted);min-height:24px;padding-block:3px;line-height:18px}
+.proj-settings-body{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%} .projname-pair,.projtheme-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%} .projtheme-pair .seg label{padding:3px 8px;min-height:24px;font-size:12px}
 .np-type{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center} .np-type .hint{margin:0}
 /* Include Cloning switch (#1433): one on/off control, a real button so Space and Enter work */
 .tgl{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;color:var(--ink);background:transparent;border:0;padding:2px 0;cursor:pointer}
@@ -217,14 +217,14 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projname:hover{border-color:var(--line)} .projname:focus{outline:none;border-color:var(--accent);background:var(--field)}
 .savestate{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .savestate.err{color:var(--t-con)}
-.rawfiles{position:relative;font-size:12.5px;color:var(--muted)} .rawfiles summary{cursor:pointer;white-space:nowrap} .rawlist{position:absolute;top:100%;left:0;z-index:30;background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:8px;min-width:300px;max-height:50vh;overflow:auto;color:var(--ink)}
+.rawfiles{position:relative;font-size:12.5px;color:var(--muted)} .rawfiles summary{cursor:pointer;white-space:nowrap;min-height:24px;padding-block:3px;line-height:18px} .rawlist{position:absolute;top:100%;left:0;z-index:30;background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:8px;min-width:300px;max-height:50vh;overflow:auto;color:var(--ink)}
 .rawlist .rawrow{display:flex;align-items:center;gap:8px;padding:3px 0} .rawlist .rawname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl{list-style:none;margin:0;padding:0;display:grid;counter-reset:step}
 .tl li{position:relative}
 .tl li:not(:last-child)::before{content:"";position:absolute;left:13px;top:26px;bottom:-4px;width:1.5px;background:var(--line)}
 .tl li.done:not(:last-child)::before{background:var(--accent);opacity:.45}
 .tl .tl-h{margin:10px 0 4px;color:var(--muted);font-size:11.5px;letter-spacing:.04em;padding-left:36px;display:flex;align-items:center;justify-content:space-between;padding-right:8px}
-.tl-stage-add{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:1px solid var(--line2);border-radius:4px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1;cursor:pointer}
+.tl-stage-add{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;width:24px;height:24px;padding:0;border:1px solid var(--line2);border-radius:4px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1;cursor:pointer}
 .tl-stage-add:hover{color:var(--ink);border-color:var(--line);background:var(--hover)}
 .tl-stage-add:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tl li.tl-head::before{display:none}
@@ -518,10 +518,11 @@ label.f.condmissing>input{border-color:var(--warn)}
 .nextbar > span:first-child{display:flex;gap:9px;align-items:baseline;flex:1;min-width:0}
 .nextbar .btns{flex:none;flex-wrap:nowrap}
 .nextbar > span:first-child::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent);transform:translateY(-1px)}
-.grp > h2{cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
-.grp > h2::after{content:"";margin-left:auto;flex:none;width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .15s}
-.grp.collapsed > h2::after{transform:rotate(-45deg)}
-.grp > h2:hover::after{border-color:var(--ink)}
+.grp > h2{cursor:default;display:flex;align-items:center;gap:6px}
+#panel > .grp > h2[role="button"]{cursor:pointer;user-select:none}
+#panel > .grp > h2[role="button"]::after{content:"";margin-left:auto;flex:none;width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .15s}
+#panel > .grp.collapsed > h2[role="button"]::after{transform:rotate(-45deg)}
+#panel > .grp > h2[role="button"]:hover::after{border-color:var(--ink)}
 .grp.collapsed{padding-bottom:14px}
 .grp.collapsed > :not(h2){display:none!important}
 .grp > h2 .st,.grp > h2 .steps-prog{font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;color:var(--muted);margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -532,15 +533,18 @@ label.f.condmissing>input{border-color:var(--warn)}
 .figtabs{display:flex;gap:2px;padding:4px 8px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--sb) transparent}
 .figtab{font:inherit;font-size:13px;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);padding:7px 12px 8px;margin-bottom:-1px;cursor:pointer;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none;border-radius:6px 6px 0 0}
 .figtab:hover{color:var(--ink);background:var(--hover)}
-.figtab[aria-pressed="true"]{color:var(--ink);font-weight:500;border-bottom-color:var(--accent)}
-.paper{background:var(--paper);border:1px solid var(--paper-edge);border-radius:6px;box-shadow:var(--shadow);padding:clamp(10px,3vw,36px);display:flex;justify-content:center;align-items:center;min-height:260px}
+.figtab[aria-selected="true"]{color:var(--ink);font-weight:500;border-bottom-color:var(--accent)}
+.paper{background:var(--paper);border:1px solid var(--paper-edge);border-radius:6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.92),0 1px 2px rgba(21,26,40,.06),var(--shadow);padding:clamp(10px,3vw,36px);display:flex;justify-content:center;align-items:center;min-height:260px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .paper{box-shadow:0 0 0 1px rgba(255,255,255,.08),var(--shadow)}}
+:root[data-theme="dark"] .paper{box-shadow:0 0 0 1px rgba(255,255,255,.08),var(--shadow)}
 .paperwrap{position:relative}
 .wfsel{position:absolute;pointer-events:none;border:2px solid #0058c4;border-radius:4px;background:rgba(0,88,196,.06);box-shadow:0 0 0 1px rgba(255,255,255,.9)}
 .wfsel::after{content:"";position:absolute;top:-5px;left:-5px;right:-5px;bottom:-5px;background-image:radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px);background-position:top left, top right, bottom left, bottom right;background-size:8px 8px;background-repeat:no-repeat}
 .wftool{position:absolute;z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:min(560px, calc(100% - 16px));padding:8px;background:var(--card, #fff);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:13px}
-.wftool input[type=text]{flex:1 1 150px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:5px;font:inherit;background:var(--well, #fff);color:inherit}
-.wftool #wfA{flex-basis:260px;min-width:min(260px,100%);text-overflow:clip}
-.wftool .wfl{color:var(--muted);font-size:12px}
+.wftool input[type=text]{flex:1 1 90px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:5px;font:inherit;background:var(--well, #fff);color:inherit}
+.wftool #wfA{min-width:248px;flex:3 1 248px;text-overflow:clip}
+@media (max-width:480px){.wftool{max-width:calc(100% - 4px);padding:6px;gap:5px}.wftool input[type=text]{font-size:12px;padding:4px 6px}.wftool #wfA{min-width:210px;flex:1 1 210px}}
+.wftool .wfl{color:var(--muted);font-size:12px;white-space:nowrap}
 .wftool .wfg{display:inline-flex;align-items:center;gap:2px}
 .wftool .wfhint{flex-basis:100%;font-size:11.5px;color:var(--muted)}
 .wftool button{font:inherit}
@@ -608,7 +612,8 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .nd-dil{display:flex;align-items:center;gap:2px;font-size:11.5px;color:var(--muted)}
 .nd-dil input{width:3.6em;min-height:24px;padding:1px 4px;font-size:11.5px}
 #sumTable .ndc{border-left:1px solid var(--line2)}
-#sumTable th:first-child,#sumTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:1}
+#sumTable th:first-child,#sumTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;box-shadow:inset -1px 0 0 var(--line)}
+#sumTable tr:hover td:first-child{background:var(--hover)}
 .grp > *{min-width:0}
 .muted{color:var(--muted)}
 .warnc{color:var(--t-con);font-weight:600}
@@ -632,7 +637,7 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .tagbtn.g[aria-pressed="true"]{background:#7F3C8D;color:#ffffff;box-shadow:none}
 .tagbtn.c[aria-pressed="true"]{background:#D62728;color:#ffffff;box-shadow:none}
 .tagbtn.a[aria-pressed="true"],.tagbtn.r[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);box-shadow:none}
-.bchip{font:inherit;font-size:12px;border:1px solid var(--line2);background:var(--field);color:var(--ink);border-radius:999px;padding:1px 4px 1px 8px;margin:1px 2px;cursor:pointer;display:inline-flex;align-items:center;gap:2px}
+.bchip{font:inherit;font-size:12px;border:1px solid var(--line2);background:var(--field);color:var(--ink);border-radius:999px;min-height:24px;padding:2px 6px 2px 8px;margin:1px 2px;cursor:pointer;display:inline-flex;align-items:center;gap:2px}
 .bchip.t{border-color:#1B9E77;color:var(--t-ok);background:rgba(27,158,119,.1);font-weight:600}
 .bchip.g{border-color:#7F3C8D;color:var(--t-tag);background:rgba(127,60,141,.1);font-weight:600}
 .bchip.c{border-color:#D62728;color:var(--t-con);background:rgba(214,39,40,.08);font-weight:600}
@@ -661,8 +666,7 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .zoom-inset:hover .zoom-inset-handles{opacity:1}
 body.stepfig .paper > svg{max-width:min(100%,680px);margin-inline:auto}
 .paper .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#5a6177;font-size:14px;text-align:center;max-width:36ch;line-height:1.5;margin:auto}
-.figmodal{width:min(1200px,calc(100vw - 32px));height:min(90vh,calc(100vh - 32px));max-width:none;max-height:none;border:1px solid var(--line2);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;box-shadow:var(--shadow)}
-.figmodal::backdrop{background:rgba(15,18,26,.58)}
+.figmodal{width:min(1200px,calc(100vw - 32px));height:min(90vh,calc(100vh - 32px));max-width:none;max-height:none}
 .figmodal-head{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .figmodal-head strong{flex:1;font-size:15px}
 .figmodal-body{height:calc(100% - 57px);overflow:auto;padding:18px;background:var(--well)}
@@ -699,16 +703,16 @@ dialog.cl-archive-dlg::backdrop{display:none}
   .paper{padding:10px;min-height:0;overflow-x:auto;justify-content:flex-start}
   .canvas-body{padding:10px}
   .export{justify-content:flex-start;gap:8px}
-  header.top .top-act{margin-left:-10px}
+  header.top .top-act{margin-left:0}
   .paper > svg{width:auto;max-width:none;max-height:none;flex:none;margin-inline:auto}
   header.top p{font-size:12.5px}
 }
 /* iOS-inspired look (UI only, the figures are untouched): tokens, inset grouped sections, switches, segmented control, rounded buttons.
    --ios-blue is the iOS blue for non-text marks; --accent is the same hue darkened to pass WCAG AA for text and button fills. */
 :root{--ios-blue:#007aff;--accent:#0066d6;--accent-ink:#ffffff;--accent-soft:#dbe9fb;--bg:#e9e9ef;--panel:#f2f2f7;--card:#ffffff;--sep:rgba(60,60,67,.18);--label:#1c1c1e;--label2:#5f5f66;--ink:var(--label);--muted:var(--label2);--line:var(--sep);--r:10px;--r-s:8px;--ease:150ms ease}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#000000;--panel:#121214;--card:#1c1c1e;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a1a1a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}}
-:root[data-theme="dark"]{--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#000000;--panel:#121214;--card:#1c1c1e;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a1a1a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}
-body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Instrument Sans",system-ui,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#0e1015;--panel:#14171f;--card:#1b1f2a;--field:#12151d;--soft:#212634;--hover:#252b3b;--well:#11141c;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a4a8b4;--faint:#9096a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}}
+:root[data-theme="dark"]{--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#0e1015;--panel:#14171f;--card:#1b1f2a;--field:#12151d;--soft:#212634;--hover:#252b3b;--well:#11141c;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a4a8b4;--faint:#9096a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Instrument Sans",system-ui,sans-serif}
 button,input,select,textarea{font-family:inherit}
 #panel > .grp{background:var(--card);border:0;border-radius:12px;margin:10px 10px 0}
 #panel > .grp:last-child{margin-bottom:10px}
@@ -725,10 +729,11 @@ button,input,select,textarea{font-family:inherit}
 #panel input[type=checkbox]:checked::after{transform:translateX(16px)}
 #panel input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #panel input[type=checkbox]:disabled{opacity:.45;cursor:default}
-#panel .krow input[type=checkbox]{-webkit-appearance:auto;appearance:auto;width:auto;height:auto;border-radius:0;background:transparent;accent-color:var(--accent);margin:0}
-#panel .krow input[type=checkbox]:checked{background:transparent}
-#panel .krow input[type=checkbox]::after{content:none}
+#panel :is(.krow,.cl-ck,.cl-ck .check) input[type=checkbox]{-webkit-appearance:auto;appearance:auto;width:16px;height:16px;border-radius:0;background:transparent;accent-color:var(--accent);margin:0}
+#panel :is(.krow,.cl-ck,.cl-ck .check) input[type=checkbox]:checked{background:transparent}
+#panel :is(.krow,.cl-ck,.cl-ck .check) input[type=checkbox]::after{content:none}
 #panel .check{min-height:32px;gap:10px}
+#panel .cl-ck .check{min-height:24px;gap:8px}
 /* Project Directory / Windows File Explorer styles */
 .proj-dir-nav{display:inline-flex;align-items:center;gap:6px;margin:0 4px}
 .proj-dir-crumbs{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(480px,60vw);cursor:pointer}
@@ -737,8 +742,9 @@ button,input,select,textarea{font-family:inherit}
 .dir-bar-crumb.active-prep{font-weight:600;color:var(--ink);gap:4px}
 .crumb-prep-sel{font:inherit;font-size:12.5px;font-weight:600;width:auto;min-height:24px;padding:1px 22px 1px 6px;border:1px solid var(--line2);border-radius:4px;background-color:var(--field);color:var(--ink);cursor:pointer;background-position:calc(100% - 11px) 55%,calc(100% - 7px) 55%}
 .dir-summary-cell{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.proj-explorer-modal{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--bg);color:var(--ink);width:920px;max-width:95vw;height:650px;max-height:90vh;box-shadow:0 12px 36px rgba(0,0,0,0.3);overflow:hidden}
-.proj-explorer-modal::backdrop{background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)}
+:is(.figmodal,.proj-explorer-modal,.dir-modal){border:1px solid var(--line2);border-radius:12px;padding:0;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+:is(.figmodal,.proj-explorer-modal,.dir-modal)::backdrop{background:rgba(15,18,26,.52);backdrop-filter:blur(2px)}
+.proj-explorer-modal{width:920px;max-width:95vw;height:650px;max-height:90vh;overflow:hidden}
 .dir-window{display:flex;flex-direction:column;height:100%}
 .dir-titlebar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line);user-select:none}
 .dir-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
@@ -773,14 +779,16 @@ button,input,select,textarea{font-family:inherit}
 .dir-card{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;user-select:none;transition:all var(--ease);position:relative}
 .dir-card:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,0.1)}
 .dir-card.active-prep{border-color:var(--accent);background:rgba(0,120,215,0.06)}
-.dir-card-icon{font-size:28px;margin-bottom:6px}
+.dir-ico{display:inline-flex;align-items:center;justify-content:center;vertical-align:-2px;flex:none}
+.dir-toolbar .btn svg{vertical-align:-2px}
+.dir-card-icon{font-size:28px;margin-bottom:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.dir-card-icon svg{width:28px;height:28px}
 .dir-card-name{font-size:12px;font-weight:500;word-break:break-word;max-width:100%}
 .dir-card-meta{font-size:11px;color:var(--muted);margin-top:2px}
 .dir-card-acts{display:flex;gap:2px;margin-top:6px;flex-wrap:wrap;justify-content:center}
 .dir-drag-over{outline:2px dashed var(--accent)!important;background:var(--soft)!important}
 .dir-badge{font-size:10px;padding:1px 5px;border-radius:10px;background:var(--accent);color:var(--accent-ink);margin-left:4px}
 .dir-statusbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:var(--card);border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
-.dir-modal{border:1px solid var(--line);border-radius:8px;padding:0;background:var(--bg);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,0.25)}
 .dir-modal-box{padding:16px;min-width:300px;display:flex;flex-direction:column;gap:12px}
 .dir-modal-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 .dir-input,.dir-select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font-size:13px}
@@ -798,7 +806,7 @@ button,input,select,textarea{font-family:inherit}
   #paper svg{max-width:100%!important;max-height:none!important;width:100%;height:auto;cursor:default}
   .tablewrap{overflow:visible}
   .itab{font-size:10.5pt}
-  #sumTable th:first-child,#sumTable td:first-child{position:static;background:transparent}
+  #sumTable th:first-child,#sumTable td:first-child{position:static;background:transparent;box-shadow:none}
   #methodsText{border:0;padding:0;background:transparent;color:#000;resize:none;height:auto;min-height:14em;overflow:visible;white-space:pre-wrap}
 }
 </style>
@@ -820,6 +828,7 @@ button,input,select,textarea{font-family:inherit}
         <span class="projname-pair"><label for="projName" class="pb-lab">Project name</label><input type="text" id="projName" name="projName" class="projname" aria-label="Project name" placeholder="Project name" spellcheck="false"></span>
         <button type="button" id="projType" class="tgl projtype clone-toggle" role="switch" aria-checked="false" title="Whether this project includes cloning. Switching it off hides the cloning steps and keeps every record."><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button>
         <button type="button" class="btn quiet" id="projCloneRestore" hidden title="Restore the archived cloning stages to the active workflow">Restore Cloning Workflow</button>
+        <span class="projtheme-pair"><span class="pb-lab">Appearance</span><span class="seg" role="radiogroup" aria-label="Appearance"><input type="radio" name="projUiTheme" id="pt-auto" value="auto" data-opt="uiTheme"><label for="pt-auto">System</label><input type="radio" name="projUiTheme" id="pt-light" value="light" data-opt="uiTheme"><label for="pt-light">Light</label><input type="radio" name="projUiTheme" id="pt-dark" value="dark" data-opt="uiTheme"><label for="pt-dark">Dark</label></span></span>
       </div>
     </details>
     <span class="savestate" id="saveState" role="status" aria-live="polite"></span>
@@ -840,15 +849,15 @@ button,input,select,textarea{font-family:inherit}
     <p>Scientific workspace for protein purification data, chromatography, and gel figures.</p>
   </div>
   <form class="newproj" id="newProj" autocomplete="off">
-    <label class="f">Project name<input type="text" id="npName" required placeholder="e.g. KPP-MM, prep 3" spellcheck="false"></label>
-    <label class="f">Protein<input type="text" id="npProt" placeholder="e.g. KPP-MM" spellcheck="false"></label>
+    <label class="f">Project name<input type="text" id="npName" required placeholder="e.g. Target-A, prep 1" spellcheck="false"></label>
+    <label class="f">Protein<input type="text" id="npProt" placeholder="e.g. Target-A" spellcheck="false"></label>
     <button class="btn primary" type="submit">Start project</button>
     <div class="np-type" id="npType"><button type="button" id="npCloning" class="tgl" role="switch" aria-checked="false"><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button><span class="hint" id="npCloningHint">Off: the project starts at the construct and expression steps.</span><span class="hint" id="npDestHint" hidden></span></div>
   </form>
   <div class="home-org" id="homeOrg">
     <div class="home-toolbar" id="homeToolbar" role="toolbar" aria-label="Project organization">
       <div class="home-tb-acts">
-        <button type="button" class="btn primary" id="homeNewProj">New Project</button>
+        <button type="button" class="btn" id="homeNewProj">New Project</button>
         <button type="button" class="btn" id="homeNewFolder">New Folder</button>
         <button type="button" class="btn" id="homeMove">Move</button>
         <button type="button" class="btn" id="homeRename">Rename</button>
@@ -893,6 +902,7 @@ button,input,select,textarea{font-family:inherit}
     <div class="dir-modal-box">
       <h3 id="homeSettingsTitle">Application Settings</h3>
       <p id="homeSettingsDesc" class="hint"></p>
+      <div class="f"><span>Appearance</span><div class="seg" role="radiogroup" aria-label="Appearance"><input type="radio" name="homeUiTheme" id="ht-auto" value="auto" data-opt="uiTheme"><label for="ht-auto">System</label><input type="radio" name="homeUiTheme" id="ht-light" value="light" data-opt="uiTheme"><label for="ht-light">Light</label><input type="radio" name="homeUiTheme" id="ht-dark" value="dark" data-opt="uiTheme"><label for="ht-dark">Dark</label></div></div>
       <label class="f">Storage location<input type="text" id="homeSettingsStorage" readonly class="dir-input"></label>
       <div class="dir-modal-acts">
         <button type="button" class="btn primary" id="homeSettingsClose">Done</button>
@@ -1110,7 +1120,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Induction<select id="pr-indKind" data-prep="indKind"><option value="IPTG">IPTG (mM)</option><option value="arabinose">L-arabinose (%)</option><option value="rhamnose">L-rhamnose (%)</option><option value="auto">Autoinduction</option><option value="other">Other (type it)</option></select></label>
           <label class="f" id="prIndAmt">Amount<input type="text" id="pr-inducer" data-prep="inducer" placeholder="e.g. 0.5"></label>
         </div>
-        <div class="row">
+        <div class="row3">
           <label class="f">Temperature (°C)<input type="text" id="pr-temp" data-prep="temp" placeholder="e.g. 18"></label>
           <label class="f">Time (h)<input type="text" id="pr-time" data-prep="time" placeholder="e.g. 16"></label>
           <label class="f">Cells (g, wet)<input type="number" id="pr-pellet" data-prep="pellet" min="0" step="0.1"></label>
@@ -1172,7 +1182,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Time (h)<input type="text" id="pr-clvTime" data-prep="clvTime" placeholder="e.g. 16"></label>
         </div>
         <details class="cardtext" id="clvMore"><summary>Dialysis setup (optional)</summary>
-          <div class="row">
+          <div class="row3">
             <label class="f">MWCO (kDa)<input type="text" id="pr-mwco" data-prep="mwco" placeholder="e.g. 10"></label>
             <label class="f">Buffer volume (L)<input type="number" id="pr-dialVol" data-prep="dialVol" min="0" step="0.5"></label>
             <label class="f">Buffer changes<input type="text" id="pr-dialChanges" data-prep="dialChanges" placeholder="e.g. 1"></label>
@@ -1226,7 +1236,7 @@ button,input,select,textarea{font-family:inherit}
         <datalist id="dl-device"><option value="Amicon Ultra-15"><option value="Amicon Ultra-4"><option value="Amicon Ultra-0.5"><option value="Vivaspin 20"><option value="PD-10 desalting column"><option value="0.22 µm syringe filter"></datalist>
       </details>
       <details class="sub" data-sub="pfin" open><summary>Final sample and quality</summary>
-        <div class="row">
+        <div class="row3">
           <label class="f" title="Measured on the final sample, for example by NanoDrop A280">Concentration (mg/mL)<input type="number" id="pr-finConc" data-prep="finConc" min="0" step="any"></label>
           <label class="f">Volume (mL)<input type="number" id="pr-finVol" data-prep="finVol" min="0" step="any"></label>
           <label class="f">A260/A280<input type="number" id="pr-finRatio" data-prep="finRatio" min="0" step="0.01" placeholder="e.g. 0.57"></label>
@@ -1540,8 +1550,8 @@ button,input,select,textarea{font-family:inherit}
       </div>
       <div class="btns"><button class="btn quiet" id="g-bandUndo" type="button" disabled title="Undo the last band change">Undo</button><button class="btn quiet" id="g-tagClear" type="button" title="Clear target, tagged and contaminant marks">Clear marks</button><button class="btn quiet" id="g-editReset" type="button" title="Clear bands you added or removed">Clear edits</button><button class="btn quiet" id="g-bandReset" type="button" title="Back to exactly what detection found">Reset all</button></div>
       <div class="row">
-        <label class="f">Untagged name (arrow)<input type="text" id="o-targetName" data-opt="targetName" placeholder="e.g. hNADK"></label>
-        <label class="f">Tagged name (arrow)<input type="text" id="o-taggedName" data-opt="taggedName" placeholder="e.g. His-SUMO-hNADK"></label>
+        <label class="f">Untagged name (arrow)<input type="text" id="o-targetName" data-opt="targetName" placeholder="e.g. Target"></label>
+        <label class="f">Tagged name (arrow)<input type="text" id="o-taggedName" data-opt="taggedName" placeholder="e.g. His-SUMO-Target"></label>
       </div>
       <div class="checks">
         <label class="check"><input type="checkbox" id="o-targetArrow" data-opt="targetArrow">Arrows at the target bands</label>
@@ -1810,9 +1820,9 @@ button,input,select,textarea{font-family:inherit}
         </div>
         <div class="dir-toolbar">
           <div class="dir-tools-left">
-            <button type="button" class="btn quiet" id="dirNewFolder" title="Create new folder">📁+ New folder</button>
-            <button type="button" class="btn quiet" id="dirNewPrep" title="Create new protein preparation">🧪+ New prep</button>
-            <button type="button" class="btn quiet" id="dirUploadFile" title="Upload file attachment">📤 Upload file</button>
+            <button type="button" class="btn quiet" id="dirNewFolder" title="Create new folder"><span class="dir-ico"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 4H7.414l-1.707-1.707A1 1 0 0 0 5 2H1.5z"/></svg></span>+ New folder</button>
+            <button type="button" class="btn quiet" id="dirNewPrep" title="Create new protein preparation"><span class="dir-ico"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h4M6.5 2v4.2L3.2 12.2A1.4 1.4 0 0 0 4.4 14h7.2a1.4 1.4 0 0 0 1.2-1.8L9.5 6.2V2"/><path d="M4.8 10.5h6.4"/></svg></span>+ New prep</button>
+            <button type="button" class="btn quiet" id="dirUploadFile" title="Upload file attachment"><span class="dir-ico"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 11.5v2h11v-2"/></svg></span> Upload file</button>
             <input type="file" id="dirFileInput" multiple hidden>
           </div>
           <div class="dir-tools-right">
@@ -1829,7 +1839,7 @@ button,input,select,textarea{font-family:inherit}
               <button type="button" class="btn quiet" id="dirViewList" title="List view" aria-pressed="true">☰</button>
               <button type="button" class="btn quiet" id="dirViewGrid" title="Grid view" aria-pressed="false">▦</button>
             </div>
-            <button type="button" class="btn quiet" id="dirToggleArchive" title="Archive / Recycle Bin">🗑 Archive</button>
+            <button type="button" class="btn quiet" id="dirToggleArchive" title="Archive / Recycle Bin"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg> Archive</button>
           </div>
         </div>
         <div class="dir-address-bar">
@@ -1936,7 +1946,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', extinction:'', epsMode:'auto', cysOx:false, path:2,
   wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
-  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600};
+  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600, uiTheme:'auto', tidy16:false};
 const RANGE = ['xmin','xmax','ymin','ymax','zoomWinA','zoomWinB'];
 /* Native E. coli proteins commonly co-purified by IMAC (Bolanos-Garcia & Davies 2006, Table 1), DnaK, and common purification additives.
    Sizes are calculated masses in kDa; "app" is an apparent SDS-PAGE size where a protein is known to run off its mass. */
@@ -1982,18 +1992,29 @@ const LADDERS = {
   custom:{name:'Custom (type values below)', v:''}};
 $('#g-preset').innerHTML = Object.entries(LADDERS).map(([k,v]) => `<option value="${k}">${v.name}</option>`).join('');
 
+const LEGACY_QUICK_SEED = [
+  {id: 'leg-lys-gs', k: 'lysis', n: 'Sonication, GS base buffer', set: {lysMethod: 'Sonication', lysBuffer: '60 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP', lysAdd: 'EDTA-free protease inhibitor (1 tablet per 2 L of culture), benzonase (1 µL per L of culture) and 2 mg/mL lysozyme', lysSet: '75% amplitude, 30 s on, 30 s off, 3 min total, on ice', clarify: '10,000 × g, 30 min, 4 °C'}},
+  {id: 'leg-clv-gs', k: 'cleave', n: 'Ulp1 into the GS base buffer, overnight', set: {protease: 'Ulp1', dialBuffer: '60 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP', clvTemp: '4', clvTime: '16'}},
+  {id: 'leg-run-gs', k: 'run', n: 'HisTrap FF 1 mL, ÄKTA go, GS buffers', set: {mCol: 'HisTrap FF 1 mL', mCV: '1', mFlow: '1', mFrac: '1', mInst: 'ÄKTA go', mBufA: '60 mM HEPES pH 7.6, 300 mM NaCl, 50 mM KCl, 10 mM MgCl2, 25 mM imidazole, 0.1 mM TCEP', mBufB: '60 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 250 mM imidazole'}},
+  {id: 'leg-run-ak', k: 'run', n: 'HisTrap 5 mL, ÄKTA start, 5 mL/min', set: {mCol: 'HisTrap FF 5 mL', mCV: '5', mFlow: '5', mBufA: '50 mM HEPES pH 7.6, 350 mM NaCl, 0.5 mM TCEP, 10 mM imidazole', mBufB: '50 mM HEPES pH 7.6, 350 mM NaCl, 0.5 mM TCEP, 300 mM imidazole', mWash: '25 mL of buffer A, then 25 mL of 6.7% B (30 mM imidazole)', mGrad: 'a step to 100% B (25 mL)', mFrac: '5', mInst: 'ÄKTA start'}},
+  {id: 'leg-man-ak', k: 'man', n: 'Dialysis, AK/ArgH buffer', set: {kind: 'dialysis', name: 'Dialysis', resin: 'dialysis cassette', buffer: '50 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP, 10% glycerol', elution: 'overnight at 4 °C'}},
+  {id: 'leg-man-ulp1', k: 'man', n: 'Dialysis, Ulp1 storage buffer', set: {kind: 'dialysis', name: 'Dialysis', resin: 'dialysis tubing, at least 100× the eluate volume', buffer: '50 mM HEPES pH 8.0, 200 mM NaCl, 10 mM EDTA, 0.5 mM TCEP, 20% glycerol', elution: 'overnight at 4 °C'}},
+  {id: 'leg-fin-ak', k: 'final', n: 'Store in the AK/ArgH dialysis buffer', set: {finBuffer: '50 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP, 10% glycerol'}},
+  {id: 'leg-fin-ulp1', k: 'final', n: 'Store in the Ulp1 storage buffer', set: {finBuffer: '50 mM HEPES pH 8.0, 200 mM NaCl, 10 mM EDTA, 0.5 mM TCEP, 20% glycerol'}}];
 let opt = Object.assign({}, DEF), savedOpt = null;
 try { const s = JSON.parse(localStorage.getItem('hplc-fig-opt') || 'null'); if (s && typeof s === 'object' && !Array.isArray(s)) { Object.assign(opt, s); savedOpt = s; } } catch(e) {}
 opt.xmin = opt.xmax = opt.ymin = opt.ymax = '';
-/* the tidier defaults reach settings saved before them once. tidy15: a sequence is untagged unless a tag is chosen, but settings and projects saved under the old His-SUMO default keep it */
-const tidyOpt = (s, proj) => { if (!opt.tidy13) { if (!(proj && s && s.wfYield)) opt.wfYield = false; if (!(proj && s && s.secStds)) opt.secStds = false; opt.tidy13 = true; } if (!opt.tidy14) { if (!(proj && s && s.noGelSlot)) opt.noGelSlot = false; if (!(proj && s && s.wfGelH != null && s.wfGelH !== '') && numOr(opt.wfGelH, 1.8) === 1.8) opt.wfGelH = 1.3; opt.tidy14 = true; } if (!opt.tidy15) { if (s && !('tagPreset' in s)) opt.tagPreset = 'sumo'; opt.tidy15 = true; } if (!(numOr(opt.path, 0) > 0)) opt.path = DEF.path; }; tidyOpt(savedOpt);
+/* the tidier defaults reach settings saved before them once. tidy15: a sequence is untagged unless a tag is chosen, but settings and projects saved under the old His-SUMO default keep it; tidy16: legacy lab presets move to myQuick only for pre-tidy16 browser localStorage */
+const tidyOpt = (s, proj) => { if (!opt.tidy13) { if (!(proj && s && s.wfYield)) opt.wfYield = false; if (!(proj && s && s.secStds)) opt.secStds = false; opt.tidy13 = true; } if (!opt.tidy14) { if (!(proj && s && s.noGelSlot)) opt.noGelSlot = false; if (!(proj && s && s.wfGelH != null && s.wfGelH !== '') && numOr(opt.wfGelH, 1.8) === 1.8) opt.wfGelH = 1.3; opt.tidy14 = true; } if (!opt.tidy15) { if (s && !('tagPreset' in s)) opt.tagPreset = 'sumo'; opt.tidy15 = true; } if (s && s === savedOpt && !opt.tidy16) { const del = new Set(Array.isArray(opt.myQuickDel) ? opt.myQuickDel : []), curQ = Array.isArray(opt.myQuick) ? opt.myQuick.slice() : []; LEGACY_QUICK_SEED.forEach(q => { if (!del.has(q.id) && !curQ.some(x => x.id === q.id || (x.k === q.k && x.n === q.n))) curQ.push({id: q.id, k: q.k, n: q.n, set: Object.assign({}, q.set)}); }); opt.myQuick = curQ; opt.tidy16 = true; try { localStorage.setItem('hplc-fig-opt', JSON.stringify(opt)); } catch(e) {} } else if (!opt.tidy16) { opt.tidy16 = true; } if (!(numOr(opt.path, 0) > 0)) opt.path = DEF.path; }; tidyOpt(savedOpt);
 /* known proteins and SEC calibrations from saved settings or a project file: drop entries that are not objects, and built-in proteins take their current sizes and notes */
 const findKnownDef = k => k && KNOWN_DEFAULT.find(x => x.name === k.name && (!k.kind || k.kind === x.kind || (x.kind === 'contam' && k.kind === 'contaminant')));
 function tidyKnown(L){ L = Array.isArray(L) ? L.filter(k => k && typeof k === 'object' && !Array.isArray(k)) : []; L.forEach(k => { const d = findKnownDef(k); if (d) { k.kind = d.kind; k.kda = d.kda; k.ctx = d.ctx; k.src = d.src; k.on = 'on' in k ? !!k.on : d.on; if (d.app != null) k.app = d.app; else delete k.app; } }); return L; }
 function mergeKnown(mine, theirs){ const cl = L => Array.isArray(L) ? L.map(k => k && typeof k === 'object' && !Array.isArray(k) ? Object.assign({}, k) : k) : [], mk = tidyKnown(Array.isArray(mine) ? cl(mine) : KNOWN_DEFAULT.map(k => Object.assign({}, k))), pk = tidyKnown(cl(theirs)), same = (a, b) => a.name === b.name && +a.kda === +b.kda && (a.kind || 'contam') === (b.kind || 'contam'), out = [], push = k => { if (!out.some(x => same(x, k))) out.push(k); }; mk.forEach(m => { const p = pk.find(x => same(x, m)); push(p || m); }); pk.forEach(push); KNOWN_DEFAULT.forEach(d => { if (!out.some(x => x.name === d.name && x.kind === d.kind)) out.push(Object.assign({}, d)); }); return out; }
 function tidyLists(){ opt.known = Array.isArray(opt.known) ? tidyKnown(opt.known) : KNOWN_DEFAULT.map(k => Object.assign({}, k)); secCals(); }
 tidyLists();
+function applyUiTheme(){ const v = opt && opt.uiTheme; if (v === 'light' || v === 'dark') document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme; }
 function saveOpt(){ try { localStorage.setItem('hplc-fig-opt', JSON.stringify(opt)); } catch(e) {} }
+applyUiTheme();
 
 let wfSel = null, wfSelKey = '', gelMovedAt = 0;
 const undoStack = [];
@@ -3858,12 +3879,12 @@ function insetHeadroom(m, iw, ih, win){
 }
 function zoomCompose(S, m, win, buildIn, zObj, cfg){
   cfg = cfg || {};
-  const o = opt, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = cfg.idp || '', zf = cfg.nest ? Math.min(zoomSize(), 0.35) : zoomSize();
+  const o = opt, pos = cfg.pos || zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = cfg.idp || '', zf = cfg.nest ? Math.min(zoomSize(), 0.35) : zoomSize(), share = cfg.share || zoomSize();
   zObj = zObj || opt;
   const lay = insetLayout(zObj, false), val = v => v !== null && v !== undefined && isFinite(+v) ? +v : null, old = k => !beside && !above && lay && val(lay[k]) !== null ? val(lay[k]) : (!beside && !above && zObj ? val(zObj['zoomInset' + k.toUpperCase()]) : null);
   const pad = 3, oyMain = above ? (cfg.aboveH || Math.round(S.H*0.38)) + (cfg.aboveGap || 10) : 0;
   let g = m.geo, {L, R, T, B} = g, plotB = B - (g.band || 0), ar = Math.max(.2, (R - L)/Math.max(1, B - T));
-  let iw = old('w') > 0 ? old('w') : beside ? S.W*zoomSize() : above ? S.W : (R - L)*zf;
+  let iw = old('w') > 0 ? old('w') : beside ? S.W*share : above ? S.W : (R - L)*zf;
   let ih = old('h') > 0 ? old('h') : beside ? S.H : above ? (cfg.aboveH || Math.round(S.H*0.38)) : iw/ar;
   const minAutoW = cfg.nest ? 46 : 54, minAutoH = cfg.nest ? 34 : 38;
   if (!beside && !above && !(old('w') > 0) && iw < minAutoW && R - L > minAutoW + 8) { iw = Math.min(R - L - pad*2, minAutoW + 2); ih = Math.max(minAutoH, iw/ar); }
@@ -3914,7 +3935,7 @@ function zoomCompose(S, m, win, buildIn, zObj, cfg){
   const sBox = {x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: oyMain + Math.min(rTop, B), y1: oyMain + Math.max(rTop, B)};
   const iBox = {x0: Math.min(tg.x0, tg.x1), x1: Math.max(tg.x0, tg.x1), y0: Math.min(tg.y0, tg.y1), y1: Math.max(tg.y0, tg.y1)};
   let con = '';
-  const abut = sBox.x0 <= iBox.x1 + 1 && sBox.x1 >= iBox.x0 - 1 && sBox.y0 <= iBox.y1 + 1 && sBox.y1 >= iBox.y0 - 1;
+  const abut = cfg.noCon ? true : sBox.x0 <= iBox.x1 + 1 && sBox.x1 >= iBox.x0 - 1 && sBox.y0 <= iBox.y1 + 1 && sBox.y1 >= iBox.y0 - 1;
   if (!abut) {
     let dx = 0, dirX = 0;
     if (sBox.x1 < iBox.x0) { dx = iBox.x0 - sBox.x1; dirX = 1; }
@@ -4178,10 +4199,13 @@ function buildRunSVG(run, ov){
   ov = ov || {};
   const doZoom = ov.nest ? (run.wfZoom && insetVisible(run, true)) : insetVisible(run, opt.zoomInset);
   if (!doZoom || run.prep || ov.noZoom) return buildRunPlainSVG(run, ov);
-  const S = style(ov), wa = run.xmin, wb = run.xmax, wy = run.ymax, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = ov.idp || '';
+  /* a workflow step can show its magnified window as a large second panel beside the full trace instead of an inset */
+  const panel = !!ov.nest && run.wfZoomStyle === 'panel';
+  const S = style(ov), wa = run.xmin, wb = run.xmax, wy = run.ymax, pos = panel ? 'beside' : zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = ov.idp || '';
+  const share = panel ? 0.5 : zoomSize(), pGap = panel ? S.fs*1.6 : 0, zfs = panel ? fontSize() : fontSize()*0.8;
   const put = (a, b, ym) => { run.xmin = a; run.xmax = b; if (ym !== undefined) run.ymax = ym; };
   const aboveH = Math.round(S.H*Math.min(0.42, Math.max(0.28, zoomSize()*0.88))), aboveGap = 10;
-  const mkMain = ym => { try { put('', '', ym != null ? ym : wy); return buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: true}, beside ? {nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H} : above ? {nest: true, wPt: S.W, hPt: Math.max(60, S.H - aboveH - aboveGap)} : {})); } finally { put(wa, wb, wy); } };
+  const mkMain = ym => { try { put('', '', ym != null ? ym : wy); return buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: true}, beside ? {nest: true, wPt: S.W*(1 - share) - pGap, hPt: S.H} : above ? {nest: true, wPt: S.W, hPt: Math.max(60, S.H - aboveH - aboveGap)} : {})); } finally { put(wa, wb, wy); } };
   const m = mkMain(null);
   if (!m.svg) return m;
   const zA = run.zoomWinA !== undefined && run.zoomWinA !== '' ? run.zoomWinA : opt.zoomWinA;
@@ -4190,7 +4214,7 @@ function buildRunSVG(run, ov){
   const win = zoomDefaultWin(run, m.geo.xlo, m.geo.xhi, zA, zB, effWa, effWb);
   const canY = numOr(wy, null) === null;
   const z = win && zoomCompose(S, m, win, (w, h, mg) => { try { put(win.a, win.b, '');
-    return withOpt({bg: false, rxlabel: beside ? opt.rxlabel : '', rylabel: zoomYTitle(opt.rylabel, fontSize()*0.8, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: false, nest: true, wPt: w, hPt: h, idp: idp + 'zi-', split: beside || above}, beside ? {fixT: mg.T, fixB: mg.B} : above ? {fixL: mg.L, fixR: mg.R} : {}))); } finally { put(wa, wb, wy); } }, ov.nest ? run : (curRun() || opt), {idp, nest: !!ov.nest, aboveH, aboveGap, rebuildMain: canY ? mkMain : null});
+    return withOpt({bg: false, rxlabel: beside ? opt.rxlabel : '', rylabel: panel ? opt.rylabel : zoomYTitle(opt.rylabel, zfs, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, fs: zfs, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: false, nest: true, wPt: w, hPt: h, idp: idp + 'zi-', split: beside || above}, beside ? {fixT: mg.T, fixB: mg.B} : above ? {fixL: mg.L, fixR: mg.R} : {}))); } finally { put(wa, wb, wy); } }, ov.nest ? run : (curRun() || opt), {idp, nest: !!ov.nest, aboveH, aboveGap, rebuildMain: canY ? mkMain : null, pos, share, noCon: panel});
   return z || buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true}));
 }
 function buildRunPlainSVG(run, ov){
@@ -5852,7 +5876,7 @@ function composeRuns(list, cfg){
     else gap = fs*3;
   }
   /* panel widths: equal, or weighted per run in the side-by-side workflow */
-  const wts = list.map(r => row ? Math.max(0.2, numOr(r.wfW, 1)) : 1), wsum = wts.reduce((a, b) => a + b, 0);
+  const zPanel = r => r.wfZoom && r.wfZoomStyle === 'panel' && insetVisible(r, true), wts = list.map(r => row ? Math.max(0.2, numOr(r.wfW, 1))*(zPanel(r) ? 2 : 1) : 1), wsum = wts.reduce((a, b) => a + b, 0);
   const pw = wts.map(w => row ? (Wt - (n-1)*gap)*w/wsum : grid ? (Wt - gap)/2 : Wt);
   /* a panel too narrow for its two axes gets the room it needs, so the trace never shrinks to a sliver */
   /* and a trace too short for its axis titles gets taller, so the rotated titles never run into the panel title */
@@ -5860,7 +5884,7 @@ function composeRuns(list, cfg){
   const yTitle = Math.max(String(opt.rylabel || '').length, String(opt.y2grad || '').length, 12)*fs*0.56 + fs;
   const sideK = r => opt.gelPos === 'right' && cfg.showGels && gelsFor(r).length ? Math.min(0.9, Math.max(0.3, numOr(opt.gelSide, 60)/100)) : 1;
   list.forEach((r, i) => { const k = sideK(r), c = buildRunSVG(r, {wPt: pw[i]*k, hPt: chromH, idp: 'dry-', nest: true}); if (!c.geo) { ovL[i] = fs*4; ovR[i] = fs; if (purL && cfg.showGels && gelsFor(r).length && pw[i] < gelPad + fs*4.5) { pw[i] = gelPad + fs*4.5; widened = 1; } return; } ovL[i] = c.geo.L; ovR[i] = pw[i]*k - c.geo.R;
-    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5; let need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (purL && cfg.showGels && gelsFor(r).length) need = Math.max(need, side ? Math.max(purL, need*k + fs*2.8) + fs*5 : gelPad + fs*4.5); if (pw[i] < need) { pw[i] = need; widened = 1; } }
+    { const zp = zPanel(r), minIn = zp ? fs*16 : r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5; let need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : zp ? pw[i] + Math.max(0, minIn - (c.geo.R - c.geo.L))/(0.5*k) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (purL && cfg.showGels && gelsFor(r).length) need = Math.max(need, side ? Math.max(purL, need*k + fs*2.8) + fs*5 : gelPad + fs*4.5); if (pw[i] < need) { pw[i] = need; widened = 1; } }
     const bPlot = c.geo.plotB != null ? c.geo.plotB : c.geo.B, needH = chromH - (bPlot - c.geo.T) + Math.max(fs*9, yTitle); if (chromH < needH) { chromH = needH; taller = 1; } });
   if (widened) Wt = row ? pw.reduce((a, b) => a + b, 0) + (n-1)*gap : grid ? 2*Math.max(...pw) + gap : Math.max(...pw);
   if (widened && !row) pw.fill(grid ? (Wt - gap)/2 : Wt);
@@ -7383,10 +7407,10 @@ function render(){
   tabs.hidden = figs.length < 2;
   /* run tabs drop the words every run name starts with ("Human NADK ..."), the full name stays in the tooltip */
   const tabName = x => { if (x.kind !== 'run') return x.name; if (!PROJ || !x.run.inWf) return shortRunName(x.run); const t = stepTitle(x.run), dup = runs.filter(r => r.inWf && stepTitle(r) === t).length > 1; return dup ? `${t} ${runs.filter(r => r.inWf && stepTitle(r) === t).indexOf(x.run) + 1}` : t; };
-  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
+  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
   if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
   tabs.classList.toggle('ovf', !tabs.hidden && tabs.scrollWidth > tabs.clientWidth + 2);
-  if (tabs._cur !== cur && !tabs.hidden) { tabs._cur = cur; const at = tabs.querySelector('[aria-pressed="true"]');
+  if (tabs._cur !== cur && !tabs.hidden) { tabs._cur = cur; const at = tabs.querySelector('[aria-selected="true"]');
     if (at) { const l = at.offsetLeft - tabs.offsetLeft, r = l + at.offsetWidth; if (l < tabs.scrollLeft) tabs.scrollLeft = l - 8; else if (r > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = r - tabs.clientWidth + 8; } }
   $('#saveAll').hidden = figs.length < 2;
   list.querySelectorAll('.run,.gelc').forEach(el => el.classList.toggle('sel', el.dataset.id === cur));
@@ -7699,6 +7723,7 @@ list.addEventListener('click', e => {
 });
 
 function syncControls(){
+  applyUiTheme();
   setTimeout(rangeVals);
   const ro = rangeObj(), g = curGel();
   document.querySelectorAll('[data-opt]').forEach(el => {
@@ -7772,10 +7797,12 @@ function onOpt(e){
   }
   if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); runs.forEach(insetClear); }
   if (['peakDec', 'path', 'eps', 'extinction', 'protSeq', 'tagSeq', 'tagPreset'].includes(k)) { renderList(); syncAllChargeWarnings(); }
+  if (k === 'uiTheme') { applyUiTheme(); syncControls(); saveOpt(); }
   if (k === 'runCond') syncControls();
   render();
 }
 $('#panel').addEventListener('input', onOpt);
+['#homeSettingsModal', '#projSettings'].forEach(s => { const e = $(s); if (e) { e.addEventListener('input', onOpt); e.addEventListener('change', onOpt); } });
 /* static guidance folds into one Tips line per section, live status lines stay visible */
 document.querySelectorAll('#panel .grp, #panel details.sub, #bandPanel, #sumPanel').forEach(box => {
   const ps = [...box.querySelectorAll(':scope > p.hint')].filter(p => !p.id || p.id === 'sec-intro'); if (!ps.length) return;
@@ -7951,14 +7978,14 @@ paper.addEventListener('mousemove', e => {
   ro.textContent = `x ${xv.toFixed(g.run ? 2 : 3)}` + (g.run || opt.mode === 'overlay' ? `   y ${fmtAuto(yv)}` : '') + (c.run ? '   drag to integrate' : '');
 });
 /* ---------- editing the workflow figure in place: click a panel for its title, arrow note, width and gel size ---------- */
-function wfItem(id){ if (!id) return null; const r = runs.find(x => x.id === id); if (r) return {kind: 'run', r, step: 'run:' + id, title: r.stepName || '', auto: guessStep(r) || r.name, arrow: r.note || '', w: numOr(r.wfW, 1), gz: numOr(r.gelZ, 1), gel: gelsFor(r).length > 0, obj: r, ox: numOr(r.wfDx, 0), oy: numOr(r.wfDy, 0), zoom: !!r.wfZoom};
+function wfItem(id){ if (!id) return null; const r = runs.find(x => x.id === id); if (r) return {kind: 'run', r, step: 'run:' + id, title: r.stepName || '', auto: guessStep(r) || r.name, arrow: r.note || '', w: numOr(r.wfW, 1), gz: numOr(r.gelZ, 1), gel: gelsFor(r).length > 0, obj: r, ox: numOr(r.wfDx, 0), oy: numOr(r.wfDy, 0), zoom: !!r.wfZoom, zs: r.wfZoomStyle === 'panel' ? 'panel' : 'inset'};
   if (String(id).startsWith('nc:')) { const rid = id.slice(3), b = (prep.btw || {})[rid]; if (!b) return null; return {kind: 'nc', b, step: 'btw:' + rid, title: b.title || '', auto: 'Concentrated', arrow: b.arrow || '', w: numOr(b.wfW, 0.85), gel: false, ox: numOr(b.wfDx, 0), oy: numOr(b.wfDy, 0)}; }
   const m = manSteps().find(x => x.id === id); if (m) { const o = manObj(m); return {kind: 'man', m, step: 'man:' + id, title: m.name || '', auto: MAN_NAME[m.kind] || 'Other step', arrow: m.arrow || '', w: numOr(m.wfW, 1), gz: numOr(m.gelZ, 1), gel: gelsFor(o).length > 0, obj: o, ox: numOr(m.wfDx, 0), oy: numOr(m.wfDy, 0)}; }
   if (['construct', 'transform', 'expr', 'lysis', 'cleave', 'final'].includes(id)) return {kind: 'prep', k: id, step: id, title: (prep.titles || {})[id] || '', auto: PREP_NAME[id] || id, gel: false, noArrow: true, noW: true, ox: wfPos(id).wfDx, oy: wfPos(id).wfDy};
   return null; }
 function wfSet(it, f, v){ if (f === 'off') { const dx = Math.round(v.dx*100)/100, dy = Math.round(v.dy*100)/100, o = it.kind === 'nc' ? it.b : it.kind === 'man' ? it.m : it.kind === 'run' ? it.r : null;
     if (!o) { prep.wfOff = Object.assign({}, prep.wfOff); if (dx || dy) prep.wfOff[it.k] = {dx, dy}; else delete prep.wfOff[it.k]; } else if (dx || dy) { o.wfDx = dx; o.wfDy = dy; } else { delete o.wfDx; delete o.wfDy; } }
-  else if (it.kind === 'run') { const r = it.r; if (f === 'title') r.stepName = v; else if (f === 'arrow') r.note = v; else if (f === 'w') r.wfW = v; else if (f === 'gz') r.gelZ = v; else if (f === 'zoom') r.wfZoom = v; }
+  else if (it.kind === 'run') { const r = it.r; if (f === 'title') r.stepName = v; else if (f === 'arrow') r.note = v; else if (f === 'w') r.wfW = v; else if (f === 'gz') r.gelZ = v; else if (f === 'zoom') r.wfZoom = v; else if (f === 'zs') { if (v === 'panel') r.wfZoomStyle = 'panel'; else delete r.wfZoomStyle; } }
   else if (it.kind === 'nc') { const b = it.b; if (f === 'title') b.title = v; else if (f === 'arrow') b.arrow = v; else if (f === 'w') b.wfW = v; }
   else if (it.kind === 'man') { const m = it.m; if (f === 'title') m.name = v; else if (f === 'arrow') m.arrow = v; else if (f === 'w') m.wfW = v; else if (f === 'gz') m.gelZ = v; }
   else if (it.kind === 'prep' && f === 'title') { prep.titles = Object.assign({}, prep.titles, {[it.k]: v}); }
@@ -7976,14 +8003,14 @@ function renderWfTool(){
       + (!it.noArrow && !last ? `<label class="wfl" for="wfA">Arrow note</label><input type="text" id="wfA" value="${esc(it.arrow)}" placeholder="e.g. SUMO protease, 4 °C overnight">` : '')
       + (!it.noW && row ? `<span class="wfg"><span class="wfl">Width</span><button type="button" class="mini" data-wf="w:-1" aria-label="Narrower">−</button><button type="button" class="mini" data-wf="w:1" aria-label="Wider">+</button></span>` : '')
       + (it.gel ? `<span class="wfg"><span class="wfl">Gel</span><button type="button" class="mini" data-wf="gz:-1" aria-label="Smaller gel">−</button><button type="button" class="mini" data-wf="gz:1" aria-label="Larger gel">+</button></span>` : '')
-      + (it.kind === 'run' ? `<label class="check" style="margin-right:12px; margin-left:6px;"><input type="checkbox" data-wfz="1" ${it.zoom ? 'checked' : ''}> Show Inset View</label>` : '')
+      + (it.kind === 'run' ? `<label class="check" style="margin-right:12px; margin-left:6px;"><input type="checkbox" data-wfz="1" ${it.zoom ? 'checked' : ''}> Show Inset View</label><span class="wfg" id="wfZsG"${it.zoom ? '' : ' style="display:none"'}><label class="wfl" for="wfZs">As</label><select id="wfZs" data-wfzs="1" ${it.zoom ? '' : 'disabled'} title="Inset: a small magnified view inside the chromatogram. Large panel: the magnified section as its own full-height panel beside the chromatogram."><option value="inset"${it.zs === 'panel' ? '' : ' selected'}>Inset</option><option value="panel"${it.zs === 'panel' ? ' selected' : ''}>Large panel</option></select></span>` : '')
       + `<button type="button" class="mini" data-wf="reset">Reset position</button><button type="button" class="mini" data-wf="edit">Edit step</button><button type="button" class="mini" data-wf="close" aria-label="Close">Done</button><span class="wfhint">Drag to move, Reset position to undo</span>`; }
   const rb = tool.querySelector('[data-wf=reset]'); if (rb) rb.disabled = !(it.ox || it.oy);
   tool.hidden = false; const th = tool.offsetHeight, tw = tool.offsetWidth, ww = wrap.clientWidth, wh = wrap.clientHeight;
   let top = a.y - wr.top - th - 8; if (top < 4) top = b.y - wr.top + 8; if (top + th > wh - 4) top = Math.max(4, wh - th - 4);
   let left = Math.min(Math.max(4, a.x - wr.left - 4), Math.max(4, ww - tw - 4));
   Object.assign(tool.style, {left: left + 'px', top: top + 'px'}); }
-$('#wfTool').addEventListener('input', e => { const it = wfItem(wfSel); if (!it) return; if (e.target.id === 'wfT') wfSet(it, 'title', e.target.value); else if (e.target.id === 'wfA') wfSet(it, 'arrow', e.target.value); else if (e.target.dataset.wfz) wfSet(it, 'zoom', e.target.checked); });
+$('#wfTool').addEventListener('input', e => { const it = wfItem(wfSel); if (!it) return; if (e.target.id === 'wfT') wfSet(it, 'title', e.target.value); else if (e.target.id === 'wfA') wfSet(it, 'arrow', e.target.value); else if (e.target.dataset.wfz) { wfSet(it, 'zoom', e.target.checked); const zs = $('#wfZs'), zg = $('#wfZsG'); if (zs) zs.disabled = !e.target.checked; if (zg) zg.style.display = e.target.checked ? '' : 'none'; } else if (e.target.dataset.wfzs) wfSet(it, 'zs', e.target.value); });
 $('#wfTool').addEventListener('keydown', e => { if (e.key === 'Escape' || (e.key === 'Enter' && e.target.tagName === 'INPUT')) { wfSel = null; renderWfTool(); } });
 $('#wfTool').addEventListener('click', e => { const b = e.target.closest('[data-wf]'); if (!b) return; const it = wfItem(wfSel); if (!it) return; const [f, d] = b.dataset.wf.split(':');
   if (f === 'close') { wfSel = null; renderWfTool(); return; }
@@ -11129,7 +11156,7 @@ function refreshPaperFig(){
   const figs = figures(), tabs = $('#figtabs');
   tabs.hidden = figs.length < 2;
   const tabName = x => { if (x.kind !== 'run') return x.name; if (!PROJ || !x.run.inWf) return shortRunName(x.run); const t = stepTitle(x.run), dup = runs.filter(r => r.inWf && stepTitle(r) === t).length > 1; return dup ? `${t} ${runs.filter(r => r.inWf && stepTitle(r) === t).indexOf(x.run) + 1}` : t; };
-  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
+  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
   if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
   const kind = f ? f.kind : 'none';
   $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData() && !hasFracYieldData());
@@ -12004,6 +12031,7 @@ function migrateProject(rawData){
     if (!optOut.tidy13) { if (!origOpt.wfYield) optOut.wfYield = false; if (!optOut.secStds) optOut.secStds = false; optOut.tidy13 = true; }
     if (!optOut.tidy14) { if (!origOpt.noGelSlot) optOut.noGelSlot = false; if (!(origOpt.wfGelH != null && origOpt.wfGelH !== '') && numOr(optOut.wfGelH, 1.8) === 1.8) optOut.wfGelH = 1.3; optOut.tidy14 = true; }
     if (!optOut.tidy15) { if (!('tagPreset' in origOpt)) optOut.tagPreset = 'sumo'; optOut.tidy15 = true; }
+    if (!optOut.tidy16) optOut.tidy16 = true;
     if ('known' in optOut) optOut.known = tidyKnown(optOut.known);
   }
   let mx = 0;
@@ -12682,8 +12710,11 @@ function sortHomeItems(arr, sortKey){
 }
 function syncHomeSelUI(){
   const bar = $('#homeSelBar'), cnt = $('#homeSelCount');
+  const n = homeSelected.size, eff = n || (!homeShowArchive && homeCurFolder !== 'root' ? 1 : 0);
+  const mv = $('#homeMove'), rn = $('#homeRename');
+  if (mv) mv.disabled = eff === 0;
+  if (rn) rn.disabled = eff !== 1;
   if (!bar || !cnt) return;
-  const n = homeSelected.size;
   bar.hidden = n === 0;
   cnt.textContent = n ? `${n} selected` : '';
 }
@@ -13135,6 +13166,7 @@ $('#homeSettings').addEventListener('click', () => {
   if (storeLabel) storeLabel.value = STORE.mode === 'cloud' ? 'Cloud database (synced across sessions)' : STORE.mode === 'local' ? 'Local browser database (IndexedDB)' : 'None (in-memory)';
   const descEl = $('#homeSettingsDesc'), whereEl = $('#homeWhere');
   if (descEl && whereEl) descEl.textContent = whereEl.textContent;
+  syncControls();
   const modal = $('#homeSettingsModal');
   if (modal && modal.showModal) modal.showModal();
 });
@@ -13889,6 +13921,12 @@ function prepDirSummary(item, dir){
   }
 }
 
+const DIR_ICONS = {
+  folder: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 4H7.414l-1.707-1.707A1 1 0 0 0 5 2H1.5z"/></svg>',
+  prep: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h4M6.5 2v4.2L3.2 12.2A1.4 1.4 0 0 0 4.4 14h7.2a1.4 1.4 0 0 0 1.2-1.8L9.5 6.2V2"/><path d="M4.8 10.5h6.4"/></svg>',
+  file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.8h5.2L13 5.6v8.6H4z"/><path d="M9.2 1.8v3.8H13"/></svg>',
+  trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg>'
+};
 function renderExplorer(){
   if (!PROJ || !PROJ.directory) return;
   const dir = PROJ.directory;
@@ -13897,7 +13935,7 @@ function renderExplorer(){
   // Breadcrumbs
   const bcEl = $('#dirBreadcrumbs');
   if (dirShowArchive) {
-    bcEl.innerHTML = '<span class="crumb-sep">🗑</span> <strong>Archive / Recycle Bin</strong>';
+    bcEl.innerHTML = `<span class="crumb-sep dir-ico">${DIR_ICONS.trash}</span> <strong>Archive / Recycle Bin</strong>`;
   } else {
     const pathList = [];
     let curF = dir.folders.find(f => f.id === dirCurrentFolder);
@@ -13926,7 +13964,7 @@ function renderExplorer(){
       const hasKids = dir.folders.some(x => !x.archived && x.parentId === f.id) || dir.preparations.some(x => !x.archived && x.folderId === f.id);
       html += `<div class="dir-tree-node ${isCur ? 'active' : ''}" style="padding-left:${depth * 14 + 6}px" data-folder-id="${esc(f.id)}" data-dir-type="folder" data-dir-id="${esc(f.id)}" draggable="${f.id !== 'root'}">`;
       html += `<span class="dir-tree-toggle" data-tree-toggle="${esc(f.id)}">${hasKids ? (isExpanded ? '▾' : '▸') : '•'}</span>`;
-      html += `<span>📁</span> <span class="dir-tree-name">${esc(f.name)}</span>`;
+      html += `<span class="dir-ico">${DIR_ICONS.folder}</span> <span class="dir-tree-name">${esc(f.name)}</span>`;
       html += `</div>`;
       if (isExpanded) {
         html += buildTree(f.id, depth + 1);
@@ -13935,14 +13973,14 @@ function renderExplorer(){
     subPreps.forEach(p => {
       const isCurPrep = p.id === dir.activePrepId;
       html += `<div class="dir-tree-node ${isCurPrep ? 'active-prep' : ''}" style="padding-left:${depth * 14 + 18}px" data-dir-type="prep" data-dir-id="${esc(p.id)}" draggable="true">`;
-      html += `<span>🧪</span> <span class="dir-tree-name">${esc(p.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}`;
+      html += `<span class="dir-ico">${DIR_ICONS.prep}</span> <span class="dir-tree-name">${esc(p.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}`;
       html += `</div>`;
     });
     return html;
   };
   const rootFolder = dir.folders.find(f => f.id === 'root') || { id: 'root', name: PROJ.name || 'Project' };
   let treeHtml = `<div class="dir-tree-node ${dirCurrentFolder === 'root' && !dirShowArchive ? 'active' : ''}" data-folder-id="root" data-dir-type="folder" data-dir-id="root">`;
-  treeHtml += `<span class="dir-tree-toggle" data-tree-toggle="root">${dirTreeExpanded.has('root') ? '▾' : '▸'}</span><span>📁</span> <span class="dir-tree-name">${esc(rootFolder.name)}</span></div>`;
+  treeHtml += `<span class="dir-tree-toggle" data-tree-toggle="root">${dirTreeExpanded.has('root') ? '▾' : '▸'}</span><span class="dir-ico">${DIR_ICONS.folder}</span> <span class="dir-tree-name">${esc(rootFolder.name)}</span></div>`;
   if (dirTreeExpanded.has('root')) {
     treeHtml += buildTree('root', 1);
   }
@@ -13996,7 +14034,7 @@ function renderExplorer(){
     contentEl.innerHTML = `<p class="empty-p" style="padding:24px;text-align:center">${dirShowArchive ? 'No archived items in this project.' : dirSearchTerm ? 'No items match your search.' : 'This folder is empty. Create a folder, preparation, or upload a file above.'}</p>`;
   } else if (dirViewMode === 'grid') {
     contentEl.innerHTML = items.map(item => {
-      const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
+      const icon = item.itemType === 'folder' ? DIR_ICONS.folder : item.itemType === 'prep' ? DIR_ICONS.prep : DIR_ICONS.file;
       const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
       const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
       const fsInfo = fileStatusInfo(item);
@@ -14027,13 +14065,13 @@ function renderExplorer(){
       </thead>
       <tbody>
         ${items.map(item => {
-          const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
+          const icon = item.itemType === 'folder' ? DIR_ICONS.folder : item.itemType === 'prep' ? DIR_ICONS.prep : DIR_ICONS.file;
           const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
           const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
           const fsInfo = fileStatusInfo(item);
           const sumTxt = item.itemType === 'prep' ? prepDirSummary(item, dir) : (item.itemType === 'file' && item.size ? fmtSize(item.size) : '—');
           return `<tr class="dir-row ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
-            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
+            <td><div class="dir-name-cell"><span class="dir-ico">${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
             <td>${typeLabel}</td>
             <td class="dir-summary-cell">${esc(sumTxt)}</td>
             <td>${fmtWhen(item.updated || item.created)}</td>
@@ -14327,7 +14365,7 @@ $('#dirSort').addEventListener('change', e => {
 
 $('#dirToggleArchive').addEventListener('click', () => {
   dirShowArchive = !dirShowArchive;
-  $('#dirToggleArchive').textContent = dirShowArchive ? '📁 Folders' : '🗑 Archive';
+  $('#dirToggleArchive').innerHTML = (dirShowArchive ? DIR_ICONS.folder + ' Folders' : DIR_ICONS.trash + ' Archive');
   $('#dirToggleArchive').classList.toggle('primary', dirShowArchive);
   renderExplorer();
 });
@@ -15875,7 +15913,7 @@ function setCloning(on){ on = !!on; if (on === !!prep.includeCloning) { syncClon
   const modal = $('#cloneArchiveModal');
   if (on) { if (modal && modal.open) modal.close(); if (clAutoFill()) renderPrep(); selectStep('clone:setup'); }
   else { if (curStep.startsWith('clone:')) selectStep('construct'); else { renderSteps(); renderClone(true); render(); }
-    if (kept) { if (modal && typeof modal.show === 'function' && !modal.open) modal.show(); toast(`Cloning is off. Its ${kept} stage${kept === 1 ? ' is' : 's are'} kept and come${kept === 1 ? 's' : ''} back when you switch it on.`); }
+    if (kept) { if (modal && typeof modal.show === 'function' && !modal.open) modal.show(); }
     else if (modal && modal.open) modal.close(); }
   queueSave(); }
 function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('aria-checked', prep.includeCloning ? 'true' : 'false'); const rs = $('#projCloneRestore'); if (rs) rs.hidden = !!(prep.includeCloning || !CL().stages.length); }
@@ -15910,6 +15948,7 @@ $('#projCloneRestore').addEventListener('click', () => setCloning(true));
 $('#cloneArchiveCancel').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
 $('#cloneArchiveConfirm').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); });
 $('#cloneArchiveModal').addEventListener('cancel', e => { e.preventDefault(); const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
+window.addEventListener('keydown', e => { if (e.key !== 'Escape') return; const m = $('#cloneArchiveModal'); if (m && m.open) { e.preventDefault(); m.close(); setCloning(true); } });
 let agLaneDrag = null;
 $('#clonePanel').addEventListener('pointerdown', e => { const z = e.target.closest('#ag-lane-editor .ag-lane-zone'); if (!z || !curStep.startsWith('clone:')) return; const s = CL().stages.find(x => 'clone:' + x.id === curStep); if (!s || !s.gel) return;
   const r = z.parentNode.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, i = +z.dataset.agLane, l = agNormalizeLanes(s.gel)[i], edge = Math.min(.035, 9 / r.width);
@@ -16076,53 +16115,50 @@ function placeFoot(){ const foot = $('#stepFoot'); if (!PROJ) { foot.hidden = tr
   let best = null, bo = -1e9; document.querySelectorAll('#panel > section[data-step]').forEach(el => { if (el.hidden) return; const o = +getComputedStyle(el).order || 0; if (o >= bo) { bo = o; best = el; } });
   if (best && best.nextElementSibling !== foot) best.after(foot); foot.style.order = best ? String(bo) : ''; }
 let rmArm = '', rmAt = 0;
-/* ---------- quick fill: the lab's usual procedures, one click per step; every field stays editable ---------- */
-const LAB_BASE = '60 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP';
-const NI_A_AK = '50 mM HEPES pH 7.6, 350 mM NaCl, 0.5 mM TCEP, 10 mM imidazole', NI_B_AK = '50 mM HEPES pH 7.6, 350 mM NaCl, 0.5 mM TCEP, 300 mM imidazole';
-const NI_A_U = '50 mM HEPES pH 8.0, 350 mM NaCl, 0.5 mM TCEP, 10 mM imidazole', NI_B_U = '50 mM HEPES pH 8.0, 350 mM NaCl, 0.5 mM TCEP, 300 mM imidazole';
-const NI_A_GS = '60 mM HEPES pH 7.6, 300 mM NaCl, 50 mM KCl, 10 mM MgCl2, 25 mM imidazole, 0.1 mM TCEP', NI_B_GS = '60 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 250 mM imidazole';
+/* ---------- quick fill: standard biochemistry procedures, one click per step; every field stays editable ---------- */
+const STD_TRIS = '50 mM Tris-HCl pH 8.0, 300 mM NaCl, 0.5 mM TCEP';
+const STD_NI_A = '50 mM Tris-HCl pH 8.0, 300 mM NaCl, 20 mM imidazole, 0.5 mM TCEP', STD_NI_B = '50 mM Tris-HCl pH 8.0, 300 mM NaCl, 500 mM imidazole, 0.5 mM TCEP';
+const STD_SEC = '20 mM HEPES pH 7.5, 150 mM NaCl, 0.5 mM TCEP';
 const LABQ = {
   transform: [
-    {n: 'Heat shock, BL21(DE3), kanamycin', src: 'glnA/glnE, HsGS', set: {strain: 'BL21(DE3)', trMethod: 'heat shock (33 µL cells + 1 µL plasmid, 20 min on ice, 42 °C for 30 to 60 s, 2 min on ice, 350 µL SOC, 1 h at 37 °C)', trSel: 'kanamycin (1X from 1000X stock)'}},
-    {n: 'Heat shock, BL21(DE3), carbenicillin', src: 'glnA/glnE', set: {strain: 'BL21(DE3)', trMethod: 'heat shock (33 µL cells + 1 µL plasmid, 20 min on ice, 42 °C for 30 to 60 s, 2 min on ice, 350 µL SOC, 1 h at 37 °C)', trSel: 'carbenicillin (1X from 1000X stock)'}},
-    {n: 'From a glycerol stock', src: 'AK/PPase, ArgH, HsGS', set: {strain: 'BL21(DE3)', trMethod: 'from a glycerol stock'}}],
+    {n: 'Heat shock, BL21(DE3), kanamycin', set: {strain: 'BL21(DE3)', trMethod: 'heat shock (42 °C for 45 s, 2 min on ice, 350 µL SOC, 1 h at 37 °C)', trSel: '50 µg/mL kanamycin'}},
+    {n: 'Heat shock, BL21(DE3), carbenicillin', set: {strain: 'BL21(DE3)', trMethod: 'heat shock (42 °C for 45 s, 2 min on ice, 350 µL SOC, 1 h at 37 °C)', trSel: '100 µg/mL carbenicillin'}},
+    {n: 'From a glycerol stock', set: {strain: 'BL21(DE3)', trMethod: 'from a −80 °C glycerol stock'}}],
   expr: [
-    {n: 'ZYM-5052 + Amp, 37 °C overnight', src: 'AK/PPase (pET21a)', set: {strain: 'BL21(DE3)', medium: 'ZYM-5052 with ampicillin', cultureL: '4', indKind: 'auto', inducer: '', od: '', temp: '37', time: '16', exStarter: 'fresh colonies from a streaked plate', exHarvest: '3,500 × g, 15 min, 4 °C', exStore: 'frozen in 10 mL of lysis buffer'}},
-    {n: 'ZYM-5052 + Kan, 37 °C overnight', src: 'ArgH (pET28a)', set: {strain: 'BL21(DE3)', medium: 'ZYM-5052 with kanamycin', cultureL: '4', indKind: 'auto', inducer: '', od: '', temp: '37', time: '16', exStarter: 'fresh colonies from a streaked plate', exHarvest: '3,500 × g, 15 min, 4 °C', exStore: 'frozen in 10 mL of lysis buffer'}},
-    {n: 'TB, 1 mM IPTG, 20 °C overnight', src: 'Ulp1', set: {strain: 'BL21(DE3)', medium: 'TB with kanamycin', cultureL: '2', indKind: 'IPTG', inducer: '1', od: '0.6 to 0.8', temp: '20', time: '16', exStarter: '50 mL LB with kanamycin overnight, 10 mL per L', exHarvest: '3,500 × g, 15 min, 4 °C', exStore: 'frozen at −80 °C'}},
-    {n: 'TB, 0.5 mM IPTG, 16 °C overnight', src: 'HsGS, glnA/glnE', set: {strain: 'BL21(DE3)', medium: 'TB with kanamycin', cultureL: '6', indKind: 'IPTG', inducer: '0.5', od: '0.6 to 0.8', temp: '16', time: '16', exStarter: '50 mL LB with kanamycin overnight, 7 to 10 mL per L', exHarvest: '3,500 × g, 15 min, 4 °C', exStore: 'frozen at −80 °C'}},
-    {n: 'TB, 0.5 mM IPTG, 37 °C 3 h', src: 'HsGS variants', set: {strain: 'BL21(DE3)', medium: 'TB with kanamycin', indKind: 'IPTG', inducer: '0.5', od: '0.6 to 0.8', temp: '37', time: '3', exStarter: '50 mL LB with kanamycin overnight, 7 to 10 mL per L', exHarvest: '4,000 × g, 20 min, 4 °C', exStore: 'frozen at −80 °C'}}],
+    {n: 'LB, 0.5 mM IPTG, 18 °C overnight', set: {strain: 'BL21(DE3)', medium: 'LB with kanamycin', cultureL: '2', indKind: 'IPTG', inducer: '0.5', od: '0.6 to 0.8', temp: '18', time: '16', exStarter: 'overnight LB starter culture (1:100 inoculation)', exHarvest: '4,000 × g, 20 min, 4 °C', exStore: 'flash-frozen at −80 °C'}},
+    {n: 'TB, 0.5 mM IPTG, 16 °C overnight', set: {strain: 'BL21(DE3)', medium: 'TB with kanamycin', cultureL: '2', indKind: 'IPTG', inducer: '0.5', od: '0.6 to 0.8', temp: '16', time: '16', exStarter: 'overnight LB starter culture (1:100 inoculation)', exHarvest: '4,000 × g, 20 min, 4 °C', exStore: 'flash-frozen at −80 °C'}},
+    {n: 'LB, 0.5 mM IPTG, 37 °C 3 h', set: {strain: 'BL21(DE3)', medium: 'LB with kanamycin', cultureL: '1', indKind: 'IPTG', inducer: '0.5', od: '0.6', temp: '37', time: '3', exStarter: 'overnight LB starter culture (1:100 inoculation)', exHarvest: '4,000 × g, 20 min, 4 °C', exStore: 'stored at −80 °C'}},
+    {n: 'ZYM-5052 auto-induction, 20 °C overnight', set: {strain: 'BL21(DE3)', medium: 'ZYM-5052 auto-induction medium', cultureL: '2', indKind: 'auto', inducer: '', od: '', temp: '20', time: '18', exStarter: 'overnight non-inducing starter culture', exHarvest: '4,000 × g, 20 min, 4 °C', exStore: 'stored at −80 °C'}}],
   lysis: [
-    {n: 'Sonication, Ni lysis buffer', src: 'AK/PPase, ArgH, Ulp1', set: {lysMethod: 'Sonication', lysBuffer: NI_A_AK, lysAdd: 'protease inhibitor, lysozyme and nuclease (1 tablet, 200 mg and 2 µL per 100 mL)', lysSet: '50% amplitude, 30 s on, 30 s off, 3.5 min total, on wet ice', clarify: '10,000 × g, 30 min, 4 °C'}},
-    {n: 'Sonication, GS base buffer', src: 'HsGS, glnA/glnE', set: {lysMethod: 'Sonication', lysBuffer: LAB_BASE, lysAdd: 'EDTA-free protease inhibitor (1 tablet per 2 L of culture), benzonase (1 µL per L of culture) and 2 mg/mL lysozyme', lysSet: '75% amplitude, 30 s on, 30 s off, 3 min total, on ice', clarify: '10,000 × g, 30 min, 4 °C'}}],
+    {n: 'Sonication, Tris/NaCl lysis', set: {lysMethod: 'Sonication', lysBuffer: STD_NI_A, lysAdd: 'EDTA-free protease inhibitor tablet, 1 mg/mL lysozyme and benzonase', lysSet: '50% amplitude, 10 s on, 20 s off, 3 min total, on ice', clarify: '18,000 × g, 30 min, 4 °C'}},
+    {n: 'High-pressure homogenization, HEPES/NaCl', set: {lysMethod: 'High-pressure homogenizer', lysBuffer: '50 mM HEPES pH 7.5, 300 mM NaCl, 20 mM imidazole, 0.5 mM TCEP', lysAdd: 'EDTA-free protease inhibitor tablet and benzonase', lysSet: '2 passes at 15,000 psi, 4 °C', clarify: '30,000 × g, 30 min, 4 °C'}}],
   cleave: [
-    {n: 'Ulp1 1:1000, 4 °C 16 h', src: 'Ulp1 cleavage conditions', set: {protease: 'Ulp1', ratio: '1:1000', dialBuffer: '50 mM Tris pH 8.0, 150 mM NaCl, 1 mM DTT', clvTemp: '4', clvTime: '16'}},
-    {n: 'Ulp1 into the GS base buffer, overnight', src: 'HsGS', set: {protease: 'Ulp1', dialBuffer: LAB_BASE, clvTemp: '4', clvTime: '16'}}],
+    {n: 'Ulp1 / TEV overnight dialysis', set: {protease: 'Ulp1', ratio: '1:100 (w/w)', dialBuffer: STD_TRIS, clvTemp: '4', clvTime: '16'}},
+    {n: 'TEV 1:50, 4 °C overnight dialysis', set: {protease: 'TEV', ratio: '1:50 (w/w)', dialBuffer: '50 mM Tris-HCl pH 8.0, 150 mM NaCl, 0.5 mM TCEP', clvTemp: '4', clvTime: '16'}},
+    {n: 'HRV 3C 1:100, 4 °C overnight', set: {protease: 'HRV 3C', ratio: '1:100 (w/w)', dialBuffer: '50 mM Tris-HCl pH 7.5, 150 mM NaCl, 1 mM DTT', clvTemp: '4', clvTime: '16'}}],
   run: [
-    {n: 'HisTrap 5 mL, ÄKTA start, 5 mL/min', src: 'AK/PPase, ArgH', set: {mCol: 'HisTrap FF 5 mL', mCV: '5', mFlow: '5', mBufA: NI_A_AK, mBufB: NI_B_AK, mWash: '25 mL of buffer A, then 25 mL of 6.7% B (30 mM imidazole)', mGrad: 'a step to 100% B (25 mL)', mFrac: '5', mInst: 'ÄKTA start'}},
-    {n: 'HisTrap 5 mL, ÄKTA start, 2 mL/min', src: 'Ulp1', set: {mCol: 'HisTrap FF 5 mL', mCV: '5', mFlow: '2', mBufA: NI_A_U, mBufB: NI_B_U, mWash: '25 mL of buffer A, then 25 mL of 6.7% B (30 mM imidazole)', mGrad: 'a step to 100% B (25 mL)', mInst: 'ÄKTA start', mLoad: 'the clarified lysate (by peristaltic pump)'}},
-    {n: 'HisTrap FF 1 mL, ÄKTA go, GS buffers', src: 'glnA/glnE (GSprep NiNTA 1), HsGS', set: {mCol: 'HisTrap FF 1 mL', mCV: '1', mFlow: '1', mFrac: '1', mInst: 'ÄKTA go', mBufA: NI_A_GS, mBufB: NI_B_GS}},
-    {n: 'Reverse IMAC, HisTrap FF 1 mL, flow-through', src: 'HsGS (ORTHO HisTrap 1 mL)', set: {mCol: 'HisTrap FF 1 mL', mCV: '1', mFlow: '1', mFrac: '1', mInst: 'ÄKTA go', mBufA: NI_A_GS, mBufB: NI_B_GS, mOther: 'the cleaved protein was collected in the flow-through'}},
-    {n: 'HiPrep 26/10 desalting into base buffer', src: 'HsGS, glnA/glnE', set: {mCol: 'HiPrep 26/10 Desalting', mBufA: LAB_BASE}},
-    {n: 'Superose 6 Increase 10/300, base buffer', src: 'Sup6 all-in-one SEC', sec: true, set: {mCol: 'Superose 6 Increase 10/300 GL', mCV: '24', mBufA: LAB_BASE, mLoad: 'the 0.22 µm spin-filtered pool (one loop volume)', mInst: 'ÄKTA go'}}],
+    {n: 'HisTrap FF 1 mL, standard IMAC', set: {mCol: 'HisTrap FF 1 mL', mCV: '1', mFlow: '1', mFrac: '1', mBufA: STD_NI_A, mBufB: STD_NI_B, mWash: '10 CV of buffer A, then 5 CV of 8% B', mGrad: 'linear gradient 8–100% B over 15 CV'}},
+    {n: 'HisTrap FF 5 mL, standard IMAC', set: {mCol: 'HisTrap FF 5 mL', mCV: '5', mFlow: '5', mFrac: '2', mBufA: STD_NI_A, mBufB: STD_NI_B, mWash: '10 CV of buffer A, then 5 CV of 8% B', mGrad: 'step or linear gradient to 100% B'}},
+    {n: 'Reverse IMAC, HisTrap FF 1 mL, flow-through', set: {mCol: 'HisTrap FF 1 mL', mCV: '1', mFlow: '1', mFrac: '1', mBufA: STD_NI_A, mBufB: STD_NI_B, mOther: 'the cleaved protein was collected in the flow-through'}},
+    {n: 'HiTrap Q HP 5 mL, NaCl gradient (IEX)', set: {mCol: 'HiTrap Q HP 5 mL', mCV: '5', mFlow: '3', mFrac: '2', mBufA: '20 mM Tris-HCl pH 8.0, 50 mM NaCl, 0.5 mM TCEP', mBufB: '20 mM Tris-HCl pH 8.0, 1 M NaCl, 0.5 mM TCEP', mGrad: '5–50% B over 20 CV'}},
+    {n: 'HiPrep 26/10 desalting', set: {mCol: 'HiPrep 26/10 Desalting', mCV: '53', mFlow: '5', mBufA: STD_SEC}},
+    {n: 'Superdex 200 Increase 10/300 GL, HEPES/NaCl', sec: true, set: {mCol: 'Superdex 200 Increase 10/300 GL', mCV: '24', mFlow: '0.5', mFrac: '0.5', mBufA: STD_SEC, mLoad: 'the 0.22 µm spin-filtered pool (≤ 500 µL)'}},
+    {n: 'Superose 6 Increase 10/300 GL, HEPES/NaCl', sec: true, set: {mCol: 'Superose 6 Increase 10/300 GL', mCV: '24', mFlow: '0.5', mFrac: '0.5', mBufA: STD_SEC, mLoad: 'the 0.22 µm spin-filtered pool (≤ 500 µL)'}}],
   man: [
-    {n: 'Ni-NTA batch, gravity elution', src: 'HsGS', set: {kind: 'batch', name: 'Ni-NTA batch', resin: '2 mL of 50% Ni-NTA slurry, 1 h rotating at 4 °C', buffer: NI_A_GS, wash: '75 mL of NiA (3 × 25 mL) on a gravity column', elution: '9 × 0.5 mL of NiB (4.5 mL)'}},
-    {n: 'Load 5 mL HisTrap by peristaltic pump', src: 'Ulp1', set: {kind: 'column', name: 'HisTrap load', resin: '5 mL HisTrap, peristaltic pump at 12 to 15 rpm, room temperature', buffer: NI_A_U, wash: '25 mL water, then 25 mL buffer A before loading'}},
-    {n: 'Dialysis, AK/ArgH buffer', src: 'AK/PPase, ArgH', set: {kind: 'dialysis', name: 'Dialysis', resin: 'dialysis cassette', buffer: '50 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP, 10% glycerol', elution: 'overnight at 4 °C'}},
-    {n: 'Dialysis, Ulp1 storage buffer', src: 'Ulp1', set: {kind: 'dialysis', name: 'Dialysis', resin: 'dialysis tubing, at least 100× the eluate volume', buffer: '50 mM HEPES pH 8.0, 200 mM NaCl, 10 mM EDTA, 0.5 mM TCEP, 20% glycerol', elution: 'overnight at 4 °C'}},
-    {n: 'Concentrate, 10 kDa Amicon to ~2 mg/mL', src: 'AK/PPase, ArgH, Ulp1', set: {kind: 'conc', name: 'Concentration', resin: 'Amicon Ultra, 10 kDa MWCO', elution: 'to about 2 mg/mL'}},
-    {n: 'Concentrate, 15 mL 30 kDa concentrator', src: 'HsGS, glnA/glnE', set: {kind: 'conc', name: 'Concentration', resin: '15 mL concentrator, 30 kDa MWCO'}},
-    {n: 'Spin filter, 0.22 µm', src: 'Sup6 all-in-one SEC', set: {kind: 'other', name: 'Spin filter', resin: '0.22 µm spin filter', elution: 'spun at maximum speed for 30 s just before injection'}}],
+    {n: 'Ni-NTA batch / gravity elution', set: {kind: 'batch', name: 'Ni-NTA batch', resin: '2 mL of 50% Ni-NTA agarose slurry, 1 h rotating at 4 °C', buffer: STD_NI_A, wash: '3 × 10 CV of wash buffer', elution: '5 × 1 CV of 300 mM imidazole elution buffer'}},
+    {n: 'Overnight dialysis at 4 °C', set: {kind: 'dialysis', name: 'Dialysis', resin: '10 kDa MWCO dialysis cassette or tubing', buffer: STD_SEC, elution: 'overnight at 4 °C against ≥ 100× buffer volume'}},
+    {n: 'Concentrate, Amicon 10 kDa', set: {kind: 'conc', name: 'Concentration', resin: 'Amicon Ultra, 10 kDa MWCO', elution: '4,000 × g at 4 °C'}},
+    {n: 'Concentrate, Amicon 30 kDa', set: {kind: 'conc', name: 'Concentration', resin: 'Amicon Ultra, 30 kDa MWCO', elution: '4,000 × g at 4 °C'}},
+    {n: 'Spin filter, 0.22 µm', set: {kind: 'other', name: 'Spin filter', resin: '0.22 µm spin filter', elution: 'spun at maximum speed for 30 s just before injection'}}],
   btw: [
-    {n: 'Amicon 10 kDa', src: 'AK/PPase, ArgH, Ulp1', set: {how: 'conc', device: 'Amicon Ultra', mwco: '10'}},
-    {n: '15 mL concentrator, 30 kDa', src: 'HsGS, glnA/glnE', set: {how: 'conc', device: '15 mL concentrator', mwco: '30'}},
-    {n: 'Desalting into base buffer', src: 'HsGS', set: {how: 'exch', device: 'HiPrep 26/10 Desalting', note: 'into ' + LAB_BASE}},
-    {n: '0.22 µm spin filter', src: 'Sup6 all-in-one SEC', set: {how: 'filt', device: '0.22 µm spin filter', note: 'spun at maximum speed for 30 s'}}],
+    {n: 'Amicon 10 kDa', set: {how: 'conc', device: 'Amicon Ultra', mwco: '10'}},
+    {n: 'Amicon 30 kDa', set: {how: 'conc', device: 'Amicon Ultra', mwco: '30'}},
+    {n: 'HiPrep 26/10 desalting', set: {how: 'exch', device: 'HiPrep 26/10 Desalting', note: 'into ' + STD_SEC}},
+    {n: '0.22 µm spin filter', set: {how: 'filt', device: '0.22 µm spin filter', note: 'spun at maximum speed for 30 s'}}],
   final: [
-    {n: '250 µL aliquots, flash-frozen', src: 'AK/PPase, ArgH, Ulp1', set: {store: '250 µL aliquots flash-frozen in liquid nitrogen, stored at −80 °C'}},
-    {n: 'Glycerol to 5–10%, 600 µL aliquots', src: 'HsGS', set: {store: 'glycerol added to 5 to 10%, 600 µL aliquots flash-frozen, stored at −80 °C'}},
-    {n: 'Store in the AK/ArgH dialysis buffer', src: 'AK/PPase, ArgH', set: {finBuffer: '50 mM HEPES pH 7.6, 50 mM NaCl, 50 mM KCl, 10 mM MgCl2, 0.5 mM TCEP, 10% glycerol'}},
-    {n: 'Store in the Ulp1 storage buffer', src: 'Ulp1', set: {finBuffer: '50 mM HEPES pH 8.0, 200 mM NaCl, 10 mM EDTA, 0.5 mM TCEP, 20% glycerol'}}]};
+    {n: 'Standard HEPES/NaCl SEC & storage', set: {finBuffer: STD_SEC, store: 'aliquoted, flash-frozen in liquid nitrogen, stored at −80 °C'}},
+    {n: 'Flash-frozen aliquots at −80 °C', set: {store: '50–100 µL aliquots flash-frozen in liquid nitrogen, stored at −80 °C'}},
+    {n: 'Add 10% glycerol, flash-freeze at −80 °C', set: {finBuffer: STD_SEC + ', 10% (v/v) glycerol', store: 'flash-frozen in liquid nitrogen, stored at −80 °C'}}]};
 /* where a step's fields live */
 function clStageFor(k){ return k && k.startsWith('clone:') && k !== 'clone:setup' ? CL().stages.find(x => 'clone:' + x.id === k) || null : null; }
 function quickTarget(kind){
@@ -16135,6 +16171,15 @@ function quickTarget(kind){
 const QUICK_KEYS = {construct: ['name', 'backbone', 'promoter', 'resist', 'cMethod', 'cEnz', 'cOverlap', 'cRecomb'], transform: ['strain', 'trMethod', 'trSel', 'trPlasmid', 'trStock'], expr: ['strain', 'medium', 'cultureL', 'indKind', 'inducer', 'od', 'temp', 'time', 'exStarter', 'exHarvest', 'exStore'], lysis: ['lysMethod', 'lysBuffer', 'lysAdd', 'lysSet', 'clarify'],
   cleave: ['protease', 'ratio', 'dialBuffer', 'clvTemp', 'clvTime', 'mwco'], run: ['mCol', 'mCV', 'mFlow', 'mTemp', 'mBufA', 'mBufB', 'mPh', 'mWash', 'mGrad', 'mLoad', 'mFrac', 'mInst', 'mOther'],
   man: ['kind', 'name', 'resin', 'buffer', 'wash', 'elution', 'note'], btw: ['how', 'device', 'mwco', 'note'], final: ['finBuffer', 'store', 'qcPurity']};
+const QUICK_LABEL = {strain: 'Strain', trMethod: 'Method', trSel: 'Selection', trPlasmid: 'Plasmid', trStock: 'Stock', medium: 'Medium', cultureL: 'Volume', indKind: 'Induction', inducer: 'Inducer', od: 'OD600', temp: 'Temp', time: 'Time', exStarter: 'Starter', exHarvest: 'Harvest', exStore: 'Storage',
+  lysMethod: 'Method', lysBuffer: 'Lysis buffer', lysAdd: 'Additives', lysSet: 'Settings', clarify: 'Clarification', protease: 'Protease', ratio: 'Ratio', dialBuffer: 'Buffer', clvTemp: 'Temp', clvTime: 'Time', mwco: 'MWCO',
+  mCol: 'Column', mCV: 'CV', mFlow: 'Flow', mTemp: 'Temp', mBufA: 'Buffer A', mBufB: 'Buffer B', mPh: 'pH', mWash: 'Wash', mGrad: 'Elution', mLoad: 'Sample load', mFrac: 'Fraction size', mInst: 'Instrument', mOther: 'Notes',
+  kind: 'Step type', name: 'Step name', resin: 'Resin/device', buffer: 'Buffer', wash: 'Wash', elution: 'Conditions', note: 'Notes', how: 'Action', device: 'Device', finBuffer: 'Final buffer', store: 'Storage', qcPurity: 'Purity'};
+function quickTip(q, cs){
+  const cmap = cs ? Object.fromEntries(clFields(CL_KIND[cs.kind]).map(fd => [fd.k, fd.l])) : null;
+  const names = Object.keys(q.set || {}).filter(k => String(q.set[k] ?? '').trim() !== '').map(k => (cmap && cmap[k]) || QUICK_LABEL[k] || k);
+  return `Fills ${names.length ? names.join(', ') : Object.keys(q.set || {}).length + ' fields'} — editable after click`;
+}
 /* your own quick fills, kept with the settings in this browser and in the project */
 const myQuick = kind => (Array.isArray(opt.myQuick) ? opt.myQuick : []).filter(q => q.k === kind);
 let quickUndo = null;
@@ -16149,7 +16194,7 @@ function renderQuick(kind){
   const list = list0.filter(fits).sort((a, b) => match(b) - match(a));
   /* a column with matching presets shows only those, the rest wait behind More */
   const nm = list.filter(match).length, few = nm > 0 && nm < list.length && !el._all;
-  const h = `<span class="ql">Quick fill</span>${list.map((q, i) => few && !match(q) ? '' : `<button type="button" class="qchip${match(q) ? ' match' : ''}" data-q="${i}" title="${esc(`From: ${q.src}. Fills ${Object.keys(q.set).length} fields, which you can still edit.`)}">${esc(q.n)}</button>`).join('')}${few ? `<button type="button" class="btn quiet" data-qall="1">${list.length - nm} more</button>` : ''}`
+  const h = `<span class="ql">Quick fill</span>${list.map((q, i) => few && !match(q) ? '' : `<button type="button" class="qchip${match(q) ? ' match' : ''}" data-q="${i}" title="${esc(quickTip(q, cs))}">${esc(q.n)}</button>`).join('')}${few ? `<button type="button" class="btn quiet" data-qall="1">${list.length - nm} more</button>` : ''}`
     + mine.map(q => `<span class="qmine"><button type="button" class="qchip mine" data-qm="${esc(q.id)}" title="Your saved quick fill">${esc(q.n)}</button><button type="button" class="qx" data-qdel="${esc(q.id)}" aria-label="Delete ${esc(q.n)}" title="Delete this quick fill">×</button></span>`).join('')
     + `<button type="button" class="btn quiet" data-qsave="1" title="Keep the values on this step as a quick fill for next time">Save as quick fill</button>`
     + (u ? `<button type="button" class="btn quiet" data-qundo="1">Undo ${esc(quickUndo.n)}</button>` : '');
@@ -16350,8 +16395,8 @@ function buildStepFig(k){
 $('#optReset').addEventListener('click', () => { const keep = {known: opt.known, secCals: opt.secCals, ovSecCal: opt.ovSecCal};
   if (Array.isArray(opt.myQuick)) keep.myQuick = opt.myQuick; if (Array.isArray(opt.myQuickDel)) keep.myQuickDel = opt.myQuickDel;
   /* the protein and its tag are data, not settings: they survive a reset */
-  ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'tagPos', 'tagPreset', 'protKda', 'tagKda', 'eps', 'extinction', 'epsMode', 'cysOx', 'secMono', 'targetName', 'taggedName'].forEach(k => { keep[k] = opt[k]; }); Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), keep);
-  saveOpt(); syncControls(); renderKnown(); render(); toast('Settings restored to the defaults'); });
+  ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'tagPos', 'tagPreset', 'protKda', 'tagKda', 'eps', 'extinction', 'epsMode', 'cysOx', 'secMono', 'targetName', 'taggedName', 'uiTheme', 'tidy13', 'tidy14', 'tidy15', 'tidy16'].forEach(k => { keep[k] = opt[k]; }); Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), keep);
+  applyUiTheme(); saveOpt(); syncControls(); renderKnown(); render(); toast('Settings restored to the defaults'); });
 
 /* ---------- export ---------- */
 let dlP = null;

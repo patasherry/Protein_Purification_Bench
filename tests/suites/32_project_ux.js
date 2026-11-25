@@ -118,7 +118,124 @@ const SYN_PDB = [
     T.check('tl_kbd.end_and_home_jump', afterEnd === steps0[steps0.length - 1] && afterHome === steps0[0], `afterEnd=${afterEnd}, afterHome=${afterHome}, steps=${JSON.stringify(steps0)}`);
   });
 
+  await T.t('universal_labq_and_tidy16_migration', async () => {
+    const personalRe = /HsGS|glnA|KPP-MM|hNADK/i;
+    const scanStepChips = async stepName => {
+      await h.step(stepName); await h.wait(150);
+      const moreBtn = p.locator('#ssQuick [data-qall="1"]');
+      if (await moreBtn.isVisible().catch(() => false)) { await moreBtn.click(); await h.wait(100); }
+      return p.$$eval('#ssQuick .qchip', els => els.map(e => ({
+        text: e.textContent.trim(),
+        title: e.getAttribute('title') || '',
+        mine: e.classList.contains('mine')
+      })));
+    };
+
+    // Check placeholders on home + workspace while preserving #pr-name / #pr-trPlasmid
+    const ph = await p.evaluate(() => ({
+      npName: (document.getElementById('npName') || {}).placeholder || '',
+      npProt: (document.getElementById('npProt') || {}).placeholder || '',
+      targetName: (document.getElementById('o-targetName') || {}).placeholder || '',
+      taggedName: (document.getElementById('o-taggedName') || {}).placeholder || '',
+      prName: (document.getElementById('pr-name') || {}).placeholder || '',
+      trPlasmid: (document.getElementById('pr-trPlasmid') || {}).placeholder || ''
+    }));
+    T.check('tidy16.placeholders_universal_and_construct_preserved',
+      ph.npName === 'e.g. Target-A, prep 1' && ph.npProt === 'e.g. Target-A' &&
+      ph.targetName === 'e.g. Target' && ph.taggedName === 'e.g. His-SUMO-Target' &&
+      ph.prName === 'e.g. pET28-SUMO-NADK' &&
+      !personalRe.test([ph.npName, ph.npProt, ph.targetName, ph.taggedName].join(' ')),
+      JSON.stringify(ph));
+
+    // Check universal textbook LABQ presets, field-preview tooltips, and all 4 LABQ.btw chips verbatim
+    const lysChips = await scanStepChips('lysis');
+    await p.click('#tl [data-addmenu]'); await p.click('#tl [data-addstep="cleave"]'); await h.wait(250);
+    const clvChips = await scanStepChips('cleave');
+    const finChips = await scanStepChips('final');
+    const runStep = await p.$eval('#tl [data-step^="run:"]', e => e.dataset.step);
+    const runChips = await scanStepChips(runStep);
+    const btwStep = await p.$eval('#tl [data-step^="btw:"]', e => e.dataset.step);
+    const btwChips = await scanStepChips(btwStep);
+    const allFresh = [...lysChips, ...clvChips, ...finChips, ...runChips, ...btwChips];
+    const btwLabels = btwChips.filter(c => !c.mine).map(c => c.text);
+
+    T.check('tidy16.fresh_labq_universal_and_btw_verbatim',
+      lysChips.some(c => c.text === 'Sonication, Tris/NaCl lysis') &&
+      clvChips.some(c => c.text === 'Ulp1 / TEV overnight dialysis') &&
+      runChips.some(c => c.text === 'HisTrap FF 1 mL, standard IMAC') &&
+      finChips.some(c => c.text === 'Standard HEPES/NaCl SEC & storage') &&
+      JSON.stringify(btwLabels) === JSON.stringify(['Amicon 10 kDa', 'Amicon 30 kDa', 'HiPrep 26/10 desalting', '0.22 µm spin filter']) &&
+      allFresh.every(c => !c.mine && !personalRe.test(c.text + ' ' + c.title) && /^Fills .+ — editable after click$/.test(c.title)),
+      JSON.stringify({btwLabels, sampleTip: runChips[0] && runChips[0].title, leaked: allFresh.filter(c => personalRe.test(c.text + ' ' + c.title))}));
+
+    // #optReset + reload must NOT trigger legacy personal-preset seeding
+    if (await p.isVisible('#moreBtn')) {
+      const exp = await p.getAttribute('#moreBtn', 'aria-expanded');
+      if (exp !== 'true') { await p.click('#moreBtn'); await h.wait(150); }
+    }
+    await p.click('#optReset'); await h.wait(250);
+    await p.reload(); await h.wait(500);
+    if (!(await p.isVisible('#npName')) && (await p.isVisible('#homeNewProj'))) { await p.click('#homeNewProj'); await h.wait(200); }
+    await p.waitForSelector('#npName', {state: 'visible', timeout: 15000});
+    await h.newProject('After Reset');
+    const lysAfterReset = await scanStepChips('lysis');
+    const phAfterReset = await p.evaluate(() => [
+      (document.getElementById('npName') || {}).placeholder || '',
+      (document.getElementById('o-targetName') || {}).placeholder || ''
+    ].join(' '));
+    T.check('tidy16.after_optreset_reload_clean',
+      lysAfterReset.length > 0 && lysAfterReset.every(c => !c.mine && !personalRe.test(c.text + ' ' + c.title)) && !personalRe.test(phAfterReset),
+      JSON.stringify({lysAfterReset, phAfterReset}));
+
+    // Importing a pre-tidy16 .json project must NOT pollute opt.myQuick or localStorage
+    const pre16Proj = JSON.stringify({
+      app: 'HPLC Figure Bench',
+      version: 1,
+      name: 'Imported Pre-tidy16 Project',
+      opt: {preset: 'single', tidy13: true, tidy14: true, tidy15: true},
+      runs: [], traces: [], gels: [], nanodrop: [], assays: [],
+      prep: {on: true}
+    });
+    const pre16Path = path.join(RES, 'syn_pre_tidy16.json');
+    fs.writeFileSync(pre16Path, pre16Proj);
+    await p.setInputFiles('#projFile', pre16Path); await h.wait(600);
+    const lysAfterImport = await scanStepChips('lysis');
+    const lsAfterImport = await p.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem('hplc-fig-opt') || '{}');
+      return Array.isArray(s.myQuick) ? s.myQuick : [];
+    });
+    T.check('tidy16.import_pre16_json_no_pollution',
+      lysAfterImport.every(c => !c.mine && !personalRe.test(c.text + ' ' + c.title)) && lsAfterImport.length === 0,
+      JSON.stringify({mine: lysAfterImport.filter(c => c.mine), lsAfterImport}));
+
+    // (b) Seed pre-tidy16 localStorage['hplc-fig-opt'] before reload in an isolated browser -> legacy personal presets preserved in myQuick
+    const a2 = await open(), p2 = a2.p, h2 = H(p2);
+    try {
+      await p2.context().addInitScript(() => {
+        if (!sessionStorage.getItem('seeded_pre16')) {
+          sessionStorage.setItem('seeded_pre16', '1');
+          localStorage.setItem('hplc-fig-opt', JSON.stringify({preset: 'single', tidy13: true, tidy14: true, tidy15: true}));
+        }
+      });
+      await p2.reload(); await p2.waitForSelector('#npName', {state: 'visible', timeout: 15000});
+      await h2.newProject('Legacy User');
+      await h2.step('lysis'); await h2.wait(200);
+      const mineLys = await p2.$$eval('#ssQuick .qchip.mine', els => els.map(e => e.textContent.trim()));
+      const storedQuick = await p2.evaluate(() => {
+        const s = JSON.parse(localStorage.getItem('hplc-fig-opt') || '{}');
+        return {tidy16: !!s.tidy16, names: (s.myQuick || []).map(q => q.n)};
+      });
+      T.check('tidy16.boot_localstorage_preserves_legacy_myquick',
+        storedQuick.tidy16 && mineLys.includes('Sonication, GS base buffer') &&
+        storedQuick.names.includes('HisTrap FF 1 mL, ÄKTA go, GS buffers') &&
+        storedQuick.names.includes('Store in the Ulp1 storage buffer'),
+        JSON.stringify({mineLys, storedQuick}));
+      errs.push(...a2.errs);
+    } finally { await a2.close(); }
+  });
+
   T.check('no_page_errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
 })();
+

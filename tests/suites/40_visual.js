@@ -83,6 +83,27 @@ const figGeom = p => p.evaluate(() => { const svg = document.querySelector('#pap
         T.check(`${tag}:${name}:one-tips`, pi.tips <= 1, `${pi.tips} Tips visible`); /* at most one Tips disclosure per step */
         T.check(`${tag}:${name}:more-closed`, !pi.optHeads.length && pi.more !== 'true', `visible option sections: ${pi.optHeads.join(', ')}`); /* rarely used settings stay behind More options */
         const bad = await contrast(p); T.check(`${tag}:${name}:contrast`, !bad.length, bad.slice(0, 6).map(x => `${x.r}:1 ${x.sel} "${x.t}"`).join(' | ') + ' ' + shotName(W, name, theme)); /* body text >= 4.5:1 (3:1 for large) */ }); }
+      if (theme === 'light') {
+        const imacKey = (steps.find(s => s[0] === 'imac') || [])[1];
+        if (imacKey) await T.t(`${tag}:imac:touch`, async () => {
+          await h.step(imacKey); await h.wait(200);
+          const gelChip = p.locator('#ssGels [data-gelopen]').first();
+          if (await gelChip.count()) { await gelChip.click(); await h.wait(250); }
+          const targets = await p.evaluate(() => {
+            const sa = document.querySelector('.tl-stage-add');
+            const bc = document.querySelector('#bandTable .bchip');
+            const ps = document.querySelector('#projSettingsSum');
+            return {
+              stageAddH: sa ? sa.getBoundingClientRect().height : 0,
+              bchipH: bc ? bc.getBoundingClientRect().height : 0,
+              projSumH: ps ? ps.getBoundingClientRect().height : 0
+            };
+          });
+          const backBtn = p.locator('#ssGels [data-back]').first();
+          if (await backBtn.count()) { await backBtn.click(); await h.wait(150); }
+          T.check(`${tag}:imac:touch-targets-24px`, targets.stageAddH >= 24 && targets.bchipH >= 24 && targets.projSumH >= 24, JSON.stringify(targets));
+        });
+      }
       /* SEC peak labels on the run's own figure */
       await T.t(`${tag}:sec-labels`, async () => { await h.step(steps.find(s => s[0] === 'sec')[1]); await h.wait(500); const g = await figGeom(p); if (!g) return T.check(`${tag}:sec-labels:figure`, false, 'no svg');
         const labs = g.T.filter(x => /^\d+(\.\d+)?\s?(mL|mg|kDa|min)$/.test(x.t)); const ticks0 = g.T.filter(x => /^0$/.test(x.t)).sort((a, b) => b.y - a.y)[0]; const ytop = g.T.filter(x => /^\d+$/.test(x.t) && x.x < (ticks0 ? ticks0.r + 2 : 0) && x.x > (ticks0 ? ticks0.x - 30 : 0)).sort((a, b) => a.y - b.y)[0];
@@ -151,7 +172,33 @@ const figGeom = p => p.evaluate(() => { const svg = document.querySelector('#pap
             await p.screenshot({path: path.join(SHOTS, `${W}_toolbar_${lay}.png`)});
             T.check(`${tag}:fig-${lay}:toolbar-in-view`, tb.x >= 0 && tb.r <= tb.vw && tb.y >= 0 && tb.b <= tb.vh, JSON.stringify(tb)); /* toolbar is fully inside the viewport */
             const hit = !(tb.r <= tr2.x || tb.x >= tr2.r || tb.b <= tr2.y || tb.y >= tr2.b); T.check(`${tag}:fig-${lay}:toolbar-not-on-title`, !hit, `${P.title} ${JSON.stringify(tr2)} ${path.join(SHOTS, `${W}_toolbar_${lay}.png`)}`); /* toolbar never hides the title being edited */
-            await p.keyboard.press('Escape'); const done = await p.$(`${SEL.tool} [data-wf=close]`); if (done && await done.isVisible()) await done.click(); await h.wait(200); } } });
+            if (lay === 'row') {
+              const wfAFit = await p.evaluate(() => {
+                const a = document.querySelector('#wfA');
+                if (!a) return null;
+                const csA = getComputedStyle(a), ctx = document.createElement('canvas').getContext('2d');
+                ctx.font = `${csA.fontSize} ${csA.fontFamily}`;
+                const roomA = a.clientWidth - parseFloat(csA.paddingLeft) - parseFloat(csA.paddingRight);
+                const needA = ctx.measureText(a.placeholder).width;
+                return {roomA, needA};
+              });
+              T.check(`${tag}:fig-${lay}:wfa-placeholder-fits`, !!wfAFit && wfAFit.needA <= wfAFit.roomA + 2, JSON.stringify(wfAFit));
+            }
+            await p.keyboard.press('Escape'); const done = await p.$(`${SEL.tool} [data-wf=close]`); if (done && await done.isVisible()) await done.click(); await h.wait(200); }
+          if (lay === 'row' && await p.locator('#sumTable tr:has(> td)').count()) {
+            const sumRow = p.locator('#sumTable tr:has(> td)').first();
+            await sumRow.scrollIntoViewIfNeeded();
+            await sumRow.hover(); await h.wait(150);
+            const sumHover = await p.evaluate(() => {
+              const r = [...document.querySelectorAll('#sumTable tr')].find(tr => tr.querySelectorAll('td').length >= 2);
+              const tds = r ? [...r.querySelectorAll('td')] : [];
+              return tds.length >= 2 ? {c0: getComputedStyle(tds[0]).backgroundColor, c1: getComputedStyle(tds[1]).backgroundColor} : null;
+            });
+            await p.mouse.move(0, 0);
+            await p.evaluate(() => window.scrollTo(0, 0));
+            T.check(`${tag}:fig-${lay}:sumtable-sticky-hover-match`, !!sumHover && sumHover.c0 === sumHover.c1, JSON.stringify(sumHover));
+          }
+        } });
       if (Date.now() - t0 > 420000) { T.check('time-budget', false, 'stopped early to stay under 8 minutes'); break; } }
     T.check(`${W}:no-page-errors`, !errs.length, errs.join(' | ')); /* nothing above threw in the page */
     await close(); }
