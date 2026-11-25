@@ -692,11 +692,30 @@ const {open, H, suite, fs, path, src} = require('../lib/harness');
         /1 run\s*·\s*[\d.]+\s*mg\s*\([\d.]+\s*mg\/L\)/.test(p1RowText) && /\bEmpty\b/.test(p2RowText),
         `Prep 001="${p1RowText}" | Prep 002="${p2RowText}"`
       );
+      await p5.click('#dirToggleArchive');
+      await h5.wait(150);
+      const archIcons = await p5.$eval('#projExplorerModal', el => ({
+        hasEmoji: /[\u{1F300}-\u{1FAFF}]/u.test(el.innerText),
+        toggleSvg: !!el.querySelector('#dirToggleArchive svg')
+      }));
+      await p5.click('#dirToggleArchive');
+      await h5.wait(150);
+      const normIcons = await p5.$eval('#projExplorerModal', el => ({
+        hasEmoji: /[\u{1F300}-\u{1FAFF}]/u.test(el.innerText),
+        toggleSvg: !!el.querySelector('#dirToggleArchive svg'),
+        treeSvg: !!el.querySelector('#dirTree svg'),
+        rowSvg: !!el.querySelector('#dirContent svg')
+      }));
       await p5.click('#projExplorerClose');
       await h5.wait(250);
 
       // Verify 🧪 remains in #projDirCrumbs and switch from Prep 002 -> Prep 001 in 1 interaction
       const multiCrumbs = await p5.$eval('#projDirCrumbs', el => el.innerText);
+      T.check(
+        'explorer-svg-icons-without-emojis-and-crumbs-keep-tube',
+        !archIcons.hasEmoji && archIcons.toggleSvg && !normIcons.hasEmoji && normIcons.toggleSvg && normIcons.treeSvg && normIcons.rowSvg && multiCrumbs.includes('🧪'),
+        JSON.stringify({archIcons, normIcons, multiCrumbs})
+      );
       const switcher = p5.locator('#projDirCrumbs .crumb-prep-sel');
       const hasSwitcher = await switcher.isVisible();
       if (hasSwitcher) {
