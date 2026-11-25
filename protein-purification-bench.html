@@ -3878,12 +3878,12 @@ function insetHeadroom(m, iw, ih, win){
 }
 function zoomCompose(S, m, win, buildIn, zObj, cfg){
   cfg = cfg || {};
-  const o = opt, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = cfg.idp || '', zf = cfg.nest ? Math.min(zoomSize(), 0.35) : zoomSize();
+  const o = opt, pos = cfg.pos || zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = cfg.idp || '', zf = cfg.nest ? Math.min(zoomSize(), 0.35) : zoomSize(), share = cfg.share || zoomSize();
   zObj = zObj || opt;
   const lay = insetLayout(zObj, false), val = v => v !== null && v !== undefined && isFinite(+v) ? +v : null, old = k => !beside && !above && lay && val(lay[k]) !== null ? val(lay[k]) : (!beside && !above && zObj ? val(zObj['zoomInset' + k.toUpperCase()]) : null);
   const pad = 3, oyMain = above ? (cfg.aboveH || Math.round(S.H*0.38)) + (cfg.aboveGap || 10) : 0;
   let g = m.geo, {L, R, T, B} = g, plotB = B - (g.band || 0), ar = Math.max(.2, (R - L)/Math.max(1, B - T));
-  let iw = old('w') > 0 ? old('w') : beside ? S.W*zoomSize() : above ? S.W : (R - L)*zf;
+  let iw = old('w') > 0 ? old('w') : beside ? S.W*share : above ? S.W : (R - L)*zf;
   let ih = old('h') > 0 ? old('h') : beside ? S.H : above ? (cfg.aboveH || Math.round(S.H*0.38)) : iw/ar;
   const minAutoW = cfg.nest ? 46 : 54, minAutoH = cfg.nest ? 34 : 38;
   if (!beside && !above && !(old('w') > 0) && iw < minAutoW && R - L > minAutoW + 8) { iw = Math.min(R - L - pad*2, minAutoW + 2); ih = Math.max(minAutoH, iw/ar); }
@@ -3934,7 +3934,7 @@ function zoomCompose(S, m, win, buildIn, zObj, cfg){
   const sBox = {x0: Math.min(xa, xb), x1: Math.max(xa, xb), y0: oyMain + Math.min(rTop, B), y1: oyMain + Math.max(rTop, B)};
   const iBox = {x0: Math.min(tg.x0, tg.x1), x1: Math.max(tg.x0, tg.x1), y0: Math.min(tg.y0, tg.y1), y1: Math.max(tg.y0, tg.y1)};
   let con = '';
-  const abut = sBox.x0 <= iBox.x1 + 1 && sBox.x1 >= iBox.x0 - 1 && sBox.y0 <= iBox.y1 + 1 && sBox.y1 >= iBox.y0 - 1;
+  const abut = cfg.noCon ? true : sBox.x0 <= iBox.x1 + 1 && sBox.x1 >= iBox.x0 - 1 && sBox.y0 <= iBox.y1 + 1 && sBox.y1 >= iBox.y0 - 1;
   if (!abut) {
     let dx = 0, dirX = 0;
     if (sBox.x1 < iBox.x0) { dx = iBox.x0 - sBox.x1; dirX = 1; }
@@ -4198,10 +4198,13 @@ function buildRunSVG(run, ov){
   ov = ov || {};
   const doZoom = ov.nest ? (run.wfZoom && insetVisible(run, true)) : insetVisible(run, opt.zoomInset);
   if (!doZoom || run.prep || ov.noZoom) return buildRunPlainSVG(run, ov);
-  const S = style(ov), wa = run.xmin, wb = run.xmax, wy = run.ymax, pos = zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = ov.idp || '';
+  /* a workflow step can show its magnified window as a large second panel beside the full trace instead of an inset */
+  const panel = !!ov.nest && run.wfZoomStyle === 'panel';
+  const S = style(ov), wa = run.xmin, wb = run.xmax, wy = run.ymax, pos = panel ? 'beside' : zoomPos(), beside = pos === 'beside', above = pos === 'above', idp = ov.idp || '';
+  const share = panel ? 0.5 : zoomSize(), pGap = panel ? S.fs*1.6 : 0, zfs = panel ? fontSize() : fontSize()*0.8;
   const put = (a, b, ym) => { run.xmin = a; run.xmax = b; if (ym !== undefined) run.ymax = ym; };
   const aboveH = Math.round(S.H*Math.min(0.42, Math.max(0.28, zoomSize()*0.88))), aboveGap = 10;
-  const mkMain = ym => { try { put('', '', ym != null ? ym : wy); return buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: true}, beside ? {nest: true, wPt: S.W*(1 - zoomSize()), hPt: S.H} : above ? {nest: true, wPt: S.W, hPt: Math.max(60, S.H - aboveH - aboveGap)} : {})); } finally { put(wa, wb, wy); } };
+  const mkMain = ym => { try { put('', '', ym != null ? ym : wy); return buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: true}, beside ? {nest: true, wPt: S.W*(1 - share) - pGap, hPt: S.H} : above ? {nest: true, wPt: S.W, hPt: Math.max(60, S.H - aboveH - aboveGap)} : {})); } finally { put(wa, wb, wy); } };
   const m = mkMain(null);
   if (!m.svg) return m;
   const zA = run.zoomWinA !== undefined && run.zoomWinA !== '' ? run.zoomWinA : opt.zoomWinA;
@@ -4210,7 +4213,7 @@ function buildRunSVG(run, ov){
   const win = zoomDefaultWin(run, m.geo.xlo, m.geo.xhi, zA, zB, effWa, effWb);
   const canY = numOr(wy, null) === null;
   const z = win && zoomCompose(S, m, win, (w, h, mg) => { try { put(win.a, win.b, '');
-    return withOpt({bg: false, rxlabel: beside ? opt.rxlabel : '', rylabel: zoomYTitle(opt.rylabel, fontSize()*0.8, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, fs: fontSize()*0.8, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: false, nest: true, wPt: w, hPt: h, idp: idp + 'zi-', split: beside || above}, beside ? {fixT: mg.T, fixB: mg.B} : above ? {fixL: mg.L, fixR: mg.R} : {}))); } finally { put(wa, wb, wy); } }, ov.nest ? run : (curRun() || opt), {idp, nest: !!ov.nest, aboveH, aboveGap, rebuildMain: canY ? mkMain : null});
+    return withOpt({bg: false, rxlabel: beside ? opt.rxlabel : '', rylabel: panel ? opt.rylabel : zoomYTitle(opt.rylabel, zfs, h), sec: 'none', showY: true, runCond: 'none', ndFig: 'none', runTitle: false, fs: zfs, w: numOr(opt.w, 3.5)*w/S.W, h: numOr(opt.h, 2.6)*h/S.H}, () => buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true, fullRun: false, nest: true, wPt: w, hPt: h, idp: idp + 'zi-', split: beside || above}, beside ? {fixT: mg.T, fixB: mg.B} : above ? {fixL: mg.L, fixR: mg.R} : {}))); } finally { put(wa, wb, wy); } }, ov.nest ? run : (curRun() || opt), {idp, nest: !!ov.nest, aboveH, aboveGap, rebuildMain: canY ? mkMain : null, pos, share, noCon: panel});
   return z || buildRunPlainSVG(run, Object.assign({}, ov, {noZoom: true}));
 }
 function buildRunPlainSVG(run, ov){
@@ -5757,7 +5760,7 @@ function composeRuns(list, cfg){
     else gap = fs*3;
   }
   /* panel widths: equal, or weighted per run in the side-by-side workflow */
-  const wts = list.map(r => row ? Math.max(0.2, numOr(r.wfW, 1)) : 1), wsum = wts.reduce((a, b) => a + b, 0);
+  const zPanel = r => r.wfZoom && r.wfZoomStyle === 'panel' && insetVisible(r, true), wts = list.map(r => row ? Math.max(0.2, numOr(r.wfW, 1))*(zPanel(r) ? 2 : 1) : 1), wsum = wts.reduce((a, b) => a + b, 0);
   const pw = wts.map(w => row ? (Wt - (n-1)*gap)*w/wsum : grid ? (Wt - gap)/2 : Wt);
   /* a panel too narrow for its two axes gets the room it needs, so the trace never shrinks to a sliver */
   /* and a trace too short for its axis titles gets taller, so the rotated titles never run into the panel title */
@@ -5765,7 +5768,7 @@ function composeRuns(list, cfg){
   const yTitle = Math.max(String(opt.rylabel || '').length, String(opt.y2grad || '').length, 12)*fs*0.56 + fs;
   const sideK = r => opt.gelPos === 'right' && cfg.showGels && gelsFor(r).length ? Math.min(0.9, Math.max(0.3, numOr(opt.gelSide, 60)/100)) : 1;
   list.forEach((r, i) => { const k = sideK(r), c = buildRunSVG(r, {wPt: pw[i]*k, hPt: chromH, idp: 'dry-', nest: true}); if (!c.geo) { ovL[i] = fs*4; ovR[i] = fs; if (purL && cfg.showGels && gelsFor(r).length && pw[i] < gelPad + fs*4.5) { pw[i] = gelPad + fs*4.5; widened = 1; } return; } ovL[i] = c.geo.L; ovR[i] = pw[i]*k - c.geo.R;
-    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5; let need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (purL && cfg.showGels && gelsFor(r).length) need = Math.max(need, side ? Math.max(purL, need*k + fs*2.8) + fs*5 : gelPad + fs*4.5); if (pw[i] < need) { pw[i] = need; widened = 1; } }
+    { const zp = zPanel(r), minIn = zp ? fs*16 : r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5; let need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : zp ? pw[i] + Math.max(0, minIn - (c.geo.R - c.geo.L))/(0.5*k) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (purL && cfg.showGels && gelsFor(r).length) need = Math.max(need, side ? Math.max(purL, need*k + fs*2.8) + fs*5 : gelPad + fs*4.5); if (pw[i] < need) { pw[i] = need; widened = 1; } }
     const bPlot = c.geo.plotB != null ? c.geo.plotB : c.geo.B, needH = chromH - (bPlot - c.geo.T) + Math.max(fs*9, yTitle); if (chromH < needH) { chromH = needH; taller = 1; } });
   if (widened) Wt = row ? pw.reduce((a, b) => a + b, 0) + (n-1)*gap : grid ? 2*Math.max(...pw) + gap : Math.max(...pw);
   if (widened && !row) pw.fill(grid ? (Wt - gap)/2 : Wt);
@@ -7859,14 +7862,14 @@ paper.addEventListener('mousemove', e => {
   ro.textContent = `x ${xv.toFixed(g.run ? 2 : 3)}` + (g.run || opt.mode === 'overlay' ? `   y ${fmtAuto(yv)}` : '') + (c.run ? '   drag to integrate' : '');
 });
 /* ---------- editing the workflow figure in place: click a panel for its title, arrow note, width and gel size ---------- */
-function wfItem(id){ if (!id) return null; const r = runs.find(x => x.id === id); if (r) return {kind: 'run', r, step: 'run:' + id, title: r.stepName || '', auto: guessStep(r) || r.name, arrow: r.note || '', w: numOr(r.wfW, 1), gz: numOr(r.gelZ, 1), gel: gelsFor(r).length > 0, obj: r, ox: numOr(r.wfDx, 0), oy: numOr(r.wfDy, 0), zoom: !!r.wfZoom};
+function wfItem(id){ if (!id) return null; const r = runs.find(x => x.id === id); if (r) return {kind: 'run', r, step: 'run:' + id, title: r.stepName || '', auto: guessStep(r) || r.name, arrow: r.note || '', w: numOr(r.wfW, 1), gz: numOr(r.gelZ, 1), gel: gelsFor(r).length > 0, obj: r, ox: numOr(r.wfDx, 0), oy: numOr(r.wfDy, 0), zoom: !!r.wfZoom, zs: r.wfZoomStyle === 'panel' ? 'panel' : 'inset'};
   if (String(id).startsWith('nc:')) { const rid = id.slice(3), b = (prep.btw || {})[rid]; if (!b) return null; return {kind: 'nc', b, step: 'btw:' + rid, title: b.title || '', auto: 'Concentrated', arrow: b.arrow || '', w: numOr(b.wfW, 0.85), gel: false, ox: numOr(b.wfDx, 0), oy: numOr(b.wfDy, 0)}; }
   const m = manSteps().find(x => x.id === id); if (m) { const o = manObj(m); return {kind: 'man', m, step: 'man:' + id, title: m.name || '', auto: MAN_NAME[m.kind] || 'Other step', arrow: m.arrow || '', w: numOr(m.wfW, 1), gz: numOr(m.gelZ, 1), gel: gelsFor(o).length > 0, obj: o, ox: numOr(m.wfDx, 0), oy: numOr(m.wfDy, 0)}; }
   if (['construct', 'transform', 'expr', 'lysis', 'cleave', 'final'].includes(id)) return {kind: 'prep', k: id, step: id, title: (prep.titles || {})[id] || '', auto: PREP_NAME[id] || id, gel: false, noArrow: true, noW: true, ox: wfPos(id).wfDx, oy: wfPos(id).wfDy};
   return null; }
 function wfSet(it, f, v){ if (f === 'off') { const dx = Math.round(v.dx*100)/100, dy = Math.round(v.dy*100)/100, o = it.kind === 'nc' ? it.b : it.kind === 'man' ? it.m : it.kind === 'run' ? it.r : null;
     if (!o) { prep.wfOff = Object.assign({}, prep.wfOff); if (dx || dy) prep.wfOff[it.k] = {dx, dy}; else delete prep.wfOff[it.k]; } else if (dx || dy) { o.wfDx = dx; o.wfDy = dy; } else { delete o.wfDx; delete o.wfDy; } }
-  else if (it.kind === 'run') { const r = it.r; if (f === 'title') r.stepName = v; else if (f === 'arrow') r.note = v; else if (f === 'w') r.wfW = v; else if (f === 'gz') r.gelZ = v; else if (f === 'zoom') r.wfZoom = v; }
+  else if (it.kind === 'run') { const r = it.r; if (f === 'title') r.stepName = v; else if (f === 'arrow') r.note = v; else if (f === 'w') r.wfW = v; else if (f === 'gz') r.gelZ = v; else if (f === 'zoom') r.wfZoom = v; else if (f === 'zs') { if (v === 'panel') r.wfZoomStyle = 'panel'; else delete r.wfZoomStyle; } }
   else if (it.kind === 'nc') { const b = it.b; if (f === 'title') b.title = v; else if (f === 'arrow') b.arrow = v; else if (f === 'w') b.wfW = v; }
   else if (it.kind === 'man') { const m = it.m; if (f === 'title') m.name = v; else if (f === 'arrow') m.arrow = v; else if (f === 'w') m.wfW = v; else if (f === 'gz') m.gelZ = v; }
   else if (it.kind === 'prep' && f === 'title') { prep.titles = Object.assign({}, prep.titles, {[it.k]: v}); }
@@ -7884,14 +7887,14 @@ function renderWfTool(){
       + (!it.noArrow && !last ? `<label class="wfl" for="wfA">Arrow note</label><input type="text" id="wfA" value="${esc(it.arrow)}" placeholder="e.g. SUMO protease, 4 °C overnight">` : '')
       + (!it.noW && row ? `<span class="wfg"><span class="wfl">Width</span><button type="button" class="mini" data-wf="w:-1" aria-label="Narrower">−</button><button type="button" class="mini" data-wf="w:1" aria-label="Wider">+</button></span>` : '')
       + (it.gel ? `<span class="wfg"><span class="wfl">Gel</span><button type="button" class="mini" data-wf="gz:-1" aria-label="Smaller gel">−</button><button type="button" class="mini" data-wf="gz:1" aria-label="Larger gel">+</button></span>` : '')
-      + (it.kind === 'run' ? `<label class="check" style="margin-right:12px; margin-left:6px;"><input type="checkbox" data-wfz="1" ${it.zoom ? 'checked' : ''}> Show Inset View</label>` : '')
+      + (it.kind === 'run' ? `<label class="check" style="margin-right:12px; margin-left:6px;"><input type="checkbox" data-wfz="1" ${it.zoom ? 'checked' : ''}> Show Inset View</label><label class="wfl" for="wfZs">As</label><select id="wfZs" data-wfzs="1" ${it.zoom ? '' : 'disabled'} title="Inset: a small magnified view inside the chromatogram. Large panel: the magnified section as its own full-height panel beside the chromatogram."><option value="inset"${it.zs === 'panel' ? '' : ' selected'}>Inset</option><option value="panel"${it.zs === 'panel' ? ' selected' : ''}>Large panel</option></select>` : '')
       + `<button type="button" class="mini" data-wf="reset">Reset position</button><button type="button" class="mini" data-wf="edit">Edit step</button><button type="button" class="mini" data-wf="close" aria-label="Close">Done</button><span class="wfhint">Drag to move, Reset position to undo</span>`; }
   const rb = tool.querySelector('[data-wf=reset]'); if (rb) rb.disabled = !(it.ox || it.oy);
   tool.hidden = false; const th = tool.offsetHeight, tw = tool.offsetWidth, ww = wrap.clientWidth, wh = wrap.clientHeight;
   let top = a.y - wr.top - th - 8; if (top < 4) top = b.y - wr.top + 8; if (top + th > wh - 4) top = Math.max(4, wh - th - 4);
   let left = Math.min(Math.max(4, a.x - wr.left - 4), Math.max(4, ww - tw - 4));
   Object.assign(tool.style, {left: left + 'px', top: top + 'px'}); }
-$('#wfTool').addEventListener('input', e => { const it = wfItem(wfSel); if (!it) return; if (e.target.id === 'wfT') wfSet(it, 'title', e.target.value); else if (e.target.id === 'wfA') wfSet(it, 'arrow', e.target.value); else if (e.target.dataset.wfz) wfSet(it, 'zoom', e.target.checked); });
+$('#wfTool').addEventListener('input', e => { const it = wfItem(wfSel); if (!it) return; if (e.target.id === 'wfT') wfSet(it, 'title', e.target.value); else if (e.target.id === 'wfA') wfSet(it, 'arrow', e.target.value); else if (e.target.dataset.wfz) { wfSet(it, 'zoom', e.target.checked); const zs = $('#wfZs'); if (zs) zs.disabled = !e.target.checked; } else if (e.target.dataset.wfzs) wfSet(it, 'zs', e.target.value); });
 $('#wfTool').addEventListener('keydown', e => { if (e.key === 'Escape' || (e.key === 'Enter' && e.target.tagName === 'INPUT')) { wfSel = null; renderWfTool(); } });
 $('#wfTool').addEventListener('click', e => { const b = e.target.closest('[data-wf]'); if (!b) return; const it = wfItem(wfSel); if (!it) return; const [f, d] = b.dataset.wf.split(':');
   if (f === 'close') { wfSel = null; renderWfTool(); return; }
