@@ -291,6 +291,46 @@ const {open, H, suite, src} = require('../lib/harness');
     T.check('wcag_1710.btn_border_contrast_and_hover_accent',
       wcLight.btnBorderR >= 3.0 && wcDark.btnBorderR >= 3.0 && hoverInfo.got === hoverInfo.want && hoverInfo.got !== wcLight.restBorder,
       JSON.stringify({lightR: wcLight.btnBorderR, darkR: wcDark.btnBorderR, hoverInfo, rest: wcLight.restBorder}));
+
+    // #1715: #home inherits body font stack, System/Light/Dark switcher overrides OS dark mode while #paper stays #ffffff and survives #optReset
+    const homeFontOk = await p.evaluate(() => {
+      const hm = document.querySelector('#home');
+      return !!hm && getComputedStyle(hm).fontFamily === getComputedStyle(document.body).fontFamily;
+    });
+    T.check('design_1715.home_inherits_body_font', homeFontOk);
+
+    await p.emulateMedia({colorScheme: 'dark'}); await h.wait(150);
+    if (await p.locator('#projSettings:not([open]) #projSettingsSum').count()) {
+      await p.click('#projSettingsSum'); await h.wait(100);
+    }
+    const ptLight = p.locator('#projSettings label[for="pt-light"]');
+    if (await ptLight.count()) { await ptLight.click(); await h.wait(150); }
+    const lightUnderDark = await p.evaluate(() => ({
+      theme: document.documentElement.dataset.theme || '',
+      paperBg: getComputedStyle(document.querySelector('#paper')).backgroundColor,
+      panelBg: getComputedStyle(document.querySelector('#panel')).backgroundColor
+    }));
+    await h.step('figure');
+    if ((await p.locator('#moreBtn').getAttribute('aria-expanded')) !== 'true') {
+      await p.click('#moreBtn'); await h.wait(150);
+    }
+    const figStyleCollapsed = p.locator('#panel > .grp.collapsed > h2', {hasText: 'Figure style'});
+    if (await figStyleCollapsed.count()) { await figStyleCollapsed.click(); await h.wait(150); }
+    await p.click('#optReset'); await h.wait(200);
+    const afterResetTheme = await p.evaluate(() => document.documentElement.dataset.theme || '');
+    await p.click('#homeBtn'); await h.wait(250);
+    await p.click('#homeSettings'); await h.wait(150);
+    const htLightChecked = await p.locator('#ht-light').count() ? await p.locator('#ht-light').isChecked() : false;
+    const htAuto = p.locator('#homeSettingsModal label[for="ht-auto"]');
+    if (await htAuto.count()) { await htAuto.click(); await h.wait(150); }
+    const autoRestored = await p.evaluate(() => !document.documentElement.dataset.theme && getComputedStyle(document.querySelector('#paper')).backgroundColor === 'rgb(255, 255, 255)');
+    await p.click('#homeSettingsClose'); await h.wait(100);
+    await p.emulateMedia({colorScheme: 'light'});
+
+    T.check('design_1715.theme_switcher_white_paper_and_reset',
+      lightUnderDark.theme === 'light' && lightUnderDark.paperBg === 'rgb(255, 255, 255)' &&
+      lightUnderDark.panelBg === 'rgb(242, 242, 247)' && afterResetTheme === 'light' && htLightChecked && autoRestored,
+      JSON.stringify({lightUnderDark, afterResetTheme, htLightChecked, autoRestored}));
   });
 
   /* #1267: toast placement below header across desktop/phone, click-to-dismiss, and 1-click run/trace deletion Undo */
