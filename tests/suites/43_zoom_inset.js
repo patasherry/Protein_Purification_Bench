@@ -712,6 +712,53 @@ const insetCount = p => p.evaluate(() => document.querySelectorAll('#paper svg [
     } finally { await close(); }
   });
 
+  /* A full workflow figure (IMAC with its gel, anion exchange, SEC) with every panel's inset on: each inset must really magnify its
+     window (its plot area wider than the marked source region: on a 0.35-wide inset the axis chrome left less than the region's own width), cover no text of its own panel's main plot, and no
+     connector may run horizontally over the marked region (where it reads as a second frame on it) or cross a label. Measured on the exported SVG. */
+  await T.t('wf-readable', async () => {
+    const {p, errs, close} = await open({width: 1600, height: 1100}), h = H(p);
+    try {
+      await h.newProject('wf readable inset');
+      for (const k of ['his', 'q', 's200']) { await h.addRun(src(k)); await h.suggest(); if (k === 'his') { await p.setInputFiles('#gelFile', src('gel')); await h.wait(2500); } }
+      await h.step('figure'); await h.wait(700);
+      for (const ch of ['A', 'B', 'C']) {
+        const pt = await p.evaluate(c => { const e = [...document.querySelectorAll('#paper svg text')].find(x => new RegExp('^' + c + '\\s').test(x.textContent)); if (!e) return null; const r = e.getBoundingClientRect(); return {x: r.left + 30, y: r.top + 60}; }, ch);
+        if (!pt) continue;
+        await p.mouse.click(pt.x, pt.y); await h.wait(300);
+        await p.evaluate(() => { const el = document.querySelector('#wfTool input[data-wfz]'); if (el) { el.checked = true; el.dispatchEvent(new Event('input', {bubbles: true})); } });
+        await h.wait(400);
+      }
+      await p.keyboard.press('Escape'); await h.wait(300);
+      const svg = await h.exportSvg(), m = await h.svgBoxes(svg);
+      const g = await inspectSvg(p, svg, () => {
+        const ov = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))*Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+        return [...document.querySelectorAll('svg .zoom-inset')].map(ins => {
+          const host = ins.parentElement, bg = ins.querySelector('.zoom-inset-bg'), reg = host.querySelector(':scope > .zoom-inset-region'), main = host.querySelector(':scope > [data-plot="main"]');
+          if (!bg || !reg || !main) return {bad: 'missing parts'};
+          const br = bg.getBoundingClientRect(), cp = ins.querySelector('clipPath[id$="zi-plot-area"] rect');
+          if (!cp) return {bad: 'no inset plot area'};
+          /* the inset's plot area and the marked region are both in the panel's own units */
+          const cw = +cp.getAttribute('width'), sw = +reg.querySelector('rect').getAttribute('width');
+          const covered = [...main.querySelectorAll('text')].filter(t => t.textContent.trim() && ov(t.getBoundingClientRect(), br) > 1).map(t => t.textContent.trim());
+          /* a horizontal connector run over the marked region, outside the inset, reads as a second frame on it (connectors and the region share the panel's coordinates) */
+          const rr = reg.querySelector('rect'), rx0 = +rr.getAttribute('x'), rx1 = rx0 + +rr.getAttribute('width'), ry0 = +rr.getAttribute('y');
+          const along = [...reg.querySelectorAll('line')].map(l => [+l.getAttribute('x1'), +l.getAttribute('y1'), +l.getAttribute('x2'), +l.getAttribute('y2')])
+            .filter(([x1, y1, x2, y2]) => Math.abs(y1 - y2) < 0.05 && y1 < ry0 - 0.5 && Math.min(Math.max(x1, x2), rx1) - Math.max(Math.min(x1, x2), rx0) > 2).length;
+          const tb = [...main.querySelectorAll('text')].filter(t => t.textContent.trim()).map(t => ({t: t.textContent.trim(), r: t.getBoundingClientRect()}));
+          const crossed = [...reg.querySelectorAll('line')].flatMap(l => { const lr = l.getBoundingClientRect(), r2 = {left: lr.left - 0.3, right: lr.right + 0.3, top: lr.top - 0.3, bottom: lr.bottom + 0.3}; return tb.filter(o => ov(r2, o.r) > 0.6).map(o => o.t); });
+          return {mag: sw > 0 ? cw/sw : 0, covered, along, crossed};
+        });
+      });
+      const bad = g.filter(x => x.bad);
+      T.check('wf-readable/three-insets', g.length === 3 && !bad.length, `insets=${g.length} ${JSON.stringify(bad)}`);
+      T.check('wf-readable/insets-magnify', g.length === 3 && g.every(x => x.mag >= 1.2), 'magnification ' + g.map(x => (x.mag || 0).toFixed(2)).join(', '));
+      T.check('wf-readable/insets-cover-no-main-text', g.length === 3 && g.every(x => x.covered && !x.covered.length), g.map(x => (x.covered || []).join('|')).join(' ; '));
+      T.check('wf-readable/no-connector-over-region', g.length === 3 && g.every(x => x.along === 0), 'horizontal connector runs over the marked region: ' + g.map(x => x.along).join(', '));
+      T.check('wf-readable/connectors-cross-no-text', g.length === 3 && g.every(x => x.crossed && !x.crossed.length), 'connectors cross: ' + g.map(x => (x.crossed || []).join('|')).join(' ; '));
+      T.check('wf-readable/nothing-clipped', m.clipped.length === 0 && errs.length === 0, m.clipped.concat(errs).slice(0, 5).join(' | '));
+    } finally { await close(); }
+  });
+
   T.done();
 
 })();
