@@ -21,18 +21,18 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#6c7280;
-    --accent:#95a4f3; --accent-ink:#0d1020; --accent-soft:#1f2747; --field:#10131c; --paper:#ffffff; --paper-edge:#2c3346;
-    --soft:#1a1f2d; --warn:#e2b45c; --hover:#1c2232; --well:#10131b; --paper-ink:#4d5468;
+    --bg:#0e1015; --panel:#14171f; --card:#1b1f2a; --ink:#f2f2f7; --muted:#a4a8b4; --faint:#9096a8; --line:#262c3c; --line2:#6c7280;
+    --accent:#409cff; --accent-ink:#0d1020; --accent-soft:#16304f; --field:#12151d; --paper:#ffffff; --paper-edge:#2c3346;
+    --soft:#212634; --warn:#e2b45c; --hover:#252b3b; --well:#11141c; --paper-ink:#4d5468;
     --t-ok:#5fd0a8; --t-tag:#cf9bdc; --t-con:#ff8a85; --t-known:#f0b35c;
     --shadow:0 1px 1px rgba(0,0,0,.4),0 10px 30px -8px rgba(0,0,0,.6); --sb:#353d52; --edge:rgba(0,0,0,.55);
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#6c7280;
-  --accent:#95a4f3; --accent-ink:#0d1020; --accent-soft:#1f2747; --field:#10131c; --paper:#ffffff; --paper-edge:#2c3346;
-  --soft:#1a1f2d; --warn:#e2b45c; --hover:#1c2232; --well:#10131b; --paper-ink:#4d5468;
+  --bg:#0e1015; --panel:#14171f; --card:#1b1f2a; --ink:#f2f2f7; --muted:#a4a8b4; --faint:#9096a8; --line:#262c3c; --line2:#6c7280;
+  --accent:#409cff; --accent-ink:#0d1020; --accent-soft:#16304f; --field:#12151d; --paper:#ffffff; --paper-edge:#2c3346;
+  --soft:#212634; --warn:#e2b45c; --hover:#252b3b; --well:#11141c; --paper-ink:#4d5468;
   --t-ok:#5fd0a8; --t-tag:#cf9bdc; --t-con:#ff8a85; --t-known:#f0b35c;
   --shadow:0 1px 1px rgba(0,0,0,.4),0 10px 30px -8px rgba(0,0,0,.6); --sb:#353d52; --edge:rgba(0,0,0,.55);
 }
@@ -43,7 +43,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 ::selection{background:var(--accent-soft)}
 /* header */
 /* projects: home, project bar, step timeline */
-.home{max-width:1180px;margin:4px auto 36px;display:grid;gap:12px;font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+.home{max-width:1180px;margin:4px auto 36px;display:grid;gap:12px;color:var(--ink)}
 .home-intro{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px;padding:2px}
 .home-intro h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 .home-intro p{margin:0;color:var(--muted);font-size:12.5px;max-width:70ch}
@@ -169,7 +169,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projbar .pb-sep{color:var(--line2);font-size:18px} .projbar .pb-lab{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .proj-settings{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
 .proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted)}
-.proj-settings-body{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%} .projname-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+.proj-settings-body{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%} .projname-pair,.projtheme-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%} .projtheme-pair .seg label{padding:3px 8px;min-height:24px;font-size:12px}
 .np-type{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center} .np-type .hint{margin:0}
 /* Include Cloning switch (#1433): one on/off control, a real button so Space and Enter work */
 .tgl{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;color:var(--ink);background:transparent;border:0;padding:2px 0;cursor:pointer}
@@ -533,7 +533,9 @@ label.f.condmissing>input{border-color:var(--warn)}
 .figtab{font:inherit;font-size:13px;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);padding:7px 12px 8px;margin-bottom:-1px;cursor:pointer;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none;border-radius:6px 6px 0 0}
 .figtab:hover{color:var(--ink);background:var(--hover)}
 .figtab[aria-pressed="true"]{color:var(--ink);font-weight:500;border-bottom-color:var(--accent)}
-.paper{background:var(--paper);border:1px solid var(--paper-edge);border-radius:6px;box-shadow:var(--shadow);padding:clamp(10px,3vw,36px);display:flex;justify-content:center;align-items:center;min-height:260px}
+.paper{background:var(--paper);border:1px solid var(--paper-edge);border-radius:6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.92),0 1px 2px rgba(21,26,40,.06),var(--shadow);padding:clamp(10px,3vw,36px);display:flex;justify-content:center;align-items:center;min-height:260px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .paper{box-shadow:0 0 0 1px rgba(255,255,255,.08),var(--shadow)}}
+:root[data-theme="dark"] .paper{box-shadow:0 0 0 1px rgba(255,255,255,.08),var(--shadow)}
 .paperwrap{position:relative}
 .wfsel{position:absolute;pointer-events:none;border:2px solid #0058c4;border-radius:4px;background:rgba(0,88,196,.06);box-shadow:0 0 0 1px rgba(255,255,255,.9)}
 .wfsel::after{content:"";position:absolute;top:-5px;left:-5px;right:-5px;bottom:-5px;background-image:radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px);background-position:top left, top right, bottom left, bottom right;background-size:8px 8px;background-repeat:no-repeat}
@@ -661,8 +663,7 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .zoom-inset:hover .zoom-inset-handles{opacity:1}
 body.stepfig .paper > svg{max-width:min(100%,680px);margin-inline:auto}
 .paper .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#5a6177;font-size:14px;text-align:center;max-width:36ch;line-height:1.5;margin:auto}
-.figmodal{width:min(1200px,calc(100vw - 32px));height:min(90vh,calc(100vh - 32px));max-width:none;max-height:none;border:1px solid var(--line2);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;box-shadow:var(--shadow)}
-.figmodal::backdrop{background:rgba(15,18,26,.58)}
+.figmodal{width:min(1200px,calc(100vw - 32px));height:min(90vh,calc(100vh - 32px));max-width:none;max-height:none}
 .figmodal-head{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
 .figmodal-head strong{flex:1;font-size:15px}
 .figmodal-body{height:calc(100% - 57px);overflow:auto;padding:18px;background:var(--well)}
@@ -706,9 +707,9 @@ dialog.cl-archive-dlg::backdrop{display:none}
 /* iOS-inspired look (UI only, the figures are untouched): tokens, inset grouped sections, switches, segmented control, rounded buttons.
    --ios-blue is the iOS blue for non-text marks; --accent is the same hue darkened to pass WCAG AA for text and button fills. */
 :root{--ios-blue:#007aff;--accent:#0066d6;--accent-ink:#ffffff;--accent-soft:#dbe9fb;--bg:#e9e9ef;--panel:#f2f2f7;--card:#ffffff;--sep:rgba(60,60,67,.18);--label:#1c1c1e;--label2:#5f5f66;--ink:var(--label);--muted:var(--label2);--line:var(--sep);--r:10px;--r-s:8px;--ease:150ms ease}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#000000;--panel:#121214;--card:#1c1c1e;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a1a1a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}}
-:root[data-theme="dark"]{--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#000000;--panel:#121214;--card:#1c1c1e;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a1a1a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}
-body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Instrument Sans",system-ui,sans-serif}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#0e1015;--panel:#14171f;--card:#1b1f2a;--field:#12151d;--soft:#212634;--hover:#252b3b;--well:#11141c;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a4a8b4;--faint:#9096a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}}
+:root[data-theme="dark"]{--ios-blue:#0a84ff;--accent:#409cff;--accent-ink:#0d1020;--accent-soft:#16304f;--bg:#0e1015;--panel:#14171f;--card:#1b1f2a;--field:#12151d;--soft:#212634;--hover:#252b3b;--well:#11141c;--sep:rgba(235,235,245,.18);--label:#f2f2f7;--label2:#a4a8b4;--faint:#9096a8;--ink:var(--label);--muted:var(--label2);--line:var(--sep)}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Instrument Sans",system-ui,sans-serif}
 button,input,select,textarea{font-family:inherit}
 #panel > .grp{background:var(--card);border:0;border-radius:12px;margin:10px 10px 0}
 #panel > .grp:last-child{margin-bottom:10px}
@@ -725,10 +726,11 @@ button,input,select,textarea{font-family:inherit}
 #panel input[type=checkbox]:checked::after{transform:translateX(16px)}
 #panel input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #panel input[type=checkbox]:disabled{opacity:.45;cursor:default}
-#panel .krow input[type=checkbox]{-webkit-appearance:auto;appearance:auto;width:auto;height:auto;border-radius:0;background:transparent;accent-color:var(--accent);margin:0}
-#panel .krow input[type=checkbox]:checked{background:transparent}
-#panel .krow input[type=checkbox]::after{content:none}
+#panel :is(.krow,.cl-ck,.cl-ck .check) input[type=checkbox]{-webkit-appearance:auto;appearance:auto;width:16px;height:16px;border-radius:0;background:transparent;accent-color:var(--accent);margin:0}
+#panel :is(.krow,.cl-ck,.cl-ck .check) input[type=checkbox]:checked{background:transparent}
+#panel :is(.krow,.cl-ck,.cl-ck .check) input[type=checkbox]::after{content:none}
 #panel .check{min-height:32px;gap:10px}
+#panel .cl-ck .check{min-height:24px;gap:8px}
 /* Project Directory / Windows File Explorer styles */
 .proj-dir-nav{display:inline-flex;align-items:center;gap:6px;margin:0 4px}
 .proj-dir-crumbs{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(480px,60vw);cursor:pointer}
@@ -737,8 +739,9 @@ button,input,select,textarea{font-family:inherit}
 .dir-bar-crumb.active-prep{font-weight:600;color:var(--ink);gap:4px}
 .crumb-prep-sel{font:inherit;font-size:12.5px;font-weight:600;width:auto;min-height:24px;padding:1px 22px 1px 6px;border:1px solid var(--line2);border-radius:4px;background-color:var(--field);color:var(--ink);cursor:pointer;background-position:calc(100% - 11px) 55%,calc(100% - 7px) 55%}
 .dir-summary-cell{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.proj-explorer-modal{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--bg);color:var(--ink);width:920px;max-width:95vw;height:650px;max-height:90vh;box-shadow:0 12px 36px rgba(0,0,0,0.3);overflow:hidden}
-.proj-explorer-modal::backdrop{background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)}
+:is(.figmodal,.proj-explorer-modal,.dir-modal){border:1px solid var(--line2);border-radius:12px;padding:0;background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+:is(.figmodal,.proj-explorer-modal,.dir-modal)::backdrop{background:rgba(15,18,26,.52);backdrop-filter:blur(2px)}
+.proj-explorer-modal{width:920px;max-width:95vw;height:650px;max-height:90vh;overflow:hidden}
 .dir-window{display:flex;flex-direction:column;height:100%}
 .dir-titlebar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line);user-select:none}
 .dir-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
@@ -773,14 +776,16 @@ button,input,select,textarea{font-family:inherit}
 .dir-card{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;user-select:none;transition:all var(--ease);position:relative}
 .dir-card:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,0.1)}
 .dir-card.active-prep{border-color:var(--accent);background:rgba(0,120,215,0.06)}
-.dir-card-icon{font-size:28px;margin-bottom:6px}
+.dir-ico{display:inline-flex;align-items:center;justify-content:center;vertical-align:-2px;flex:none}
+.dir-toolbar .btn svg{vertical-align:-2px}
+.dir-card-icon{font-size:28px;margin-bottom:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.dir-card-icon svg{width:28px;height:28px}
 .dir-card-name{font-size:12px;font-weight:500;word-break:break-word;max-width:100%}
 .dir-card-meta{font-size:11px;color:var(--muted);margin-top:2px}
 .dir-card-acts{display:flex;gap:2px;margin-top:6px;flex-wrap:wrap;justify-content:center}
 .dir-drag-over{outline:2px dashed var(--accent)!important;background:var(--soft)!important}
 .dir-badge{font-size:10px;padding:1px 5px;border-radius:10px;background:var(--accent);color:var(--accent-ink);margin-left:4px}
 .dir-statusbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:var(--card);border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
-.dir-modal{border:1px solid var(--line);border-radius:8px;padding:0;background:var(--bg);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,0.25)}
 .dir-modal-box{padding:16px;min-width:300px;display:flex;flex-direction:column;gap:12px}
 .dir-modal-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 .dir-input,.dir-select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font-size:13px}
@@ -820,6 +825,7 @@ button,input,select,textarea{font-family:inherit}
         <span class="projname-pair"><label for="projName" class="pb-lab">Project name</label><input type="text" id="projName" name="projName" class="projname" aria-label="Project name" placeholder="Project name" spellcheck="false"></span>
         <button type="button" id="projType" class="tgl projtype clone-toggle" role="switch" aria-checked="false" title="Whether this project includes cloning. Switching it off hides the cloning steps and keeps every record."><span class="tgl-t" aria-hidden="true"></span>Include Cloning</button>
         <button type="button" class="btn quiet" id="projCloneRestore" hidden title="Restore the archived cloning stages to the active workflow">Restore Cloning Workflow</button>
+        <span class="projtheme-pair"><span class="pb-lab">Appearance</span><span class="seg" role="radiogroup" aria-label="Appearance"><input type="radio" name="projUiTheme" id="pt-auto" value="auto" data-opt="uiTheme"><label for="pt-auto">System</label><input type="radio" name="projUiTheme" id="pt-light" value="light" data-opt="uiTheme"><label for="pt-light">Light</label><input type="radio" name="projUiTheme" id="pt-dark" value="dark" data-opt="uiTheme"><label for="pt-dark">Dark</label></span></span>
       </div>
     </details>
     <span class="savestate" id="saveState" role="status" aria-live="polite"></span>
@@ -893,6 +899,7 @@ button,input,select,textarea{font-family:inherit}
     <div class="dir-modal-box">
       <h3 id="homeSettingsTitle">Application Settings</h3>
       <p id="homeSettingsDesc" class="hint"></p>
+      <div class="f"><span>Appearance</span><div class="seg" role="radiogroup" aria-label="Appearance"><input type="radio" name="homeUiTheme" id="ht-auto" value="auto" data-opt="uiTheme"><label for="ht-auto">System</label><input type="radio" name="homeUiTheme" id="ht-light" value="light" data-opt="uiTheme"><label for="ht-light">Light</label><input type="radio" name="homeUiTheme" id="ht-dark" value="dark" data-opt="uiTheme"><label for="ht-dark">Dark</label></div></div>
       <label class="f">Storage location<input type="text" id="homeSettingsStorage" readonly class="dir-input"></label>
       <div class="dir-modal-acts">
         <button type="button" class="btn primary" id="homeSettingsClose">Done</button>
@@ -1811,9 +1818,9 @@ button,input,select,textarea{font-family:inherit}
         </div>
         <div class="dir-toolbar">
           <div class="dir-tools-left">
-            <button type="button" class="btn quiet" id="dirNewFolder" title="Create new folder">📁+ New folder</button>
-            <button type="button" class="btn quiet" id="dirNewPrep" title="Create new protein preparation">🧪+ New prep</button>
-            <button type="button" class="btn quiet" id="dirUploadFile" title="Upload file attachment">📤 Upload file</button>
+            <button type="button" class="btn quiet" id="dirNewFolder" title="Create new folder"><span class="dir-ico"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 4H7.414l-1.707-1.707A1 1 0 0 0 5 2H1.5z"/></svg></span>+ New folder</button>
+            <button type="button" class="btn quiet" id="dirNewPrep" title="Create new protein preparation"><span class="dir-ico"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h4M6.5 2v4.2L3.2 12.2A1.4 1.4 0 0 0 4.4 14h7.2a1.4 1.4 0 0 0 1.2-1.8L9.5 6.2V2"/><path d="M4.8 10.5h6.4"/></svg></span>+ New prep</button>
+            <button type="button" class="btn quiet" id="dirUploadFile" title="Upload file attachment"><span class="dir-ico"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 11.5v2h11v-2"/></svg></span> Upload file</button>
             <input type="file" id="dirFileInput" multiple hidden>
           </div>
           <div class="dir-tools-right">
@@ -1830,7 +1837,7 @@ button,input,select,textarea{font-family:inherit}
               <button type="button" class="btn quiet" id="dirViewList" title="List view" aria-pressed="true">☰</button>
               <button type="button" class="btn quiet" id="dirViewGrid" title="Grid view" aria-pressed="false">▦</button>
             </div>
-            <button type="button" class="btn quiet" id="dirToggleArchive" title="Archive / Recycle Bin">🗑 Archive</button>
+            <button type="button" class="btn quiet" id="dirToggleArchive" title="Archive / Recycle Bin"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg> Archive</button>
           </div>
         </div>
         <div class="dir-address-bar">
@@ -1927,7 +1934,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   baseline:'none', smooth:0, normalize:false,
   showPeaks:true, peakRot:false, peakDec:2, prom:5, peakColor:'trace', peakMax:8,
   xlabel:'Retention time (min)', ylabel:'Absorbance (mAU)', showY:true, frame:false, ticksOut:true,
-  scalebar:false, sbValue:'', sbUnit:'mAU', legend:'inside',
+  scalebar:false, sbValue:'', sbUnit:'mAU', legend:'inside', dashTraces:false,
   runPad:15, sec:'grad', fracFmt:'full', fracEvery:0, phases:false, runTitle:false, bandSens:5, gelAutoCrop:true, bandLabels:'none', purBase:'lane', tagTol:2, tagShow:true, purRow:false, known: null, knownTol:6, knownMin:5, cleaveDetect:false, tagPreset:'', tagKda:'', protKda:'', knownShow:'arrows', knownOn:false, knownCount:false,
   /* ndA340Warn: 0.1 AU turbidity threshold (Thermo Scientific NanoDrop User Guide / Technical Bulletin T042; A340 > 0.1 indicates scattering from aggregates/particles) */
   secStds:false, targetName:'', taggedName:'', targetArrow:false, tagCounts:true, gelPos:'below', gelAlign:'center', gelScale:100, laneMark:'fill', gelView:'focus', ndNorm:'raw', ndFrom:240, ndCorr:true, ndFig:'conc', ndA340Warn:0.1, gelSpan:2.5, gelFocusKda:'', gelGap:0, gelSide:60, runGel:true, connectors:true, linkFrom:'axis', laneColors:true, laneAlpha:0.55,
@@ -1936,7 +1943,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', extinction:'', epsMode:'auto', cysOx:false, path:2,
   wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
-  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dashTraces:false, dpi:600};
+  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600, uiTheme:'auto'};
 const RANGE = ['xmin','xmax','ymin','ymax','zoomWinA','zoomWinB'];
 /* Native E. coli proteins commonly co-purified by IMAC (Bolanos-Garcia & Davies 2006, Table 1), DnaK, and common purification additives.
    Sizes are calculated masses in kDa; "app" is an apparent SDS-PAGE size where a protein is known to run off its mass. */
@@ -1993,7 +2000,9 @@ function tidyKnown(L){ L = Array.isArray(L) ? L.filter(k => k && typeof k === 'o
 function mergeKnown(mine, theirs){ const cl = L => Array.isArray(L) ? L.map(k => k && typeof k === 'object' && !Array.isArray(k) ? Object.assign({}, k) : k) : [], mk = tidyKnown(Array.isArray(mine) ? cl(mine) : KNOWN_DEFAULT.map(k => Object.assign({}, k))), pk = tidyKnown(cl(theirs)), same = (a, b) => a.name === b.name && +a.kda === +b.kda && (a.kind || 'contam') === (b.kind || 'contam'), out = [], push = k => { if (!out.some(x => same(x, k))) out.push(k); }; mk.forEach(m => { const p = pk.find(x => same(x, m)); push(p || m); }); pk.forEach(push); KNOWN_DEFAULT.forEach(d => { if (!out.some(x => x.name === d.name && x.kind === d.kind)) out.push(Object.assign({}, d)); }); return out; }
 function tidyLists(){ opt.known = Array.isArray(opt.known) ? tidyKnown(opt.known) : KNOWN_DEFAULT.map(k => Object.assign({}, k)); secCals(); }
 tidyLists();
+function applyUiTheme(){ const v = opt && opt.uiTheme; if (v === 'light' || v === 'dark') document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme; }
 function saveOpt(){ try { localStorage.setItem('hplc-fig-opt', JSON.stringify(opt)); } catch(e) {} }
+applyUiTheme();
 
 let wfSel = null, wfSelKey = '', gelMovedAt = 0;
 const undoStack = [];
@@ -7630,6 +7639,7 @@ list.addEventListener('click', e => {
 });
 
 function syncControls(){
+  applyUiTheme();
   setTimeout(rangeVals);
   const ro = rangeObj(), g = curGel();
   document.querySelectorAll('[data-opt]').forEach(el => {
@@ -7703,10 +7713,12 @@ function onOpt(e){
   }
   if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); runs.forEach(insetClear); }
   if (['peakDec', 'path', 'eps', 'extinction', 'protSeq', 'tagSeq', 'tagPreset'].includes(k)) { renderList(); syncAllChargeWarnings(); }
+  if (k === 'uiTheme') { applyUiTheme(); syncControls(); saveOpt(); }
   if (k === 'runCond') syncControls();
   render();
 }
 $('#panel').addEventListener('input', onOpt);
+['#homeSettingsModal', '#projSettings'].forEach(s => { const e = $(s); if (e) { e.addEventListener('input', onOpt); e.addEventListener('change', onOpt); } });
 /* static guidance folds into one Tips line per section, live status lines stay visible */
 document.querySelectorAll('#panel .grp, #panel details.sub, #bandPanel, #sumPanel').forEach(box => {
   const ps = [...box.querySelectorAll(':scope > p.hint')].filter(p => !p.id || p.id === 'sec-intro'); if (!ps.length) return;
@@ -13065,6 +13077,7 @@ $('#homeSettings').addEventListener('click', () => {
   if (storeLabel) storeLabel.value = STORE.mode === 'cloud' ? 'Cloud database (synced across sessions)' : STORE.mode === 'local' ? 'Local browser database (IndexedDB)' : 'None (in-memory)';
   const descEl = $('#homeSettingsDesc'), whereEl = $('#homeWhere');
   if (descEl && whereEl) descEl.textContent = whereEl.textContent;
+  syncControls();
   const modal = $('#homeSettingsModal');
   if (modal && modal.showModal) modal.showModal();
 });
@@ -13819,6 +13832,12 @@ function prepDirSummary(item, dir){
   }
 }
 
+const DIR_ICONS = {
+  folder: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 4H7.414l-1.707-1.707A1 1 0 0 0 5 2H1.5z"/></svg>',
+  prep: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h4M6.5 2v4.2L3.2 12.2A1.4 1.4 0 0 0 4.4 14h7.2a1.4 1.4 0 0 0 1.2-1.8L9.5 6.2V2"/><path d="M4.8 10.5h6.4"/></svg>',
+  file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.8h5.2L13 5.6v8.6H4z"/><path d="M9.2 1.8v3.8H13"/></svg>',
+  trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg>'
+};
 function renderExplorer(){
   if (!PROJ || !PROJ.directory) return;
   const dir = PROJ.directory;
@@ -13827,7 +13846,7 @@ function renderExplorer(){
   // Breadcrumbs
   const bcEl = $('#dirBreadcrumbs');
   if (dirShowArchive) {
-    bcEl.innerHTML = '<span class="crumb-sep">🗑</span> <strong>Archive / Recycle Bin</strong>';
+    bcEl.innerHTML = `<span class="crumb-sep dir-ico">${DIR_ICONS.trash}</span> <strong>Archive / Recycle Bin</strong>`;
   } else {
     const pathList = [];
     let curF = dir.folders.find(f => f.id === dirCurrentFolder);
@@ -13856,7 +13875,7 @@ function renderExplorer(){
       const hasKids = dir.folders.some(x => !x.archived && x.parentId === f.id) || dir.preparations.some(x => !x.archived && x.folderId === f.id);
       html += `<div class="dir-tree-node ${isCur ? 'active' : ''}" style="padding-left:${depth * 14 + 6}px" data-folder-id="${esc(f.id)}" data-dir-type="folder" data-dir-id="${esc(f.id)}" draggable="${f.id !== 'root'}">`;
       html += `<span class="dir-tree-toggle" data-tree-toggle="${esc(f.id)}">${hasKids ? (isExpanded ? '▾' : '▸') : '•'}</span>`;
-      html += `<span>📁</span> <span class="dir-tree-name">${esc(f.name)}</span>`;
+      html += `<span class="dir-ico">${DIR_ICONS.folder}</span> <span class="dir-tree-name">${esc(f.name)}</span>`;
       html += `</div>`;
       if (isExpanded) {
         html += buildTree(f.id, depth + 1);
@@ -13865,14 +13884,14 @@ function renderExplorer(){
     subPreps.forEach(p => {
       const isCurPrep = p.id === dir.activePrepId;
       html += `<div class="dir-tree-node ${isCurPrep ? 'active-prep' : ''}" style="padding-left:${depth * 14 + 18}px" data-dir-type="prep" data-dir-id="${esc(p.id)}" draggable="true">`;
-      html += `<span>🧪</span> <span class="dir-tree-name">${esc(p.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}`;
+      html += `<span class="dir-ico">${DIR_ICONS.prep}</span> <span class="dir-tree-name">${esc(p.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}`;
       html += `</div>`;
     });
     return html;
   };
   const rootFolder = dir.folders.find(f => f.id === 'root') || { id: 'root', name: PROJ.name || 'Project' };
   let treeHtml = `<div class="dir-tree-node ${dirCurrentFolder === 'root' && !dirShowArchive ? 'active' : ''}" data-folder-id="root" data-dir-type="folder" data-dir-id="root">`;
-  treeHtml += `<span class="dir-tree-toggle" data-tree-toggle="root">${dirTreeExpanded.has('root') ? '▾' : '▸'}</span><span>📁</span> <span class="dir-tree-name">${esc(rootFolder.name)}</span></div>`;
+  treeHtml += `<span class="dir-tree-toggle" data-tree-toggle="root">${dirTreeExpanded.has('root') ? '▾' : '▸'}</span><span class="dir-ico">${DIR_ICONS.folder}</span> <span class="dir-tree-name">${esc(rootFolder.name)}</span></div>`;
   if (dirTreeExpanded.has('root')) {
     treeHtml += buildTree('root', 1);
   }
@@ -13926,7 +13945,7 @@ function renderExplorer(){
     contentEl.innerHTML = `<p class="empty-p" style="padding:24px;text-align:center">${dirShowArchive ? 'No archived items in this project.' : dirSearchTerm ? 'No items match your search.' : 'This folder is empty. Create a folder, preparation, or upload a file above.'}</p>`;
   } else if (dirViewMode === 'grid') {
     contentEl.innerHTML = items.map(item => {
-      const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
+      const icon = item.itemType === 'folder' ? DIR_ICONS.folder : item.itemType === 'prep' ? DIR_ICONS.prep : DIR_ICONS.file;
       const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
       const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
       const fsInfo = fileStatusInfo(item);
@@ -13957,13 +13976,13 @@ function renderExplorer(){
       </thead>
       <tbody>
         ${items.map(item => {
-          const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
+          const icon = item.itemType === 'folder' ? DIR_ICONS.folder : item.itemType === 'prep' ? DIR_ICONS.prep : DIR_ICONS.file;
           const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
           const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
           const fsInfo = fileStatusInfo(item);
           const sumTxt = item.itemType === 'prep' ? prepDirSummary(item, dir) : (item.itemType === 'file' && item.size ? fmtSize(item.size) : '—');
           return `<tr class="dir-row ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
-            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
+            <td><div class="dir-name-cell"><span class="dir-ico">${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
             <td>${typeLabel}</td>
             <td class="dir-summary-cell">${esc(sumTxt)}</td>
             <td>${fmtWhen(item.updated || item.created)}</td>
@@ -14257,7 +14276,7 @@ $('#dirSort').addEventListener('change', e => {
 
 $('#dirToggleArchive').addEventListener('click', () => {
   dirShowArchive = !dirShowArchive;
-  $('#dirToggleArchive').textContent = dirShowArchive ? '📁 Folders' : '🗑 Archive';
+  $('#dirToggleArchive').innerHTML = (dirShowArchive ? DIR_ICONS.folder + ' Folders' : DIR_ICONS.trash + ' Archive');
   $('#dirToggleArchive').classList.toggle('primary', dirShowArchive);
   renderExplorer();
 });
@@ -15805,7 +15824,7 @@ function setCloning(on){ on = !!on; if (on === !!prep.includeCloning) { syncClon
   const modal = $('#cloneArchiveModal');
   if (on) { if (modal && modal.open) modal.close(); if (clAutoFill()) renderPrep(); selectStep('clone:setup'); }
   else { if (curStep.startsWith('clone:')) selectStep('construct'); else { renderSteps(); renderClone(true); render(); }
-    if (kept) { if (modal && typeof modal.show === 'function' && !modal.open) modal.show(); toast(`Cloning is off. Its ${kept} stage${kept === 1 ? ' is' : 's are'} kept and come${kept === 1 ? 's' : ''} back when you switch it on.`); }
+    if (kept) { if (modal && typeof modal.show === 'function' && !modal.open) modal.show(); }
     else if (modal && modal.open) modal.close(); }
   queueSave(); }
 function syncCloneType(){ const el = $('#projType'); if (el) el.setAttribute('aria-checked', prep.includeCloning ? 'true' : 'false'); const rs = $('#projCloneRestore'); if (rs) rs.hidden = !!(prep.includeCloning || !CL().stages.length); }
@@ -15840,6 +15859,7 @@ $('#projCloneRestore').addEventListener('click', () => setCloning(true));
 $('#cloneArchiveCancel').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
 $('#cloneArchiveConfirm').addEventListener('click', () => { const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); });
 $('#cloneArchiveModal').addEventListener('cancel', e => { e.preventDefault(); const m = $('#cloneArchiveModal'); if (m && m.open) m.close(); setCloning(true); });
+window.addEventListener('keydown', e => { if (e.key !== 'Escape') return; const m = $('#cloneArchiveModal'); if (m && m.open) { e.preventDefault(); m.close(); setCloning(true); } });
 let agLaneDrag = null;
 $('#clonePanel').addEventListener('pointerdown', e => { const z = e.target.closest('#ag-lane-editor .ag-lane-zone'); if (!z || !curStep.startsWith('clone:')) return; const s = CL().stages.find(x => 'clone:' + x.id === curStep); if (!s || !s.gel) return;
   const r = z.parentNode.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, i = +z.dataset.agLane, l = agNormalizeLanes(s.gel)[i], edge = Math.min(.035, 9 / r.width);
@@ -16280,8 +16300,8 @@ function buildStepFig(k){
 $('#optReset').addEventListener('click', () => { const keep = {known: opt.known, secCals: opt.secCals, ovSecCal: opt.ovSecCal};
   if (Array.isArray(opt.myQuick)) keep.myQuick = opt.myQuick; if (Array.isArray(opt.myQuickDel)) keep.myQuickDel = opt.myQuickDel;
   /* the protein and its tag are data, not settings: they survive a reset */
-  ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'tagPos', 'tagPreset', 'protKda', 'tagKda', 'eps', 'extinction', 'epsMode', 'cysOx', 'secMono', 'targetName', 'taggedName'].forEach(k => { keep[k] = opt[k]; }); Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), keep);
-  saveOpt(); syncControls(); renderKnown(); render(); toast('Settings restored to the defaults'); });
+  ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'tagPos', 'tagPreset', 'protKda', 'tagKda', 'eps', 'extinction', 'epsMode', 'cysOx', 'secMono', 'targetName', 'taggedName', 'uiTheme'].forEach(k => { keep[k] = opt[k]; }); Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), keep);
+  applyUiTheme(); saveOpt(); syncControls(); renderKnown(); render(); toast('Settings restored to the defaults'); });
 
 /* ---------- export ---------- */
 let dlP = null;
