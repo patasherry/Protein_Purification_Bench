@@ -5744,7 +5744,7 @@ function composeRuns(list, cfg){
     /* fillH: the height at which a gel's lanes fill the plot width at true proportions; a gel with many lanes may also use the panel's margin */
     const fullW = it => Math.max(wOf(it), pw[list.indexOf(it.r)] - gelPad);
     items.forEach(it => { if (sideOf(it)) return; it.fillP = gelPart(it.g, 0, 0, wOf(it), gH, it.idx, false, {fit: true, win: it.win, fixedH: 1e5}).fillH; it.fillW = gelPart(it.g, 0, 0, fullW(it), gH, it.idx, false, {fit: true, win: it.win, fixedH: 1e5}).fillH; });
-    const fill = items.map(it => (wOf(it)/it.idx.length < fs*1.8 ? it.fillW : it.fillP) || 0).filter(v => v > 0).sort((a, b) => a - b);
+    const fill = items.map(it => (wOf(it)/it.idx.length < 7.5 ? it.fillW : it.fillP) || 0).filter(v => v > 0).sort((a, b) => a - b);
     /* the tallest height at which every gel still fits its width without distortion, so all gels share one height */
     const Hc = fill.length ? Math.min(gH, fill[(fill.length - 1) >> 1])*(cfg.gelK || 1) : 0;
     items.forEach(it => { it.wide = (it.fillP > 0 && it.fillP < Hc*0.98) || wOf(it)/it.idx.length < fs*1.8; it.gw = it.wide ? fullW(it) : wOf(it); });
