@@ -1900,6 +1900,7 @@ button,input,select,textarea{font-family:inherit}
       <p class="hint noproj">Protein is the A₂₈₀ area of each pool divided by the A₂₈₀ of a 1 mg/mL solution (set under Peak integration) and the flow cell path. Yield is relative to the first step. Purity is the target's share of the stain in that step's Pool lane, when one is marked.</p>
     </div>
     <script type="application/json" id="assayCalcData"></script>
+    <script type="application/json" id="qcPassportData"></script>
     <div class="intp" id="bandPanel" hidden>
       <div class="intp-head"><strong>Bands and estimated sizes</strong>
         <div class="btns"><button type="button" class="mini" id="bandCsv">Save table (CSV)</button></div></div>
@@ -5717,6 +5718,121 @@ function laneLinks(){
   return map;
 }
 function gelsFor(r){ return gels.filter(g => g.out && lanesFor(g, r.id).length); }
+function mapNdPassportSample(s){
+  const c = ndConc(s);
+  return {
+    id: s.id,
+    name: s.name || '',
+    runId: s.runId || '',
+    stage: s.stage || 'pool',
+    kind: s.kind || 'protein',
+    conc: c.v ?? null,
+    unit: c.unit || 'mg/mL',
+    a280: s.a280 ?? null,
+    r260_280: s.r280 ?? null,
+    r280_260: s.r280 > 0 ? +(1 / s.r280).toFixed(4) : null,
+    r260_230: s.r230 ?? null,
+    a340: s.a340 ?? null,
+    hasSpectrum: !!(s.spec && Array.isArray(s.spec.wl) && s.spec.wl.length > 0)
+  };
+}
+function assembleQcPassport(){
+  const wfRuns = runs.filter(r => r && r.inWf && !r.isStd);
+  const wfRunIds = new Set(wfRuns.map(r => r.id));
+  const rows = wfRuns.map((r, idx) => {
+    const uv = uvOf(r), xs = (uv && uv.xs) || [], ys = (uv && uv.ys) || [];
+    const pool = poolRows(r);
+    const integ = (r.integ && r.integ.length) ? integRows(r).map(g => ({
+      a: +g.a.toFixed(4), b: +g.b.toFixed(4), apex: g.apex != null ? +g.apex.toFixed(4) : null,
+      area: g.area != null ? +g.area.toFixed(3) : null, height: g.height != null ? +g.height.toFixed(3) : null,
+      mg: massOf(g.area, r)
+    })) : [];
+    let winA = null, winB = null, source = 'none';
+    if (pool) { winA = pool.a; winB = pool.b; source = 'shade'; }
+    else if (integ.length) { winA = Math.min(...integ.map(x => x.a)); winB = Math.max(...integ.map(x => x.b)); source = 'integ'; }
+    else if (xs.length >= 2) { winA = xs[0]; winB = xs[xs.length - 1]; source = 'trace'; }
+    const thumbPts = [];
+    if (xs.length >= 2 && winA != null && winB != null) {
+      const span = Math.max(1e-6, winB - winA), pad = source === 'trace' ? 0 : span * 0.35;
+      const lo = winA - pad, hi = winB + pad;
+      const i0 = Math.max(0, lowerBound(xs, lo)), i1 = Math.min(xs.length - 1, lowerBound(xs, hi));
+      const step = Math.max(1, Math.ceil((i1 - i0 + 1) / 80));
+      for (let i = i0; i <= i1; i += step) thumbPts.push([+xs[i].toFixed(4), +ys[i].toFixed(3)]);
+      if (i1 > i0 && thumbPts.length && thumbPts[thumbPts.length - 1][0] !== +xs[i1].toFixed(4)) thumbPts.push([+xs[i1].toFixed(4), +ys[i1].toFixed(3)]);
+    }
+    const linkedNdSamples = ndSamples.filter(s => s && s.runId === r.id).map(mapNdPassportSample);
+    const ndSum = ndForRun(r);
+    const gelLanes = [];
+    gels.forEach(g => {
+      if (!g) return;
+      const labs = gelLabels(g), bndsAll = g.pix ? gelBands(g) : [];
+      for (let i = 0; i < labs.length; i++) {
+        if (laneAssign(g, i) !== r.id) continue;
+        const ln = bndsAll[i], pur = ln ? lanePurity(g, ln) : null;
+        gelLanes.push({
+          gelId: g.id,
+          gelName: g.name || '',
+          laneIndex: i,
+          label: labs[i] || '',
+          purity: pur && pur.purity != null ? +pur.purity.toFixed(2) : null,
+          purityBasis: opt.purBase || 'lane',
+          purityEstimated: !!(pur && pur.est),
+          bandCount: ln && ln.bands ? ln.bands.length : 0
+        });
+      }
+    });
+    return {
+      index: idx,
+      runId: r.id,
+      stepTitle: stepTitle(r),
+      runName: r.name || '',
+      path: r.path ?? null,
+      detector: {
+        path: r.path ?? null,
+        effPathMm: effPathMm(r),
+        pathAssumed: pathAssumed(r),
+        wavelengthNm: uvWl(uv) || null,
+        curveName: (uv && uv.name) || ''
+      },
+      chromatogram: {
+        hasData: source !== 'none',
+        source,
+        unit: xUnit(r),
+        shade: String(r.shade || '').trim(),
+        window: winA != null && winB != null ? [+winA.toFixed(4), +winB.toFixed(4)] : null,
+        pool: pool ? {label: pool.label, a: +pool.a.toFixed(4), b: +pool.b.toFixed(4), vol: pool.vol, volMl: pool.volMl, area: pool.area, mg: pool.mg, measured: !!pool.measured} : null,
+        integ,
+        points: thumbPts
+      },
+      nanodrop: linkedNdSamples.length ? {
+        samples: linkedNdSamples,
+        summary: ndSum ? {mgml: ndSum.mgml, mg: ndSum.mg, vol: ndSum.vol, r260_280: ndSum.r280, r280_260: ndSum.r280 > 0 ? +(1 / ndSum.r280).toFixed(4) : null} : null
+      } : null,
+      gelLanes
+    };
+  });
+  const unlinkedNd = ndSamples.filter(s => s && (!s.runId || !wfRunIds.has(s.runId))).map(mapNdPassportSample);
+  const unlinkedGelLanes = [];
+  gels.forEach(g => {
+    if (!g) return;
+    const labs = gelLabels(g);
+    for (let i = 0; i < labs.length; i++) {
+      const asgn = laneAssign(g, i);
+      if (asgn === 'marker') continue;
+      if (!asgn || (!wfRunIds.has(asgn) && !PREP_LANE.includes(asgn) && !isManId(asgn))) {
+        unlinkedGelLanes.push({gelId: g.id, gelName: g.name || '', laneIndex: i, label: labs[i] || ''});
+      }
+    }
+  });
+  return {rows, unlinkedNd, unlinkedGelLanes};
+}
+function syncQcPassportData(){
+  const el = $('#qcPassportData'); if (!el) return null;
+  if (!runs.length && !ndSamples.length && !gels.length) { if (el.textContent) el.textContent = ''; return null; }
+  const res = assembleQcPassport();
+  el.textContent = JSON.stringify(res);
+  return res;
+}
 /* the margin kept under a text panel's content (Margin under text panels, pt), never so small that descenders touch the next item */
 const textPad = fs => Math.max(fs*0.35, numOr(opt.wfPad, fs*0.8));
 function composeRuns(list, cfg){
@@ -7231,7 +7347,7 @@ function render(){
     if (sk === 'btw') syncBtw(); if (sk === 'man') syncMan(); document.querySelectorAll('#prepPanel > p.hint, #prepPanel > details.tip').forEach(x => { x.hidden = true; }); }
   else { document.querySelectorAll('#panel > [data-step]:not([data-for])').forEach(el => { el.hidden = false; }); document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = d.dataset.sub === 'ptr' || d.dataset.sub === 'pbtw' || d.dataset.sub === 'pman'; }); }
   /* More options shows when this step has settings to offer */
-  renderSec(); renderProt(); renderPrep(); renderND(); syncAssayDerived(); renderAssays(); grpStatus(); moreSync(); renderNext(); renderWfTool();
+  renderSec(); renderProt(); renderPrep(); renderND(); syncAssayDerived(); syncQcPassportData(); renderAssays(); grpStatus(); moreSync(); renderNext(); renderWfTool();
   { const mo = $('#moreOpts'), mw = $('#moreWhat'), secs = [...document.querySelectorAll('#panel > .optsec')], any = PROJ && secs.some(x => !x.hidden); mo.hidden = !any;
     if (mw) { const bs = mw._bs || (mw._bs = [...mw.querySelectorAll('[data-more-sec]')]), on = bs.filter(b => secs.some(g => { const h = g.querySelector(':scope > h2'); return !g.hidden && h && h.firstChild && h.firstChild.textContent.trim() === b.dataset.moreSec; })), k = on.map(b => b.dataset.moreSec).join('|');
       if (mw._k !== k) { mw._k = k; const ch = []; on.forEach((b, i) => { if (i) ch.push(i === on.length - 1 ? ' and ' : ', '); ch.push(b); }); mw.replaceChildren(...ch); }
@@ -11018,6 +11134,7 @@ function refreshPaperFig(){
   const kind = f ? f.kind : 'none';
   $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData() && !hasFracYieldData());
   if (kind === 'workflow') renderSumTable();
+  syncQcPassportData();
   const mt = $('#methodsText'); if (mt) { const t = methodsText(); if (mt.value !== t) mt.value = t; }
   if (PROJ && typeof renderSteps === 'function') renderSteps();
 }
