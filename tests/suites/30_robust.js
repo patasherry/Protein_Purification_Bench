@@ -64,6 +64,35 @@ await T.t('bad', async () => { const {p, errs, close} = await open(), h = H(p); 
   T.check('ok.second-conc-step', cAfter === cBefore + 1, `timeline ${cBefore}->${cAfter}`);
   await close(); });
 
+/* ---------------- comparator saturation diagnostics ---------------- */
+await T.t('comparator-saturation-diagnostics', async () => {
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    await h.newProject('Comparator saturation diagnostics');
+    const csv = values => ['Time (min),UV 280 (mAU)', ...Array.from({length: 8}, (_, i) => `${(i / 10).toFixed(1)},${values[i % values.length]}`)].join('\n');
+    const card = name => p.locator('.trace[data-kind="trace"]').filter({has: p.locator(`input[data-k="name"][title="${name}"]`)});
+    const upload = async (name, values) => {
+      await p.setInputFiles('#file', {name: name + '.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(values))});
+      await h.wait(700);
+      const c = card(name), diag = (await c.locator('.source-diag').allTextContents()).join(' ');
+      return {n: await c.count(), diag};
+    };
+
+    const below = await upload('below_limit', ['<0.01', '<=0.01']);
+    T.check('sat.below_limit.loads', below.n === 1, `generic trace cards=${below.n}`);
+    T.check('sat.below_limit.no_false_warning', !/detector-saturated/i.test(below.diag), `diagnostic: ${below.diag || 'none'}`);
+
+    for (const [id, value] of [['upper_gt', '>0.01'], ['upper_gte', '>=0.01'], ['suffix_star', '0.01*'], ['suffix_hash', '0.01#']]) {
+      const result = await upload(id, [value]);
+      T.check(`sat.${id}.loads`, result.n === 1, `generic trace cards=${result.n}`);
+      T.check(`sat.${id}.retains_warning`, /detector-saturated/i.test(result.diag), `diagnostic: ${result.diag || 'none'}`);
+    }
+    T.check('sat.comparators.no_error', !errs.length, errs.join(' | '));
+  } finally {
+    await close();
+  }
+});
+
 /* ---------------- operation fuzz, fixed seed ---------------- */
 await T.t('fuzz', async () => { const {p, errs, close} = await open(), h = H(p); await h.newProject('Fuzz');
   let seed = 20261022; const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0)/4294967296; };
