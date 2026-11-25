@@ -741,6 +741,157 @@ async function seqDerivedPeakMassAndWlGuard() {
   }
 }
 
+async function suitabilityAndDualUvAndSecAxis() {
+  // (a) Synthetic Gaussian (tR = 10, FWHM = 0.5) + unresolved doublet with 35%-height valley
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    const sigma = 0.5 / (2 * Math.sqrt(2 * Math.LN2));
+    const lines = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'mL,mAU,mL,Fraction'];
+    // Isolated peak at x = 10 (FWHM = 0.5), plus unresolved doublet at x = 16.0 and x = 16.793 (exact 35%-height valley)
+    for (let i = 0; i <= 2200; i++) {
+      const x = +(i * 0.01).toFixed(2);
+      const gIso = 200 * Math.exp(-0.5 * Math.pow((x - 10) / sigma, 2));
+      const gD1 = 200 * Math.exp(-0.5 * Math.pow((x - 16.0) / sigma, 2));
+      const gD2 = 200 * Math.exp(-0.5 * Math.pow((x - 16.793) / sigma, 2));
+      const y = +(gIso + gD1 + gD2).toFixed(4);
+      const isFrac = i % 100 === 0 && x >= 1 && x <= 21;
+      lines.push(`${x},${y},${isFrac ? x : ''},${isFrac ? '"F' + (i / 100) + '"' : ''}`);
+    }
+    await h.newProject('Suitability metrics');
+    await h.addRun({name: 'suitability_synth.csv', mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n'))});
+    await p.evaluate(() => {
+      const cr = document.querySelector('.trace.run.sel select[data-k="crop"]');
+      if (cr) { cr.value = ''; cr.dispatchEvent(new Event('input', {bubbles: true})); cr.dispatchEvent(new Event('change', {bubbles: true})); }
+    });
+    await setOpt(p, 'o-intMethod', 'trap');
+    await setOpt(p, 'o-intBase', 'line');
+    await detect(p);
+    await h.wait(300);
+
+    if (await p.locator('#intMore').isVisible()) {
+      await p.evaluate(() => document.getElementById('intMore').click());
+      await h.wait(300);
+    }
+    const pt = await h.peakTable(), head = pt[0] || [];
+    const iVe = head.findIndex(c => /^(Apex|Ve|Center)/i.test(c));
+    const iFwhm = head.findIndex(c => /^FWHM\b/i.test(c));
+    const iAs = head.findIndex(c => /^As$/i.test(c));
+    const iTf = head.findIndex(c => /^Tf$/i.test(c));
+    const iPl = head.findIndex(c => /^Plates$/i.test(c));
+    const iRs = head.findIndex(c => /^Rs$/i.test(c));
+    const pRows = pt.slice(1).filter(r => r.length === head.length && /^P\d+$/.test(r[0]));
+    const iso = pRows.find(r => Math.abs(num(r[iVe]) - 10) < 0.05);
+    const dbl = pRows.filter(r => num(r[iVe]) > 15);
+
+    T.check(
+      'suitability/trap_fwhm_as_plates',
+      !!iso && iFwhm >= 0 && iAs >= 0 && iTf >= 0 && iPl >= 0 &&
+        iso[iFwhm] === '0.50' &&
+        Math.abs(num(iso[iAs]) - 1.0) <= 0.03 &&
+        Math.abs(num(iso[iTf]) - 1.0) <= 0.03 &&
+        Math.abs(num(iso[iPl]) - 2218) <= 35,
+      `head=${JSON.stringify(head)}, iso=${JSON.stringify(iso)}`
+    );
+    T.check(
+      'suitability/doublet_35pct_valley_reports_emdash_for_as',
+      dbl.length >= 1 && iAs >= 0 && dbl.every(r => r[iAs] === '—'),
+      `doublet rows=${JSON.stringify(dbl)}`
+    );
+    T.check(
+      'suitability/resolution_rs_computed_between_peaks',
+      iRs >= 0 && pRows.length >= 2 && pRows[0][iRs] === '—' && num(pRows[1][iRs]) > 5,
+      `Rs values=${JSON.stringify(pRows.map(r => r[iRs]))}`
+    );
+
+    // Methods text disclosure for intBase and smooth > 2
+    await setOpt(p, 'o-intBase', 'zero');
+    await setOpt(p, 'o-smooth', '11');
+    await h.wait(300);
+    await h.step('figure');
+    await h.wait(300);
+    const mTxt = await h.methods();
+    T.check(
+      'suitability/methods_discloses_intbase_and_smoothing',
+      /zero \(0 mAU\) baseline/i.test(mTxt) && /11-point Savitzky–Golay/i.test(mTxt),
+      `methods=${mTxt}`
+    );
+  } finally {
+    T.check('suitability/no_page_errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+
+  // (b) Dual 280/260 nm ÄKTA CSV: A260/A280 visible BEFORE #intMore, Overlay 260 nm dashed 0.65 pt trace + Beer-Lambert mass preserved, per-run secAxis
+  const {p: p2, errs: errs2, close: close2} = await open(), h2 = H(p2);
+  try {
+    const dualLines = [
+      'Chrom.1,,Chrom.1,,Chrom.1,,Chrom.1,,Chrom.1,',
+      'UV 1_280,,UV 2_260,,Conc B,,Cond,,Fraction,',
+      'mL,mAU,mL,mAU,mL,%,mL,mS/cm,mL,Fraction'
+    ];
+    for (let i = 0; i <= 200; i++) {
+      const x = +(i * 0.1).toFixed(1);
+      const y280 = +(300 * Math.exp(-0.5 * Math.pow((x - 10) / 0.6, 2))).toFixed(3);
+      const y260 = +(180 * Math.exp(-0.5 * Math.pow((x - 10) / 0.6, 2))).toFixed(3);
+      const grad = +(x * 5).toFixed(2);
+      const cond = +(5 + x * 2).toFixed(2);
+      const isF = i % 10 === 0 && i < 200;
+      dualLines.push(`${x},${y280},${x},${y260},${x},${grad},${x},${cond},${isF ? x : ''},${isF ? '"T' + (i / 10 + 1) + '"' : ''}`);
+    }
+    await h2.newProject('Dual UV and secAxis');
+    await setOpt(p2, 'o-eps', '1.0');
+    await h2.addRun({name: 'dual_280_260.csv', mimeType: 'text/csv', buffer: Buffer.from(dualLines.join('\n'))});
+    await detect(p2);
+    await h2.wait(300);
+
+    const isAllBefore = await p2.$eval('#intTable', tb => tb.classList.contains('all'));
+    const ptBefore = await h2.peakTable(), hdBefore = ptBefore[0] || [];
+    const ratIdx = hdBefore.findIndex(c => c.includes('A₂₆₀/A₂₈₀') || c.includes('A260/A280'));
+    const mgIdx = hdBefore.findIndex(c => /^Protein \(mg\)$/i.test(c));
+    const p1Before = ptBefore.slice(1).find(r => r[0] === 'P1');
+    T.check(
+      'dual_uv/a260_a280_visible_before_intmore',
+      !isAllBefore && ratIdx >= 0 && !!p1Before && Math.abs(parseFloat(p1Before[ratIdx]) - 0.60) <= 0.03,
+      `all=${isAllBefore}, hdBefore=${JSON.stringify(hdBefore)}, P1=${JSON.stringify(p1Before)}`
+    );
+
+    const mgBefore = p1Before && mgIdx >= 0 ? p1Before[mgIdx] : '';
+    const chk260 = p2.locator('.trace.run.sel input[data-k="show260"]').first();
+    const hasChk260 = (await chk260.count()) > 0;
+    if (hasChk260) {
+      await chk260.check();
+      await h2.wait(300);
+    }
+    const svgDual = await h2.exportSvg();
+    const ptAfter = await h2.peakTable(), p1After = ptAfter.slice(1).find(r => r[0] === 'P1');
+    const mgAfter = p1After && mgIdx >= 0 ? p1After[mgIdx] : '';
+    T.check(
+      'dual_uv/overlay_260_draws_065pt_dashed_and_keeps_280_mg',
+      hasChk260 && /class="uv260-trace"[^>]*stroke-width="0\.65"[^>]*stroke-dasharray=/.test(svgDual) && mgBefore !== '' && mgAfter === mgBefore,
+      `hasChk=${hasChk260}, mgBefore=${mgBefore}, mgAfter=${mgAfter}`
+    );
+
+    const secSel = p2.locator('.trace.run.sel select[data-k="secAxis"]').first();
+    const hasSecSel = (await secSel.count()) > 0;
+    let svgCond = '', svgNone = '';
+    if (hasSecSel) {
+      await secSel.selectOption('cond');
+      await h2.wait(300);
+      svgCond = await h2.exportSvg();
+      await secSel.selectOption('none');
+      await h2.wait(300);
+      svgNone = await h2.exportSvg();
+    }
+    T.check(
+      'sec_axis/per_run_override_switches_cond_and_none',
+      hasSecSel && /Conductivity/i.test(svgCond) && !/Conductivity|Buffer B/i.test(svgNone),
+      `hasSecSel=${hasSecSel}, condHas=${/Conductivity/i.test(svgCond)}, noneHas=${/Conductivity|Buffer B/i.test(svgNone)}`
+    );
+  } finally {
+    T.check('dual_uv/no_page_errors', !errs2.length, errs2.join(' | '));
+    await close2();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -754,5 +905,6 @@ async function seqDerivedPeakMassAndWlGuard() {
   await T.t('theo_peak_mass', theoPeakMassTest);
   await T.t('pool_dip_same_span', poolDipSameSpan);
   await T.t('seq_derived_peak_mass_and_wl_guard', seqDerivedPeakMassAndWlGuard);
+  await T.t('suitability_and_dual_uv_and_sec_axis', suitabilityAndDualUvAndSecAxis);
   T.done();
 })();
