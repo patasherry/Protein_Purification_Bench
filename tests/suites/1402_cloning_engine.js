@@ -124,6 +124,19 @@ const {open, H, suite, fs, path, DATA} = require('../lib/harness');
       T.check('ath/skip', /Skipped/.test((await row(h, 'Overnight culture')).s), (await row(h, 'Overnight culture')).s);
       await go(h, 'Miniprep');
       T.check('ath/miniprep-checklist', await cl(p).locator('[data-cck]').count() === 11, String(await cl(p).locator('[data-cck]').count()));
+      const ckGeom = await p.evaluate(() => {
+        const ck = document.querySelector('#clonePanel .cl-ck input[type=checkbox]');
+        const sw = document.querySelector('#o-wfGels');
+        const cks = ck ? getComputedStyle(ck) : null, sws = sw ? getComputedStyle(sw) : null;
+        const ckr = ck ? ck.getBoundingClientRect() : null;
+        return {
+          ckOk: !!(ck && cks.appearance !== 'none' && ckr.width > 0 && ckr.width <= 18),
+          swOk: !!(sw && sws.appearance === 'none' && parseFloat(sws.width) >= 34),
+          app: cks ? cks.appearance : '',
+          w: ckr ? ckr.width : 0
+        };
+      });
+      T.check('ath/checklist-native-checkbox-not-switch', ckGeom.ckOk && ckGeom.swOk, JSON.stringify(ckGeom));
       T.check('ath/n3-requires-review', /N3:.*Requires review/.test(await cl(p).innerText()), 'the N3 recipe is not marked Requires review');
 
       // the lineage names the failure as a failure and claims no verified clone
@@ -523,6 +536,12 @@ const {open, H, suite, fs, path, DATA} = require('../lib/harness');
       const modal = p.locator('#cloneArchiveModal');
       await clickHead(); await h.wait(250);
       T.check('dialog/visible-when-data-exists', await modal.isVisible());
+      const toastWhenOpen = await p.locator('#toast').isVisible();
+      await p.keyboard.press('Escape'); await h.wait(200);
+      const escDismissed = !(await modal.isVisible()) && await headOn();
+      T.check('dialog/no-colliding-toast-and-escape-dismisses', !toastWhenOpen && escDismissed, `toastWhenOpen=${toastWhenOpen} escDismissed=${escDismissed}`);
+      if (await modal.isVisible()) { await p.locator('#cloneArchiveCancel').click(); await h.wait(200); }
+      await clickHead(); await h.wait(250);
       await p.locator('#cloneArchiveCancel').click(); await h.wait(200);
       T.check('dialog/cancel-keeps-on', !(await modal.isVisible()) && await headOn() && (await rows(h)).length === cloneCountOn);
       await clickHead(); await h.wait(250);
