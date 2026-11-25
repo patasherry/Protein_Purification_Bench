@@ -11176,7 +11176,11 @@ async function openProject(rawData, name, noUndo){
 $('#projSave').addEventListener('click', () => {
   const hasDir = PROJ && PROJ.directory && ((PROJ.directory.folders || []).length > 1 || (PROJ.directory.files || []).length > 0 || (PROJ.directory.preparations || []).length > 1 || (PROJ.directory.preparations || []).some(p => p && p.data && ((p.data.runs && p.data.runs.length) || (p.data.gels && p.data.gels.length) || p.data.struct || (p.data.traces && p.data.traces.some(t => !t.ex)) || (p.data.assays && p.data.assays.length) || (p.data.prep && (p.data.prep.name || p.data.prep.gb || p.data.prep.parentConstructId || (p.data.prep.growth && p.data.prep.growth.length))))));
   if (!hasDir && !runs.length && !gels.length && !struct && !traces.some(t => !t.ex) && !assays.length && !prep.gb && !cleanSeq(opt.protSeq) && !prep.name && !prep.parentConstructId && !(prep.constructs && prep.constructs.length) && !(prep.growth && prep.growth.length) && !prep.cEnz && !prep.cOverlap && !prep.cRecomb && !CL().stages.length) { toast('Load some data first'); return; }
-  const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || (PROJ && PROJ.name) || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true; saveFile(`${safe(nm)}_project.json`, JSON.stringify(d)); });
+  const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || (PROJ && PROJ.name) || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true;
+  const omitted = PROJ && PROJ.directory && Array.isArray(PROJ.directory.files) ? PROJ.directory.files.filter(f => f && !f.archived && !f._dataUrl && !f.dataUrl).length : 0;
+  saveFile(`${safe(nm)}_project.json`, JSON.stringify(d));
+  if (omitted) toast(`Exported project (${omitted} attachment${omitted === 1 ? '' : 's'} >5 MB stored in this browser only and not embedded in .json)`);
+});
 $('#projOpen').addEventListener('click', () => $('#projFile').click());
 $('#projFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; let data;
   try { data = JSON.parse(await f.text()); } catch (err) { toast(`Could not open ${f.name}`); return; }
@@ -11546,15 +11550,42 @@ function keepRaw(fs){
   if (n) { PROJ.editSeq = (PROJ.editSeq || 0) + 1; renderRaw(); queueSave(); }
 }
 const fmtSize = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' kB' : (n / 1048576).toFixed(1) + ' MB';
+async function readRawBlob(r){
+  let b = r._f;
+  if (!b && r.blobId) {
+    if (STORE.mode === 'local') b = await getLocalBlob(r.blobId);
+    else { const rs = await fetch('/_blob/' + r.blobId); if (!rs.ok) throw new Error('missing'); b = await rs.blob(); }
+  }
+  if (!b) throw new Error('missing');
+  return b;
+}
 function renderRaw(){
   const box = $('#rawPanel'); if (!box) return; box.hidden = !PROJ || !rawFiles.length; $('#rawSum').textContent = `Raw files (${rawFiles.length})`;
-  $('#rawList').innerHTML = rawFiles.map(r => `<div class="rawrow" data-raw="${esc(r.id)}"><span class="rawname" title="${esc(r.name)}">${esc(r.name)}</span><span>${fmtSize(r.size || 0)}, ${esc(new Date(r.time || 0).toLocaleDateString())}</span><button type="button" class="mini" data-rawdl="${esc(r.id)}">Download</button><button type="button" class="mini" data-rawrm="${esc(r.id)}">Remove</button></div>`).join('');
+  $('#rawList').innerHTML = `<p class="hint" style="margin:0 0 6px">Stored in this browser only (not embedded in .json project exports).</p>`
+    + rawFiles.map(r => `<div class="rawrow" data-raw="${esc(r.id)}"><span class="rawname" title="${esc(r.name)}">${esc(r.name)}</span><span>${fmtSize(r.size || 0)}, ${esc(new Date(r.time || 0).toLocaleDateString())}</span><button type="button" class="mini" data-rawdl="${esc(r.id)}">Download</button><button type="button" class="mini" data-rawrm="${esc(r.id)}">Remove</button></div>`).join('')
+    + `<div class="btns" style="margin-top:6px"><button type="button" class="btn mini" data-rawzip="1">Download all (ZIP)</button></div>`;
 }
 $('#rawList').addEventListener('click', async e => {
+  if (e.target.closest('[data-rawzip]')) {
+    if (!rawFiles.length) return;
+    const entries = [], used = new Set(), missed = [];
+    for (const r of rawFiles) {
+      try {
+        const b = await readRawBlob(r);
+        let nm = String(r.name || 'file'), k = 2;
+        while (used.has(nm)) { const dot = nm.lastIndexOf('.'); nm = dot > 0 ? `${r.name.slice(0, dot)}_${k++}${r.name.slice(dot)}` : `${r.name}_${k++}`; }
+        used.add(nm);
+        entries.push({name: nm, data: new Uint8Array(await b.arrayBuffer())});
+      } catch (err) { missed.push(r.name); }
+    }
+    if (!entries.length) { toast('Could not read raw files from storage'); return; }
+    saveFile(`${safe((PROJ && PROJ.name) || 'project')}_raw_files.zip`, zip(entries));
+    if (missed.length) toast(`Bundled ${entries.length} raw file${entries.length === 1 ? '' : 's'} (skipped ${missed.length} unreadable)`);
+    return;
+  }
   const dl = e.target.closest('[data-rawdl]'), rm = e.target.closest('[data-rawrm]'), id = (dl || rm || {dataset: {}}).dataset.rawdl || (rm || {dataset: {}}).dataset.rawrm, r = rawFiles.find(x => x.id === id); if (!r) return;
   if (rm) { rawFiles = rawFiles.filter(x => x !== r); PROJ.editSeq = (PROJ.editSeq || 0) + 1; renderRaw(); flushSave(); return; }
-  try { let b = r._f; if (!b && r.blobId) { if (STORE.mode === 'local') b = await getLocalBlob(r.blobId); else { const rs = await fetch('/_blob/' + r.blobId); if (!rs.ok) throw new Error('missing'); b = await rs.blob(); } }
-    if (!b) throw new Error('missing'); const url = URL.createObjectURL(b), a = document.createElement('a'); a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
+  try { const b = await readRawBlob(r); const url = URL.createObjectURL(b), a = document.createElement('a'); a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
   catch (err) { toast(`Could not read ${r.name} from storage`); }
 });
 
@@ -12929,6 +12960,13 @@ function renderExplorer(){
   const contentEl = $('#dirContent');
   contentEl.className = `dir-content dir-${dirViewMode}`;
 
+  const fileStatusInfo = item => {
+    if (item.itemType !== 'file') return {badge: '', hollow: false};
+    const hollow = !(item._f instanceof Blob) && !item.blobId && !item._dataUrl && !item.dataUrl;
+    if (hollow) return {badge: ' <span class="status-badge st-review">Not in .json (&gt;5 MB)</span>', hollow: true};
+    if (item.localOnly || (item.size || 0) > 5242880) return {badge: ' <span class="status-badge st-review">Browser only (&gt;5 MB)</span>', hollow: false};
+    return {badge: '', hollow: false};
+  };
   if (!items.length) {
     contentEl.innerHTML = `<p class="empty-p" style="padding:24px;text-align:center">${dirShowArchive ? 'No archived items in this project.' : dirSearchTerm ? 'No items match your search.' : 'This folder is empty. Create a folder, preparation, or upload a file above.'}</p>`;
   } else if (dirViewMode === 'grid') {
@@ -12936,12 +12974,13 @@ function renderExplorer(){
       const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
       const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
       const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
+      const fsInfo = fileStatusInfo(item);
       return `<div class="dir-card ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
         <div class="dir-card-icon">${icon}</div>
-        <div class="dir-card-name" title="${esc(item.name)}">${esc(item.name)}${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}</div>
+        <div class="dir-card-name" title="${esc(item.name)}">${esc(item.name)}${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div>
         <div class="dir-card-meta">${typeLabel}</div>
         <div class="dir-card-acts">
-          <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Open</button>
+          <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}"${fsInfo.hollow ? ' disabled title="Files over 5 MB are not embedded in .json exports"' : ''}>Open</button>
           ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
           ${!dirShowArchive ? `
             <button type="button" class="mini" data-dir-rename="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Rename</button>
@@ -12965,13 +13004,14 @@ function renderExplorer(){
           const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
           const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
           const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
+          const fsInfo = fileStatusInfo(item);
           return `<tr class="dir-row ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
-            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}</div></td>
+            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
             <td>${typeLabel}</td>
             <td>${fmtWhen(item.updated || item.created)}</td>
             <td>
               <div class="dir-acts-cell">
-                <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Open</button>
+                <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}"${fsInfo.hollow ? ' disabled title="Files over 5 MB are not embedded in .json exports"' : ''}>Open</button>
                 ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
                 ${!dirShowArchive ? `
                   <button type="button" class="mini" data-dir-rename="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Rename</button>
@@ -13104,6 +13144,7 @@ $('#dirTree').addEventListener('click', async e => {
 $('#dirContent').addEventListener('click', async e => {
   const op = e.target.closest('[data-dir-open]');
   if (op) {
+    if (op.disabled) return;
     const id = op.dataset.dirOpen, typ = op.dataset.dirType;
     if (typ === 'folder') {
       dirCurrentFolder = id;
@@ -13205,9 +13246,12 @@ $('#dirFileInput').addEventListener('change', async e => {
   const fs = Array.from(e.target.files || []);
   e.target.value = '';
   if (!fs.length || !PROJ || !PROJ.directory) return;
+  const bigNames = [];
   for (const f of fs) {
     let dUrl = '';
-    if ((f.size || 0) <= 5242880) { try { dUrl = await blobToDataUrl(f); } catch (err) {} }
+    const over5mb = (f.size || 0) > 5242880;
+    if (!over5mb) { try { dUrl = await blobToDataUrl(f); } catch (err) {} }
+    else bigNames.push(f.name);
     PROJ.directory.files.push({
       id: 'file-' + newBlobId().slice(2),
       name: f.name,
@@ -13217,6 +13261,7 @@ $('#dirFileInput').addEventListener('change', async e => {
       time: Date.now(),
       folderId: dirCurrentFolder,
       archived: false,
+      localOnly: over5mb,
       _f: f,
       _dataUrl: dUrl
     });
@@ -13224,7 +13269,8 @@ $('#dirFileInput').addEventListener('change', async e => {
   PROJ.editSeq = (PROJ.editSeq || 0) + 1;
   renderExplorer();
   queueSave();
-  toast(`Added ${fs.length} file attachment${fs.length === 1 ? '' : 's'}`);
+  if (bigNames.length) toast(`Added ${bigNames.join(', ')} (stored in this browser only; files over 5 MB are not embedded in .json exports)`);
+  else toast(`Added ${fs.length} file attachment${fs.length === 1 ? '' : 's'}`);
 });
 
 $('#dirViewList').addEventListener('click', () => {

@@ -61,6 +61,20 @@ const {open, H, suite, src, fs, path, DATA} = require('../lib/harness');
       const gotRaw = fs.readFileSync(await rawDl.path());
       T.check('downloaded raw file is byte-identical to the upload', gotRaw.equals(origRaw) && rawDl.suggestedFilename() === F.imac.split('/').pop(), `${gotRaw.length} vs ${origRaw.length}`);
 
+      const rawHint = (await p.locator('#rawList .hint').count()) ? await p.$eval('#rawList .hint', e => e.textContent) : '';
+      const rawZipBtn = p.locator('#rawList [data-rawzip]');
+      let zipOk = false, zipDetail = `hint="${rawHint}"`;
+      if (await rawZipBtn.count()) {
+        const [zipDl] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), rawZipBtn.click()]);
+        const zipBuf = fs.readFileSync(await zipDl.path());
+        const zipStr = zipBuf.toString('latin1');
+        zipOk = zipBuf.length > origRaw.length && zipBuf.readUInt32LE(0) === 0x04034b50 &&
+          zipStr.includes(path.basename(F.imac)) && zipStr.includes(path.basename(F.sec)) && zipStr.includes(path.basename(F.q)) &&
+          zipBuf.includes(origRaw);
+        zipDetail = `zipLen=${zipBuf.length} fn=${zipDl.suggestedFilename()} hint="${rawHint}"`;
+      }
+      T.check('rawPanel shows browser-only hint and Download all (ZIP) bundles raw uploads', /browser only/i.test(rawHint) && zipOk, zipDetail);
+
       const rec = await p.evaluate(() => new Promise(res => { const q = indexedDB.open('hfb-projects'); q.onsuccess = () => { const db = q.result, tx = db.transaction(['projects', 'blobs'], 'readonly'), a = tx.objectStore('projects').getAll(), b = tx.objectStore('blobs').getAll();
         tx.oncomplete = () => res({data: a.result.map(x => x.data).join(''), raws: b.result.filter(x => /^raw-/.test(x.id)).length, blobs: b.result.length}); }; q.onerror = () => res(null); }));
       const st = rec ? JSON.parse(rec.data) : {};
