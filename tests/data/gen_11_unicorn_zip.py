@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 import numpy as np
 import zipfile
 
@@ -8,7 +9,74 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.append(HERE)
 
-from gen_chrom import write_unicorn_zip, signal, OUT, plate_labels
+from gen_chrom import write_unicorn_zip, signal, OUT, plate_labels, net_floats
+
+class NonSeekableStream(io.RawIOBase):
+    def __init__(self):
+        self.buf = bytearray()
+    def write(self, b):
+        self.buf.extend(b)
+        return len(b)
+    def seekable(self):
+        return False
+    def tell(self):
+        return len(self.buf)
+
+def stream_zip_bytes(entries):
+    ns = NonSeekableStream()
+    with zipfile.ZipFile(ns, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+        for name, data in entries:
+            zi = zipfile.ZipInfo(name, date_time=(2026, 10, 22, 9, 0, 0))
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            with z.open(zi, 'w') as f:
+                f.write(data)
+    return bytes(ns.buf)
+
+def gen_descriptor_unicorn():
+    np.random.seed(42)
+    fn = 'descriptor_unicorn.zip'
+    inj = 1.0
+    flow = 0.5
+    x = np.round(np.arange(0, 30.0001, 0.05), 4).astype(float)
+    y = signal(x, [(inj + 12.0, 0.4, 40.0), (inj + 16.0, 0.4, 70.0)])
+    inner_curve_bytes = stream_zip_bytes([
+        ('CoordinateData.VolumesDataType', b'System.Single[]\r\n'),
+        ('CoordinateData.Volumes', net_floats(x)),
+        ('CoordinateData.AmplitudesDataType', b'System.Single[]\r\n'),
+        ('CoordinateData.Amplitudes', net_floats(y))
+    ])
+    xml = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<Chromatogram xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" FormatVersion="9" UNICORNVersion="7.10.0.2756">'
+        '<ChromatogramName>Chrom.1</ChromatogramName><IsReadonly>false</IsReadonly><TimeUnit>min</TimeUnit><VolumeUnit>ml</VolumeUnit>'
+        '<Created>2026-10-22T09:00:00.000</Created><CreatedUtcOffsetMinutes>-420</CreatedUtcOffsetMinutes>'
+        '<Curves>'
+        '<Curve CurveDataType="UV"><Name>UV 1_280</Name><IsoChroneType>Volume</IsoChroneType>'
+        '<TimeUnit>min</TimeUnit><VolumeUnit>ml</VolumeUnit><AmplitudePrecision>3</AmplitudePrecision><AmplitudeUnit>mAU</AmplitudeUnit>'
+        '<IsOriginalData>true</IsOriginalData><IsReadOnly>false</IsReadOnly><CurveNumber>1</CurveNumber><ColumnVolume>23.562</ColumnVolume><ColumnVolumeUnitName>ml</ColumnVolumeUnitName>'
+        '<CurvePoints><CurvePoint><IsFullResolution>true</IsFullResolution><BinaryCurvePointsFileName>Chrom.1_1_True</BinaryCurvePointsFileName></CurvePoint></CurvePoints>'
+        '<CurveUVInfo><IsUVValuesNormalizedToNominalUVPathLength>true</IsUVValuesNormalizedToNominalUVPathLength><UVPathLength>2</UVPathLength><NominalUVPathLength>2</NominalUVPathLength><IsSystemProvided>true</IsSystemProvided></CurveUVInfo>'
+        '</Curve>'
+        '</Curves>'
+        '<EventCurves>'
+        '<EventCurve EventCurveType="Fraction"><Name>Fraction</Name><TimeUnit>min</TimeUnit><VolumeUnit>ml</VolumeUnit><IsOriginalData>true</IsOriginalData><CurveNumber>11</CurveNumber><ColumnVolume>23.562</ColumnVolume><ColumnVolumeUnitName>ml</ColumnVolumeUnitName>'
+        '<Events><Event EventType="Method" EventSubType="Undefined"><EventTime>14.00000</EventTime><EventVolume>7.00000</EventVolume><EventText>A1</EventText><InstructionFeedback>0</InstructionFeedback></Event></Events>'
+        '</EventCurve>'
+        '</EventCurves>'
+        '</Chromatogram>'
+    ).encode('utf-8')
+    outer_entries = [
+        ('CalibrationSettingData', b'\x00' * 64),
+        ('Chrom.1.Xml', xml),
+        ('Chrom.1_1_True', inner_curve_bytes),
+        ('Manifest.xml', b'<ExportManifest FormatVersion="1"><Details><FileName>Result.xml</FileName><FileType>Result</FileType></Details></ExportManifest>'),
+        ('Result.xml', b'<Result FormatVersion="1" />'),
+        ('MethodData', b'\x00' * 128),
+        ('SystemData', b'\x00' * 128)
+    ]
+    path = os.path.join(OUT, fn)
+    with open(path, 'wb') as f:
+        f.write(stream_zip_bytes(outer_entries))
 
 def gen_valid_unicorn():
     np.random.seed(42)
@@ -90,6 +158,7 @@ def gen_zero_measurement_unicorn():
 
 if __name__ == '__main__':
     gen_valid_unicorn()
+    gen_descriptor_unicorn()
     gen_zero_measurement_unicorn()
     gen_missing_curve_unicorn()
     gen_not_unicorn()

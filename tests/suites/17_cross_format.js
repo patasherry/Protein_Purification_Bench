@@ -189,5 +189,82 @@ async function testFormat(filename, desc) {
     }
   });
 
+  /* #1762: Multi-wavelength ÄKTA CSV prioritizes uniquely identifiable 280 nm UV channel over earlier non-280 nm channels */
+  await T.t('multi_wavelength_akta_csv_prioritizes_280', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    const num = s => { const m = String(s == null ? '' : s).replace(/,/g, '').match(/-?\d+(\.\d+)?/); return m ? +m[0] : NaN; };
+    try {
+      p.setDefaultTimeout(15000);
+      await h.newProject('multi-wavelength ÄKTA 280 priority');
+
+      const lines = ['UV 1_214,,UV 2_280,', 'ml,mAU,ml,mAU'];
+      for (let i = 0; i <= 200; i++) {
+        const x = i * 0.05;
+        const g = Math.exp(-0.5 * ((x - 5.0) / 0.2) ** 2);
+        lines.push(`${x.toFixed(4)},${(500 * g).toFixed(3)},${x.toFixed(4)},${(100 * g).toFixed(3)}`);
+      }
+      await p.setInputFiles('#file', {
+        name: 'multi_wl_akta.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(lines.join('\n') + '\n')
+      });
+      await p.waitForTimeout(800);
+
+      const d = await saved(p);
+      const run = (d.runs || []).find(r => r.file === 'multi_wl_akta');
+      T.check('akta_280/uv-order',
+        !!run && run.uvs.length === 2 && run.uvs[0].name === 'UV 2_280' && run.uvs[1].name === 'UV 1_214',
+        `uvs=${JSON.stringify(run && run.uvs.map(u => u.name))}`);
+
+      const runStep = (await h.timeline()).find(x => x.k.startsWith('run:'));
+      T.check('akta_280/run-step', !!runStep, 'Run step should appear in timeline');
+      if (runStep) {
+        await h.step(runStep.k);
+        await p.waitForTimeout(500);
+        await p.waitForSelector('#intAuto', { state: 'visible', timeout: 5000 });
+        await p.click('#intAuto');
+        await p.waitForTimeout(600);
+        if (await p.locator('#intMore').isVisible()) {
+          const txt = await p.locator('#intMore').textContent();
+          if (/more columns/i.test(txt || '')) {
+            await p.click('#intMore');
+            await p.waitForTimeout(200);
+          }
+        }
+
+        const tbl = await h.peakTable();
+        const head = tbl[0] || [];
+        const ih = head.findIndex(c => /Height/i.test(c));
+        const rows = tbl.slice(1).filter(r => r.length > 3);
+        const height = rows.length && ih >= 0 ? num(rows[0][ih]) : NaN;
+        T.check('akta_280/peak-height-280',
+          rows.length > 0 && isFinite(height) && Math.abs(height - 100) < 5,
+          `rows=${rows.length}, height=${height}, head=${JSON.stringify(head)}`);
+      }
+
+      /* Ambiguous multiple 280 nm channels retain original file order */
+      const ambLines = ['UV 1_214,,UV 2_280,,UV 3_280,', 'ml,mAU,ml,mAU,ml,mAU'];
+      for (let i = 0; i <= 20; i++) {
+        const x = i * 0.5;
+        ambLines.push(`${x.toFixed(2)},${(10 + i).toFixed(2)},${x.toFixed(2)},${(5 + i).toFixed(2)},${x.toFixed(2)},${(2 + i).toFixed(2)}`);
+      }
+      await p.setInputFiles('#file', {
+        name: 'multi_wl_akta_ambiguous_280.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(ambLines.join('\n') + '\n')
+      });
+      await p.waitForTimeout(600);
+      const d2 = await saved(p);
+      const ambRun = (d2.runs || []).find(r => r.file === 'multi_wl_akta_ambiguous_280');
+      T.check('akta_280/ambiguous-keeps-file-order',
+        !!ambRun && JSON.stringify(ambRun.uvs.map(u => u.name)) === JSON.stringify(['UV 1_214', 'UV 2_280', 'UV 3_280']),
+        `uvs=${JSON.stringify(ambRun && ambRun.uvs.map(u => u.name))}`);
+
+      T.check('akta_280/no-errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
