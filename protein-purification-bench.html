@@ -16541,6 +16541,28 @@ function buildStepFig(k){
   if (isManId(k)) { const m = manSteps().find(x => x.id === k); return composeRuns([manObj(m)], base); }
   return composeRuns([prepObjFor(k)], base);
 }
+function buildQcPassportFooterSVG(data, cfg){
+  const uNd = (data && Array.isArray(data.unlinkedNd)) ? data.unlinkedNd : [];
+  const uGel = (data && Array.isArray(data.unlinkedGelLanes)) ? data.unlinkedGelLanes : [];
+  if (!uNd.length && !uGel.length) return null;
+  const {x, y, w, fs, aw, isGray, wrapTxt} = cfg, ff = fs*0.74, lh = ff*1.38, lines = [];
+  if (uNd.length) {
+    const ndTxt = 'Unlinked NanoDrop: ' + uNd.map(s => (s.name || s.id) + (s.a280 != null ? ` (A280 ${fmt(s.a280, 2)})` : s.conc != null ? ` (${fmt(s.conc, 2)} ${s.unit || 'mg/mL'})` : '')).join(', ');
+    wrapTxt(ndTxt, w - 16, ff).forEach(ln => lines.push(ln));
+  }
+  if (uGel.length) {
+    const gelTxt = 'Unlinked gel lanes: ' + uGel.map(l => (l.gelName ? l.gelName + ' ' : '') + 'lane ' + (l.label || ('#' + (l.laneIndex + 1)))).join(', ');
+    wrapTxt(gelTxt, w - 16, ff).forEach(ln => lines.push(ln));
+  }
+  const footH = fs*2.35 + Math.max(0, lines.length - 1)*lh + fs*0.72;
+  const fill = isGray ? '#f3f3f3' : '#fffbeb', stroke = isGray ? '#737373' : '#d97706', hdrCol = isGray ? '#222222' : '#92400e';
+  const out = [`<g id="qcPassportUnlinkedFooter" class="passport-unlinked-footer">`];
+  out.push(`<rect class="passport-footer-bg" x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(footH)}" rx="4" fill="${fill}" stroke="${stroke}" stroke-dasharray="4 2" stroke-width="${r2(Math.max(0.6, aw))}"/>`);
+  out.push(`<text x="${r2(x + 8)}" y="${r2(y + fs*1.18)}" font-size="${r2(fs*0.82)}" font-weight="bold" fill="${hdrCol}">Unlinked evidence (${uNd.length + uGel.length})</text>`);
+  lines.forEach((ln, idx) => { out.push(`<text x="${r2(x + 8)}" y="${r2(y + fs*2.3 + idx*lh)}" font-size="${r2(ff)}" fill="#334155">${esc(ln)}</text>`); });
+  out.push(`</g>`);
+  return {svg: out.join(''), h: footH};
+}
 
 $('#optReset').addEventListener('click', () => { const keep = {known: opt.known, secCals: opt.secCals, ovSecCal: opt.ovSecCal};
   if (Array.isArray(opt.myQuick)) keep.myQuick = opt.myQuick; if (Array.isArray(opt.myQuickDel)) keep.myQuickDel = opt.myQuickDel;
