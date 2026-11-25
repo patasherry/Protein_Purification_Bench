@@ -484,6 +484,47 @@ const {open, H, suite, fs, path} = require('../lib/harness');
       T.check('pixel_brightened_over_120', pixelVal > 120, `brightened pixel value is ${pixelVal} (> 120)`);
       T.check('disclosures_present', adjBoxes.texts.some(x => x.t.includes('Disclosures:')), 'Disclosures: appears in figure');
       T.check('no_clipped_text_disclosures', adjBoxes.clipped.length === 0, 'no clipped text with disclosures: ' + adjBoxes.clipped.join(' | '));
+
+      // #1704: 8-lane gel with duplicate (1200, 1200 bp) and closely spaced distinct (2100..2900 bp) expected products
+      while ((await p.locator('#ag-lane-list [data-lane-k="label"]').count()) < 8) {
+        await p.click('#ag-add-lane');
+        await h.wait(80);
+      }
+      const laneSpec = [
+        ['M', 'DNA ladder', ''],
+        ['PCR-1', 'Sample', '1200 bp'],
+        ['PCR-2', 'Sample', '1200 bp'],
+        ['PCR-3', 'Sample', '2100 bp'],
+        ['PCR-4', 'Sample', '2300 bp'],
+        ['PCR-5', 'Sample', '2500 bp'],
+        ['PCR-6', 'Sample', '2700 bp'],
+        ['PCR-7', 'Sample', '2900 bp']
+      ];
+      for (let i = 0; i < laneSpec.length; i++) {
+        const [lbl, tp, exp] = laneSpec[i];
+        await p.locator(`#ag-lane-label-${i}`).fill(lbl); await p.locator(`#ag-lane-label-${i}`).dispatchEvent('change');
+        await p.locator(`#ag-lane-type-${i}`).selectOption(tp); await p.locator(`#ag-lane-type-${i}`).dispatchEvent('change');
+        const expLoc = p.locator(`#ag-lane-exp-${i}`);
+        if (await expLoc.count() > 0) { await expLoc.fill(exp); await expLoc.dispatchEvent('change'); }
+      }
+      await genBtn.click(); await h.wait(500);
+      const svg8 = await h.exportSvg();
+      const boxes8 = await h.svgBoxes(svg8);
+      const pairs8 = [];
+      for (let i = 0; i < boxes8.texts.length; i++) {
+        for (let j = i + 1; j < boxes8.texts.length; j++) {
+          const a = boxes8.texts[i], b = boxes8.texts[j];
+          const iw = Math.min(a.right, b.right) - Math.max(a.x, b.x);
+          const ih = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+          if (iw > 0 && ih > 0) pairs8.push(`${a.t.trim()} × ${b.t.trim()} (${iw.toFixed(1)}x${ih.toFixed(1)})`);
+        }
+      }
+      T.check('eight_lane_width_bounded', boxes8.root.w <= 9.5 * 96, `root.w=${boxes8.root.w.toFixed(1)}px (${(boxes8.root.w / 96).toFixed(2)} in)`);
+      T.check('eight_lane_no_clipped_text', boxes8.clipped.length === 0, 'clipped: ' + boxes8.clipped.join(' | '));
+      T.check('eight_lane_zero_text_overlaps', pairs8.length === 0, `overlaps (${pairs8.length}): ${pairs8.slice(0, 6).join('; ')}`);
+      const callout12 = boxes8.texts.filter(x => x.t.trim() === 'Expected product: 1.2 kb');
+      T.check('eight_lane_merges_duplicate_and_keeps_distinct', callout12.length === 1 && ['2.1', '2.3', '2.5', '2.7', '2.9'].every(kb => boxes8.texts.some(x => x.t.trim() === `Expected product: ${kb} kb`)), `1.2kb count=${callout12.length}`);
+
       T.check('figure_no_page_errors', errs.length === 0, errs.join(' | '));
     } finally {
       await close();
