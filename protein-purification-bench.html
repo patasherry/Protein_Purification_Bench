@@ -497,6 +497,9 @@ ul.sumnotes{margin:6px 0 0;padding-left:18px;display:grid;gap:3px}#sumAssumption
 .runcond[open]{gap:9px}
 input.autoval::placeholder{color:var(--accent);opacity:.85}
 .condwarn{display:block;color:var(--warn);font-size:11.5px;line-height:1.35}
+.charge-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;letter-spacing:.01em;line-height:1.25;margin-left:6px;background:rgba(217,119,6,.12);color:#92400e;border:1px solid rgba(217,119,6,.35);vertical-align:middle}
+:root:not([data-theme="light"]) .charge-badge,:root[data-theme="dark"] .charge-badge{background:rgba(245,158,11,.15);color:#fcd34d;border-color:rgba(245,158,11,.35)}
+.charge-curve-card{display:grid;gap:6px;background:var(--well);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
 label.f.condmissing>input{border-color:var(--warn)}
 .methods{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 .methods>summary{cursor:pointer;font-size:12px;color:var(--muted);padding:2px 0}
@@ -957,6 +960,7 @@ button,input,select,textarea{font-family:inherit}
       <label class="f tagf">Tag sequence<textarea id="tagSeq" data-opt="tagSeq" rows="2" spellcheck="false"></textarea></label>
       <p class="hint warnc" id="protNote" hidden></p>
       <div class="tablewrap"><table class="itab" id="protTable"></table></div>
+      <div id="protChargeCard" class="cardtext charge-curve-card" hidden></div>
       <p class="hint" id="protEps"></p>
       <label class="check" id="cysOxWrap" hidden><input type="checkbox" id="o-cysOx" data-opt="cysOx">Disulfides oxidized (+125 M⁻¹cm⁻¹ per cystine)</label>
       <button type="button" class="btn" id="protUse" style="justify-self:start" title="Sets the protein and tag sizes for gel matching and the SEC monomer mass">Use for gel and SEC</button>
@@ -1125,7 +1129,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Method<input type="text" id="pr-lysMethod" data-prep="lysMethod" list="dl-lysis" placeholder="e.g. Sonication"></label>
           <label class="f">Clarified volume (mL)<input type="number" id="pr-lysVol" data-prep="lysVol" min="0" step="1"></label>
         </div>
-        <label class="f">Lysis buffer<input type="text" id="pr-lysBuffer" data-prep="lysBuffer" placeholder="e.g. 50 mM Tris pH 8.0, 300 mM NaCl, 20 mM imidazole"></label>
+        <label class="f"><span class="flab">Lysis buffer<span class="charge-badge warn-badge charge-precip-warn" data-charge-prep="lysBuffer" hidden></span></span><input type="text" id="pr-lysBuffer" data-prep="lysBuffer" placeholder="e.g. 50 mM Tris pH 8.0, 300 mM NaCl, 20 mM imidazole"></label>
         <details class="cardtext" id="lysMore"><summary>Protocol and figure details (optional)</summary>
           <label class="f">Additives<input type="text" id="pr-lysAdd" data-prep="lysAdd" placeholder="e.g. protease inhibitor tablet, 10 µg/mL DNase I, 2 mM MgCl2, 1 mg/mL lysozyme"></label>
           <label class="f">Sonication or press settings<input type="text" id="pr-lysSet" data-prep="lysSet" placeholder="e.g. 40% amplitude, 5 s on, 10 s off, 6 min total, on ice"></label>
@@ -1141,7 +1145,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Protease<input type="text" id="pr-protease" data-prep="protease" list="dl-protease" spellcheck="false"></label>
           <label class="f" title="Protease to protein, by mass unless you say otherwise. 100 reads as 1:100 (w/w)">Ratio<input type="text" id="pr-ratio" data-prep="ratio" placeholder="e.g. 1:100"></label>
         </div>
-        <label class="f">Dialysis buffer<input type="text" id="pr-dialBuffer" data-prep="dialBuffer" placeholder="e.g. 20 mM Tris pH 8.0, 300 mM NaCl, 1 mM DTT"></label>
+        <label class="f"><span class="flab">Dialysis buffer<span class="charge-badge warn-badge charge-precip-warn" data-charge-prep="dialBuffer" hidden></span></span><input type="text" id="pr-dialBuffer" data-prep="dialBuffer" placeholder="e.g. 20 mM Tris pH 8.0, 300 mM NaCl, 1 mM DTT"></label>
         <div class="row">
           <label class="f">Temperature (°C)<input type="text" id="pr-clvTemp" data-prep="clvTemp" placeholder="e.g. 4"></label>
           <label class="f">Time (h)<input type="text" id="pr-clvTime" data-prep="clvTime" placeholder="e.g. 16"></label>
@@ -1206,7 +1210,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Volume (mL)<input type="number" id="pr-finVol" data-prep="finVol" min="0" step="any"></label>
           <label class="f">A260/A280<input type="number" id="pr-finRatio" data-prep="finRatio" min="0" step="0.01" placeholder="e.g. 0.57"></label>
         </div>
-        <label class="f">Storage buffer<input type="text" id="pr-finBuffer" data-prep="finBuffer" placeholder="e.g. 20 mM HEPES pH 7.5, 150 mM NaCl, 10% glycerol, 1 mM TCEP"></label>
+        <label class="f"><span class="flab">Storage buffer<span class="charge-badge warn-badge charge-precip-warn" data-charge-prep="finBuffer" hidden></span></span><input type="text" id="pr-finBuffer" data-prep="finBuffer" placeholder="e.g. 20 mM HEPES pH 7.5, 150 mM NaCl, 10% glycerol, 1 mM TCEP"></label>
         <label class="f" id="prStoreWrap" title="How the final protein was concentrated and stored. Goes in the methods text">Storage<input type="text" id="pr-store" data-prep="store" placeholder="e.g. 50 µL aliquots flash-frozen in liquid nitrogen, stored at −80 °C"></label>
         <details class="cardtext" id="finQcMore"><summary>Quality and characterization checks (optional)</summary>
           <label class="f" title="Backed by a gel of the last column's fractions, so the figure can print it">Purity<input type="text" id="pr-qcPurity" data-prep="qcPurity" placeholder="e.g. over 95% by SDS-PAGE"></label>
@@ -6467,7 +6471,7 @@ function manSentence(o, Lt, wf){ const m = (o && o.man) || o || {}, t = x => Str
 window.btwSentence = btwSentence; window.btwShort = btwShort; window.manSentence = manSentence;
 /* the column, from the run's file name and method (HisTrap FF 1 mL, Resource Q 6 mL ...), or the SEC calibration's column */
 function guessColumn(r){
-  const t = ' ' + [r.file, r.method, r.name].filter(Boolean).join(' ').replace(/[_]+/g, ' ') + ' ';
+  const t = ' ' + [r.mCol, r.col, r.file, r.method, r.name].filter(Boolean).join(' ').replace(/[_]+/g, ' ') + ' ';
   if (isSec(r) && r.colLog) return r.colLog;
   if (isSec(r)) { const c = secCalFor(r); if (c && c.col && c.col !== 'custom' && SEC_COLUMNS[c.col]) return SEC_COLUMNS[c.col].name; const g = secColumnGuess(r); return g !== 'custom' ? SEC_COLUMNS[g].name : ''; }
   const vol = (t.match(/(\d+(?:\.\d+)?)\s*-?\s*ml\b/i) || [])[1], grade = (t.match(/\b(FF|HP|excel|crude)\b/i) || [])[1];
@@ -6511,7 +6515,7 @@ function guessFrac(r){ const segs = fracSegments(r, uvOf(r).xs[uvOf(r).xs.length
   return `${fmtAuto(min)} to ${fmtAuto(max)} ${xUnit(r)}`; }
 /* each field: what the user typed, else what the file says */
 function runCond(r){
-  const v = k => String(r[k] == null ? (k === 'mPh' && r.mPH != null ? r.mPH : '') : r[k]).trim(), au = {mCol: guessColumn(r), mCV: (c => c ? String(+(+c).toPrecision(3)) : '')(guessCV(r)), mFlow: r.flowAuto ? fmt(r.flowAuto, r.flowAuto < 1 ? 2 : 1) : '', mTemp: '', mGrad: guessGradient(r), mFrac: guessFrac(r), mPh: ''};
+  const v = k => String(r[k] == null ? (k === 'mPh' && r.mPH != null ? r.mPH : (k === 'mBufA' && r.bufA != null ? r.bufA : (k === 'mBufB' && r.bufB != null ? r.bufB : (k === 'mCol' && r.col != null ? r.col : '')))) : r[k]).trim(), au = {mCol: guessColumn(r), mCV: (c => c ? String(+(+c).toPrecision(3)) : '')(guessCV(r)), mFlow: r.flowAuto ? fmt(r.flowAuto, r.flowAuto < 1 ? 2 : 1) : '', mTemp: '', mGrad: guessGradient(r), mFrac: guessFrac(r), mPh: ''};
   const o = {}; COND_KEYS.forEach(k => { o[k] = v(k) || au[k] || ''; o[k + 'Auto'] = !v(k) && !!au[k]; }); o.auto = au; return o; }
 /* IMAC needs these four values for a reproducible condition. Keep the warning beside the field that resolves it, rather than adding another summary surface. */
 function imacCondWarnings(r){ const c = runCond(r), w = {}; if (guessStep(r) !== 'IMAC') return w;
@@ -6970,7 +6974,7 @@ const runFolds = new WeakMap(), MORE_COND_KEYS = ['mCV', 'mFrac', 'mPh', 'mTemp'
         <label class="eye" title="UV flow cell path of the instrument this run was on (ÄKTA usually 2 mm, HPLC often 10 mm). Used for mg from the A280 area">UV path (mm)<input type="number" step="any" min="0.1" id="up${r.id}" data-k="path" value="${esc(r.path ?? '')}" placeholder="assumed: ${esc(String(effPathMm()))}" class="tiny autoval" title="Not in the file. ÄKTA monitors are usually 2 mm, HPLC flow cells often 10 mm"></label>
       </div>
       ${r.inWf && !(poolRows(r) || {}).measured ? (massWhy(r) ? `<p class="hint uvhint">No mg from the UV area: ${esc(massWhy(r))}.</p>` : !hasTxt(r.path) ? `<p class="hint uvhint">UV path assumed ${esc(fmtAuto(effPathMm()))} mm (not in the file); set above for UV area mg.</p>` : '') : ''}
-      ${(() => { const imacWarn = imacCondWarnings(r), f = (k, lab, ph, extra) => { const warn = imacWarn[k] || '', wid = `cw-${k}${r.id}`, val = r[k] == null ? (k === 'mPh' && r.mPH != null ? r.mPH : '') : r[k]; return `<label class="f${warn ? ' condmissing' : ''}">${lab}<input type="${extra && extra.num ? 'number' : 'text'}"${extra && extra.num ? ' step="any" min="0"' : ''} id="${k}${r.id}" data-k="${k}" value="${esc(val)}" placeholder="${esc(c.auto[k] ? 'auto: ' + c.auto[k] : ph)}"${c.auto[k] ? ` class="autoval" title="Read from the run: ${esc(c.auto[k])}. This is what the figure and methods use until you type your own."` : ''}${imacWarn && Object.prototype.hasOwnProperty.call(imacWarn, k) ? ` aria-describedby="${wid}" aria-invalid="true"` : ''}>${guessStep(r) === 'IMAC' ? `<span class="condwarn" id="${wid}" data-condwarn="${k}" aria-live="polite"${warn ? '' : ' hidden'}>${esc(warn)}</span>` : ''}</label>`; };
+      ${(() => { const imacWarn = imacCondWarnings(r), f = (k, lab, ph, extra) => { const warn = imacWarn[k] || '', wid = `cw-${k}${r.id}`, val = r[k] == null ? (k === 'mPh' && r.mPH != null ? r.mPH : (k === 'mBufA' && r.bufA != null ? r.bufA : (k === 'mBufB' && r.bufB != null ? r.bufB : (k === 'mCol' && r.col != null ? r.col : '')))) : r[k]; const isBuf = k === 'mBufA' || k === 'mBufB', badge = isBuf ? chargeBadgeHtml(r, k) : ''; return `<label class="f${warn ? ' condmissing' : ''}"><span class="flab">${lab}${badge}</span><input type="${extra && extra.num ? 'number' : 'text'}"${extra && extra.num ? ' step="any" min="0"' : ''} id="${k}${r.id}" data-k="${k}" value="${esc(val)}" placeholder="${esc(c.auto[k] ? 'auto: ' + c.auto[k] : ph)}"${c.auto[k] ? ` class="autoval" title="Read from the run: ${esc(c.auto[k])}. This is what the figure and methods use until you type your own."` : ''}${imacWarn && Object.prototype.hasOwnProperty.call(imacWarn, k) ? ` aria-describedby="${wid}" aria-invalid="true"` : ''}>${guessStep(r) === 'IMAC' ? `<span class="condwarn" id="${wid}" data-condwarn="${k}" aria-live="polite"${warn ? '' : ' hidden'}>${esc(warn)}</span>` : ''}</label>`; };
         const sumT = [c.mCol, c.mFlow ? `${c.mFlow} mL/min` : ''].filter(Boolean).join(', ');
         const defP = effPathMm(), cellV = uvCellKey(r);
         return `<details class="cardtext runcond" data-fold="runcond"${foldOpen('runcond')}><summary>Run conditions${PROJ && sumT ? `<span class="muted">: ${esc(sumT)}${miss.length ? `, needs ${esc(miss.join(', '))}` : ''}</span>` : ''}</summary>
@@ -7048,7 +7052,7 @@ list.addEventListener('input', e => {
   else if (k === 'runId' && t.src) { const asg = gelLabels(t).map((_, i) => laneAssign(t, i)); t.runId = el.value; t.assign = asg.map(a => a === 'marker' ? 'marker' : el.value); if (curGel() === t) renderLaneTable(); }
   else if (k === 'pathCell') { if (el.value === 'custom') return; t.path = el.value; delete t.pathFromFile; const pi = el.closest('.trace') && el.closest('.trace').querySelector('[data-k="path"]'); if (pi) pi.value = t.path; }
   else { t[k] = el.value; if (k === 'mPh') delete t.mPH; if (!document.body.classList.contains('searching') && MORE_COND_KEYS.includes(k)) { const st = runFolds.get(t); if (st) { st.auto.more = hasMoreCond(t); if (PROJ && st.auto.more) st.auto.runcond = true; } } if (k === 'path') { delete t.pathFromFile; const cs = el.closest('.trace') && el.closest('.trace').querySelector('[data-k="pathCell"]'); if (cs) { const ck = uvCellKey(t); if (ck !== 'custom') cs.value = ck; } } }
-  if (k === 'name' || COND_KEYS.includes(k)) syncImacCondWarnings(t, el.closest('.trace'));
+  if (k === 'name' || COND_KEYS.includes(k)) { syncImacCondWarnings(t, el.closest('.trace')); syncChargeWarnings(t, el.closest('.trace')); }
   if (k === 'crop') { t.xmin = t.xmax = ''; }
   if (k === 'name') { const tb = $('#figtabs'); tb._h = null; const sn = document.getElementById('sn' + t.id); if (sn) sn.placeholder = opt.wfTitle === 'name' ? t.name : guessStep(t) || t.name; }
   if (k === 'runId' || k === 'inWf') { renderList(); if (document.body.classList.contains('searching') && $('#panelSearch')) $('#panelSearch').dispatchEvent(new Event('input')); }
@@ -7235,7 +7239,7 @@ function onOpt(e){
     syncControls();
   }
   if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); runs.forEach(insetClear); }
-  if (['peakDec', 'path', 'eps', 'extinction'].includes(k)) renderList();
+  if (['peakDec', 'path', 'eps', 'extinction', 'protSeq', 'tagSeq', 'tagPreset'].includes(k)) { renderList(); syncAllChargeWarnings(); }
   if (k === 'runCond') syncControls();
   render();
 }
@@ -8327,11 +8331,157 @@ const cysNote = n => n >= 2 ? (opt.cysOx ? 'assuming all cysteines oxidized to c
 const seqA280 = s => { let w = 0, y = 0, cys = 0; for (const c of s) { if (c === 'W') w++; else if (c === 'Y') y++; else if (c === 'C') cys++; } const m = seqMass(s); return m ? (5500*w + 1490*y + (opt.cysOx ? 125*Math.floor(cys/2) : 0))/m : null; };
 /* isoelectric point with the Bjellqvist pK set (ExPASy), by bisection on the net charge */
 const PK_POS = {K: 10.0, R: 12.0, H: 5.98}, PK_NEG = {D: 4.05, E: 4.45, C: 9.0, Y: 10.0}, PK_NT = {A: 7.59, M: 7.0, S: 6.93, P: 8.36, T: 6.82, V: 7.44, E: 7.7}, PK_CT = {D: 4.55, E: 4.75};
-function seqPI(s){
-  if (!s) return null; const n = {}; for (const c of s) n[c] = (n[c] || 0) + 1;
+function seqCharge(s, pH){
+  if (!s || pH == null || isNaN(pH)) return null; const n = {}; for (const c of s) n[c] = (n[c] || 0) + 1;
   const nt = PK_NT[s[0]] ?? 7.5, ct = PK_CT[s[s.length - 1]] ?? 3.55;
-  const q = pH => { let z = 1/(1 + 10**(pH - nt)) - 1/(1 + 10**(ct - pH)); for (const k in PK_POS) z += (n[k] || 0)/(1 + 10**(pH - PK_POS[k])); for (const k in PK_NEG) z -= (n[k] || 0)/(1 + 10**(PK_NEG[k] - pH)); return z; };
+  let z = 1/(1 + 10**(pH - nt)) - 1/(1 + 10**(ct - pH));
+  for (const k in PK_POS) z += (n[k] || 0)/(1 + 10**(pH - PK_POS[k]));
+  for (const k in PK_NEG) z -= (n[k] || 0)/(1 + 10**(PK_NEG[k] - pH));
+  return z;
+}
+function seqPI(s){
+  if (!s) return null;
+  const q = pH => seqCharge(s, pH);
   let lo = 0, hi = 14; for (let i = 0; i < 60; i++) { const m = (lo + hi)/2; if (q(m) > 0) lo = m; else hi = m; } return (lo + hi)/2;
+}
+function parseBufferPH(str){
+  if (str == null) return null; const s = String(str).trim(); if (!s) return null;
+  const m = s.match(/\bpH\s*(?:[=:]\s*)?(\d+(?:\.\d+)?)/i);
+  if (m) return parseFloat(m[1]);
+  if (/^\d+(?:\.\d+)?$/.test(s)) { const v = parseFloat(s); if (v >= 0 && v <= 14) return v; }
+  return null;
+}
+function iexType(r){
+  const t = typeof r === 'string' ? r : ' ' + [r && (r.mCol || r.col), r && guessColumn(r), r && r.name, r && r.file, r && r.method].filter(Boolean).join(' ').replace(/[_]+/g, ' ') + ' ';
+  if (/\b(q|deae|anx|aex|qff|qhp|hiq|hq)\b|anion|mono[\s.-]*q|hi[\s.-]*trap[\s.-]*q|resource[\s.-]*q|capto[\s.-]*q|poros[\s.-]*h?q/i.test(t)) return 'anion';
+  if (/\b(sp|cm|cex|spff|sphp|hs)\b|cation|mono[\s.-]*s\b|hi[\s.-]*trap[\s.-]*sp?\b|resource[\s.-]*s\b|capto[\s.-]*s\b|poros[\s.-]*h?s\b/i.test(t)) return 'cation';
+  return '';
+}
+function targetPI(){
+  const s = cleanSeq(opt.protSeq); return s ? seqPI(s) : null;
+}
+function checkBufferCharge(r, k){
+  const pi = targetPI(); if (pi == null) return null;
+  const s = cleanSeq(opt.protSeq);
+  const c = runCond(r), val = k === 'mBufA' ? (c.mBufA || r.bufA || '') : (c.mBufB || r.bufB || '');
+  const ph = parseBufferPH(val); if (ph == null) return null;
+  const diff = Math.abs(ph - pi), z = seqCharge(s, ph), zStr = z != null ? ` (net charge Z = ${z > 0 ? '+' : ''}${fmt(z, 1)})` : '';
+  if (diff <= 0.5) {
+    return {type: 'precip', ph, text: 'Near-pI precipitation warning', title: `Buffer pH ${fmt(ph, 1)} is within 0.5 units of theoretical pI ${fmt(pi, 2)}${zStr}; isoelectric precipitation risk.`};
+  }
+  const iex = iexType(r);
+  if (iex === 'anion' && ph <= pi) {
+    return {type: 'binding', ph, text: 'Anion-exchange opposite-charge non-binding warning', title: `Buffer pH ${fmt(ph, 1)} ≤ pI ${fmt(pi, 2)}${zStr}: protein has net non-negative charge and will not bind to an anion exchanger (flowthrough loss).`};
+  }
+  if (iex === 'cation' && ph >= pi) {
+    return {type: 'binding', ph, text: 'Cation-exchange opposite-charge non-binding warning', title: `Buffer pH ${fmt(ph, 1)} ≥ pI ${fmt(pi, 2)}${zStr}: protein has net non-positive charge and will not bind to a cation exchanger (flowthrough loss).`};
+  }
+  return null;
+}
+function checkPrepBufferCharge(prepField){
+  const pi = targetPI(); if (pi == null) return null;
+  const s = cleanSeq(opt.protSeq), val = prep[prepField], ph = parseBufferPH(val); if (ph == null) return null;
+  const diff = Math.abs(ph - pi), z = seqCharge(s, ph), zStr = z != null ? ` (net charge Z = ${z > 0 ? '+' : ''}${fmt(z, 1)})` : '';
+  if (diff <= 0.5) {
+    return {type: 'precip', ph, text: 'Near-pI precipitation warning', title: `Buffer pH ${fmt(ph, 1)} is within 0.5 units of theoretical pI ${fmt(pi, 2)}${zStr}; isoelectric precipitation risk.`};
+  }
+  return null;
+}
+function chargeBadgeHtml(r, k){
+  const ch = checkBufferCharge(r, k), wid = `chw-${k}${r.id}`, cls = ch ? (ch.type === 'precip' ? 'charge-badge warn-badge charge-precip-warn' : 'charge-badge warn-badge charge-binding-warn') : 'charge-badge warn-badge';
+  return `<span class="${cls}" id="${wid}" data-charge-badge="${k}" data-charge-warn="${ch ? ch.type : ''}" title="${esc(ch ? ch.title : '')}"${ch ? '' : ' hidden'}>${esc(ch ? ch.text : '')}</span>`;
+}
+function syncChargeWarnings(r, card){
+  if (!card) return;
+  card.querySelectorAll('[data-charge-badge]').forEach(badge => {
+    const k = badge.dataset.chargeBadge, ch = checkBufferCharge(r, k);
+    badge.hidden = !ch;
+    if (ch) {
+      badge.textContent = ch.text; badge.title = ch.title; badge.dataset.chargeWarn = ch.type;
+      badge.className = ch.type === 'precip' ? 'charge-badge warn-badge charge-precip-warn' : 'charge-badge warn-badge charge-binding-warn';
+    } else {
+      badge.textContent = ''; badge.title = ''; badge.dataset.chargeWarn = ''; badge.className = 'charge-badge warn-badge';
+    }
+  });
+}
+function syncPrepChargeWarnings(){
+  ['lysBuffer', 'dialBuffer', 'finBuffer'].forEach(k => {
+    const b = document.querySelector(`[data-charge-prep="${k}"]`); if (!b) return;
+    const ch = checkPrepBufferCharge(k);
+    b.hidden = !ch;
+    if (ch) {
+      b.textContent = ch.text; b.title = ch.title; b.dataset.chargeWarn = ch.type; b.className = 'charge-badge warn-badge charge-precip-warn';
+    } else {
+      b.textContent = ''; b.title = ''; b.dataset.chargeWarn = '';
+    }
+  });
+}
+function syncAllChargeWarnings(){
+  const l = $('#list');
+  if (l) l.querySelectorAll('.trace.run').forEach(card => {
+    const r = runs.find(x => x.id === card.dataset.id);
+    if (r) syncChargeWarnings(r, card);
+  });
+  syncPrepChargeWarnings();
+}
+function stepBufferMarkers(){
+  const markers = [];
+  if (prep.on) {
+    if (prep.lysBuffer) { const ph = parseBufferPH(prep.lysBuffer); if (ph != null) markers.push({name: 'Lysis', ph, buf: prep.lysBuffer}); }
+    if (prep.dialBuffer) { const ph = parseBufferPH(prep.dialBuffer); if (ph != null) markers.push({name: 'Dialysis', ph, buf: prep.dialBuffer}); }
+    if (prep.finBuffer) { const ph = parseBufferPH(prep.finBuffer); if (ph != null) markers.push({name: 'Storage', ph, buf: prep.finBuffer}); }
+  }
+  runs.forEach((r, idx) => {
+    const c = runCond(r), rName = (r.stepName || r.name || `Run ${idx + 1}`).trim();
+    const phA = parseBufferPH(c.mBufA || r.bufA); if (phA != null) markers.push({name: `${rName} (A)`, ph: phA, buf: c.mBufA || r.bufA});
+    const phB = parseBufferPH(c.mBufB || r.bufB); if (phB != null) markers.push({name: `${rName} (B)`, ph: phB, buf: c.mBufB || r.bufB});
+  });
+  return markers;
+}
+function renderChargeCurveCard(seq, pi){
+  const card = $('#protChargeCard'); if (!card || !seq) return;
+  const markers = stepBufferMarkers(), pts = []; let maxZ = 1;
+  for (let p = 20; p <= 120; p++) {
+    const ph = p / 10, z = seqCharge(seq, ph);
+    if (z != null) { pts.push({ph, z}); if (Math.abs(z) > maxZ) maxZ = Math.abs(z); }
+  }
+  const boundZ = Math.max(5, Math.ceil(maxZ));
+  const x = ph => (36 + (ph - 2) / 10 * 284).toFixed(1), y = z => (16 + (boundZ - z) / (2 * boundZ) * 118).toFixed(1);
+  const y0 = y(0), d = pts.map((pt, i) => (i === 0 ? 'M' : 'L') + x(pt.ph) + ',' + y(pt.z)).join(' ');
+  const xPI = pi >= 2 && pi <= 12 ? x(pi) : null;
+  const piSvg = xPI ? `<line x1="${xPI}" y1="16" x2="${xPI}" y2="134" stroke="#64748b" stroke-dasharray="3,3"/><circle cx="${xPI}" cy="${y0}" r="4" fill="#64748b"/><text x="${xPI}" y="12" text-anchor="middle" font-size="10" fill="var(--ink)" font-weight="600">pI ${fmt(pi, 2)}</text>` : '';
+  const mkSvg = markers.map(mk => {
+    const z = seqCharge(seq, mk.ph); if (z == null || mk.ph < 2 || mk.ph > 12) return '';
+    const mx = x(mk.ph), my = y(z), near = Math.abs(mk.ph - pi) <= 0.5, col = near ? '#d97706' : '#2563eb';
+    const label = `${mk.name} pH ${fmt(mk.ph, 1)} (Z=${z > 0 ? '+' : ''}${fmt(z, 1)})`;
+    return `<g class="step-marker" title="${esc(label)}">
+      <line x1="${mx}" y1="${y0}" x2="${mx}" y2="${my}" stroke="${col}" stroke-width="1.2" stroke-dasharray="2,2" opacity="0.8"/>
+      <circle cx="${mx}" cy="${my}" r="4" fill="${col}" stroke="#fff" stroke-width="1.2"/>
+      <text x="${mx}" y="${+my > +y0 ? +my + 11 : +my - 5}" text-anchor="middle" font-size="9" fill="${col}" font-weight="600">${esc(mk.name)}</text>
+    </g>`;
+  }).join('');
+  const xTicks = [2, 4, 6, 8, 10, 12].map(t => `<text x="${x(t)}" y="146" text-anchor="middle" font-size="9" fill="var(--muted)">${t}</text>`).join('');
+  card.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <strong style="font-size:11.5px;color:var(--ink);">Net Charge Curve Z(pH)</strong>
+      <button type="button" class="icon" id="closeChargeCard" title="Close" aria-label="Close" style="font-size:13px;cursor:pointer;background:none;border:none;color:var(--muted);padding:0 4px;">✕</button>
+    </div>
+    <svg viewBox="0 0 340 160" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto;overflow:visible;">
+      <rect x="36" y="16" width="284" height="118" fill="var(--field)" stroke="var(--line2)" rx="2"/>
+      <line x1="36" y1="${y0}" x2="320" y2="${y0}" stroke="var(--line2)" stroke-dasharray="2,2"/>
+      <text x="32" y="20" text-anchor="end" font-size="9" fill="var(--muted)">+${boundZ}</text>
+      <text x="32" y="${+y0 + 3}" text-anchor="end" font-size="9" fill="var(--muted)">0</text>
+      <text x="32" y="134" text-anchor="end" font-size="9" fill="var(--muted)">-${boundZ}</text>
+      ${xTicks}
+      <text x="178" y="157" text-anchor="middle" font-size="9" fill="var(--muted)">pH</text>
+      <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      ${piSvg}
+      ${mkSvg}
+    </svg>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
+      <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#64748b;margin-right:3px;"></span>pI (${fmt(pi, 2)})</span>
+      ${markers.length ? `<span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2563eb;margin-right:3px;"></span>Working step pH</span>` : ''}
+      ${markers.some(m => Math.abs(m.ph - pi) <= 0.5) ? `<span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#d97706;margin-right:3px;"></span>Near pI (|ΔpH| ≤ 0.5)</span>` : ''}
+    </div>`;
 }
 /* mmCIF: tokens (quotes and ; text fields), then categories; filter large loops while reading */
 function parseCif(text, keep){
@@ -8455,7 +8605,7 @@ function renderProt(){
   if (pe.length > 1) { const h = pe.map(e => `<option value="${e.id}"${e.id === struct.ent ? ' selected' : ''}>${esc(e.desc || 'Entity ' + e.id)} (chain${e.chains.length > 1 ? 's' : ''} ${esc(e.chains.join(', '))})</option>`).join(''); const sl = $('#protEnt'); if (sl._h !== h) { sl._h = h; sl.innerHTML = h; } }
   const F = protForms();
   $('#protTable').innerHTML = F.length ? `<tr><th>Form</th><th title="Residues">aa</th><th>kDa</th><th>pI</th><th title="A280 of a 1 mg/mL solution, 1 cm path, ${opt.cysOx ? 'cystines oxidized' : 'cysteines reduced'}">A₂₈₀</th></tr>` +
-    F.map(x => `<tr><td${x.t ? ` title="${esc(x.t)}"` : ''}>${esc(x.k)}${x.unk ? `<br><span class="warnc" style="font-size:0.85em">(approximate: ${x.unk} unknown residue${x.unk > 1 ? 's' : ''} counted as average)</span>` : ''}</td><td>${x.seq.length}</td><td>${x.unk ? '≈ ' : ''}${fmt(x.mass/1000, 1)}</td><td>${x.unk ? '≈ ' : ''}${fmt(x.pi, 2)}</td><td>${x.a280 ? (x.unk ? '≈ ' : '') + fmt(x.a280, 2) : '<span title="No Trp or Tyr">none</span>'}</td></tr>`).join('') : '';
+    F.map(x => `<tr><td${x.t ? ` title="${esc(x.t)}"` : ''}>${esc(x.k)}${x.unk ? `<br><span class="warnc" style="font-size:0.85em">(approximate: ${x.unk} unknown residue${x.unk > 1 ? 's' : ''} counted as average)</span>` : ''}</td><td>${x.seq.length}</td><td>${x.unk ? '≈ ' : ''}${fmt(x.mass/1000, 1)}</td><td class="prot-pi-cell" data-pi="${x.pi ?? ''}" data-seq="${esc(x.seq || '')}" tabindex="0" role="button" style="cursor:pointer;text-decoration:underline dotted var(--muted);" title="Click or hover to view net charge curve Z(pH)">${x.unk ? '≈ ' : ''}${fmt(x.pi, 2)}</td><td>${x.a280 ? (x.unk ? '≈ ' : '') + fmt(x.a280, 2) : '<span title="No Trp or Tyr">none</span>'}</td></tr>`).join('') : '';
   const cw = $('#cysOxWrap'); if (cw) cw.hidden = !F.some(x => seqCys(x.seq) >= 2);
   $('#protUse').hidden = !F.length;
   $('#protEps').textContent = F.length ? F.slice(0, 2).map(x => { const t = x.a280 ? `${x.k}: ε₂₈₀ ${Math.round(x.a280*x.mass).toLocaleString('en-US')} M⁻¹cm⁻¹, E1% ${fmt(x.a280*10, 2)}, A₂₈₀ of 1 mg/mL ${fmt(x.a280, 3)}${(c => c >= 2 ? (opt.cysOx ? ` (${cysNote(c)}, +${125*Math.floor(c/2)} M⁻¹cm⁻¹ for ${Math.floor(c/2)} cystine${Math.floor(c/2) > 1 ? 's' : ''}; reduced ε₂₈₀ ${Math.round(x.a280*x.mass - 125*Math.floor(c/2)).toLocaleString('en-US')} M⁻¹cm⁻¹, Pace et al., 1995)` : ` (${cysNote(c)}; with all ${2*Math.floor(c/2)} of ${c} Cys as cystine, ε₂₈₀ ${Math.round(x.a280*x.mass + 125*Math.floor(c/2)).toLocaleString('en-US')} M⁻¹cm⁻¹, Pace et al., 1995)`) : '')(seqCys(x.seq))}` : ''; return x.unk ? (t ? t + ` ` : `${x.k}: `) + `(approximate: ${x.unk} unknown residue${x.unk > 1 ? 's' : ''} counted as average)` : t; }).filter(Boolean).join('. ') + (F.some(x => x.a280 || x.unk) ? '.' : '') : '';
@@ -8479,7 +8629,30 @@ function renderProt(){
 }
 $('#protView').addEventListener('click', e => { const b = e.target.closest('[data-pview]'); if (!b) return; cur = b.dataset.pview === 'struct' && struct ? 'struct' : 'step:construct'; syncControls(); render(); });
 $('#protNote').addEventListener('click', e => { if (e.target.id === 'protTake' && struct) { const en = struct.ents.find(x => x.id === struct.ent); if (en) { opt.protSeq = en.seq; opt.protSrc = struct.code; saveOpt(); syncControls(); render(); } } else if (e.target.id === 'protApply') applyProt(); else if (e.target.id === 'protTransDna') { const s = cleanSeq(opt.protSeq); let tx = translateNt(s, 1, 11, false).replace(/\*.*$/, ''); if (tx.length < 8) { const m = s.match(/A[TU]G(?:[A-Z]{3})+/); if (m) tx = translateNt(m[0], 1, 11, false).replace(/\*.*$/, '') || tx; } if (tx) { opt.protSeq = tx; opt.protSrc = ''; $('#protSeq').value = tx; saveOpt(); syncControls(); render(); } } });
-$('#protSeq').addEventListener('input', () => { opt.protSrc = ''; });
+$('#protSeq').addEventListener('input', () => { opt.protSrc = ''; syncAllChargeWarnings(); });
+$('#protSeq').addEventListener('change', () => { syncAllChargeWarnings(); });
+let chargePinned = false;
+$('#protTable').addEventListener('click', e => {
+  const cell = e.target.closest('.prot-pi-cell'); if (!cell) return;
+  const seq = cell.dataset.seq || cleanSeq(opt.protSeq), pi = parseFloat(cell.dataset.pi) || seqPI(seq);
+  const card = $('#protChargeCard'); if (!card) return;
+  if (!card.hidden && chargePinned) { card.hidden = true; chargePinned = false; }
+  else { chargePinned = true; renderChargeCurveCard(seq, pi); card.hidden = false; }
+});
+$('#protTable').addEventListener('mouseenter', e => {
+  const cell = e.target.closest('.prot-pi-cell'); if (!cell || chargePinned) return;
+  const seq = cell.dataset.seq || cleanSeq(opt.protSeq), pi = parseFloat(cell.dataset.pi) || seqPI(seq);
+  const card = $('#protChargeCard'); if (!card) return;
+  renderChargeCurveCard(seq, pi); card.hidden = false;
+}, true);
+$('#protPanel').addEventListener('mouseleave', () => {
+  if (chargePinned) return; const card = $('#protChargeCard'); if (card) card.hidden = true;
+});
+$('#protPanel').addEventListener('click', e => {
+  if (e.target.id === 'closeChargeCard' || e.target.closest('#closeChargeCard')) {
+    const card = $('#protChargeCard'); if (card) card.hidden = true; chargePinned = false;
+  }
+});
 function applyProt(quiet){ const F = protForms(); if (!F.length) return; const u = F[0], t = F[2];
   opt.protKda = +fmt(u.mass/1000, 1); opt.secMono = opt.protKda; if (t) opt.tagKda = +fmt(t.mass/1000, 1);
   saveOpt(); syncControls(); render(); { const b = $('#protUse'); b.textContent = 'Applied'; b.disabled = true; setTimeout(() => { b.textContent = 'Use for gel and SEC'; b.disabled = false; }, 1600); }
@@ -8517,6 +8690,7 @@ function loadGenBankText(text, fname){
 }
 function renderPrep(){
   const pn = $('#prepPanel'); if (!pn) return;
+  syncPrepChargeWarnings();
   pn.querySelectorAll('[data-prep]').forEach(el => { if (el === document.activeElement) return; const k = el.dataset.prep; let v = prep[k]; if (el.type === 'checkbox') el.checked = !!v; else { if (Array.isArray(v)) v = v.join(', '); const s = v == null ? '' : String(v); if (el.value !== s) el.value = s; } });
   pn.querySelectorAll('details.sub').forEach(el => el.classList.toggle('off', el.dataset.sub === 'pclv' ? !prep.cleave : !prep.on));
   { const sel = $('#pr-cMethod'); if (sel) {
@@ -8572,6 +8746,7 @@ function onPrepInput(e){ const el = e.target, k = el.dataset.prep; if (!k) retur
   else if (k === 'cOverlap') { prep.cDetails.overlap = prep.cDetails.overlap || {}; prep.cDetails.overlap.overlapBp = el.value; }
   else if (k === 'cRecomb') { prep.cDetails.recomb = prep.cDetails.recomb || {}; prep.cDetails.recomb.sites = el.value; }
   /* typing in a text field redraws once the typing pauses */
+  if (['lysBuffer', 'dialBuffer', 'finBuffer'].includes(k)) syncPrepChargeWarnings();
   if (el.type === 'text') { clearTimeout(prepT); prepT = setTimeout(render, 260); return; } if (['on', 'lysLanes', 'lysis', 'cleave'].includes(k)) gels.forEach(g => { g._prepA = null; }); render(); }
 $('#prepPanel').addEventListener('input', onPrepInput);
 $('#prepPanel').addEventListener('change', onPrepInput);
