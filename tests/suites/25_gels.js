@@ -979,4 +979,121 @@ await T.t('marked-purity-narrow-and-uncalibrated-svg-unclipped', async () => {
   }
 });
 
+/* #1700: offline pure-JS 8/16-bit uncompressed & Deflate TIFF reader, explicit LZW offline toast, and tiffP retry reset */
+await T.t('offline-tiff16-deflate-and-lzw-retry', async () => {
+  const zlib = require('zlib');
+  const a = await start(), {p} = a, h = H(p);
+  try {
+    let blockCdn = true;
+    await p.context().route('https://cdnjs.cloudflare.com/**', r => blockCdn ? r.abort('internetdisconnected') : r.fulfill({status: 200, contentType: 'application/javascript', body: 'window.pako={};'}));
+    await p.context().route('https://cdn.jsdelivr.net/**', r => blockCdn ? r.abort('internetdisconnected') : r.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.UTIF={decode:()=>[{width:40,height:40,t258:[8],t262:[1],t277:[1]}],decodeImage:()=>{},toRGBA8:()=>new Uint8Array(40*40*4).fill(200)};'
+    }));
+
+    await set(p, '#o-gelAutoCrop', false);
+
+    // 1. Uncompressed 16-bit grayscale TIFF with saturated (65535) pixels loads completely offline, detects bands, and flags saturation
+    const satTiff16 = makeTiff16(300, 360, (x, y) => {
+      const ln = Math.floor(x / 100), dx = Math.abs(x % 100 - 50), wx = Math.exp(-0.5 * Math.pow(dx / 22, 6));
+      let v = 180;
+      if (ln === 0) {
+        for (const mu of [72, 144, 216, 288]) v += 18000 * Math.exp(-0.5 * Math.pow((y - mu) / 5, 2)) * wx;
+      } else if (ln === 1) {
+        v += 70000 * Math.exp(-0.5 * Math.pow((y - 130) / 7, 2)) * wx;
+        v += 12000 * Math.exp(-0.5 * Math.pow((y - 250) / 7, 2)) * wx;
+      } else {
+        v += 14000 * Math.exp(-0.5 * Math.pow((y - 130) / 7, 2)) * wx;
+      }
+      return Math.min(65535, Math.round(v));
+    });
+
+    await p.setInputFiles('#gelFile', {name: 'offline_sat16.tif', mimeType: 'image/tiff', buffer: satTiff16});
+    await h.wait(900);
+    const toasts1 = await h.toasts();
+    const tabs1 = await p.$$eval('#figtabs [data-fig^="g"]', els => els.length);
+    T.check('tiff-offline.uncompressed16-loads-without-cdn',
+      tabs1 >= 1 && !toasts1.some(t => /could not open/i.test(t)),
+      `tabs=${tabs1} toasts=${toasts1.join(' | ')}`);
+
+    if (tabs1 >= 1) {
+      await set(p, '#g-invert', true);
+      await set(p, '#g-n', 3);
+      await set(p, '#g-labels', 'M, SatLane, UnsatLane');
+      await h.wait(300);
+    }
+    const bandInfo1 = await p.evaluate(() => {
+      const rows = [...document.querySelectorAll('#bandTable tbody tr')];
+      const rSat = rows.find(r => r.cells[1] && r.cells[1].textContent.trim() === 'SatLane');
+      const rUnsat = rows.find(r => r.cells[1] && r.cells[1].textContent.trim() === 'UnsatLane');
+      const chips = r => r ? [...r.querySelectorAll('.bchip')].map(c => ({t: c.textContent.trim(), sat: c.classList.contains('sat') || /saturated/i.test(c.textContent)})) : [];
+      return {satLane: chips(rSat), unsatLane: chips(rUnsat)};
+    });
+    T.check('tiff-offline.uncompressed16-detects-bands-and-saturation',
+      bandInfo1.satLane.length >= 2 && bandInfo1.satLane.some(c => c.sat) &&
+      bandInfo1.unsatLane.length >= 1 && bandInfo1.unsatLane.every(c => !c.sat),
+      JSON.stringify(bandInfo1));
+
+    // 2. Big-endian (0x4D4D) Deflate-compressed (Compression = 8) 16-bit grayscale TIFF loads offline
+    const makeBigEndianDeflateTiff16 = (w, h, getPx) => {
+      const raw = Buffer.alloc(w * h * 2);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) raw.writeUInt16BE(getPx(x, y), (y * w + x) * 2);
+      const comp = zlib.deflateSync(raw);
+      const nTags = 9, ifdOff = 8, dataOff = ifdOff + 2 + nTags * 12 + 4;
+      const buf = Buffer.alloc(dataOff + comp.length);
+      buf.write('MM', 0); buf.writeUInt16BE(42, 2); buf.writeUInt32BE(ifdOff, 4); buf.writeUInt16BE(nTags, ifdOff);
+      const tags = [
+        [256, 4, 1, w], [257, 4, 1, h], [258, 3, 1, 16], [259, 3, 1, 8], [262, 3, 1, 1],
+        [273, 4, 1, dataOff], [277, 3, 1, 1], [278, 4, 1, h], [279, 4, 1, comp.length]
+      ];
+      tags.forEach(([tag, tp, cnt, val], i) => {
+        const o = ifdOff + 2 + i * 12;
+        buf.writeUInt16BE(tag, o); buf.writeUInt16BE(tp, o + 2); buf.writeUInt32BE(cnt, o + 4);
+        if (tp === 3) buf.writeUInt16BE(val, o + 8); else buf.writeUInt32BE(val, o + 8);
+      });
+      buf.writeUInt32BE(0, ifdOff + 2 + nTags * 12);
+      comp.copy(buf, dataOff);
+      return buf;
+    };
+    const deflateBeBuf = makeBigEndianDeflateTiff16(240, 300, (x, y) => {
+      const ln = Math.floor(x / 80), dx = Math.abs(x % 80 - 40), wx = Math.exp(-0.5 * Math.pow(dx / 18, 6));
+      let v = 50000;
+      if (ln === 1) v -= 35000 * Math.exp(-0.5 * Math.pow((y - 140) / 6, 2)) * wx;
+      return Math.max(1000, Math.round(v));
+    });
+    await p.setInputFiles('#gelFile', {name: 'offline_deflate_be16.tif', mimeType: 'image/tiff', buffer: deflateBeBuf});
+    await h.wait(900);
+    const tabs2 = await p.$$eval('#figtabs [data-fig^="g"]', els => els.length);
+    T.check('tiff-offline.bigendian-deflate16-loads', tabs2 >= 2, `tabs=${tabs2}`);
+
+    // 3. LZW TIFF (Compression = 5) while offline shows explicit LZW guidance toast and resets tiffP so retry succeeds once online
+    const makeLzwStub = () => {
+      const nTags = 8, ifdOff = 8, dataOff = ifdOff + 2 + nTags * 12 + 4, buf = Buffer.alloc(dataOff + 16);
+      buf.write('II', 0); buf.writeUInt16LE(42, 2); buf.writeUInt32LE(ifdOff, 4); buf.writeUInt16LE(nTags, ifdOff);
+      [[256, 4, 1, 40], [257, 4, 1, 40], [258, 3, 1, 8], [259, 3, 1, 5], [262, 3, 1, 1], [273, 4, 1, dataOff], [277, 3, 1, 1], [279, 4, 1, 16]].forEach(([tag, tp, cnt, val], i) => {
+        const o = ifdOff + 2 + i * 12;
+        buf.writeUInt16LE(tag, o); buf.writeUInt16LE(tp, o + 2); buf.writeUInt32LE(cnt, o + 4);
+        if (tp === 3) buf.writeUInt16LE(val, o + 8); else buf.writeUInt32LE(val, o + 8);
+      });
+      return buf;
+    };
+    await p.setInputFiles('#gelFile', {name: 'offline_lzw.tif', mimeType: 'image/tiff', buffer: makeLzwStub()});
+    await h.wait(700);
+    const lzwToasts = await h.toasts();
+    T.check('tiff-offline.lzw-explicit-toast',
+      lzwToasts.some(t => /LZW/i.test(t) && /internet/i.test(t) && /uncompressed TIFF or PNG/i.test(t)),
+      lzwToasts.join(' | '));
+
+    blockCdn = false;
+    await p.setInputFiles('#gelFile', {name: 'online_retry_lzw.tif', mimeType: 'image/tiff', buffer: makeLzwStub()});
+    await h.wait(900);
+    const tabs3 = await p.$$eval('#figtabs [data-fig^="g"]', els => els.length);
+    T.check('tiff-offline.tiffp-reset-allows-retry', tabs3 >= 3, `tabsAfterRetry=${tabs3}`);
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
+

@@ -8046,33 +8046,122 @@ paper.addEventListener('click', e => {
 const isImage = f => /^image\//.test(f.type) || /\.(tif|tiff|png|jpe?g|bmp|gif|webp)$/i.test(f.name);
 function loadScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
 let tiffP = null;
-function tiffLib(){ if (!tiffP) tiffP = loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js').catch(() => {}).then(() => loadScript('https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js')); return tiffP; }
+function tiffLib(){ if (!tiffP) tiffP = loadScript('https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js').catch(() => {}).then(() => loadScript('https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js')).catch(e => { tiffP = null; throw e; }); return tiffP; }
 function toCanvas(src, w, h){
   const k = Math.min(1, 2400/Math.max(w, h)), c = document.createElement('canvas');
   c.width = Math.round(w*k); c.height = Math.round(h*k); const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height); return c;
 }
+function scaleGray16ToRgba(readU16, n, intp){
+  let mx = 0;
+  for (let i = 0; i < n; i++) { const v = readU16(i); if (v > mx) mx = v; }
+  const ceil = mx <= 4095 ? 4095 : mx <= 16383 ? 16383 : 65535;
+  let hiN = 0, loN = 0;
+  const rgba = new Uint8ClampedArray(n * 4);
+  for (let i = 0; i < n; i++) {
+    const v = readU16(i);
+    if (v >= ceil) hiN++;
+    if (v <= 4) loN++;
+    let px = Math.round(v * 255 / ceil);
+    if (intp === 0) px = 255 - px;
+    const qi = i * 4; rgba[qi] = rgba[qi + 1] = rgba[qi + 2] = px; rgba[qi + 3] = 255;
+  }
+  return {rgba, rawHiClip: (intp === 0 ? loN : hiN) >= 6, rawLoClip: (intp === 0 ? hiN : loN) >= 6};
+}
+async function decodeBasicTiff(buf){
+  if (!buf || buf.byteLength < 8) return null;
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), m0 = dv.getUint16(0, false);
+  const le = m0 === 0x4949 ? true : m0 === 0x4D4D ? false : null;
+  if (le === null || dv.getUint16(2, le) !== 42) return null;
+  const ifdOff = dv.getUint32(4, le);
+  if (ifdOff + 2 > buf.byteLength) return null;
+  const nEnt = dv.getUint16(ifdOff, le);
+  if (ifdOff + 2 + nEnt * 12 > buf.byteLength) return null;
+  const tSz = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8}, tags = {};
+  for (let i = 0; i < nEnt; i++) {
+    const eo = ifdOff + 2 + i * 12, tag = dv.getUint16(eo, le), tp = dv.getUint16(eo + 2, le), cnt = dv.getUint32(eo + 4, le), sz = tSz[tp];
+    if (!sz || !cnt) continue;
+    const byteLen = cnt * sz, vo = byteLen <= 4 ? eo + 8 : dv.getUint32(eo + 8, le);
+    if (vo + byteLen > buf.byteLength) continue;
+    if (tp === 1 || tp === 3 || tp === 4) {
+      const arr = new Array(cnt);
+      for (let k = 0; k < cnt; k++) arr[k] = tp === 1 ? u8[vo + k] : tp === 3 ? dv.getUint16(vo + k * 2, le) : dv.getUint32(vo + k * 4, le);
+      tags[tag] = arr;
+    }
+  }
+  const w = tags[256] && tags[256][0], h = tags[257] && tags[257][0];
+  if (!(w > 0 && h > 0)) return null;
+  const comp = (tags[259] && tags[259][0]) || 1;
+  if (comp !== 1 && comp !== 8 && comp !== 32946) return {unsupported: true, comp};
+  if (tags[322] || (tags[284] && tags[284][0] === 2) || (tags[339] && tags[339].some(v => v !== 1))) return {unsupported: true, comp};
+  const pred = (tags[317] && tags[317][0]) || 1;
+  if (pred !== 1 && (pred !== 2 || (tags[258] && tags[258][0] === 16))) return {unsupported: true, comp};
+  const intp = tags[262] ? tags[262][0] : 1;
+  if (intp !== 0 && intp !== 1 && intp !== 2) return {unsupported: true, comp};
+  const bpsArr = tags[258] || [8], bps = bpsArr[0];
+  if ((bps !== 8 && bps !== 16) || bpsArr.some(b => b !== bps)) return {unsupported: true, comp};
+  const spp = tags[277] ? tags[277][0] : (intp === 2 ? Math.max(3, bpsArr.length) : (bpsArr.length || 1));
+  if ((intp < 2 && spp !== 1 && spp !== 2) || (intp === 2 && spp !== 3 && spp !== 4)) return {unsupported: true, comp};
+  const offs = tags[273], rowBytes = w * spp * (bps >> 3), totBytes = h * rowBytes;
+  if (!offs || !offs.length) return {unsupported: true, comp};
+  const cnts = tags[279] || (comp === 1 && offs.length === 1 ? [totBytes] : null);
+  if (!cnts || cnts.length < offs.length) return {unsupported: true, comp};
+  const inflateSlice = async s => {
+    if (typeof DecompressionStream === 'undefined') throw new Error('no-ds');
+    const run = async fmt => new Uint8Array(await new Response(new Blob([s]).stream().pipeThrough(new DecompressionStream(fmt))).arrayBuffer());
+    try { return await run('deflate'); } catch (e) { return await run('deflate-raw'); }
+  };
+  const raw = new Uint8Array(totBytes);
+  let dstOff = 0;
+  try {
+    for (let s = 0; s < offs.length && dstOff < totBytes; s++) {
+      const so = offs[s], sc = cnts[s];
+      if (so + sc > buf.byteLength) return {unsupported: true, comp};
+      const chunk = comp === 1 ? u8.subarray(so, so + sc) : await inflateSlice(u8.subarray(so, so + sc));
+      const take = Math.min(chunk.length, totBytes - dstOff);
+      raw.set(chunk.subarray(0, take), dstOff);
+      dstOff += take;
+    }
+  } catch (e) { return {unsupported: true, comp}; }
+  if (dstOff < totBytes) return {unsupported: true, comp};
+  if (pred === 2 && bps === 8) {
+    for (let y = 0; y < h; y++) { const ro = y * rowBytes; for (let x = spp; x < rowBytes; x++) raw[ro + x] = (raw[ro + x] + raw[ro + x - spp]) & 255; }
+  }
+  const n = w * h;
+  if (bps === 16 && spp === 1 && intp < 2) {
+    const r16 = scaleGray16ToRgba(le ? i => raw[2 * i] | (raw[2 * i + 1] << 8) : i => (raw[2 * i] << 8) | raw[2 * i + 1], n, intp);
+    return {w, h, rgba: r16.rgba, rawHiClip: r16.rawHiClip, rawLoClip: r16.rawLoClip};
+  }
+  const rgba = new Uint8ClampedArray(n * 4);
+  if (bps === 8 && intp < 2) {
+    for (let i = 0; i < n; i++) { let px = raw[i * spp]; if (intp === 0) px = 255 - px; const qi = i * 4; rgba[qi] = rgba[qi + 1] = rgba[qi + 2] = px; rgba[qi + 3] = spp === 2 ? raw[i * 2 + 1] : 255; }
+  } else if (bps === 16 && intp < 2) {
+    const rd = le ? k => raw[2 * k] | (raw[2 * k + 1] << 8) : k => (raw[2 * k] << 8) | raw[2 * k + 1];
+    for (let i = 0; i < n; i++) { let px = Math.round(rd(i * 2) * 255 / 65535); if (intp === 0) px = 255 - px; const qi = i * 4; rgba[qi] = rgba[qi + 1] = rgba[qi + 2] = px; rgba[qi + 3] = Math.round(rd(i * 2 + 1) * 255 / 65535); }
+  } else if (bps === 8) {
+    for (let i = 0; i < n; i++) { const si = i * spp, qi = i * 4; rgba[qi] = raw[si]; rgba[qi + 1] = raw[si + 1]; rgba[qi + 2] = raw[si + 2]; rgba[qi + 3] = spp === 4 ? raw[si + 3] : 255; }
+  } else {
+    const rd = le ? k => raw[2 * k] | (raw[2 * k + 1] << 8) : k => (raw[2 * k] << 8) | raw[2 * k + 1];
+    for (let i = 0; i < n; i++) { const si = i * spp, qi = i * 4; rgba[qi] = Math.round(rd(si) * 255 / 65535); rgba[qi + 1] = Math.round(rd(si + 1) * 255 / 65535); rgba[qi + 2] = Math.round(rd(si + 2) * 255 / 65535); rgba[qi + 3] = spp === 4 ? Math.round(rd(si + 3) * 255 / 65535) : 255; }
+  }
+  return {w, h, rgba, rawHiClip: true, rawLoClip: true};
+}
 async function imageToCanvas(file){
   if (/\.tiff?$/i.test(file.name) || /tiff/.test(file.type)) {
-    await tiffLib(); const buf = await file.arrayBuffer(); const ifds = window.UTIF.decode(buf); window.UTIF.decodeImage(buf, ifds[0]);
+    const buf = await file.arrayBuffer();
+    const basic = await decodeBasicTiff(buf);
+    if (basic && !basic.unsupported) {
+      const c0 = document.createElement('canvas'); c0.width = basic.w; c0.height = basic.h;
+      c0.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(basic.rgba.buffer, basic.rgba.byteOffset, basic.w * basic.h * 4), basic.w, basic.h), 0, 0);
+      const c = toCanvas(c0, basic.w, basic.h); c._rawHiClip = basic.rawHiClip; c._rawLoClip = basic.rawLoClip; return c;
+    }
+    try { await tiffLib(); } catch (e) { const err = new Error('tiff-lib-offline'); err.lzwOffline = !!(basic && basic.comp === 5); throw err; }
+    const ifds = window.UTIF.decode(buf); window.UTIF.decodeImage(buf, ifds[0]);
     const ifd = ifds[0], w = ifd.width, h = ifd.height, n = w*h;
     const bps = ifd.t258 ? ifd.t258[0] : 1, spp = ifd.t277 ? ifd.t277[0] : (ifd.t258 ? ifd.t258.length : 1), intp = ifd.t262 ? ifd.t262[0] : 1;
     let rgba, rawHiClip = true, rawLoClip = true;
     if (bps === 16 && spp === 1 && ifd.data) {
-      const raw = ifd.data; let mx = 0;
-      for (let i = 0; i < n; i++) { const v = raw[2*i] | (raw[2*i+1] << 8); if (v > mx) mx = v; }
-      const ceil = mx <= 4095 ? 4095 : mx <= 16383 ? 16383 : 65535;
-      let hiN = 0, loN = 0;
-      rgba = new Uint8ClampedArray(n*4);
-      for (let i = 0; i < n; i++) {
-        const v = raw[2*i] | (raw[2*i+1] << 8);
-        if (v >= ceil) hiN++;
-        if (v <= 4) loN++;
-        let px = Math.round(v * 255 / ceil);
-        if (intp === 0) px = 255 - px;
-        const qi = i*4; rgba[qi] = rgba[qi+1] = rgba[qi+2] = px; rgba[qi+3] = 255;
-      }
-      rawHiClip = (intp === 0 ? loN : hiN) >= 6;
-      rawLoClip = (intp === 0 ? hiN : loN) >= 6;
+      const raw = ifd.data, r16 = scaleGray16ToRgba(i => raw[2 * i] | (raw[2 * i + 1] << 8), n, intp);
+      rgba = r16.rgba; rawHiClip = r16.rawHiClip; rawLoClip = r16.rawLoClip;
     } else rgba = window.UTIF.toRGBA8(ifd);
     const c0 = document.createElement('canvas'); c0.width = w; c0.height = h; c0.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, w*h*4), w, h), 0, 0);
     const c = toCanvas(c0, w, h); c._rawHiClip = rawHiClip; c._rawLoClip = rawLoClip; return c;
@@ -8083,12 +8172,12 @@ async function imageToCanvas(file){
 }
 async function addGelFiles(files){
   keepRaw(files);
-  let last = null; const bad = [];
+  let last = null; const bad = [], badLzw = [];
   for (const f of files) {
     try { const c = await imageToCanvas(f); const g = makeGel(f.name.replace(/\.[^.]+$/, ''), c);
       const r = curRun(); if (gelTarget) g.runId = gelTarget; else if (r && !gels.some(x => x.runId === r.id)) g.runId = r.id;
       g.autoLv = true; processGel(g); autoContrast(g); processGel(g); if (opt.gelAutoCrop) g.autoCropped = !applyAutoCrop(g, true).err; gels.push(g); last = g; }
-    catch (e) { bad.push(f.name); }
+    catch (e) { if (e && e.lzwOffline) badLzw.push(f.name); else bad.push(f.name); }
   }
   gelTarget = null;
   if (last) {
@@ -8103,6 +8192,7 @@ async function addGelFiles(files){
       }});
     } else toast(msg);
   }
+  if (badLzw.length) toast(`Could not open LZW-compressed TIFF ${badLzw.join(', ')} while offline. Connect to the internet once or re-save as uncompressed TIFF or PNG.`);
   if (bad.length) toast(`Could not open ${bad.join(', ')}. Try exporting the gel as PNG or JPEG.`);
 }
 /* processTrace sorts a trace whose X axis goes down; say so, and tell a wholly reversed export from one that resets, without changing the source rows */
@@ -11178,7 +11268,11 @@ async function openProject(rawData, name, noUndo){
 $('#projSave').addEventListener('click', () => {
   const hasDir = PROJ && PROJ.directory && ((PROJ.directory.folders || []).length > 1 || (PROJ.directory.files || []).length > 0 || (PROJ.directory.preparations || []).length > 1 || (PROJ.directory.preparations || []).some(p => p && p.data && ((p.data.runs && p.data.runs.length) || (p.data.gels && p.data.gels.length) || p.data.struct || (p.data.traces && p.data.traces.some(t => !t.ex)) || (p.data.assays && p.data.assays.length) || (p.data.prep && (p.data.prep.name || p.data.prep.gb || p.data.prep.parentConstructId || (p.data.prep.growth && p.data.prep.growth.length))))));
   if (!hasDir && !runs.length && !gels.length && !struct && !traces.some(t => !t.ex) && !assays.length && !prep.gb && !cleanSeq(opt.protSeq) && !prep.name && !prep.parentConstructId && !(prep.constructs && prep.constructs.length) && !(prep.growth && prep.growth.length) && !prep.cEnz && !prep.cOverlap && !prep.cRecomb && !CL().stages.length) { toast('Load some data first'); return; }
-  const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || (PROJ && PROJ.name) || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true; saveFile(`${safe(nm)}_project.json`, JSON.stringify(d)); });
+  const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || (PROJ && PROJ.name) || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true;
+  const omitted = PROJ && PROJ.directory && Array.isArray(PROJ.directory.files) ? PROJ.directory.files.filter(f => f && !f.archived && !f._dataUrl && !f.dataUrl).length : 0;
+  saveFile(`${safe(nm)}_project.json`, JSON.stringify(d));
+  if (omitted) toast(`Exported project (${omitted} attachment${omitted === 1 ? '' : 's'} >5 MB stored in this browser only and not embedded in .json)`);
+});
 $('#projOpen').addEventListener('click', () => $('#projFile').click());
 $('#projFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; let data;
   try { data = JSON.parse(await f.text()); } catch (err) { toast(`Could not open ${f.name}`); return; }
@@ -11548,15 +11642,42 @@ function keepRaw(fs){
   if (n) { PROJ.editSeq = (PROJ.editSeq || 0) + 1; renderRaw(); queueSave(); }
 }
 const fmtSize = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' kB' : (n / 1048576).toFixed(1) + ' MB';
+async function readRawBlob(r){
+  let b = r._f;
+  if (!b && r.blobId) {
+    if (STORE.mode === 'local') b = await getLocalBlob(r.blobId);
+    else { const rs = await fetch('/_blob/' + r.blobId); if (!rs.ok) throw new Error('missing'); b = await rs.blob(); }
+  }
+  if (!b) throw new Error('missing');
+  return b;
+}
 function renderRaw(){
   const box = $('#rawPanel'); if (!box) return; box.hidden = !PROJ || !rawFiles.length; $('#rawSum').textContent = `Raw files (${rawFiles.length})`;
-  $('#rawList').innerHTML = rawFiles.map(r => `<div class="rawrow" data-raw="${esc(r.id)}"><span class="rawname" title="${esc(r.name)}">${esc(r.name)}</span><span>${fmtSize(r.size || 0)}, ${esc(new Date(r.time || 0).toLocaleDateString())}</span><button type="button" class="mini" data-rawdl="${esc(r.id)}">Download</button><button type="button" class="mini" data-rawrm="${esc(r.id)}">Remove</button></div>`).join('');
+  $('#rawList').innerHTML = `<p class="hint" style="margin:0 0 6px">Stored in this browser only (not embedded in .json project exports).</p>`
+    + rawFiles.map(r => `<div class="rawrow" data-raw="${esc(r.id)}"><span class="rawname" title="${esc(r.name)}">${esc(r.name)}</span><span>${fmtSize(r.size || 0)}, ${esc(new Date(r.time || 0).toLocaleDateString())}</span><button type="button" class="mini" data-rawdl="${esc(r.id)}">Download</button><button type="button" class="mini" data-rawrm="${esc(r.id)}">Remove</button></div>`).join('')
+    + `<div class="btns" style="margin-top:6px"><button type="button" class="btn mini" data-rawzip="1">Download all (ZIP)</button></div>`;
 }
 $('#rawList').addEventListener('click', async e => {
+  if (e.target.closest('[data-rawzip]')) {
+    if (!rawFiles.length) return;
+    const entries = [], used = new Set(), missed = [];
+    for (const r of rawFiles) {
+      try {
+        const b = await readRawBlob(r);
+        let nm = String(r.name || 'file'), k = 2;
+        while (used.has(nm)) { const dot = nm.lastIndexOf('.'); nm = dot > 0 ? `${r.name.slice(0, dot)}_${k++}${r.name.slice(dot)}` : `${r.name}_${k++}`; }
+        used.add(nm);
+        entries.push({name: nm, data: new Uint8Array(await b.arrayBuffer())});
+      } catch (err) { missed.push(r.name); }
+    }
+    if (!entries.length) { toast('Could not read raw files from storage'); return; }
+    saveFile(`${safe((PROJ && PROJ.name) || 'project')}_raw_files.zip`, zip(entries));
+    if (missed.length) toast(`Bundled ${entries.length} raw file${entries.length === 1 ? '' : 's'} (skipped ${missed.length} unreadable)`);
+    return;
+  }
   const dl = e.target.closest('[data-rawdl]'), rm = e.target.closest('[data-rawrm]'), id = (dl || rm || {dataset: {}}).dataset.rawdl || (rm || {dataset: {}}).dataset.rawrm, r = rawFiles.find(x => x.id === id); if (!r) return;
   if (rm) { rawFiles = rawFiles.filter(x => x !== r); PROJ.editSeq = (PROJ.editSeq || 0) + 1; renderRaw(); flushSave(); return; }
-  try { let b = r._f; if (!b && r.blobId) { if (STORE.mode === 'local') b = await getLocalBlob(r.blobId); else { const rs = await fetch('/_blob/' + r.blobId); if (!rs.ok) throw new Error('missing'); b = await rs.blob(); } }
-    if (!b) throw new Error('missing'); const url = URL.createObjectURL(b), a = document.createElement('a'); a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
+  try { const b = await readRawBlob(r); const url = URL.createObjectURL(b), a = document.createElement('a'); a.href = url; a.download = r.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
   catch (err) { toast(`Could not read ${r.name} from storage`); }
 });
 
@@ -12931,6 +13052,13 @@ function renderExplorer(){
   const contentEl = $('#dirContent');
   contentEl.className = `dir-content dir-${dirViewMode}`;
 
+  const fileStatusInfo = item => {
+    if (item.itemType !== 'file') return {badge: '', hollow: false};
+    const hollow = !(item._f instanceof Blob) && !item.blobId && !item._dataUrl && !item.dataUrl;
+    if (hollow) return {badge: ' <span class="status-badge st-review">Not in .json (&gt;5 MB)</span>', hollow: true};
+    if (item.localOnly || (item.size || 0) > 5242880) return {badge: ' <span class="status-badge st-review">Browser only (&gt;5 MB)</span>', hollow: false};
+    return {badge: '', hollow: false};
+  };
   if (!items.length) {
     contentEl.innerHTML = `<p class="empty-p" style="padding:24px;text-align:center">${dirShowArchive ? 'No archived items in this project.' : dirSearchTerm ? 'No items match your search.' : 'This folder is empty. Create a folder, preparation, or upload a file above.'}</p>`;
   } else if (dirViewMode === 'grid') {
@@ -12938,12 +13066,13 @@ function renderExplorer(){
       const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
       const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
       const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
+      const fsInfo = fileStatusInfo(item);
       return `<div class="dir-card ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
         <div class="dir-card-icon">${icon}</div>
-        <div class="dir-card-name" title="${esc(item.name)}">${esc(item.name)}${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}</div>
+        <div class="dir-card-name" title="${esc(item.name)}">${esc(item.name)}${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div>
         <div class="dir-card-meta">${typeLabel}</div>
         <div class="dir-card-acts">
-          <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Open</button>
+          <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}"${fsInfo.hollow ? ' disabled title="Files over 5 MB are not embedded in .json exports"' : ''}>Open</button>
           ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
           ${!dirShowArchive ? `
             <button type="button" class="mini" data-dir-rename="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Rename</button>
@@ -12967,13 +13096,14 @@ function renderExplorer(){
           const icon = item.itemType === 'folder' ? '📁' : item.itemType === 'prep' ? '🧪' : '📄';
           const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
           const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
+          const fsInfo = fileStatusInfo(item);
           return `<tr class="dir-row ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
-            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}</div></td>
+            <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
             <td>${typeLabel}</td>
             <td>${fmtWhen(item.updated || item.created)}</td>
             <td>
               <div class="dir-acts-cell">
-                <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Open</button>
+                <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}"${fsInfo.hollow ? ' disabled title="Files over 5 MB are not embedded in .json exports"' : ''}>Open</button>
                 ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
                 ${!dirShowArchive ? `
                   <button type="button" class="mini" data-dir-rename="${esc(item.id)}" data-dir-type="${esc(item.itemType)}">Rename</button>
@@ -13106,6 +13236,7 @@ $('#dirTree').addEventListener('click', async e => {
 $('#dirContent').addEventListener('click', async e => {
   const op = e.target.closest('[data-dir-open]');
   if (op) {
+    if (op.disabled) return;
     const id = op.dataset.dirOpen, typ = op.dataset.dirType;
     if (typ === 'folder') {
       dirCurrentFolder = id;
@@ -13207,9 +13338,12 @@ $('#dirFileInput').addEventListener('change', async e => {
   const fs = Array.from(e.target.files || []);
   e.target.value = '';
   if (!fs.length || !PROJ || !PROJ.directory) return;
+  const bigNames = [];
   for (const f of fs) {
     let dUrl = '';
-    if ((f.size || 0) <= 5242880) { try { dUrl = await blobToDataUrl(f); } catch (err) {} }
+    const over5mb = (f.size || 0) > 5242880;
+    if (!over5mb) { try { dUrl = await blobToDataUrl(f); } catch (err) {} }
+    else bigNames.push(f.name);
     PROJ.directory.files.push({
       id: 'file-' + newBlobId().slice(2),
       name: f.name,
@@ -13219,6 +13353,7 @@ $('#dirFileInput').addEventListener('change', async e => {
       time: Date.now(),
       folderId: dirCurrentFolder,
       archived: false,
+      localOnly: over5mb,
       _f: f,
       _dataUrl: dUrl
     });
@@ -13226,7 +13361,8 @@ $('#dirFileInput').addEventListener('change', async e => {
   PROJ.editSeq = (PROJ.editSeq || 0) + 1;
   renderExplorer();
   queueSave();
-  toast(`Added ${fs.length} file attachment${fs.length === 1 ? '' : 's'}`);
+  if (bigNames.length) toast(`Added ${bigNames.join(', ')} (stored in this browser only; files over 5 MB are not embedded in .json exports)`);
+  else toast(`Added ${fs.length} file attachment${fs.length === 1 ? '' : 's'}`);
 });
 
 $('#dirViewList').addEventListener('click', () => {
@@ -14373,7 +14509,7 @@ async function handleAgaroseGelUpload(file, s){
     clChanged(true);
     toast(s.gel.replaced ? `Replaced gel image with "${file.name}"` : `Uploaded gel image "${file.name}"`);
   } catch (err) {
-    toast(`Could not open ${file.name}. Try exporting the gel as PNG or JPEG.`);
+    toast(err && err.lzwOffline ? `Could not open LZW-compressed TIFF ${file.name} while offline. Connect to the internet once or re-save as uncompressed TIFF or PNG.` : `Could not open ${file.name}. Try exporting the gel as PNG or JPEG.`);
   }
 }
 function clPanelHtml(){ const c = CL(), onC = curStep === 'transform', id = curStep.startsWith('clone:') ? curStep.slice(6) : '', s = c.stages.find(x => x.id === id);

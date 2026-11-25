@@ -558,5 +558,71 @@ const {open, H, suite, fs, path} = require('../lib/harness');
     }
   });
 
+  await T.t('offline_16bit_tiff_agarose_upload', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await p.context().route('https://cdnjs.cloudflare.com/**', r => r.abort('internetdisconnected'));
+      await p.context().route('https://cdn.jsdelivr.net/**', r => r.abort('internetdisconnected'));
+
+      await h.newProject('Agarose Offline TIFF', 'cloning');
+      await cl(p).locator('[data-cl=tpl][data-v=ath]').click();
+      await h.wait(450);
+      await go(h, 'Agarose-gel verification');
+      await h.wait(300);
+
+      const w = 240, hPx = 280, nTags = 9, ifdOff = 8, dataOff = ifdOff + 2 + nTags * 12 + 4;
+      const tiffBuf = Buffer.alloc(dataOff + w * hPx * 2);
+      tiffBuf.write('II', 0); tiffBuf.writeUInt16LE(42, 2); tiffBuf.writeUInt32LE(ifdOff, 4); tiffBuf.writeUInt16LE(nTags, ifdOff);
+      [[256, 4, 1, w], [257, 4, 1, hPx], [258, 3, 1, 16], [259, 3, 1, 1], [262, 3, 1, 1], [273, 4, 1, dataOff], [277, 3, 1, 1], [278, 4, 1, hPx], [279, 4, 1, w * hPx * 2]].forEach(([tag, tp, cnt, val], i) => {
+        const o = ifdOff + 2 + i * 12;
+        tiffBuf.writeUInt16LE(tag, o); tiffBuf.writeUInt16LE(tp, o + 2); tiffBuf.writeUInt32LE(cnt, o + 4);
+        if (tp === 3) tiffBuf.writeUInt16LE(val, o + 8); else tiffBuf.writeUInt32LE(val, o + 8);
+      });
+      for (let y = 0; y < hPx; y++) {
+        for (let x = 0; x < w; x++) {
+          const ln = Math.floor(x / 80), dx = Math.abs(x % 80 - 40), wx = Math.exp(-0.5 * Math.pow(dx / 18, 6));
+          let v = 1200;
+          if (ln === 0) {
+            for (const mu of [60, 120, 180, 230]) v += 24000 * Math.exp(-0.5 * Math.pow((y - mu) / 5, 2)) * wx;
+          } else if (ln === 1) {
+            v += 65535 * Math.exp(-0.5 * Math.pow((y - 120) / 6, 2)) * wx;
+          } else {
+            v += 22000 * Math.exp(-0.5 * Math.pow((y - 120) / 6, 2)) * wx;
+          }
+          tiffBuf.writeUInt16LE(Math.min(65535, Math.round(v)), dataOff + (y * w + x) * 2);
+        }
+      }
+
+      const b64 = tiffBuf.toString('base64');
+      await p.evaluate(([sel, b, name]) => {
+        const u = Uint8Array.from(atob(b), c => c.charCodeAt(0));
+        const dt = new DataTransfer();
+        dt.items.add(new File([u], name, {type: 'image/tiff'}));
+        const el = document.querySelector(sel);
+        el.dispatchEvent(new DragEvent('dragover', {dataTransfer: dt, bubbles: true, cancelable: true}));
+        el.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true}));
+      }, ['#clonePanel .cl-gel-upload', b64, 'agarose_offline16.tif']);
+      await h.wait(900);
+
+      const toasts = await h.toasts();
+      const imgSrc = (await cl(p).locator('.cl-gel-img').count()) ? (await cl(p).locator('.cl-gel-img').getAttribute('src') || '') : '';
+      const gelName = (await cl(p).locator('.cl-gel-name').count()) ? await cl(p).locator('.cl-gel-name').innerText() : '';
+      T.check('agarose_offline_tiff16_loads',
+        imgSrc.startsWith('data:image/png;base64,') && gelName.includes('agarose_offline16.tif') && !toasts.some(t => /could not open/i.test(t)),
+        `name="${gelName}" srcLen=${imgSrc.length} toasts=${toasts.join(' | ')}`);
+
+      if (await p.locator('#ag-auto-lanes').count()) {
+        await p.click('#ag-auto-lanes');
+        await h.wait(400);
+      }
+      const laneCnt = await p.locator('#ag-lane-editor .ag-lane-zone').count();
+      T.check('agarose_offline_tiff16_detects_lanes', laneCnt >= 2, `lanes=${laneCnt}`);
+      T.check('agarose_offline_tiff16_no_errors', !errs.length, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
+

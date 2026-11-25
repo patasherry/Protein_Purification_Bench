@@ -107,7 +107,7 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 
 **Inputs:**
 *   **Chromatography Data:** `.csv`, `.tsv`, `.txt`, `.zip` (UNICORN 7 result archives), `.asc`, `.dat`, `.arw`, `.xy`, and pasted spreadsheet columns.
-*   **Gel Images:** PNG, JPEG, and TIFF (`.tif`, `.tiff`, decoded on demand via `pako` and `UTIF`).
+*   **Gel Images:** PNG, JPEG, and TIFF (`.tif`, `.tiff`, with built-in offline decoding for uncompressed and Deflate 8/16-bit TIFFs and on-demand `pako`/`UTIF` loading for LZW or specialized TIFFs).
 *   **Sequences & Plasmids:** GenBank and plasmid files (`.gb`, `.gbk`, `.genbank`, `.ape`, `.dna`) and plain amino acid sequences. GenBank text copied from Benchling or SnapGene can be pasted with **Paste GenBank text** in the Construct section. Only the first record is read; FASTA and protein records are refused, and a LOCUS length that differs from the sequence gives a warning.
 *   **Structures:** Local `.cif`, `.mmcif`, `.pdb`, `.ent` files, or live fetches from RCSB PDB by entry code.
 *   **NanoDrop Readings:** `.csv`, `.tsv`, and `.txt` exports from NanoDrop One, 2000, or 8000 (Protein A280, A205, Proteins & Labels, and full spectra), or manual readings via **"Type a reading"**. The parser automatically handles vendor preamble lines (such as `"Vendor: Agilent"` or metadata labels ending with `:`) and strips status characters or asterisks on numeric values (e.g. `0.05A`, `1.23*`). Readings are checked for $A_{340}$ turbidity and light scattering, $A_{280}/A_{260}$ ratios outside `1.5–2.5` for purified protein, tied step-name matches (left unassigned for review), and unrecognised concentration units (kept as read and withheld from step mass totals until reviewed).
@@ -158,7 +158,7 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 ## External Libraries and Network Dependencies
 
 *   **Fonts:** Instrument Sans from Google Fonts (`fonts.googleapis.com` and `fonts.gstatic.com`).
-*   **TIFF Gel Support:** `pako` 2.1.0 (`cdnjs.cloudflare.com`) and `UTIF` 3.1.0 (`cdn.jsdelivr.net`), loaded on demand only when a TIFF image is opened.
+*   **TIFF Gel Support:** Built-in offline reader for uncompressed and Deflate 8/16-bit TIFFs; `pako` 2.1.0 (`cdnjs.cloudflare.com`) and `UTIF` 3.1.0 (`cdn.jsdelivr.net`) loaded on demand only when an LZW or specialized TIFF image is opened.
 *   **PDB Structures:** Structure files fetched on demand from RCSB Protein Data Bank (`files.rcsb.org/download/`) when a PDB code is loaded.
 
 ## Repository Layout
