@@ -109,6 +109,21 @@ async function peaks(p, h){ const t = await h.peakTable(); if (!t.length) return
     T.check('no page errors for not unicorn', !errs.length, errs.join(' | '));
   });
 
+  await T.t('data descriptor archive', async () => {
+    await p.reload();
+    await h.wait(900);
+    await h.newProject('Unicorn 7 descriptor');
+    await h.addRun(path.join(DATA, 'chrom', 'descriptor_unicorn.zip'));
+
+    await h.wait(1500);
+    const tl = await h.timeline();
+    T.check('descriptor run appears in timeline', tl.some(x => /descriptor unicorn/i.test(x.t)), `timeline: ${JSON.stringify(tl)}`);
+    T.check('exactly one selected run card', (await card(p).count()) === 1);
+    const toasts = await h.toasts();
+    T.check('no error toast for descriptor archive', !toasts.some(t => /error|failed|not a unicorn/i.test(t)), toasts.join(', '));
+    T.check('no page errors for descriptor archive', !errs.length, errs.join(' | '));
+  });
+
   await T.t('nested raw Float32 archive', async () => {
     await p.reload();
     await h.wait(900);

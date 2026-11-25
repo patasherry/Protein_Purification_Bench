@@ -2292,14 +2292,74 @@ function aktaFromCurves(curves, fname, extra){
 /* ---------- UNICORN 7 result archive (.zip) ---------- */
 /* the archive and each curve inside it are zip files, the curves in zip64 form; their points are .NET float arrays */
 async function inflateRaw(u8){ const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw')); return new Uint8Array(await new Response(s).arrayBuffer()); }
-function zipList(u8){ const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), out = new Map(); let i = 0;
+function readZipCD(u8, dv){
+  let p = u8.length - 22, minP = Math.max(0, u8.length - 65557), eocd = -1;
+  while (p >= minP) {
+    if (dv.getUint32(p, true) === 0x06054b50) {
+      const cl = dv.getUint16(p + 20, true);
+      if (p + 22 + cl === u8.length) { eocd = p; break; }
+    }
+    p--;
+  }
+  if (eocd < 0) return null;
+  let cdOff = dv.getUint32(eocd + 16, true), cdSize = dv.getUint32(eocd + 12, true);
+  if (eocd >= 20 && dv.getUint32(eocd - 20, true) === 0x07064b50) {
+    const z64Off = Number(dv.getBigUint64(eocd - 20 + 8, true));
+    if (z64Off >= 0 && z64Off + 56 <= u8.length && dv.getUint32(z64Off, true) === 0x06064b50) {
+      cdSize = Number(dv.getBigUint64(z64Off + 40, true));
+      cdOff = Number(dv.getBigUint64(z64Off + 48, true));
+    }
+  }
+  if (cdOff < 0 || cdSize < 0 || cdOff + cdSize > u8.length) return null;
+  const cdMap = new Map(); let c = cdOff, cdEnd = cdOff + cdSize;
+  while (c + 46 <= cdEnd && dv.getUint32(c, true) === 0x02014b50) {
+    const flag = dv.getUint16(c + 8, true), meth = dv.getUint16(c + 10, true);
+    let cs = dv.getUint32(c + 20, true), us = dv.getUint32(c + 24, true);
+    const nl = dv.getUint16(c + 28, true), xl = dv.getUint16(c + 30, true), cl = dv.getUint16(c + 32, true);
+    let lhOff = dv.getUint32(c + 42, true);
+    if (c + 46 + nl + xl + cl > cdEnd) return null;
+    const name = new TextDecoder().decode(u8.subarray(c + 46, c + 46 + nl));
+    let k = c + 46 + nl, xe = k + xl, isZip64 = false;
+    while (k + 4 <= xe) {
+      const id = dv.getUint16(k, true), sz = dv.getUint16(k + 2, true);
+      if (k + 4 + sz > xe) return null;
+      if (id === 1) {
+        isZip64 = true;
+        let q = k + 4, qe = q + sz;
+        if (us === 0xffffffff && q + 8 <= qe) { us = Number(dv.getBigUint64(q, true)); q += 8; }
+        if (cs === 0xffffffff && q + 8 <= qe) { cs = Number(dv.getBigUint64(q, true)); q += 8; }
+        if (lhOff === 0xffffffff && q + 8 <= qe) { lhOff = Number(dv.getBigUint64(q, true)); q += 8; }
+      }
+      k += 4 + sz;
+    }
+    if (lhOff < 0 || lhOff + 30 > u8.length) return null;
+    cdMap.set(lhOff, {name, meth, cs, us, flag, isZip64});
+    c += 46 + nl + xl + cl;
+  }
+  return cdMap;
+}
+function zipList(u8){ const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), out = new Map(); let i = 0, cd = null;
   while (i + 30 <= u8.length && dv.getUint32(i, true) === 0x04034b50) {
     const flag = dv.getUint16(i + 6, true), meth = dv.getUint16(i + 8, true), nl = dv.getUint16(i + 26, true), xl = dv.getUint16(i + 28, true); let cs = dv.getUint32(i + 18, true), us = dv.getUint32(i + 22, true);
+    if (i + 30 + nl > u8.length) throw new Error('truncated zip header');
     const name = new TextDecoder().decode(u8.subarray(i + 30, i + 30 + nl)); let k = i + 30 + nl; const xe = k + xl;
-    while (k + 4 <= xe) { const id = dv.getUint16(k, true), sz = dv.getUint16(k + 2, true); if (id === 1) { let q = k + 4; if (us === 0xffffffff) { us = Number(dv.getBigUint64(q, true)); q += 8; } if (cs === 0xffffffff) { cs = Number(dv.getBigUint64(q, true)); q += 8; } } k += 4 + sz; }
-    if ((flag & 8) && !cs) throw new Error('zip with data descriptors');
+    if (xe > u8.length) throw new Error('truncated zip extra');
+    let isZip64 = false;
+    while (k + 4 <= xe) { const id = dv.getUint16(k, true), sz = dv.getUint16(k + 2, true); if (id === 1) { isZip64 = true; let q = k + 4; if (us === 0xffffffff && q + 8 <= xe) { us = Number(dv.getBigUint64(q, true)); q += 8; } if (cs === 0xffffffff && q + 8 <= xe) { cs = Number(dv.getBigUint64(q, true)); q += 8; } } k += 4 + sz; }
+    if ((flag & 8) && !cs) {
+      if (!cd) cd = readZipCD(u8, dv);
+      const ce = cd ? cd.get(i) : null;
+      if (!ce || ce.name !== name) throw new Error('zip with data descriptors');
+      cs = ce.cs; us = ce.us; if (ce.isZip64) isZip64 = true;
+    }
+    if (xe + cs > u8.length) throw new Error('truncated zip payload');
     out.set(name, {meth, data: u8.subarray(xe, xe + cs)}); i = xe + cs;
-    if (flag & 8) { if (dv.getUint32(i, true) === 0x08074b50) i += 4; i += 12; } }
+    if (flag & 8) {
+      if (i + 4 <= u8.length && dv.getUint32(i, true) === 0x08074b50) i += 4;
+      const descSz = isZip64 ? 20 : 12;
+      if (i + descSz > u8.length) throw new Error('truncated zip descriptor');
+      i += descSz;
+    } }
   return out; }
 async function zipGet(map, name){ const e = map.get(name); if (!e) return null; return e.meth === 8 ? inflateRaw(e.data) : e.meth === 0 ? e.data : null; }
 function netFloats(u8, dt){ if (!u8) return []; if (u8.length >= 27 && u8[0] === 0x00 && u8[1] === 0x01 && u8[2] === 0x00 && u8[3] === 0x00 && u8[4] === 0x00 && u8[17] === 0x0f) { const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), n = dv.getInt32(22, true), t = u8[26], out = new Array(n);
