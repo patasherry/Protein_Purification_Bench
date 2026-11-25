@@ -806,7 +806,7 @@ button,input,select,textarea{font-family:inherit}
   <div class="btns top-act">
     <button class="btn ghost" id="homeBtn" type="button" hidden>All projects</button>
     <button class="btn ghost" id="quickSave" type="button" hidden title="Turn what is loaded into a project that saves as you go">Save as project</button>
-    <button class="btn ghost" id="projOpen" type="button" title="Open a project file saved from this tool">Open file</button>
+    <button class="btn ghost" id="projOpen" type="button" title="Open a project file saved from this tool">Open project (.json)</button>
     <button class="btn ghost" id="projSave" type="button" title="Save runs, traces, gels, labels, marks and settings in one file, so you can change a figure later">Export project</button>
     <input type="file" id="projFile" accept=".json,application/json" hidden>
   </div>
@@ -900,7 +900,7 @@ button,input,select,textarea{font-family:inherit}
   </dialog>
   <p class="home-where" id="homeWhere"></p>
   <div class="home-alt">
-    <button class="btn" id="homeImport" type="button">Open file</button>
+    <button class="btn" id="homeImport" type="button">Open project (.json)</button>
     <button class="btn" id="homeQuick" type="button">Make a quick figure with example data</button>
   </div>
 </section>
@@ -8557,8 +8557,29 @@ async function loadFastaFile(f){
   const label = hdr ? hdr.split(/\s+/)[0] : '';
   toast(`Loaded protein sequence from ${f.name} (${seq.length} aa${label ? `, ${label}` : ''})${recs > 1 ? `. Read first of ${recs} FASTA records` : ''}.`);
 }
+async function isUnsupportedHomeFile(f){
+  if (/\.(heic|heif|pdf|svg|dng|raw|cr2|nef|xlsx?|xlsm|ods|docx?)$/i.test(f.name)) return true;
+  if (/\.res$/i.test(f.name)) {
+    const head = new Uint8Array(await f.slice(0, 32).arrayBuffer());
+    if (head.length >= 4 && head[0] === 0x11 && head[1] === 0x47 && head[2] === 0x11 && head[3] === 0x47) return true;
+  }
+  return false;
+}
 async function loadFiles(files){
-  const proj = files.find(f => /\.json$/i.test(f.name)); if (proj && MODE !== 'quick') { const prev = PROJ; let d = null; try { d = JSON.parse(await proj.text()); } catch (e) { toast(`Could not open ${proj.name}`); } if (d) await importAsProject(d, proj.name);
+  if (!files || !files.length) return;
+  const proj = files.find(f => /\.json$/i.test(f.name));
+  if (!proj && MODE === 'home') {
+    const unsup = await Promise.all(files.map(isUnsupportedHomeFile));
+    if (unsup.every(Boolean)) {
+      const bad = files.map(f => /\.(heic|heif|pdf|svg|dng|raw|cr2|nef)$/i.test(f.name) ? `${f.name} (a picture format this tool cannot open: export the gel as PNG, JPEG or TIFF)`
+        : /\.(xlsx?|xlsm|ods|docx?)$/i.test(f.name) ? `${f.name} (a spreadsheet or document: save the data as CSV or tab-separated text first)`
+        : `${f.name} (a legacy UNICORN 3-5 binary result: export its curves as .asc or .csv from UNICORN Evaluation)`);
+      toast(`Could not read ${bad.join(', ')}. Use an ÄKTA (UNICORN) export or a text file with time and signal columns.`);
+      return;
+    }
+    enterQuickFromHome();
+  }
+  if (proj && MODE !== 'quick') { const prev = PROJ; let d = null; try { d = JSON.parse(await proj.text()); } catch (e) { toast(`Could not open ${proj.name}`); } if (d) await importAsProject(d, proj.name);
     if (!PROJ || PROJ === prev) return; files = files.filter(f => f !== proj); if (!files.length) return; }
   else if (proj) { try { await openProject(JSON.parse(await proj.text()), proj.name); } catch (e) { toast(`Could not open ${proj.name}`); return; } files = files.filter(f => f !== proj); if (!files.length) return; }
   keepRaw(files);
@@ -12689,10 +12710,13 @@ const npSw = on => { const b = $('#npCloning'); b.setAttribute('aria-checked', o
 $('#npCloning').addEventListener('click', () => npSw($('#npCloning').getAttribute('aria-checked') !== 'true'));
 $('#newProj').addEventListener('submit', e => { e.preventDefault(); const on = $('#npCloning').getAttribute('aria-checked') === 'true';
   newProject($('#npName').value, $('#npProt').value, on); $('#npName').value = ''; $('#npProt').value = ''; npSw(false); });
-$('#homeQuick').addEventListener('click', async () => { await leaveWorkspace(); MODE = 'quick'; enterApp();
+function enterQuickFromHome(){
+  MODE = 'quick'; enterApp();
   if (QUICK) { ({runs, traces, gels, struct, ndSamples, assays, prep} = QUICK); assays = Array.isArray(assays) ? assays : []; QKEYS.forEach(k => { opt[k] = QUICK.o[k]; }); customTagSeq = QUICK.customTagSeq || ''; cur = QUICK.cur; QUICK = null; }
   else { if (runs.length || gels.length || struct || assays.length || traces.some(t => !t.ex)) resetWorkspace(); if (!traces.length) exampleTraces(); cur = figures()[0] ? figures()[0].id : 'overlay'; }
-  applyProjUI(); renderList(); syncControls(); render(); });
+  applyProjUI(); renderList(); syncControls(); render();
+}
+$('#homeQuick').addEventListener('click', async () => { await leaveWorkspace(); enterQuickFromHome(); });
 $('#homeImport').addEventListener('click', () => $('#projFile').click());
 $('#homeBtn').addEventListener('click', showHome);
 $('#quickSave').addEventListener('click', async () => { stripBlobIds(); traces = traces.filter(t => !t.ex); QUICK = null;
