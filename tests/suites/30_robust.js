@@ -1043,4 +1043,43 @@ await T.t('schema-migration-roundtrip', async () => {
   await close();
 });
 
+/* ---------------- below-limit vs upper-limit saturation diagnostics (#1758) ---------------- */
+await T.t('below-limit-saturation-diagnostics', async () => {
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    await h.newProject('Below-limit saturation diagnostics');
+    const makeCsv = vals => ['Time (min),UV 280 (mAU)', ...Array.from({length: 20}, (_, i) => `${(i * 0.1).toFixed(1)},${i < vals.length ? vals[i] : '0.02'}`)].join('\n');
+    const cardOf = nm => p.locator('.trace[data-kind="trace"]').filter({has: p.locator(`input[data-k="name"][title="${nm}"]`)});
+    const loadCase = async (nm, vals) => {
+      await p.setInputFiles('#file', {name: `${nm}.csv`, mimeType: 'text/csv', buffer: Buffer.from(makeCsv(vals))});
+      await h.wait(500);
+      const c = cardOf(nm);
+      const diag = (await c.locator('.source-diag').allTextContents()).join(' ');
+      return {n: await c.count(), diag};
+    };
+
+    const below = await loadCase('below_limit_loq', ['<0.01', '<=0.01']);
+    T.check('sat.below_limit.loads', below.n === 1, `cards=${below.n}`);
+    T.check('sat.below_limit.no_false_warning', !/detector-saturated/i.test(below.diag), `diag="${below.diag}"`);
+
+    for (const [id, token] of [['gt', '>0.01'], ['gte', '>=0.01'], ['star', '0.01*'], ['hash', '0.01#']]) {
+      const res = await loadCase(`sat_upper_${id}`, [token]);
+      T.check(`sat.upper_${id}.loads`, res.n === 1, `cards=${res.n}`);
+      T.check(`sat.upper_${id}.warns_saturated`, /detector-saturated/i.test(res.diag), `${token}: diag="${res.diag}"`);
+    }
+
+    const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.click(SEL.exportBtn)]);
+    const saved = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
+    const trBelow = (saved.traces || []).find(t => t.name === 'below_limit_loq');
+    T.check('sat.below_limit.numeric_retained',
+      !!trBelow && Array.isArray(trBelow.rows) && trBelow.rows.length === 20 &&
+      trBelow.rows[0][1] === 0.01 && trBelow.rows[1][1] === 0.01 && trBelow.rows[2][1] === 0.02,
+      JSON.stringify(trBelow && trBelow.rows && trBelow.rows.slice(0, 3)));
+    T.check('sat.below_limit.no_error', !errs.length, errs.join(' | '));
+  } finally {
+    await close();
+  }
+});
+
 T.done(); })();
+
