@@ -82,8 +82,11 @@ const figGeom = p => p.evaluate(() => { const svg = document.querySelector('#pap
         if (theme === 'light') T.check(`${tag}:${name}:panel-budget`, pi.h <= BUDGET[W][name], `${pi.h}px > ${BUDGET[W][name]}px ${shotName(W, name, theme)}`); /* clutter creep: side panel stays within its height budget */
         T.check(`${tag}:${name}:one-tips`, pi.tips <= 1, `${pi.tips} Tips visible`); /* at most one Tips disclosure per step */
         T.check(`${tag}:${name}:more-closed`, !pi.optHeads.length && pi.more !== 'true', `visible option sections: ${pi.optHeads.join(', ')}`); /* rarely used settings stay behind More options */
-        const bad = await contrast(p); T.check(`${tag}:${name}:contrast`, !bad.length, bad.slice(0, 6).map(x => `${x.r}:1 ${x.sel} "${x.t}"`).join(' | ') + ' ' + shotName(W, name, theme)); /* body text >= 4.5:1 (3:1 for large) */
-        if (theme === 'light' && name === 'imac') {
+        const bad = await contrast(p); T.check(`${tag}:${name}:contrast`, !bad.length, bad.slice(0, 6).map(x => `${x.r}:1 ${x.sel} "${x.t}"`).join(' | ') + ' ' + shotName(W, name, theme)); /* body text >= 4.5:1 (3:1 for large) */ }); }
+      if (theme === 'light') {
+        const imacKey = (steps.find(s => s[0] === 'imac') || [])[1];
+        if (imacKey) await T.t(`${tag}:imac:touch`, async () => {
+          await h.step(imacKey); await h.wait(200);
           const gelChip = p.locator('#ssGels [data-gelopen]').first();
           if (await gelChip.count()) { await gelChip.click(); await h.wait(250); }
           const targets = await p.evaluate(() => {
@@ -98,8 +101,9 @@ const figGeom = p => p.evaluate(() => { const svg = document.querySelector('#pap
           });
           const backBtn = p.locator('#ssGels [data-back]').first();
           if (await backBtn.count()) { await backBtn.click(); await h.wait(150); }
-          T.check(`${tag}:${name}:touch-targets-24px`, targets.stageAddH >= 24 && targets.bchipH >= 24 && targets.projSumH >= 24, JSON.stringify(targets));
-        } }); }
+          T.check(`${tag}:imac:touch-targets-24px`, targets.stageAddH >= 24 && targets.bchipH >= 24 && targets.projSumH >= 24, JSON.stringify(targets));
+        });
+      }
       /* SEC peak labels on the run's own figure */
       await T.t(`${tag}:sec-labels`, async () => { await h.step(steps.find(s => s[0] === 'sec')[1]); await h.wait(500); const g = await figGeom(p); if (!g) return T.check(`${tag}:sec-labels:figure`, false, 'no svg');
         const labs = g.T.filter(x => /^\d+(\.\d+)?\s?(mL|mg|kDa|min)$/.test(x.t)); const ticks0 = g.T.filter(x => /^0$/.test(x.t)).sort((a, b) => b.y - a.y)[0]; const ytop = g.T.filter(x => /^\d+$/.test(x.t) && x.x < (ticks0 ? ticks0.r + 2 : 0) && x.x > (ticks0 ? ticks0.x - 30 : 0)).sort((a, b) => a.y - b.y)[0];
