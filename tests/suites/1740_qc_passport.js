@@ -1,5 +1,5 @@
 // 1740_qc_passport: QC Passport data model and row assembly (#1775, Part 1 of 3 of #1771).
-// Drives the app strictly through its UI and DOM (never window.__HFB or window.__PPB).
+// Drives the app strictly through its UI controls and DOM elements.
 const {open, H, suite, src} = require('../lib/harness');
 
 (async () => {
