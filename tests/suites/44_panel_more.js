@@ -232,6 +232,65 @@ const {open, H, suite, src} = require('../lib/harness');
     T.check('stage_header_add_btn', await stageAddBtn.count() >= 1 && (await stageAddBtn.textContent())?.trim() === '+');
     await stageAddBtn.click(); await h.wait(350);
     T.check('stage_header_activates_clone_setup', await p.locator('#tl [data-step="clone:setup"][aria-current="step"]').count() === 1 && await p.locator('#clonePanel [data-cadd]').count() === 1);
+
+    // #1710: WCAG AA contrast for .tl li.done.warn.cur .mk, #panelSearch height & dark placeholder, #ssDate single-line .ss-head, and >=3:1 .btn border + :hover transition
+    const tlRun = (await h.timeline()).find(x => /^run:/.test(x.k));
+    if (tlRun) { await h.step(tlRun.k); await h.suggest(); await h.wait(250); }
+    const checkWcag = async () => p.evaluate(() => {
+      const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+      const rgba = s => { const m = (s || '').match(/[\d.]+/g); return m ? [+m[0], +m[1], +m[2], m.length > 3 ? +m[3] : 1] : [0, 0, 0, 0]; };
+      const over = (top, bot) => { const a = top[3]; return [top[0] * a + bot[0] * (1 - a), top[1] * a + bot[1] * (1 - a), top[2] * a + bot[2] * (1 - a), 1]; };
+      const bgOf = e => {
+        const st = [];
+        for (let n = e; n && n.nodeType === 1; n = n.parentElement) { const c = rgba(getComputedStyle(n).backgroundColor); if (c[3] > 0) { st.push(c); if (c[3] >= 1) break; } }
+        let c = rgba(getComputedStyle(document.documentElement).backgroundColor);
+        if (!c[3]) c = [255, 255, 255, 1];
+        for (let i = st.length - 1; i >= 0; i--) c = over(st[i], c);
+        return c;
+      };
+      const ratio = (c1, c2) => { const L1 = lum(c1), L2 = lum(c2); return +(((Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)).toFixed(2)); };
+
+      const mk = document.querySelector('.tl li.done.warn.cur .mk');
+      const mkR = mk ? ratio(over(rgba(getComputedStyle(mk).color), bgOf(mk)), bgOf(mk)) : 0;
+
+      const ps = document.querySelector('#panelSearch');
+      const psH = ps ? ps.getBoundingClientRect().height : 0;
+      const psPhCs = ps ? getComputedStyle(ps, '::placeholder') : null;
+      const psBg = ps ? bgOf(ps) : [255, 255, 255, 1];
+      const phCol = psPhCs ? rgba(psPhCs.color) : [0, 0, 0, 1];
+      const phOp = psPhCs ? (parseFloat(psPhCs.opacity) || 1) : 1;
+      const psPhR = ps ? ratio(over([phCol[0], phCol[1], phCol[2], phCol[3] * phOp], psBg), psBg) : 0;
+
+      const ssHead = document.querySelector('#stepSheet .ss-head'), ssH2 = ssHead && ssHead.querySelector('h2'), ssDt = document.querySelector('#ssDate');
+      const ssSingleLine = !!(ssHead && ssH2 && ssDt && Math.abs(ssH2.getBoundingClientRect().top - ssDt.getBoundingClientRect().top) < 14);
+
+      const copyBtn = document.querySelector('#copySvg');
+      const copyParentBg = copyBtn && copyBtn.parentElement ? bgOf(copyBtn.parentElement) : [255, 255, 255, 1];
+      const copyBorder = copyBtn ? over(rgba(getComputedStyle(copyBtn).borderTopColor), copyParentBg) : [0, 0, 0, 1];
+      const btnBorderR = copyBtn ? ratio(copyBorder, copyParentBg) : 0;
+      return {mkR, psH, psPhR, ssSingleLine, btnBorderR, restBorder: copyBtn ? getComputedStyle(copyBtn).borderTopColor : ''};
+    });
+
+    const wcLight = await checkWcag();
+    await p.hover('#copySvg'); await h.wait(250);
+    const hoverInfo = await p.evaluate(() => {
+      const b = document.querySelector('#copySvg'), probe = document.createElement('div');
+      probe.style.borderTopColor = 'var(--accent)'; document.body.appendChild(probe);
+      const want = getComputedStyle(probe).borderTopColor; probe.remove();
+      return {got: b ? getComputedStyle(b).borderTopColor : '', want};
+    });
+    await p.mouse.move(0, 0); await h.wait(200);
+
+    await p.emulateMedia({colorScheme: 'dark'}); await h.wait(150);
+    const wcDark = await checkWcag();
+    await p.emulateMedia({colorScheme: 'light'}); await h.wait(100);
+
+    T.check('wcag_1710.warn_mk_contrast', wcLight.mkR >= 4.5 && wcDark.mkR >= 4.5, `light=${wcLight.mkR} dark=${wcDark.mkR}`);
+    T.check('wcag_1710.search_height_and_dark_placeholder', wcLight.psH >= 30 && wcDark.psH >= 30 && wcDark.psPhR >= 4.5, JSON.stringify({wcLight, wcDark}));
+    T.check('wcag_1710.ssdate_keeps_sshead_single_line', wcLight.ssSingleLine && wcDark.ssSingleLine, JSON.stringify({wcLight, wcDark}));
+    T.check('wcag_1710.btn_border_contrast_and_hover_accent',
+      wcLight.btnBorderR >= 3.0 && wcDark.btnBorderR >= 3.0 && hoverInfo.got === hoverInfo.want && hoverInfo.got !== wcLight.restBorder,
+      JSON.stringify({lightR: wcLight.btnBorderR, darkR: wcDark.btnBorderR, hoverInfo, rest: wcLight.restBorder}));
   });
 
   /* #1267: toast placement below header across desktop/phone, click-to-dismiss, and 1-click run/trace deletion Undo */
