@@ -270,7 +270,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .tl li.skip .mk::after{content:"–";color:var(--muted)}
 .tl-menu button{display:grid;gap:1px;text-align:left;font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--field);color:var(--ink);cursor:pointer}
 .tl-menu button:hover{border-color:var(--accent)} .tl-menu button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.tl-menu b{font-weight:600;font-size:13px} .tl-menu span{color:var(--muted);font-size:12px}
+.tl-menu b{font-weight:600;font-size:13px} .tl-menu span{color:var(--muted);font-size:12px} .tl-menu .tl-tip{margin:0 0 2px;color:var(--muted);font-size:12px;line-height:1.4}
 .ss-gels .gchip{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
 .ss-gels .gchip:hover{border-color:var(--accent)}
 body.proj:not(.onhplc) #list .trace:not(.sel){display:none}
@@ -307,6 +307,7 @@ header.top{max-width:1480px;margin:0 auto 14px;display:flex;flex-wrap:wrap;align
 header.top .top-act{margin-left:auto}
 .btn.ghost,.btn.quiet{background:transparent;border-color:transparent;color:var(--muted)}
 .btn.quiet{padding-inline:8px;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}
+.cardopts .btn.quiet{min-height:24px;padding:2px 6px;font-size:12px}
 .btn.quiet:hover{text-decoration-color:currentColor}
 .btn.quiet:disabled,.btn.danger:disabled{background:transparent;border-color:transparent;text-decoration:none}
 .btn.danger{background:transparent;border-color:transparent;color:var(--t-con);padding-inline:8px}
@@ -370,6 +371,7 @@ details.tip[open]{display:grid;gap:6px;background:var(--well);border:1px solid v
 body:not(.secstds) .secstd{display:none!important}
 /* in a project the panel shows the step; settings wait behind More options */
 body.proj:not(.moreopen) #panel > .optsec{display:none!important}
+body.proj #panel[data-cal="1"] > #secPanel{display:grid!important}
 body.proj.searching #panel > .optsec:not([hidden]):not(.srchmiss),body.proj.searching #list .trace:not(.srchmiss){display:grid!important}
 .psearch{padding:4px 10px 0;order:-2}.psearch input{width:100%;box-sizing:border-box}.psearch #searchEmpty{padding:8px 2px 2px}
 .srchmiss{display:none!important}
@@ -415,7 +417,7 @@ details.sub > *:not(summary){margin-top:10px}
 details.sub > summary + *{margin-top:10px}
 details.paste[open]{display:grid;gap:8px}
 .assay-card{border:1px solid var(--line);border-radius:var(--r);padding:10px;display:grid;gap:8px;background:var(--field);margin-top:8px}
-.assay-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
+.assay-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto auto;gap:6px;align-items:center}
 .assay-proto > .row,.assay-blanks-body{margin-top:6px}
 .assay-blank-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto;gap:6px;align-items:center;margin-top:4px}
 .assay-tbl{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
@@ -1431,7 +1433,7 @@ button,input,select,textarea{font-family:inherit}
       <div class="secstd">
       <label class="f">Standards<select id="sec-set" data-sec="set"></select></label>
       <div class="known" id="secStdList"></div>
-      <div class="btns"><button class="btn" id="sec-addStd" type="button">Add a standard</button><button class="btn" id="sec-new" type="button">New calibration</button><button class="btn danger" id="sec-delCal" type="button">Delete calibration</button></div>
+      <div class="btns"><button class="btn" id="sec-addStd" type="button">Add a standard</button><button class="btn" id="sec-new" type="button">New calibration</button><button class="btn danger" id="sec-delCal" type="button">Delete calibration</button><button class="btn quiet" id="sec-viewCal" type="button" hidden>View calibration plot</button></div>
       <div class="row" style="align-items:end">
         <label class="f">Read standard volumes from<select id="sec-from" aria-label="Run or trace with the standards"></select></label>
         <button class="btn" id="sec-read" type="button">Read peaks</button>
@@ -7095,8 +7097,8 @@ function showWorkflowFull(){
 $('#wfFullView').addEventListener('click', showWorkflowFull);
 $('#wfFullModalClose').addEventListener('click', () => $('#wfFullModal').close());
 $('#wfFullModal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
-$('#moreOpts').addEventListener('click', e => { const b = e.target.closest('[data-more-sec]'); if (b) { document.body.classList.add('moreopen'); render(); const sec = [...document.querySelectorAll('#panel > .grp')].find(g => { const h = g.querySelector(':scope > h2'); return h && h.firstChild && h.firstChild.textContent.trim() === b.dataset.moreSec; }); if (sec) { sec.classList.remove('collapsed'); const h = sec.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', 'true'); sec.scrollIntoView({behavior: smooth(), block: 'start'}); } } });
-$('#moreBtn').addEventListener('click', () => { document.body.classList.toggle('moreopen'); render(); });
+$('#moreOpts').addEventListener('click', e => { const b = e.target.closest('[data-more-sec]'); if (b) { document.body.classList.add('moreopen'); render(); const sec = [...document.querySelectorAll('#panel > .grp')].find(g => { const h = g.querySelector(':scope > h2'); return h && h.firstChild && h.firstChild.textContent.trim() === b.dataset.moreSec; }); if (sec) { sec.classList.remove('collapsed'); const h = sec.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', 'true'); scrollPanelTo(sec); } } });
+$('#moreBtn').addEventListener('click', () => { const sc = $('#panel'), st = sc ? sc.scrollTop : 0, open = document.body.classList.toggle('moreopen'); render(); if (sc) sc.scrollTop = open ? st : Math.min(st, Math.max(0, sc.scrollHeight - sc.clientHeight)); });
 /* the ladder is detected automatically whenever the crop, lanes or ladder sizes change, until you mark it by hand */
 function ensureLadder(g){
   if (!g || !g.pix || g.marksManual || marking || g._live) return;
@@ -7127,11 +7129,13 @@ function render(){
   document.body.classList.toggle('secstds', !!opt.secStds);
   gels.forEach(ensureLadder);
   if (PROJ && curStep === 'hplc' && !traces.some(t => !t.ex)) { curStep = 'construct'; cur = 'step:construct'; }  /* the last plain trace was removed, and its step with it */
+  if (PROJ && (curStep.startsWith('cal:') || curStep.startsWith('assay:')) && !figures().some(f => f.id === curStep)) { const sr = curStep.startsWith('cal:') && runs.find(isSec); curStep = sr ? 'run:' + sr.id : 'construct'; cur = sr ? sr.id : 'step:construct'; }
   if (PROJ && curStep === 'final' && cur === 'step:construct' && FIN_KEYS.some(k => hasTxt(prep[k])) && !finHasPlot()) cur = 'step:final';
   const f = curFig(); if (f) cur = f.id;
   const {svg, geo} = buildFig(f, true); G = geo;
   paper.innerHTML = svg || '<div class="empty"><p>Load a CSV or ASCII export to start.</p><button type="button" class="btn primary" id="paperPick">Choose data files</button></div>';
   const kind = f ? f.kind : 'overlay';
+  if (kind === 'cal') $('#panel').dataset.cal = '1'; else delete $('#panel').dataset.cal;
   document.body.classList.toggle('stepfig', kind === 'step'); document.body.classList.toggle('onhplc', !!PROJ && kind === 'overlay');
   { const g = curGel(), ls = $('#ladderStatus'), dh = $('#g-darkHint'), dc = document.querySelector('details[data-sub="gcrop"]'); const isDark = !!(g && !g.invert && gelRawMedian(g) < 64);
     if (ls) { let msg = g ? (g.ladderMsg || '') : ''; if (isDark) msg = (msg ? msg + ' ' : '') + 'Dark background: check Invert (#g-invert) under Crop and contrast.'; ls.textContent = msg; }
@@ -7143,7 +7147,7 @@ function render(){
       else if (MODE !== 'proj' && dc._projAuto) { dc._projAuto = 0; setDc(sv !== '0'); } } }
   document.querySelectorAll('[data-for]').forEach(el => { el.hidden = !el.dataset.for.split(' ').includes(kind); });
   /* in a project the panel shows only what the current step needs */
-  if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : (curStep === 'expr' && kind === 'growth') ? 'expr' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
+  if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : (curStep === 'expr' && kind === 'growth') ? 'expr' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'cal' ? 'cal' : kind === 'assay' ? 'assay' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
     document.querySelectorAll('#panel [data-step]').forEach(el => { if (el.closest('#stepsPanel, #stepSheet')) return; el.hidden = !el.dataset.step.split(' ').includes(sk); });
     document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = ({pcon: 'construct', ptr: 'transform', pexp: 'expr', plys: 'lysis', pclv: 'cleave', pbtw: 'btw', pman: 'man', pfin: 'final'})[d.dataset.sub] !== sk; if (!d.hidden) d.open = true; });
     if (sk === 'btw') syncBtw(); if (sk === 'man') syncMan(); document.querySelectorAll('#prepPanel > p.hint, #prepPanel > details.tip').forEach(x => { x.hidden = true; }); }
@@ -7211,7 +7215,7 @@ function render(){
   { const mt = $('#methodsText'); if (mt) { const t = methodsText(); if (mt.value !== t) mt.value = t; } }
   if (PROJ) { renderSteps(); queueSave(); }
 }
-function selectFig(id){ if (marking && marking.gelId !== id) marking = null; if (!gels.some(g => g.id === id)) tagMode = ''; cur = id; if (PROJ && id === 'overlay' && traces.some(t => !t.ex)) curStep = 'hplc'; if (PROJ && id.startsWith('step:')) { const sk = id.slice(5); if (sk.startsWith('clone:')) curStep = sk; } syncControls(); render(); }
+function selectFig(id){ if (marking && marking.gelId !== id) marking = null; if (!gels.some(g => g.id === id)) tagMode = ''; cur = id; if (PROJ && id === 'overlay' && traces.some(t => !t.ex)) curStep = 'hplc'; if (PROJ && (id.startsWith('cal:') || id.startsWith('assay:'))) curStep = id; if (PROJ && id.startsWith('step:')) { const sk = id.slice(5); if (sk.startsWith('clone:')) curStep = sk; } syncControls(); render(); }
 $('#figtabs').addEventListener('click', e => { const b = e.target.closest('[data-fig]'); if (b) selectFig(b.dataset.fig); });
 $('#figtabs').addEventListener('keydown', e => { const k = {ArrowRight: 1, ArrowLeft: -1, Home: -1e9, End: 1e9}[e.key]; if (!k) return; e.preventDefault();
   const ids = figures().map(x => x.id), i = Math.max(0, Math.min(ids.length - 1, ids.indexOf(cur) + k)); selectFig(ids[i]); const b = $(`.figtab[data-fig="${ids[i]}"]`); if (b) b.focus(); });
@@ -7274,6 +7278,7 @@ const runFolds = new WeakMap(), MORE_COND_KEYS = ['mCV', 'mFrac', 'mPh', 'mTemp'
       <div class="cardopts">
         ${PROJ ? '' : wfOpt}${secOpt}
         <label class="eye" title="UV flow cell path of the instrument this run was on (ÄKTA usually 2 mm, HPLC often 10 mm). Used for mg from the A280 area">UV path (mm)<input type="number" step="any" min="0.1" id="up${r.id}" data-k="path" value="${esc(r.path ?? '')}" placeholder="assumed: ${esc(String(effPathMm()))}" class="tiny autoval" title="Not in the file. ÄKTA monitors are usually 2 mm, HPLC flow cells often 10 mm"></label>
+        ${isSec(r) ? `<button type="button" class="btn quiet" data-open-sec="1">SEC calibration &amp; sizing…</button>` : ''}
         <button type="button" class="mini" data-act="copyTrace" title="Copy this run's UV curve into HPLC traces for overlay comparison across preparations">Copy as overlay trace</button>
       </div>
       ${r.inWf && !(poolRows(r) || {}).measured ? (massWhy(r) ? `<p class="hint uvhint">No mg from the UV area: ${esc(massWhy(r))}.</p>` : !hasTxt(r.path) ? `<p class="hint uvhint">UV path assumed ${esc(fmtAuto(effPathMm()))} mm (not in the file); set above for UV area mg.</p>` : '') : ''}
@@ -7373,6 +7378,8 @@ list.addEventListener('change', e => {
   if (!sf) sf = [...list.querySelectorAll('.trace details[data-fold]')].map(d => { const c = d.closest('.trace'), r = runs.find(x => x.id === c.dataset.id), st = r && runFolds.get(r); if (st) st.open[d.dataset.fold] = d.open; return {el: d, id: c.dataset.id, r, fold: d.dataset.fold, open: d.open, hadMore: !!(r && hasMoreCond(r))}; }); }); }
 list.addEventListener('click', e => {
   const c = e.target.closest('.trace'); if (!c) return;
+  const openSec = e.target.closest('[data-open-sec]');
+  if (openSec) { const r = itemOf(openSec); if (r) openSecSettings(r.id); return; }
   const b = e.target.closest('[data-act]');
   if (!b) { if (!e.target.closest('input,select,label')) selectFig(c.dataset.kind === 'trace' ? 'overlay' : c.dataset.id); return; }
   const t = itemOf(b); if (!t) return; const a = b.dataset.act, kind = c.dataset.kind;
@@ -10876,6 +10883,7 @@ function renderAssays(){
     const headHtml = `<div class="assay-head"><input type="text" class="assay-title" data-ak="name" value="${esc(a.name || '')}" placeholder="Assay name" aria-label="Assay name">` +
       `<select data-ak="mode" aria-label="Assay mode"><option value="steps"${c.mode === 'steps' ? ' selected' : ''}>Steps</option><option value="fractions"${c.mode === 'fractions' ? ' selected' : ''}>Fractions</option><option value="kinetics"${c.mode === 'kinetics' ? ' selected' : ''}>Kinetics</option><option value="profile"${c.mode === 'profile' ? ' selected' : ''}>Profile</option></select>` +
       ((c.mode === 'fractions' || c.mode === 'steps') && runs.length ? `<select data-ak="runId" aria-label="Linked run"><option value="">No run</option>${runs.map(r => `<option value="${esc(r.id)}"${a.runId === r.id ? ' selected' : ''}>${esc(shortRunName(r))}</option>`).join('')}</select>` : `<span></span>`) +
+      `<button type="button" class="btn mini quiet" data-assay-act="view" data-assay-id="${esc(a.id)}">${cur === 'assay:' + a.id ? 'Viewing plot' : 'View plot'}</button>` +
       `<button type="button" class="xbtn" data-assay-del="${esc(a.id)}" aria-label="Delete assay">×</button></div>`;
     if (c.mode === 'kinetics') {
       const fitCtrl = `<div class="row"><label class="f">Model<select data-af="model"><option value="mm"${fCfg.model === 'mm' ? ' selected' : ''}>Michaelis-Menten</option><option value="hill"${fCfg.model === 'hill' ? ' selected' : ''}>Hill</option><option value="subInhib"${fCfg.model === 'subInhib' ? ' selected' : ''}>Substrate inhibition</option></select></label>` +
@@ -11003,6 +11011,16 @@ $('#assayCalcList').addEventListener('change', e => {
   render(); if (PROJ) queueSave();
 });
 $('#assayCalcList').addEventListener('click', e => {
+  const vwA = e.target.closest('[data-assay-act="view"]');
+  if (vwA) {
+    const card = vwA.closest('.assay-card'), a = card && assays.find(x => x.id === card.dataset.assayId); if (!a) return;
+    activeAssayId = a.id;
+    if (a.display && a.display.visible === false) a.display.visible = true;
+    const pl = (a.display && a.display.placement) || '';
+    if (!(pl === 'panel' || a.mode === 'kinetics' || a.mode === 'profile' || !a.runId)) a.display = Object.assign({}, ASSAY_DISPLAY_DEF, a.display || {}, {placement: 'panel'});
+    if (PROJ) selectStep('assay:' + a.id); else selectFig('assay:' + a.id);
+    if (PROJ) queueSave(); return;
+  }
   const delA = e.target.closest('[data-assay-del]');
   if (delA) { const id = delA.dataset.assayDel; assays = assays.filter(x => x.id !== id); assayProtoOpen.delete(id); assayBlankOpen.delete(id); render(); if (PROJ) queueSave(); return; }
   const addB = e.target.closest('[data-blank-add]');
@@ -11306,8 +11324,21 @@ function activeCal(){
   if (f && f.kind === 'overlay') { let c = L.find(x => x.id === opt.ovSecCal); if (!c || c.unit !== 'min') { c = L.find(x => x.unit === 'min') || null; if (!c) { c = newSecCal('custom', 'min'); c.name = 'Analytical SEC'; L.push(c); } opt.ovSecCal = c.id; saveOpt(); } return c; }
   const r = runs.find(isSec); return r ? secCalFor(r) : (L[0] || null);
 }
+let lastSecRunId = '';
+function scrollPanelTo(el){
+  if (!el) return; const sc = $('#panel');
+  if (sc && getComputedStyle(sc).overflowY !== 'visible' && sc.scrollHeight > sc.clientHeight + 4) sc.scrollTo({top: Math.max(0, el.offsetTop - 8), behavior: smooth()});
+  else el.scrollIntoView({behavior: smooth(), block: 'nearest'});
+}
+function openSecSettings(runId){
+  if (runId) { if (PROJ) { if (curStep !== 'run:' + runId) selectStep('run:' + runId); else if (cur !== runId) selectFig(runId); } else selectFig(runId); }
+  if (PROJ) document.body.classList.add('moreopen');
+  const pn = $('#secPanel'); if (pn) { pn.classList.remove('collapsed'); const h = pn.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', 'true'); }
+  render(); scrollPanelTo(pn);
+}
 function renderSec(){
   const panel = $('#secPanel'); if (!panel) return; const f = curFig(), kind = f ? f.kind : 'overlay';
+  if (kind === 'run' && f.run && isSec(f.run)) lastSecRunId = f.run.id;
   const show = kind === 'cal' || (kind === 'overlay' && traces.some(t => !t.ex)) || (kind === 'run' && isSec(f.run)) || (kind === 'workflow' && runs.some(isSec));
   panel.hidden = !show; if (!show) return;
   const c = activeCal(); if (!c) return; const L = secCals();
@@ -11330,6 +11361,7 @@ function renderSec(){
   const fromEl = $('#sec-from'), prevFrom = fromEl.value, fromHtml = src.length ? src.map(([id, nm]) => `<option value="${id}">${esc(nm)}${(runs.find(r => r.id === id) || {}).isStd ? ' (standards)' : ''}</option>`).join('') : '<option value="">No runs in these units</option>';
   if (fromEl._h !== fromHtml) { fromEl._h = fromHtml; fromEl.innerHTML = fromHtml; if (src.some(x => x[0] === prevFrom)) fromEl.value = prevFrom; }
   const fit = secFit(c);
+  const vc = $('#sec-viewCal'); if (vc) { vc.hidden = !(fit && fit.mw); vc.textContent = kind === 'cal' ? 'Back to SEC run' : 'View calibration plot'; }
   $('#sec-fit').textContent = !fit || !fit.mw ? `Enter elution volumes for at least two standards (${fit ? fit.n : 0} so far), or read them from a standards run.${secGeomWarn(fit)}`
     : `Fit from ${fit.n} standards against ${fit.useKav ? 'Kav' : 'Ve'}: log MW = ${fmt(fit.a, 3)} ${fit.b < 0 ? '−' : '+'} ${fmt(Math.abs(fit.b), 3)}·${fit.useKav ? 'Kav' : 'Ve'}, R² = ${fmt(fit.r2, 4)}.${(w => w ? ` Largest miss: ${w.name} ${w.e > 0 ? '+' : '−'}${Math.round(Math.abs(w.e))}%.` : '')(secWorst(fit))}${fit.r2 < 0.97 ? ' The fit is loose, so check the volumes.' : ''}${secGeomWarn(fit)}`;
   const colP = c.col ? SEC_COLUMNS[c.col] : null, colVt = colP && typeof colP.vt === 'number' ? colP.vt : null, colV0 = colVt != null ? Math.round(colVt * 0.36 * 100) / 100 : null;
@@ -11379,6 +11411,13 @@ $('#sec-new').addEventListener('click', () => { const r = curRun(), c = newSecCa
   const f = curFig(); if (f && f.kind === 'run') f.run.secCal = c.id; else if (f && f.kind === 'overlay') opt.ovSecCal = c.id; saveOpt(); renderList(); renderSec(); render(); });
 $('#sec-delCal').addEventListener('click', () => { const c = activeCal(); if (!c) return; const L = secCals(); if (L.length <= 1 && runs.some(isSec)) { toast('Keep at least one calibration while SEC runs are loaded. Clear its standards instead.'); return; }
   L.splice(L.indexOf(c), 1); runs.forEach(r => { if (r.secCal === c.id) r.secCal = ''; }); if (opt.ovSecCal === c.id) opt.ovSecCal = ''; saveOpt(); renderList(); renderSec(); render(); toast('Calibration deleted'); });
+$('#sec-viewCal').addEventListener('click', () => {
+  const c = activeCal(), f = curFig(); if (!c) return;
+  if (f && f.kind === 'cal') {
+    const r = runs.find(x => x.id === lastSecRunId && isSec(x)) || runs.find(x => isSec(x) && x.secCal === c.id) || runs.find(isSec);
+    if (PROJ) selectStep(r ? 'run:' + r.id : traces.some(t => !t.ex) ? 'hplc' : 'figure'); else selectFig(r ? r.id : 'overlay');
+  } else { if (PROJ) selectStep('cal:' + c.id); else selectFig('cal:' + c.id); }
+});
 /* standards run: eligible peaks in elution order, matched biggest protein first, confirmed before applying */
 $('#sec-read').addEventListener('click', () => {
   const c = activeCal(), id = $('#sec-from').value; if (!c || !id) { toast('Load the standards run first'); return; }
@@ -11484,7 +11523,7 @@ function nextStep(){
   if (noPool && (noPool.id === cur || cur === 'workflow')) { const _n = {k: 'pool:' + noPool.id, t: `Set the pooled fractions for ${noPool.id === cur ? 'this run' : shortRunName(noPool)}.`, go: 'Suggest fractions', act: () => { const c = document.querySelector(`.trace.run[data-id="${noPool.id}"] [data-act="suggest"]`); if (c) c.click(); }}; if (!nextHidden.has(_n.k) && nextHere(_n.k)) return _n; }
   if (noPool) { const _n = {k: 'pool:' + noPool.id, t: `${shortRunName(noPool)} has no pooled fractions.`, go: 'Open run', act: () => { selectFig(noPool.id); const el = $('#sh' + noPool.id); if (el) { el.scrollIntoView({behavior: smooth(), block: 'center'}); setTimeout(() => el.focus(), 250); } }}; if (!nextHidden.has(_n.k) && nextHere(_n.k)) return _n; }
   const f0 = curFig(), fk = f0 ? f0.kind : 'overlay', secHere = fk === 'workflow' || fk === 'cal' || fk === 'overlay' || (fk === 'run' && isSec(f0.run));
-  const secR = secHere && (fk === 'run' && isSec(f0.run) && !f0.run.isStd ? f0.run : runs.find(r => isSec(r) && !r.isStd)); if (secR && opt.secStds) { const f = secFit(secCalFor(secR)); if (!f || !f.mw) { const _n = {k: 'sec:' + secR.id, t: `Calibrate the column to size the peaks in ${stepTitle(secR) !== secR.name ? stepTitle(secR).toLowerCase() : secR.name}.`, go: 'Open SEC settings', act: () => { selectFig(secR.id); const pn = $('#secPanel'); pn.classList.remove('collapsed'); pn.scrollIntoView({behavior: smooth(), block: 'start'}); }}; if (!nextHidden.has(_n.k) && nextHere(_n.k)) return _n; } }
+  const secR = secHere && (fk === 'run' && isSec(f0.run) && !f0.run.isStd ? f0.run : runs.find(r => isSec(r) && !r.isStd)); if (secR && opt.secStds) { const f = secFit(secCalFor(secR)); if (!f || !f.mw) { const _n = {k: 'sec:' + secR.id, t: `Calibrate the column to size the peaks in ${stepTitle(secR) !== secR.name ? stepTitle(secR).toLowerCase() : secR.name}.`, go: 'Open SEC settings', act: () => openSecSettings(secR.id)}; if (!nextHidden.has(_n.k) && nextHere(_n.k)) return _n; } }
   if (runs.length && !gels.length && steps.length && (fk === 'workflow' || (fk === 'run' && !isSec(f0.run)))) { const _n = {k: 'gel', t: 'Optional: add a gel to show its lanes under each run.', go: 'Add gel image', act: () => $('#gelFile').click()}; if (!nextHidden.has(_n.k) && nextHere(_n.k)) return _n; }
   const gOrder = gels.slice().sort((a, b) => (b.id === cur) - (a.id === cur));
   for (const g of gOrder) { if (fk === 'run' && isSec(f0.run)) break; if (fk === 'gel' && g.id !== cur) continue; const labs = gelLabels(g), dflt = labs[0] === 'M' && labs.slice(1).every((t, i) => t === String(i + 1));
@@ -15642,7 +15681,11 @@ function stepList(){
   L.push({k: 'add', g: first ? 'Purification' : '', add: true, t: '', s: ''});
   const ys = finalYields(), y = ys[0] || finalYield(), fin = FIN_KEYS.some(v) || ndSamples.some(n => n.stage === 'final') || !!m('final').date;
   const fw = !fin || !y ? '' : y.meas && y.loaded && y.mg != null && y.mg > y.loaded.mg*1.05 ? `${sig2(y.mg)} mg is more than was loaded, check` : y.purTyped ? 'Purity typed, add a gel of the last pool' : '';
-  { const nt = traces.filter(t => !t.ex).length; if (nt) L.push({k: 'hplc', g: 'Analysis', t: 'HPLC traces', done: true, s: `${nt} trace${nt === 1 ? '' : 's'}, drawn as an overlay`}); }
+  { let anaFirst = true; const anaG = () => anaFirst ? (anaFirst = false, 'Analysis') : '';
+    const nt = traces.filter(t => !t.ex).length; if (nt) L.push({k: 'hplc', g: anaG(), t: 'HPLC traces', done: true, s: `${nt} trace${nt === 1 ? '' : 's'}, drawn as an overlay`});
+    secCals().forEach(c => { const ft = secFit(c); if (ft && ft.mw) L.push({k: 'cal:' + c.id, g: anaG(), t: 'SEC calibration: ' + c.name, done: true, s: `${ft.n} standards, R² = ${fmt(ft.r2, 4)}`}); });
+    assays.forEach(a => { if (!a || (a.display && a.display.visible === false)) return; const pl = (a.display && a.display.placement) || '';
+      if (pl === 'panel' || a.mode === 'kinetics' || a.mode === 'profile' || !a.runId) L.push({k: 'assay:' + a.id, g: anaG(), t: a.name || 'Activity assay', done: !!(a.entries && a.entries.length), s: `${(a.mode || 'steps')[0].toUpperCase() + (a.mode || 'steps').slice(1)} plot`}); }); }
   L.push({k: 'final', g: 'Results', t: 'Final sample', done: fin, warn: fw, s: fw ? fw : fin && y ? `${y.mg !== null ? sig2(y.mg) + ' mg' : 'unknown yield'}${y.perL != null ? `, ${sig2(y.perL)} mg per L` : ''}${y.meas ? '' : ', from the last pool'}` : ys.length > 1 ? `Latest pools: ${ys.map(q => `${q.poolMg != null ? sig2(q.poolMg) + ' mg' : 'unknown yield'} (${stepTitle(q.fin.r)})`).join(', ')}` : y ? `Latest pool: ${y.poolMg != null ? sig2(y.poolMg) + ' mg' : 'unknown yield'} after ${stepTitle(y.fin.r)}` : 'Concentration, storage, quality checks'});
   const hasWf = figures().some(f => f.kind === 'workflow'), gaps = hasWf ? methodGaps() : 0, gn = gaps ? methodGapNames(gapMemo.k) : [];
   /* name what is missing, at most four on the row so it stays short; the full list is in the tooltip */
@@ -15661,6 +15704,8 @@ const STEP_WHAT = {construct: 'Paste the protein sequence, or load the plasmid\'
   man: 'A step with no chromatogram, such as a gravity column, a precipitation or a dialysis.',
   btw: 'Load the NanoDrop export and enter the volume after concentrating.',
   hplc: 'Plain time and signal files, such as an analytical HPLC export, drawn together as an overlay. They are not purification runs, so they have no fractions or pools.',
+  cal: 'Standard elution volumes, V₀/Vₜ and linear log(MW) calibration fit.',
+  assay: 'Activity, kinetics or condition profile plotted from the assay table.',
   final: 'Concentration, volume, storage and quality checks.',
   figure: 'The workflow figure, summary table and methods text.'};
 let tlHtml = '';
@@ -15680,7 +15725,7 @@ const ADD_OPTS = () => [['run', 'Column run with a chromatogram', 'Load an ÄKTA
   ['man:dialysis', 'Dialysis or buffer exchange', 'Without a protease'], ['man:other', 'Other step', 'Anything else, described in words']].filter(Boolean);
 function addRowHtml(){ /* ADD_OPTS() starts with ['run', 'Column run with a chromatogram'] plus bench purification steps */
   const btn = `<div class="tl-add"><button type="button" class="btn${addOpen ? ' quiet' : wfList().length ? '' : ' primary'}" data-addmenu="1" aria-expanded="${addOpen}">${addOpen ? 'Cancel' : 'Add run'}</button></div>`;
-  return btn + (addOpen ? `<div class="tl-menu" role="group" aria-label="Kind of step">${ADD_OPTS().map(([k, t, d]) => `<button type="button" data-addstep="${k}"><b>${esc(t)}</b><span>${esc(d)}</span></button>`).join('')}</div>` : ''); }
+  return btn + (addOpen ? `<div class="tl-menu" role="group" aria-label="Kind of step"><p class="tl-tip">Tip: you can also drag and drop ÄKTA, HPLC, NanoDrop or gel files anywhere on the page.</p>${ADD_OPTS().map(([k, t, d]) => `<button type="button" data-addstep="${k}"><b>${esc(t)}</b><span>${esc(d)}</span></button>`).join('')}</div>` : ''); }
 /* a new step without a chromatogram goes after the last step */
 function addMan(kind){ const L = wfList(), last = L[L.length - 1], id = nextUid('m');
   prep.manual = (prep.manual || []).concat([{id, kind, name: '', after: last ? last.id : ''}]); gels.forEach(g => { g._prepA = null; }); selectStep('man:' + id); }
@@ -15699,7 +15744,7 @@ function renderStepSheet(L){
   const clStg = kind === 'clone' && k.startsWith('clone:') ? CL().stages.find(x => 'clone:' + x.id === k) : null;
   $('#ssTitle').textContent = onGel ? `Gel: ${f.gel.name}` : s.t;
   $('#ssWhat').textContent = onGel ? 'Select lane labels in the sidebar and check the ladder. The lanes appear under their step in the figure.' : (clStg && CL_KIND[clStg.kind].what) || (STEP_WHAT[kind] || '') + '';
-  const di = $('#ssDate'), ni = $('#ssNotes'), mm = stepMeta(k); di.parentNode.hidden = k === 'figure' || onGel; ni.parentNode.hidden = k === 'figure' || onGel;
+  const di = $('#ssDate'), ni = $('#ssNotes'), mm = stepMeta(k); di.parentNode.hidden = k === 'figure' || kind === 'cal' || kind === 'assay' || onGel; ni.parentNode.hidden = k === 'figure' || kind === 'cal' || kind === 'assay' || onGel;
   if (di !== document.activeElement) di.value = mm.date || ''; if (ni !== document.activeElement) ni.value = mm.notes || '';
   const lane = STEP_LANE(k), gl = lane ? gels.filter(g => lanesFor(g, lane).length) : [], rid = kind === 'run' ? k.slice(4) : '', rr = rid && runs.find(r => r.id === rid);
   const gh = onGel ? `<button type="button" class="btn" data-back="1">Back to ${esc(s.t)}</button>` : (lane ? gl.map(g => `<button type="button" class="gchip" data-gelopen="${g.id}" title="Edit lanes and ladder">${esc(g.name)}</button>`).join('') + `<button type="button" class="btn${gl.length ? ' quiet' : ''}" data-gelfor="${esc(lane)}">${gl.length ? 'Add another gel' : 'Add gel image'}</button>` : '')
@@ -15965,8 +16010,9 @@ function selectStep(k){
   if (k !== curStep) rmArm = '';
   if (k !== curStep) clPickTpl = false;
   if (k !== curStep) $('#ssQuick')._all = false;
+  if (k.startsWith('cal:')) { const pn = $('#secPanel'); if (pn) { pn.classList.remove('collapsed'); const h = pn.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', 'true'); } }
   curStep = k; prep.on = true;
-  cur = k === 'hplc' ? 'overlay' : k.startsWith('btw:') ? 'conc:' + k.slice(4) : k.startsWith('run:') ? k.slice(4) : k.startsWith('man:') ? 'step:' + k.slice(4) : k === 'final' || k === 'figure' ? 'workflow' : 'step:' + k;
+  cur = k === 'hplc' ? 'overlay' : (k.startsWith('cal:') || k.startsWith('assay:')) ? k : k.startsWith('btw:') ? 'conc:' + k.slice(4) : k.startsWith('run:') ? k.slice(4) : k.startsWith('man:') ? 'step:' + k.slice(4) : k === 'final' || k === 'figure' ? 'workflow' : 'step:' + k;
   if (!figures().some(f => f.id === cur)) cur = k.startsWith('run:') || k.startsWith('btw:') ? k.slice(4) : k === 'final' && figures().some(f => f.id === 'step:final') ? 'step:final' : 'step:construct';
   marking = null; tagMode = ''; syncControls(); renderList(); render();
   const p = $('#panel'); if (p && p.scrollTo) p.scrollTo({top: 0, behavior: smooth()});
