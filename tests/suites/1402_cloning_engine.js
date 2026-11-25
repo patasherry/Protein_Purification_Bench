@@ -661,5 +661,42 @@ const {open, H, suite, fs, path, DATA} = require('../lib/harness');
     } finally { await close(); }
   });
 
+  /* #1755: Reset cloning timeline folding between preparations */
+  await T.t('reset-cloning-timeline-folding', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      await h.newProject('ATH first', 'cloning');
+      await cl(p).locator('[data-cl=tpl][data-v=ath]').click(); await h.wait(500);
+
+      const all = p.locator('#tl [data-clall="1"]');
+      T.check('fold-reset/show-all-initial', /Show all stages \(14\)/.test(await all.innerText()));
+      await all.click(); await h.wait(250);
+
+      const vis1 = await p.$$eval('#tl [data-step^="clone:"]', els => els.filter(el => {
+        const s = window.getComputedStyle(el);
+        return s && s.display !== 'none' && s.visibility !== 'hidden' && (el.offsetWidth > 0 || el.offsetHeight > 0);
+      }).length);
+      T.check('fold-reset/first-shows-15-stages', vis1 === 15, `expected 15, got ${vis1}`);
+
+      await p.click('#homeBtn'); await h.wait(400);
+      await h.newProject('ATH second', 'cloning');
+      await cl(p).locator('[data-cl=tpl][data-v=ath]').click(); await h.wait(500);
+
+      const vis2 = await p.$$eval('#tl [data-step^="clone:"]', els => els.filter(el => {
+        const s = window.getComputedStyle(el);
+        return s && s.display !== 'none' && s.visibility !== 'hidden' && (el.offsetWidth > 0 || el.offsetHeight > 0);
+      }).length);
+      T.check('fold-reset/second-rows-at-most-four', vis2 <= 4, `expected at most 4 visible clone rows, got ${vis2}`);
+
+      const showAllEls = await p.$$eval('#tl [data-clall="1"]', els => els.filter(el => {
+        const s = window.getComputedStyle(el);
+        return s && s.display !== 'none' && s.visibility !== 'hidden' && (el.offsetWidth > 0 || el.offsetHeight > 0);
+      }).map(el => (el.textContent || '').trim()));
+      T.check('fold-reset/exactly-one-show-all-with-text', showAllEls.length === 1 && /Show all stages \(14\)/.test(showAllEls[0]), JSON.stringify(showAllEls));
+      T.check('fold-reset/no page errors', errs.length === 0, errs.join(' | '));
+    } finally { await close(); }
+  });
+
   T.done();
 })();
