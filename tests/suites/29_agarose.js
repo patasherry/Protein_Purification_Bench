@@ -664,6 +664,58 @@ const {open, H, suite, fs, path} = require('../lib/harness');
     }
   });
 
+  /* #1712: 1 kb and 1 kb Plus DNA ladder presets (neb1kbplus, neb1kb, thermo1kbplus) and 5,400 bp sizing */
+  await T.t('onekb_plus_dna_ladders_calibration', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      await h.newProject('Agarose 1kb Plus Calibration', 'cloning');
+      await cl(p).locator('[data-cl=tpl][data-v=ath]').click();
+      await h.wait(450);
+      await go(h, 'Agarose-gel verification');
+      await h.wait(300);
+
+      const opts = await p.$$eval('#ag-ladder-preset option', os => os.map(o => o.value));
+      const hasAll = ['neb100', 'neb1kbplus', 'neb1kb', 'thermo1kbplus', 'custom'].every(k => opts.includes(k));
+      T.check('ag_ladder_presets_1kb_and_plus_present', hasAll, JSON.stringify(opts));
+
+      if (opts.includes('neb1kbplus')) {
+        const preset = p.locator('#ag-ladder-preset');
+        await preset.selectOption('neb1kbplus');
+        await preset.dispatchEvent('change');
+        await h.wait(150);
+
+        const catVal = await p.locator('#ag-ladder-cat').inputValue();
+        const bandBtns = await p.$$eval('#ag-visible-bands [data-cl="ag-pick-band"]', bs => bs.map(b => +b.dataset.size));
+        T.check('neb1kbplus_19_bands_and_n3200s', catVal === 'N3200S' && bandBtns.length === 19 && bandBtns[0] === 10000 && bandBtns[bandBtns.length - 1] === 100, `cat=${catVal} n=${bandBtns.length}`);
+
+        // Calibrate log10(bp) -> migration y = 220 - 50 * log10(bp) across 10,000 bp, 6,000 bp, 3,000 bp, 1,000 bp
+        const calRef = [10000, 6000, 3000, 1000];
+        for (let i = 0; i < calRef.length; i++) {
+          await p.locator(`[data-cl="ag-pick-band"][data-size="${calRef[i]}"]`).click();
+          const yIn = p.locator('#ag-cal-y-' + i);
+          await yIn.fill((220 - 50 * Math.log10(calRef[i])).toFixed(4));
+          await yIn.dispatchEvent('change');
+        }
+        const mig5400 = (220 - 50 * Math.log10(5400)).toFixed(4);
+        const sampleMig = p.locator('#ag-lane-migration-1');
+        await sampleMig.fill(mig5400);
+        await sampleMig.dispatchEvent('change');
+        await h.wait(100);
+
+        const estTxt = (await p.locator('#ag-estimate-1').innerText()).trim();
+        const estMatch = estTxt.match(/Estimated:\s*(\d+)\s*bp/);
+        const estBp = estMatch ? +estMatch[1] : NaN;
+        T.check('neb1kbplus_calibrates_5400bp_accurately', Math.abs(estBp - 5400) <= 5, `est="${estTxt}"`);
+      } else {
+        T.check('neb1kbplus_19_bands_and_n3200s', false, 'neb1kbplus option missing');
+        T.check('neb1kbplus_calibrates_5400bp_accurately', false, 'neb1kbplus option missing');
+      }
+      T.check('onekb_plus_no_errors', !errs.length, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
 

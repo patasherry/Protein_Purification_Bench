@@ -152,6 +152,89 @@ const {open, H, suite, src, fs, path, APP} = require('../lib/harness');
     }
   });
 
+  await T.t('multi_trace_overlay_ergonomics', async () => {
+    const {p: p3, errs: errs3, close: close3} = await open(), h3 = H(p3);
+    try {
+      await p3.click('#homeBtn').catch(() => {});
+      await h3.wait(300);
+      await p3.click('#homeQuick');
+      await h3.wait(600);
+
+      const files = Array.from({length: 9}, (_, idx) => {
+        const rows = ['Time (min),UV 280 (mAU)'];
+        const mu = 2 + idx * 0.8;
+        for (let k = 0; k <= 120; k++) {
+          const t = +(k * 0.1).toFixed(1);
+          const y = +(100 * Math.exp(-0.5 * Math.pow((t - mu) / 0.25, 2))).toFixed(3);
+          rows.push(`${t},${y}`);
+        }
+        return {name: `ov_trace_${idx + 1}.csv`, mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n'))};
+      });
+      await p3.setInputFiles('#file', files);
+      await h3.wait(900);
+
+      const nCards = await p3.locator('#list .trace[data-kind="trace"]').count();
+      const foldCount = await p3.locator('#list .trace[data-kind="trace"] details[data-fold="sliders"]').count();
+      const anyFoldOpen = await p3.$$eval('#list .trace[data-kind="trace"] details[data-fold="sliders"]', ds => ds.some(d => d.open));
+      T.check('overlay_9traces_folded_sliders', nCards === 9 && foldCount === 9 && !anyFoldOpen, `cards=${nCards}, folds=${foldCount}, anyOpen=${anyFoldOpen}`);
+
+      // Show all / Hide all bulk controls when traces.length >= 3
+      const hideBtn = p3.locator('#list .trace-bulk [data-bulk="hideAll"]');
+      const showBtn = p3.locator('#list .trace-bulk [data-bulk="showAll"]');
+      const hasBulk = (await hideBtn.count()) > 0 && (await showBtn.count()) > 0;
+      T.check('overlay_bulk_buttons_visible', hasBulk && await hideBtn.isVisible() && await showBtn.isVisible(), 'Show all / Hide all visible');
+      let visAfterHide = -1, visAfterShow = -1;
+      if (hasBulk) {
+        await hideBtn.click();
+        await h3.wait(200);
+        visAfterHide = await p3.$$eval('#list .trace[data-kind="trace"] input[data-k="visible"]', cs => cs.filter(c => c.checked).length);
+        await showBtn.click();
+        await h3.wait(200);
+        visAfterShow = await p3.$$eval('#list .trace[data-kind="trace"] input[data-k="visible"]', cs => cs.filter(c => c.checked).length);
+      }
+      T.check('overlay_bulk_hide_and_show_all', visAfterHide === 0 && visAfterShow === 9, `afterHide=${visAfterHide}, afterShow=${visAfterShow}`);
+
+      // Move down button (data-act="down") reorders traces
+      const beforeNames = await p3.$$eval('#list .trace[data-kind="trace"] input[data-k="name"]', els => els.map(e => e.value));
+      const downBtn = p3.locator('#list .trace[data-kind="trace"]').first().locator('[data-act="down"]');
+      if ((await downBtn.count()) > 0) {
+        await downBtn.click();
+        await h3.wait(250);
+      }
+      const afterNames = await p3.$$eval('#list .trace[data-kind="trace"] input[data-k="name"]', els => els.map(e => e.value));
+      T.check('overlay_move_down_reorders', beforeNames.length === 9 && afterNames[0] === beforeNames[1] && afterNames[1] === beforeNames[0], `before=${beforeNames.slice(0, 2)}, after=${afterNames.slice(0, 2)}`);
+
+      // #intPanel visible on overlay when peaks exist with Trace | Peak | RT | Height | Area | % Area
+      await p3.click('#list .trace[data-kind="trace"] [data-act="detect"]');
+      await h3.wait(300);
+      const intVis = await p3.locator('#intPanel').isVisible();
+      const ptOv = await h3.peakTable();
+      T.check(
+        'overlay_intpanel_columns',
+        intVis && JSON.stringify(ptOv[0]) === JSON.stringify(['Trace', 'Peak', 'RT', 'Height', 'Area', '% Area']) && ptOv.length >= 2,
+        `vis=${intVis}, head=${JSON.stringify(ptOv[0])}, rows=${ptOv.length}`
+      );
+
+      // Exported SVG: Trace 9 (index 8 in plot-area) has a non-empty stroke-dasharray
+      const svg9 = await h3.exportSvg();
+      const dashInfo = await p3.evaluate(raw => {
+        const host = document.createElement('div');
+        host.innerHTML = raw;
+        const paths = [...host.querySelectorAll('g[clip-path*="plot-area"] > path')];
+        return paths.map(el => el.getAttribute('stroke-dasharray') || '');
+      }, svg9);
+      T.check(
+        'overlay_trace9_has_stroke_dasharray',
+        dashInfo.length === 9 && dashInfo.slice(0, 8).every(d => d === '') && dashInfo[8].trim().length > 0,
+        `dashInfo=${JSON.stringify(dashInfo)}`
+      );
+
+      errs.push(...errs3);
+    } finally {
+      await close3();
+    }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

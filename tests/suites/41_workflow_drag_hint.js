@@ -91,6 +91,62 @@ const {open, H, suite, src} = require('../lib/harness');
       T.check('no-page-errors-2', !q.errs.length, q.errs.join(' | '));
     } finally { await q.close(); }
   });
+  await T.t('workflow-arrow-nudge-and-undo', async () => {
+    const q = await open(), hq = H(q.p), pg = q.p;
+    try {
+      await hq.newProject('Workflow nudge undo');
+      await hq.addRun(src('his'));
+      await hq.step('figure'); await hq.wait(600);
+
+      const titleX = async () => {
+        const svg = await hq.exportSvg();
+        return pg.evaluate(raw => {
+          const host = document.createElement('div');
+          host.innerHTML = raw;
+          const t = [...host.querySelectorAll('text')].find(e => /^A\s+\S/.test((e.textContent || '').trim()));
+          return t ? parseFloat(t.getAttribute('x')) : NaN;
+        }, svg);
+      };
+
+      const x0 = await titleX();
+      const pt = await pg.evaluate(() => {
+        const t = [...document.querySelectorAll('#paper svg text')].find(e => /^A\s+\S/.test(e.textContent.trim()));
+        if (!t) return null;
+        const r = t.getBoundingClientRect();
+        return {x: r.left + 20, y: r.bottom + 40};
+      });
+      await pg.mouse.click(pt.x, pt.y);
+      await hq.wait(250);
+
+      await pg.keyboard.press('ArrowRight');
+      await hq.wait(200);
+      const x1 = await titleX();
+      T.check('nudge.arrow_right_1pt', Math.abs((x1 - x0) - 1) < 0.05, `x0=${x0}, x1=${x1}`);
+
+      await pg.keyboard.press('Shift+ArrowRight');
+      await hq.wait(200);
+      const x6 = await titleX();
+      T.check('nudge.shift_arrow_right_5pt', Math.abs((x6 - x0) - 6) < 0.05, `x0=${x0}, x6=${x6}`);
+
+      // Form focus guard: ArrowRight and Control+z inside #wfT must not nudge or undo the panel
+      await pg.focus('#wfT');
+      await pg.keyboard.press('ArrowRight');
+      await pg.keyboard.press('Control+z');
+      await hq.wait(150);
+      const xInInput = await titleX();
+      T.check('nudge.ignored_inside_input', Math.abs((xInInput - x0) - 6) < 0.05, `xInInput=${xInInput}, x0=${x0}, x6=${x6}`);
+
+      // Blur input and press Control+z: coalesced nudge returns dx to 0
+      await pg.evaluate(() => { if (document.activeElement) document.activeElement.blur(); });
+      await pg.keyboard.press('Control+z');
+      await hq.wait(250);
+      const xUndo = await titleX();
+      const resetDisabled = await pg.$eval('#wfTool [data-wf="reset"]', b => b.disabled);
+      const toasts = await hq.toasts();
+      T.check('nudge.ctrl_z_restores_zero', Math.abs(xUndo - x0) < 0.05 && resetDisabled && toasts.some(t => /Undid panel nudge/i.test(t)), `xUndo=${xUndo}, x0=${x0}, resetDisabled=${resetDisabled}, toasts=${toasts.join(' | ')}`);
+      T.check('no-page-errors-3', !q.errs.length, q.errs.join(' | '));
+    } finally { await q.close(); }
+  });
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close(); T.done();
 })();
