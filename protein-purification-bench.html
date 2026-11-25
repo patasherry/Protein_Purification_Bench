@@ -10,7 +10,7 @@
 <style>
 /* Palette: destain greys with a blue bias, Coomassie blue as the one accent. The figure itself stays on white paper in both themes. */
 :root{
-  --bg:#e9ecf2; --panel:#f7f8fb; --ink:#151a28; --muted:#5a6177; --faint:#666d82; --line:#d8dce6; --line2:#b4bbca;
+  --bg:#e9ecf2; --panel:#f7f8fb; --ink:#151a28; --muted:#5a6177; --faint:#666d82; --line:#d8dce6; --line2:#848a98;
   --accent:#2b3c9b; --accent-ink:#ffffff; --accent-soft:#e2e6f6; --field:#ffffff; --paper:#ffffff; --paper-edge:#cfd4df;
   --soft:#eef0f6; --warn:#8a5a00; --hover:#eef0f7;
   --t-ok:#137257; --t-tag:#6a2f77; --t-con:#b0201f; --t-known:#8a5300;
@@ -21,7 +21,7 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#454e66;
+    --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#6c7280;
     --accent:#95a4f3; --accent-ink:#0d1020; --accent-soft:#1f2747; --field:#10131c; --paper:#ffffff; --paper-edge:#2c3346;
     --soft:#1a1f2d; --warn:#e2b45c; --hover:#1c2232; --well:#10131b; --paper-ink:#4d5468;
     --t-ok:#5fd0a8; --t-tag:#cf9bdc; --t-con:#ff8a85; --t-known:#f0b35c;
@@ -30,7 +30,7 @@
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#454e66;
+  --bg:#0f121a; --panel:#151925; --ink:#e3e6ef; --muted:#9aa1b5; --faint:#8b93a8; --line:#262c3c; --line2:#6c7280;
   --accent:#95a4f3; --accent-ink:#0d1020; --accent-soft:#1f2747; --field:#10131c; --paper:#ffffff; --paper-edge:#2c3346;
   --soft:#1a1f2d; --warn:#e2b45c; --hover:#1c2232; --well:#10131b; --paper-ink:#4d5468;
   --t-ok:#5fd0a8; --t-tag:#cf9bdc; --t-con:#ff8a85; --t-known:#f0b35c;
@@ -173,7 +173,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .np-type{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center} .np-type .hint{margin:0}
 /* Include Cloning switch (#1433): one on/off control, a real button so Space and Enter work */
 .tgl{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;color:var(--ink);background:transparent;border:0;padding:2px 0;cursor:pointer}
-.tgl .tgl-t{position:relative;flex:none;width:30px;height:17px;border-radius:9px;background:var(--line);transition:background .15s}
+.tgl .tgl-t{position:relative;flex:none;width:30px;height:17px;border-radius:9px;background:var(--line2);transition:background .15s}
 .tgl .tgl-t::after{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .15s}
 .tgl[aria-checked="true"] .tgl-t{background:var(--accent)} .tgl[aria-checked="true"] .tgl-t::after{left:15px}
 .tgl:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-s)}
@@ -289,7 +289,8 @@ body.proj #prepPanel details.sub{border:0;padding-top:0;margin-top:0} body.proj 
 #odTable td{padding:3px 5px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap} #odTable tbody tr:last-child td{border-bottom:0}
 #odTable input,#odTable select{font-size:12px;padding:2px 5px;min-height:26px;width:auto} #odTable input[data-od="timestamp"]{width:9.5em} #odTable input[data-od="elapsed"],#odTable input[data-od="rawOd"],#odTable input[data-od="dilution"],#odTable input[data-od="blank"]{width:4.8em} #odTable input[data-od="cultureId"],#odTable input[data-od="instrument"],#odTable input[data-od="notes"]{width:7.2em} #odTable input[data-od="operator"]{width:4.5em} #odTable select[data-od="marker"]{width:7.6em;padding-right:22px} #odTable .od-corr{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink);text-align:right;padding-inline:6px}
 .tl{max-height:min(54vh,600px);overflow:auto;overscroll-behavior:contain;padding-right:2px}
-.tl li.warn .mk{background:var(--panel);border-color:var(--warn);color:var(--warn)}
+.tl li.warn .mk,.tl li.done.warn .mk,.tl li.warn.cur .mk,.tl li.done.warn.cur .mk{background:var(--panel);border-color:var(--warn);color:var(--warn)}
+.tl li.warn.cur .mk{box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 22%,transparent)}
 .tl li.warn .ts{color:var(--warn)}
 .tl li.sub button.tl-i{padding-left:20px;grid-template-columns:28px minmax(0,1fr) auto}
 .tl li.sub .mk{width:16px;height:16px;margin:4px 0 0 5px;font-size:9px}
@@ -326,10 +327,11 @@ header.top p{margin:0;color:var(--muted);font-size:13px}
 @media (max-width:420px){#prNames{grid-template-columns:minmax(0,1fr)}}
 .row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px 10px}
 label.f{display:grid;gap:4px;font-size:12px;color:var(--muted);min-width:0;align-content:space-between;line-height:1.35}
-input[type=text],input[type=number],select,textarea{font:inherit;font-size:13px;color:var(--ink);background:var(--field);border:1px solid var(--line2);border-radius:var(--r-s);padding:6px 8px;width:100%;min-width:0;min-height:32px;transition:border-color .12s,box-shadow .12s}
-input[type=text]:hover,input[type=number]:hover,select:hover,textarea:hover{border-color:var(--faint)}
-input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
-input::placeholder,textarea::placeholder{color:var(--faint)}
+input[type=text],input[type=number],input[type=search]:not(.home-search),input[type=date]:not(#ssDate),select,textarea{font:inherit;font-size:13px;color:var(--ink);background:var(--field);border:1px solid var(--line2);border-radius:var(--r-s);padding:6px 8px;width:100%;min-width:0;min-height:32px;transition:border-color .12s,box-shadow .12s}
+input[type=search],input[type=date]:not(#ssDate){border-radius:var(--r-s);min-height:32px;background:var(--field)}
+input[type=text]:hover,input[type=number]:hover,input[type=search]:hover,input[type=date]:not(#ssDate):hover,select:hover,textarea:hover{border-color:var(--faint)}
+input[type=text]:focus,input[type=number]:focus,input[type=search]:focus,input[type=date]:not(#ssDate):focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
+input::placeholder,textarea::placeholder{color:var(--faint);opacity:1}
 select{appearance:none;-webkit-appearance:none;padding-right:26px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 13px) 55%,calc(100% - 9px) 55%;background-size:4px 4px;background-repeat:no-repeat;text-overflow:ellipsis}
 input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 2px;height:18px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
 input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line2)}
@@ -369,7 +371,7 @@ body:not(.secstds) .secstd{display:none!important}
 /* in a project the panel shows the step; settings wait behind More options */
 body.proj:not(.moreopen) #panel > .optsec{display:none!important}
 body.proj.searching #panel > .optsec:not([hidden]):not(.srchmiss),body.proj.searching #list .trace:not(.srchmiss){display:grid!important}
-.psearch{padding:10px 16px 0;order:-2}.psearch input{width:100%;box-sizing:border-box}.psearch #searchEmpty{padding:8px 2px 2px}
+.psearch{padding:4px 10px 0;order:-2}.psearch input{width:100%;box-sizing:border-box}.psearch #searchEmpty{padding:8px 2px 2px}
 .srchmiss{display:none!important}
 details.more{border-top:1px dashed var(--line);padding-top:8px}
 details.more > summary{cursor:pointer;font-size:12px;color:var(--muted)}
@@ -495,7 +497,7 @@ ul.sumnotes{margin:6px 0 0;padding-left:18px;display:grid;gap:3px}#sumAssumption
 .cardtext>summary{cursor:pointer;font-size:12px;color:var(--muted);padding:2px 0}
 .cardtext[open]{display:grid;gap:6px}
 .runcond[open]{gap:9px}
-input.autoval::placeholder{color:var(--accent);opacity:.85}
+input.autoval::placeholder{color:var(--accent);opacity:1}
 .condwarn{display:block;color:var(--warn);font-size:11.5px;line-height:1.35}
 label.f.condmissing>input{border-color:var(--warn)}
 .methods{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
@@ -707,7 +709,7 @@ button,input,select,textarea{font-family:inherit}
 #panel > .grp:last-child{margin-bottom:10px}
 #panel > .grp > h2{font-size:13px;font-weight:600;font-variant-caps:all-small-caps;letter-spacing:.06em;color:var(--muted)}
 #panel .grp details.sub{border-top:.5px solid var(--sep)}
-.btn{border-radius:10px;border-color:var(--sep);min-height:32px;transition:background-color var(--ease),border-color var(--ease),filter var(--ease),transform var(--ease)}
+.btn{border-radius:10px;border-color:var(--line2);min-height:32px;transition:background-color var(--ease),border-color var(--ease),filter var(--ease),transform var(--ease)}
 .btn:active:not(:disabled){transform:scale(.98)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .seg{border-radius:10px;background:var(--soft);padding:2px}

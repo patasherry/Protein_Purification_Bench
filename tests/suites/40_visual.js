@@ -37,7 +37,7 @@ const contrast = p => p.evaluate(() => { const lum = c => { const f = v => { v /
     /* text inside a closed <details> has a box but is not drawn, and its colour transition stays frozen at the other theme's value until it is shown:
        the raw-files list measured 1.12:1 in dark for buttons nobody could see (#1416). Measured open, they are 16:1. */
     if (e.checkVisibility && !e.checkVisibility()) continue;
-    const txt = [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim(); if (txt.length < 2) continue; const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+    const txt = [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim(); if (!txt || (txt.length < 2 && !e.classList.contains('mk'))) continue; const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || +cs.opacity === 0) continue;
     if (e.matches(':disabled') || e.closest(':disabled, [aria-disabled=true]')) continue; /* disabled controls are exempt under WCAG */
     const fg = over(rgba(cs.color), bgOf(e)), bg = bgOf(e), L1 = lum(fg), L2 = lum(bg), r = (Math.max(L1, L2) + 0.05)/(Math.min(L1, L2) + 0.05);
     const big = parseFloat(cs.fontSize) >= 24 || (parseFloat(cs.fontSize) >= 18.66 && +cs.fontWeight >= 700);
