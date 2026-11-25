@@ -16,39 +16,39 @@
 | 2658–2782 | `runs: windows and fractions` | Fraction boundary detection, fraction segment calculation, and time/volume windowing |
 | 2783–2836 | `peak integration` | Numerical integration algorithms (Simpson/trapezoidal, Gaussian fit) between retention limits |
 | 2837–3179 | `size exclusion (SEC)` | SEC molecular weight calibration, standards curve fitting ($V_e/V_0$ and $K_{av}$ vs $\log M_w$), and peak mass calculations |
-| 3180–3440 | `figure: shared bits` | Common SVG chart dimensions, axis tick rendering, styles, and color definitions |
-| 3441–3825 | `figure: zoom inset` | Magnified inset plot on HPLC and ÄKTA figures showing an expanded sub-window within or beside the main chart |
-| 3826–3986 | `figure: HPLC overlay` | Rendering analytical HPLC overlay chromatograms with aligned peak labels and legend |
-| 3987–4418 | `figure: ÄKTA run chart` | Rendering ÄKTA preparative run figures with dual Y-axes, fractions, and phase shading |
-| 4419–4514 | `gels` | SDS-PAGE gel image object construction, lane assignments, and crop metadata |
-| 4515–4625 | `auto crop: find the stained lanes, their spacing, and the top and bottom of the bands` | Image processing to detect stained SDS-PAGE lanes, lane spacing, and top/bottom gel bounds |
-| 4626–4860 | `gel densitometry: lane profiles, bands, ladder calibration` | Lane pixel intensity profile extraction, band peak detection, and ladder $R_f$ log-MW calibration |
-| 4861–5454 | `band tags and purity` | Gel band tagging, contaminant identification, known protein matching, and lane purity math |
-| 5455–5798 | `composite: run with gels, and the workflow` | Rendering multi-panel purification workflow figures combining chromatograms, SDS-PAGE gel aligned lanes, parallel branches, and final yield line |
-| 5799–6570 | `upstream steps: construct, expression and lysis, drawn before the first column` | Upstream purification steps (construct cassette, expression, lysis, cleavage) diagram rendering and GenBank parsing |
-| 6571–6872 | `run conditions: column, buffers, flow, temperature, gradient, load, fractions` | Formatting run conditions (column model, buffer compositions, flow rate, gradient) and generating methods and results text |
-| 6873–6921 | `figures` | Active figure selection and figure state getters |
-| 6922–7553 | `UI` | DOM element event bindings, tab management, control synchronization, and interactive table rendering |
-| 7554–8185 | `editing the workflow figure in place: click a panel for its title, arrow note, width and gel size` | On-figure interactive click handlers and floating toolbar (`#wfTool`, `#wfSelBox`) to adjust panel titles, arrow notes, widths, gel heights, and drag offsets (`wfDx`, `wfDy`) |
-| 8186–8563 | `loading` | File drag-and-drop / file input handlers for chromatograms, gel images, GenBank, and PDB files |
-| 8564–8741 | `protein: sequence properties and PDB structures` | Protein MW, $\varepsilon_{280}$, pI calculations from sequence, and PDB/mmCIF 3D structure domain parsing |
-| 8742–9206 | `construct and expression panel` | UI controls, GenBank file loading/text pasting (`#gbPaste`), and SVG builder for construct cassette, expression host, and lysis parameters |
-| 9207–9208 | `NanoDrop: protein A280 readings` | NanoDrop UV-Vis spectrum/summary parser, $A_{280}$ concentration calculations, and concentration bar charts |
-| 9209–9268 | `activity assays: data model` |  |
-| 9269–10916 | `activity assays: calculation engine` |  |
-| 10917–11014 | `SEC panel` | UI controls and calibration curve plots for size-exclusion chromatography standards |
-| 11015–11024 | `collapsible panel sections (remembered), each with a one-line summary when closed` | Expand/collapse accordion panel UI state persistence in `localStorage` |
-| 11025–11085 | `More options inside each section (open or closed remembered), and the settings search` | Condensed progressive disclosure sections (`details.more`), settings search filter (`#panelSearch`), and automatic expansion of non-default settings (`moreSync`) |
-| 11086–11129 | `what to do next: one suggestion above the figure, with a button that takes you there` | Guided workflow suggestion bar above figures with actionable next-step buttons |
-| 11130–11456 | `projects: everything in one JSON file` | Exporting workspace state to `.json` files and importing project files |
-| 11457–11844 | `projects: a project per purification, saved with the page (db + assets) or in this browser` | IndexedDB (`hfb-projects`) and cloud persistence for multi-project management and asset blob storage |
-| 11845–12576 | `home` | Home screen workspace project list and project creation/opening UI |
-| 12577–13582 | `projects: directory, folders, preparations, explorer and file attachments` |  |
-| 13583–15136 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
-| 15137–15289 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
-| 15290–15527 | `quick fill: the lab's usual procedures, one click per step; every field stays editable` | One-click lab protocol templates (`LABQ`) populating workflow steps (IMAC, SEC, cleavage, expression, lysis) |
-| 15528–15643 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
-| 15644–15664 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
+| 3180–3533 | `figure: shared bits` | Common SVG chart dimensions, axis tick rendering, styles, and color definitions |
+| 3534–3918 | `figure: zoom inset` | Magnified inset plot on HPLC and ÄKTA figures showing an expanded sub-window within or beside the main chart |
+| 3919–4079 | `figure: HPLC overlay` | Rendering analytical HPLC overlay chromatograms with aligned peak labels and legend |
+| 4080–4551 | `figure: ÄKTA run chart` | Rendering ÄKTA preparative run figures with dual Y-axes, fractions, and phase shading |
+| 4552–4647 | `gels` | SDS-PAGE gel image object construction, lane assignments, and crop metadata |
+| 4648–4758 | `auto crop: find the stained lanes, their spacing, and the top and bottom of the bands` | Image processing to detect stained SDS-PAGE lanes, lane spacing, and top/bottom gel bounds |
+| 4759–4993 | `gel densitometry: lane profiles, bands, ladder calibration` | Lane pixel intensity profile extraction, band peak detection, and ladder $R_f$ log-MW calibration |
+| 4994–5587 | `band tags and purity` | Gel band tagging, contaminant identification, known protein matching, and lane purity math |
+| 5588–5931 | `composite: run with gels, and the workflow` | Rendering multi-panel purification workflow figures combining chromatograms, SDS-PAGE gel aligned lanes, parallel branches, and final yield line |
+| 5932–6703 | `upstream steps: construct, expression and lysis, drawn before the first column` | Upstream purification steps (construct cassette, expression, lysis, cleavage) diagram rendering and GenBank parsing |
+| 6704–7005 | `run conditions: column, buffers, flow, temperature, gradient, load, fractions` | Formatting run conditions (column model, buffer compositions, flow rate, gradient) and generating methods and results text |
+| 7006–7054 | `figures` | Active figure selection and figure state getters |
+| 7055–7686 | `UI` | DOM element event bindings, tab management, control synchronization, and interactive table rendering |
+| 7687–8318 | `editing the workflow figure in place: click a panel for its title, arrow note, width and gel size` | On-figure interactive click handlers and floating toolbar (`#wfTool`, `#wfSelBox`) to adjust panel titles, arrow notes, widths, gel heights, and drag offsets (`wfDx`, `wfDy`) |
+| 8319–8696 | `loading` | File drag-and-drop / file input handlers for chromatograms, gel images, GenBank, and PDB files |
+| 8697–8874 | `protein: sequence properties and PDB structures` | Protein MW, $\varepsilon_{280}$, pI calculations from sequence, and PDB/mmCIF 3D structure domain parsing |
+| 8875–9339 | `construct and expression panel` | UI controls, GenBank file loading/text pasting (`#gbPaste`), and SVG builder for construct cassette, expression host, and lysis parameters |
+| 9340–9341 | `NanoDrop: protein A280 readings` | NanoDrop UV-Vis spectrum/summary parser, $A_{280}$ concentration calculations, and concentration bar charts |
+| 9342–9401 | `activity assays: data model` |  |
+| 9402–11049 | `activity assays: calculation engine` |  |
+| 11050–11147 | `SEC panel` | UI controls and calibration curve plots for size-exclusion chromatography standards |
+| 11148–11157 | `collapsible panel sections (remembered), each with a one-line summary when closed` | Expand/collapse accordion panel UI state persistence in `localStorage` |
+| 11158–11218 | `More options inside each section (open or closed remembered), and the settings search` | Condensed progressive disclosure sections (`details.more`), settings search filter (`#panelSearch`), and automatic expansion of non-default settings (`moreSync`) |
+| 11219–11262 | `what to do next: one suggestion above the figure, with a button that takes you there` | Guided workflow suggestion bar above figures with actionable next-step buttons |
+| 11263–11589 | `projects: everything in one JSON file` | Exporting workspace state to `.json` files and importing project files |
+| 11590–11977 | `projects: a project per purification, saved with the page (db + assets) or in this browser` | IndexedDB (`hfb-projects`) and cloud persistence for multi-project management and asset blob storage |
+| 11978–12709 | `home` | Home screen workspace project list and project creation/opening UI |
+| 12710–13715 | `projects: directory, folders, preparations, explorer and file attachments` |  |
+| 13716–15269 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
+| 15270–15422 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
+| 15423–15660 | `quick fill: the lab's usual procedures, one click per step; every field stays editable` | One-click lab protocol templates (`LABQ`) populating workflow steps (IMAC, SEC, cleavage, expression, lysis) |
+| 15661–15776 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
+| 15777–15797 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
 
 ---
 
@@ -238,17 +238,17 @@ Saved `.json` files or IndexedDB records:
 | Function | Line | Purpose | Reads | Called By |
 |---|---|---|---|---|
 | `parseText` | Line 2234 | Parses raw ASCII/CSV/TSV chromatogram data lines into numeric series | Raw text string | `loadFiles`, `addParsed` |
-| `parseGenBank` | Line 6025 | Parses GenBank text to extract CDS features, tags, and amino acid sequences | GenBank file text | `loadGenBank` |
-| `loadGenBankText` | Line 8753 | Validates and processes GenBank text from file import or paste box (`#gbPaste`) | GenBank text string | `loadGenBank`, `#gbPasteGo` listener |
-| `parseStructure` | Line 8643 | Parses PDB or mmCIF structure file into protein entities and chain metadata | PDB/CIF file text | `loadStructFile` |
-| `parseNanoDrop` | Line 10685 | Parses NanoDrop exported spectra CSV/TSV or concentration summary tables | File text string | `loadFiles` |
-| `looksNanoDrop` | Line 10661 | Checks if text file content matches NanoDrop export header signatures | File text string | `loadFiles` |
+| `parseGenBank` | Line 6158 | Parses GenBank text to extract CDS features, tags, and amino acid sequences | GenBank file text | `loadGenBank` |
+| `loadGenBankText` | Line 8886 | Validates and processes GenBank text from file import or paste box (`#gbPaste`) | GenBank text string | `loadGenBank`, `#gbPasteGo` listener |
+| `parseStructure` | Line 8776 | Parses PDB or mmCIF structure file into protein entities and chain metadata | PDB/CIF file text | `loadStructFile` |
+| `parseNanoDrop` | Line 10818 | Parses NanoDrop exported spectra CSV/TSV or concentration summary tables | File text string | `loadFiles` |
+| `looksNanoDrop` | Line 10794 | Checks if text file content matches NanoDrop export header signatures | File text string | `loadFiles` |
 | `fracSegments` | Line 2659 | Splits fraction boundaries into continuous baseline time/volume segments | `run` object | `buildRunPlainSVG`, `laneTarget` |
 | `procFull` | Line 3074 | Processes raw run UV data, subtracts baseline, and computes peak integration | `run` object | `autoIntegrate`, `renderIntTable`, `buildRunPlainSVG` |
 | `runAuto` | Line 2681 | Auto-detects run type, units, fraction tables, and chromatography conditions | `run` object | `addParsed`, `loadFiles`, `buildRunPlainSVG` |
-| `runCondLines` | Line 6683 | Formats run conditions (column, buffer, flow, gradient) into formatted text lines | `run` object | `methodsText` |
-| `guessColumn` | Line 6612 | Heuristically identifies column model and dimensions from run title or labels | `run` object / string | `runCondLines` |
-| `guessGradient` | Line 6628 | Parses gradient step changes (%B, CV, or flow rate) from run data | `run` object | `runCondLines` |
+| `runCondLines` | Line 6816 | Formats run conditions (column, buffer, flow, gradient) into formatted text lines | `run` object | `methodsText` |
+| `guessColumn` | Line 6745 | Heuristically identifies column model and dimensions from run title or labels | `run` object / string | `runCondLines` |
+| `guessGradient` | Line 6761 | Parses gradient step changes (%B, CV, or flow rate) from run data | `run` object | `runCondLines` |
 | `poolRows` | Line 3121 | Computes pooled fraction volumes, $A_{280}$, and total protein amounts | `run` object | `sumRows`, `methodsText`, `ncLines` |
 | `poolMeas` | Line 3098 | Calculates peak area, height, and concentration for a pooled fraction region | `run` object, pool region | `poolRows`, `methodsText`, `ncLines` |
 | `massOf` | Line 2963 | Calculates protein mass (mg) from integrated peak area or $A_{280}$ absorbance | Area, $A_{280}$, $\varepsilon$, MW | `poolMeas`, `sumRows` |
@@ -256,80 +256,80 @@ Saved `.json` files or IndexedDB records:
 | `autoIntegrate` | Line 3137 | Automatically detects and integrates UV baseline peaks above prominence threshold | `run` object | `addParsed`, `procFull` |
 | `integrateRegion` | Line 2795 | Numerically integrates peak area between retention bounds $a$ and $b$ | $x$-array, $y$-array, $a$, $b$, baseline mode | `procFull`, `autoIntegrate` |
 | `secCalFor` | Line 2894 | Retrieves active SEC standard calibration curve for a run | `run` object | `buildRunPlainSVG`, `activeCal` |
-| `activeCal` | Line 10919 | Gets currently active SEC calibration curve for the SEC panel | `opt`, `runs` | `renderSec` |
-| `zoomWindow` | Line 3590 | Computes the zoomed-in sub-window retention boundaries ($a$, $b$) | `lo`, `hi`, user bounds | `zoomCompose`, `buildRunFig` |
-| `zoomCompose` | Line 3675 | Assembles composite SVG with the main plot and magnified inset plot | Main SVG, inset builder, window | `buildRunFig`, `buildOverlaySVG` |
-| `buildRunFig` | Line 5721 | Generates full SVG for single chromatogram run, supporting zoom inset | `run` object | `buildWorkflow`, `buildFig` |
-| `buildRunPlainSVG` | Line 4010 | Core SVG generator for chromatogram curves, axes, fractions, and full run mode (`wfFull`) | `run` object, options | `buildRunFig`, `composeRuns` |
-| `autoCrop` | Line 4516 | Auto-detects SDS-PAGE gel lane boundaries, vertical bounds, and crop box | `gel` object | `processGel`, `addGelFiles` |
-| `detectBands` | Line 4706 | Finds band peaks in a gel lane intensity profile curve | `gel`, lane index, sensitivity | `gelBands`, `processGel` |
-| `ladderResid` | Line 4793 | Calculates ladder fit residual error for gel $R_f$ calibration | `gel` object | `autoLadder`, `calib` |
-| `autoLadder` | Line 5168 | Matches gel ladder lane bands against reference ladder size standard values | `gel` object | `processGel`, `renderLaneTable` |
-| `calib` | Line 4809 | Calibrates molecular weight $\log(M_w)$ vs $R_f$ migration curve for gel | `gel` object | `gelBands`, `lanePurity` |
-| `gelBands` | Line 4825 | Returns list of detected gel bands with assigned MW and integrated intensity | `gel` object | `renderBandTable`, `composeRuns` |
-| `lanePurity` | Line 5000 | Calculates relative densitometric purity percentage of target gel lane bands | `gel`, lane index | `renderBandTable`, `sumRows` |
-| `bandSnap` | Line 4848 | Saves state snapshot of gel tags/marks for undo history | `gel` object | UI event listeners |
-| `bandUndo` | Line 4849 | Restores previous gel marks/tags state from undo stack | `gel` object | UI event listener |
-| `autoContrast` | Line 5202 | Auto-adjusts display contrast/brightness levels for gel image view | `gel` object | `processGel`, UI event listener |
-| `wfFromOf` | Line 5923 | Resolves parent step ID for parallel workflow branches | `run` or step object | `wfParents`, `wfBranches` |
-| `wfFromNoteOf` | Line 5924 | Resolves branch edge note annotation text | `run` or step object | `composeRuns` |
-| `wfParents` | Line 5926 | Maps each step index to its parent step index in branching workflow | Step list | `composeRuns`, `wfBranches`, `wfFigList` |
-| `wfBranches` | Line 5928 | Computes all linear paths from start to terminal leaves for parallel branches | Step list | `finalYields`, `composeRuns` |
-| `wfFigList` | Line 5940 | Reorders workflow panels so parallel branches stay grouped contiguously | Step list | `composeRuns`, `renderWfTool` |
-| `wfItem` | Line 7555 | Resolves panel metadata (run, nc, man, prep) for workflow click-to-edit | Step ID | `renderWfTool`, `wfSet` |
-| `wfSet` | Line 7560 | Updates panel properties (title, arrow note, width, gel zoom, drag offsets `wfDx`/`wfDy`) | Panel item, field, value | `#wfTool` listeners |
-| `renderWfTool` | Line 7567 | Positions and renders floating panel editor toolbar (`#wfTool`) and selection box (`#wfSelBox`) | Active selection `wfSel` | Click handlers, `render` |
-| `constructModel` | Line 6162 | Generates translated protein sequence model from genetic construct cassette | `prep.gb`, `opt.protSeq` | `seqMass`, `buildPrepSVG`, `yieldLine` |
-| `stepList` | Line 15157 | Builds ordered list of purification steps across workflow pipeline | `runs`, `gels`, `prep` | `renderSteps`, `stepStatus`, `renderNext` |
-| `applyQuick` | Line 15368 | Applies lab protocol template (`LABQ`) to populate workflow steps and conditions | Quick template ID | UI event listener |
-| `manSentence` | Line 6599 | Formats written methods sentence for a manual workflow step | Step object | `methodsText` |
-| `btwSentence` | Line 6592 | Formats written methods sentence for inter-step transfers | Transfer object | `methodsText` |
-| `ndForm` | Line 10773 | Determines active protein form and extinction coefficient for NanoDrop sample | Run / sample object | `ndEpsFor`, `renderND` |
-| `ndEpsFor` | Line 10774 | Calculates molar extinction coefficient $\varepsilon_{280}$ for a protein form | Run ID / protein form | `ndConc`, `renderND` |
-| `cleanSeq` | Line 8574 | Cleans amino acid sequence string (removes whitespace and digits) | Sequence string | `seqMass`, `seqA280`, `seqPI` |
-| `seqMass` | Line 8575 | Calculates molecular weight (Da) from amino acid sequence | Sequence string | `constructModel`, `protForms` |
-| `seqA280` | Line 8580 | Calculates extinction coefficient $\varepsilon_{280}$ ($\text{M}^{-1}\text{cm}^{-1}$) from sequence | Sequence string | `constructModel`, `protForms` |
-| `seqPI` | Line 8583 | Estimates theoretical isoelectric point (pI) from protein sequence | Sequence string | `renderProt` |
-| `ndStats` | Line 10811 | Calculates mean, SD, and CV% for NanoDrop sample replicate measurements | Samples array | `renderND` |
-| `sumRows` | Line 7791 | Generates purification summary table rows across all workflow steps | `runs`, `gels`, `prep`, `opt` | `renderSumTable`, `finalYield`, `methodsText` |
-| `finalYield` | Line 5728 | Calculates final recovery amount (mg, mg/L, mg/g cells) for a workflow branch | Workflow branch path | `finalYields`, `methodsText` |
-| `finalYields` | Line 5745 | Computes per-branch final yields across all parallel workflow branches | `wfBranches()` | `yieldLine`, `methodsText` |
-| `yieldLine` | Line 5751 | Renders final yield text annotation line beneath the workflow figure SVG | Rendered SVG result | `buildWorkflow` |
-| `methodsText` | Line 6698 | Generates full written Materials and Methods and Results text paragraphs | `runs`, `gels`, `prep`, `opt` | UI event listener |
-| `renderSumTable` | Line 7958 | Renders purification yield and recovery summary HTML table | `sumRows()` | `render` |
-| `renderBandTable` | Line 7411 | Renders gel densitometry and band purity HTML table | `gel`, `gelBands()` | `render` |
-| `renderIntTable` | Line 8077 | Renders peak integration details HTML table | `run`, `integRows()` | `render` |
-| `moreSync` | Line 11046 | Expands More options disclosures when any enclosed setting differs from default | `opt`, `DEF` | `syncControls`, `openProject` |
-| `grpStatus` | Line 11075 | Updates one-line status summary labels on closed panel section headers | `opt` object | `render`, `syncControls` |
-| `projectData` | Line 11362 | Packs current workspace state into exportable project JSON structure | `runs`, `gels`, `prep`, `opt` | `openProject`, `projSave` listener |
-| `openProject` | Line 11398 | Loads project JSON object into current workspace state | Project data JSON | `projFile` listener, `importAsProject` |
-| `importAsProject` | Line 11444 | Opens saved project file as a new isolated project in workspace | Project data JSON | `projFile` listener |
-| `storeInit` | Line 11469 | Initializes IndexedDB (`hfb-projects`) or Cloud storage backends | Window environment | `storeLoad`, `saveOne`, `storeDelete`, `renderHome` |
-| `packCloud` | Line 11525 | Packs project state and uploads heavy asset blobs to cloud storage | Workspace snapshot | `packFor`, `saveOne` |
-| `unpackCloud` | Line 11651 | Downloads cloud asset blobs and restores full project state | Cloud project state | `storeLoad` |
-| `saveOne` | Line 11728 | Saves project state to IndexedDB or Cloud database store | Project ID, snapshot | `flushSave` |
-| `storeLoad` | Line 11754 | Loads project state from IndexedDB or Cloud database store | Project ID | `openStoredProject` |
-| `storeDelete` | Line 11764 | Deletes project record from IndexedDB or Cloud database store | Project ID | UI event listener |
-| `render` | Line 6963 | Master UI render routine updating figures and active panels | Global app state | Event listeners, `openProject` |
-| `buildWorkflow` | Line 5768 | Generates multi-panel composite figure SVG (runs + gel lanes + yield line) | `runs`, `gels`, `prep` | `buildFig`, `render` |
-| `buildStepFig` | Line 15510 | Generates step timeline diagram SVG | `stepList()` | `renderSteps` |
-| `buildConcFig` | Line 10882 | Generates NanoDrop $A_{280}$ concentration bar chart SVG | `ndSamples` | `buildNDSVG` |
-| `buildNDSVG` | Line 10885 | Generates full NanoDrop panel SVG (spectra or bar chart) | `ndSamples` | `renderND` |
-| `buildPrepSVG` | Line 6224 | Generates construct / expression / lysis panel SVG diagram | `prep` state | `renderPrep` |
-| `buildStructSVG` | Line 9172 | Generates PDB protein structure domain diagram SVG | `struct` state | `renderProt` |
-| `renderList` | Line 7087 | Renders sidebar list of loaded runs, gels, and traces | `runs`, `gels`, `traces` | `render` |
-| `syncControls` | Line 7308 | Synchronizes HTML input controls with `opt` settings state | `opt` object | `render`, `openProject` |
-| `renderHome` | Line 12119 | Renders home screen project workspace cards list | `storeList()` | `showHome` |
-| `renderSteps` | Line 15227 | Renders step timeline HTML controls and SVG diagram | `stepList()` | `render` |
-| `renderStepSheet` | Line 15237 | Renders step detail editor sheet in UI | Selected step | `selectStep`, `render` |
-| `renderND` | Line 10826 | Renders NanoDrop data table, stats, and spectrum SVG | `ndSamples` | `render` |
-| `renderSec` | Line 10926 | Renders SEC calibration standards panel and curve SVG | `secCals`, `runs` | `render` |
-| `renderPrep` | Line 8771 | Renders construct / expression panel HTML controls and SVG | `prep` state | `render` |
-| `renderNext` | Line 11124 | Renders next suggested action banner above figure | `nextStep()` | `render` |
-| `downloads` | Line 15530 | Triggers browser file download of SVG, PNG, or JSON | Content blob, filename | Export event listeners |
-| `toPng` | Line 15572 | Renders SVG string onto HTML canvas and exports High-DPI PNG | SVG string, DPI/scale | Export event listeners |
-| `zip` | Line 15591 | Creates ZIP archive containing exported figure files | Files map | Export event listeners |
-| `saveFile` | Line 15533 | Triggers browser file download for text or binary content | Filename, content | `projSave`, export listeners |
+| `activeCal` | Line 11052 | Gets currently active SEC calibration curve for the SEC panel | `opt`, `runs` | `renderSec` |
+| `zoomWindow` | Line 3683 | Computes the zoomed-in sub-window retention boundaries ($a$, $b$) | `lo`, `hi`, user bounds | `zoomCompose`, `buildRunFig` |
+| `zoomCompose` | Line 3768 | Assembles composite SVG with the main plot and magnified inset plot | Main SVG, inset builder, window | `buildRunFig`, `buildOverlaySVG` |
+| `buildRunFig` | Line 5854 | Generates full SVG for single chromatogram run, supporting zoom inset | `run` object | `buildWorkflow`, `buildFig` |
+| `buildRunPlainSVG` | Line 4103 | Core SVG generator for chromatogram curves, axes, fractions, and full run mode (`wfFull`) | `run` object, options | `buildRunFig`, `composeRuns` |
+| `autoCrop` | Line 4649 | Auto-detects SDS-PAGE gel lane boundaries, vertical bounds, and crop box | `gel` object | `processGel`, `addGelFiles` |
+| `detectBands` | Line 4839 | Finds band peaks in a gel lane intensity profile curve | `gel`, lane index, sensitivity | `gelBands`, `processGel` |
+| `ladderResid` | Line 4926 | Calculates ladder fit residual error for gel $R_f$ calibration | `gel` object | `autoLadder`, `calib` |
+| `autoLadder` | Line 5301 | Matches gel ladder lane bands against reference ladder size standard values | `gel` object | `processGel`, `renderLaneTable` |
+| `calib` | Line 4942 | Calibrates molecular weight $\log(M_w)$ vs $R_f$ migration curve for gel | `gel` object | `gelBands`, `lanePurity` |
+| `gelBands` | Line 4958 | Returns list of detected gel bands with assigned MW and integrated intensity | `gel` object | `renderBandTable`, `composeRuns` |
+| `lanePurity` | Line 5133 | Calculates relative densitometric purity percentage of target gel lane bands | `gel`, lane index | `renderBandTable`, `sumRows` |
+| `bandSnap` | Line 4981 | Saves state snapshot of gel tags/marks for undo history | `gel` object | UI event listeners |
+| `bandUndo` | Line 4982 | Restores previous gel marks/tags state from undo stack | `gel` object | UI event listener |
+| `autoContrast` | Line 5335 | Auto-adjusts display contrast/brightness levels for gel image view | `gel` object | `processGel`, UI event listener |
+| `wfFromOf` | Line 6056 | Resolves parent step ID for parallel workflow branches | `run` or step object | `wfParents`, `wfBranches` |
+| `wfFromNoteOf` | Line 6057 | Resolves branch edge note annotation text | `run` or step object | `composeRuns` |
+| `wfParents` | Line 6059 | Maps each step index to its parent step index in branching workflow | Step list | `composeRuns`, `wfBranches`, `wfFigList` |
+| `wfBranches` | Line 6061 | Computes all linear paths from start to terminal leaves for parallel branches | Step list | `finalYields`, `composeRuns` |
+| `wfFigList` | Line 6073 | Reorders workflow panels so parallel branches stay grouped contiguously | Step list | `composeRuns`, `renderWfTool` |
+| `wfItem` | Line 7688 | Resolves panel metadata (run, nc, man, prep) for workflow click-to-edit | Step ID | `renderWfTool`, `wfSet` |
+| `wfSet` | Line 7693 | Updates panel properties (title, arrow note, width, gel zoom, drag offsets `wfDx`/`wfDy`) | Panel item, field, value | `#wfTool` listeners |
+| `renderWfTool` | Line 7700 | Positions and renders floating panel editor toolbar (`#wfTool`) and selection box (`#wfSelBox`) | Active selection `wfSel` | Click handlers, `render` |
+| `constructModel` | Line 6295 | Generates translated protein sequence model from genetic construct cassette | `prep.gb`, `opt.protSeq` | `seqMass`, `buildPrepSVG`, `yieldLine` |
+| `stepList` | Line 15290 | Builds ordered list of purification steps across workflow pipeline | `runs`, `gels`, `prep` | `renderSteps`, `stepStatus`, `renderNext` |
+| `applyQuick` | Line 15501 | Applies lab protocol template (`LABQ`) to populate workflow steps and conditions | Quick template ID | UI event listener |
+| `manSentence` | Line 6732 | Formats written methods sentence for a manual workflow step | Step object | `methodsText` |
+| `btwSentence` | Line 6725 | Formats written methods sentence for inter-step transfers | Transfer object | `methodsText` |
+| `ndForm` | Line 10906 | Determines active protein form and extinction coefficient for NanoDrop sample | Run / sample object | `ndEpsFor`, `renderND` |
+| `ndEpsFor` | Line 10907 | Calculates molar extinction coefficient $\varepsilon_{280}$ for a protein form | Run ID / protein form | `ndConc`, `renderND` |
+| `cleanSeq` | Line 8707 | Cleans amino acid sequence string (removes whitespace and digits) | Sequence string | `seqMass`, `seqA280`, `seqPI` |
+| `seqMass` | Line 8708 | Calculates molecular weight (Da) from amino acid sequence | Sequence string | `constructModel`, `protForms` |
+| `seqA280` | Line 8713 | Calculates extinction coefficient $\varepsilon_{280}$ ($\text{M}^{-1}\text{cm}^{-1}$) from sequence | Sequence string | `constructModel`, `protForms` |
+| `seqPI` | Line 8716 | Estimates theoretical isoelectric point (pI) from protein sequence | Sequence string | `renderProt` |
+| `ndStats` | Line 10944 | Calculates mean, SD, and CV% for NanoDrop sample replicate measurements | Samples array | `renderND` |
+| `sumRows` | Line 7924 | Generates purification summary table rows across all workflow steps | `runs`, `gels`, `prep`, `opt` | `renderSumTable`, `finalYield`, `methodsText` |
+| `finalYield` | Line 5861 | Calculates final recovery amount (mg, mg/L, mg/g cells) for a workflow branch | Workflow branch path | `finalYields`, `methodsText` |
+| `finalYields` | Line 5878 | Computes per-branch final yields across all parallel workflow branches | `wfBranches()` | `yieldLine`, `methodsText` |
+| `yieldLine` | Line 5884 | Renders final yield text annotation line beneath the workflow figure SVG | Rendered SVG result | `buildWorkflow` |
+| `methodsText` | Line 6831 | Generates full written Materials and Methods and Results text paragraphs | `runs`, `gels`, `prep`, `opt` | UI event listener |
+| `renderSumTable` | Line 8091 | Renders purification yield and recovery summary HTML table | `sumRows()` | `render` |
+| `renderBandTable` | Line 7544 | Renders gel densitometry and band purity HTML table | `gel`, `gelBands()` | `render` |
+| `renderIntTable` | Line 8210 | Renders peak integration details HTML table | `run`, `integRows()` | `render` |
+| `moreSync` | Line 11179 | Expands More options disclosures when any enclosed setting differs from default | `opt`, `DEF` | `syncControls`, `openProject` |
+| `grpStatus` | Line 11208 | Updates one-line status summary labels on closed panel section headers | `opt` object | `render`, `syncControls` |
+| `projectData` | Line 11495 | Packs current workspace state into exportable project JSON structure | `runs`, `gels`, `prep`, `opt` | `openProject`, `projSave` listener |
+| `openProject` | Line 11531 | Loads project JSON object into current workspace state | Project data JSON | `projFile` listener, `importAsProject` |
+| `importAsProject` | Line 11577 | Opens saved project file as a new isolated project in workspace | Project data JSON | `projFile` listener |
+| `storeInit` | Line 11602 | Initializes IndexedDB (`hfb-projects`) or Cloud storage backends | Window environment | `storeLoad`, `saveOne`, `storeDelete`, `renderHome` |
+| `packCloud` | Line 11658 | Packs project state and uploads heavy asset blobs to cloud storage | Workspace snapshot | `packFor`, `saveOne` |
+| `unpackCloud` | Line 11784 | Downloads cloud asset blobs and restores full project state | Cloud project state | `storeLoad` |
+| `saveOne` | Line 11861 | Saves project state to IndexedDB or Cloud database store | Project ID, snapshot | `flushSave` |
+| `storeLoad` | Line 11887 | Loads project state from IndexedDB or Cloud database store | Project ID | `openStoredProject` |
+| `storeDelete` | Line 11897 | Deletes project record from IndexedDB or Cloud database store | Project ID | UI event listener |
+| `render` | Line 7096 | Master UI render routine updating figures and active panels | Global app state | Event listeners, `openProject` |
+| `buildWorkflow` | Line 5901 | Generates multi-panel composite figure SVG (runs + gel lanes + yield line) | `runs`, `gels`, `prep` | `buildFig`, `render` |
+| `buildStepFig` | Line 15643 | Generates step timeline diagram SVG | `stepList()` | `renderSteps` |
+| `buildConcFig` | Line 11015 | Generates NanoDrop $A_{280}$ concentration bar chart SVG | `ndSamples` | `buildNDSVG` |
+| `buildNDSVG` | Line 11018 | Generates full NanoDrop panel SVG (spectra or bar chart) | `ndSamples` | `renderND` |
+| `buildPrepSVG` | Line 6357 | Generates construct / expression / lysis panel SVG diagram | `prep` state | `renderPrep` |
+| `buildStructSVG` | Line 9305 | Generates PDB protein structure domain diagram SVG | `struct` state | `renderProt` |
+| `renderList` | Line 7220 | Renders sidebar list of loaded runs, gels, and traces | `runs`, `gels`, `traces` | `render` |
+| `syncControls` | Line 7441 | Synchronizes HTML input controls with `opt` settings state | `opt` object | `render`, `openProject` |
+| `renderHome` | Line 12252 | Renders home screen project workspace cards list | `storeList()` | `showHome` |
+| `renderSteps` | Line 15360 | Renders step timeline HTML controls and SVG diagram | `stepList()` | `render` |
+| `renderStepSheet` | Line 15370 | Renders step detail editor sheet in UI | Selected step | `selectStep`, `render` |
+| `renderND` | Line 10959 | Renders NanoDrop data table, stats, and spectrum SVG | `ndSamples` | `render` |
+| `renderSec` | Line 11059 | Renders SEC calibration standards panel and curve SVG | `secCals`, `runs` | `render` |
+| `renderPrep` | Line 8904 | Renders construct / expression panel HTML controls and SVG | `prep` state | `render` |
+| `renderNext` | Line 11257 | Renders next suggested action banner above figure | `nextStep()` | `render` |
+| `downloads` | Line 15663 | Triggers browser file download of SVG, PNG, or JSON | Content blob, filename | Export event listeners |
+| `toPng` | Line 15705 | Renders SVG string onto HTML canvas and exports High-DPI PNG | SVG string, DPI/scale | Export event listeners |
+| `zip` | Line 15724 | Creates ZIP archive containing exported figure files | Files map | Export event listeners |
+| `saveFile` | Line 15666 | Triggers browser file download for text or binary content | Filename, content | `projSave`, export listeners |
 
 ---
 
@@ -337,30 +337,30 @@ Saved `.json` files or IndexedDB records:
 
 | Task | Functions / Objects to Edit | Location / Notes |
 |---|---|---|
-| **Add a new import format** | `loadFiles` (Line 8427), `addParsed` (Line 8533), Section `parsing` | Add parsing logic in `parsing: generic` or `parsing: ÄKTA` section |
-| **Add a new figure option** | `DEF` (Line 1902), `syncControls` (Line 7308), `onOpt` (Line 7353), `buildRunPlainSVG` / `buildWorkflow` | Register default in `DEF`, bind UI control in `syncControls`, apply in SVG build functions |
-| **Modify zoom inset behavior** | `zoomWindow` (Line 3590), `zoomCompose` (Line 3675), `buildRunFig` (Line 5721) | Adjust magnification, inset placement (`tr`, `tl`, `br`, `beside`), or connector line drawing in `figure: zoom inset` |
-| **Adjust workflow full chromatograms** | `buildRunPlainSVG` (Line 4010), `opt.wfFull` | Edit x-axis windowing condition (`opt.wfFull && ov.nest`) under `figure: ÄKTA run chart` |
-| **Modify workflow panel dragging** | `wfItem` (Line 7555), `wfSet` (Line 7560), `renderWfTool` (Line 7567), `#wfTool`, `#wfSelBox` | Adjust floating toolbar, drag delta calculations, or offset reset logic under `editing the workflow figure in place` |
-| **Modify parallel workflow branching** | `wfFromOf` (Line 5923), `wfParents` (Line 5926), `wfBranches` (Line 5928), `composeRuns` (Line 5485) | Adjust branch topology, connector arrows, or branch grouping under `composite: run with gels, and the workflow` |
-| **Update GenBank parsing or text pasting** | `parseGenBank` (Line 6025), `loadGenBankText` (Line 8753), `#gbPaste` | Edit feature/CDS extraction or paste box handling in `upstream steps` and `construct and expression panel` |
-| **Modify side panel or More options** | `ADV` (Line 11027), `moreSync` (Line 11046), `grpStatus` (Line 11075), `#panelSearch` (Line 6977) | Edit progressive disclosure IDs in `ADV` or search behavior in `More options inside each section` |
-| **Modify yield reporting & calculation** | `finalYield` (Line 5728), `finalYields` (Line 5745), `yieldLine` (Line 5751), `methodsText` (Line 6698) | Adjust recovery calculation, per-culture/per-gram cell basis, or yield line rendering under `composite` and `run conditions` |
-| **Add a new column in summary table** | `sumRows` (Line 7791), `renderSumTable` (Line 7958) | Add field calculation in `sumRows` and HTML table header/cell in `renderSumTable` |
-| **Add a new methods sentence** | `methodsText` (Line 6698), `runCondLines` (Line 6683), `manSentence` (Line 6599), `btwSentence` (Line 6592) | Edit sentence builders under `run conditions` section |
+| **Add a new import format** | `loadFiles` (Line 8560), `addParsed` (Line 8666), Section `parsing` | Add parsing logic in `parsing: generic` or `parsing: ÄKTA` section |
+| **Add a new figure option** | `DEF` (Line 1902), `syncControls` (Line 7441), `onOpt` (Line 7486), `buildRunPlainSVG` / `buildWorkflow` | Register default in `DEF`, bind UI control in `syncControls`, apply in SVG build functions |
+| **Modify zoom inset behavior** | `zoomWindow` (Line 3683), `zoomCompose` (Line 3768), `buildRunFig` (Line 5854) | Adjust magnification, inset placement (`tr`, `tl`, `br`, `beside`), or connector line drawing in `figure: zoom inset` |
+| **Adjust workflow full chromatograms** | `buildRunPlainSVG` (Line 4103), `opt.wfFull` | Edit x-axis windowing condition (`opt.wfFull && ov.nest`) under `figure: ÄKTA run chart` |
+| **Modify workflow panel dragging** | `wfItem` (Line 7688), `wfSet` (Line 7693), `renderWfTool` (Line 7700), `#wfTool`, `#wfSelBox` | Adjust floating toolbar, drag delta calculations, or offset reset logic under `editing the workflow figure in place` |
+| **Modify parallel workflow branching** | `wfFromOf` (Line 6056), `wfParents` (Line 6059), `wfBranches` (Line 6061), `composeRuns` (Line 5618) | Adjust branch topology, connector arrows, or branch grouping under `composite: run with gels, and the workflow` |
+| **Update GenBank parsing or text pasting** | `parseGenBank` (Line 6158), `loadGenBankText` (Line 8886), `#gbPaste` | Edit feature/CDS extraction or paste box handling in `upstream steps` and `construct and expression panel` |
+| **Modify side panel or More options** | `ADV` (Line 11160), `moreSync` (Line 11179), `grpStatus` (Line 11208), `#panelSearch` (Line 7110) | Edit progressive disclosure IDs in `ADV` or search behavior in `More options inside each section` |
+| **Modify yield reporting & calculation** | `finalYield` (Line 5861), `finalYields` (Line 5878), `yieldLine` (Line 5884), `methodsText` (Line 6831) | Adjust recovery calculation, per-culture/per-gram cell basis, or yield line rendering under `composite` and `run conditions` |
+| **Add a new column in summary table** | `sumRows` (Line 7924), `renderSumTable` (Line 8091) | Add field calculation in `sumRows` and HTML table header/cell in `renderSumTable` |
+| **Add a new methods sentence** | `methodsText` (Line 6831), `runCondLines` (Line 6816), `manSentence` (Line 6732), `btwSentence` (Line 6725) | Edit sentence builders under `run conditions` section |
 | **Add a new gel ladder preset** | `LADDERS` (Line 1952), `#g-preset` dropdown (Line 1959) | Add ladder entry with reference band sizes to `LADDERS` constant |
 | **Add a new host contaminant protein** | `KNOWN_DEFAULT` (Line 1920) | Add protein entry `{ name, kda, kind: 'contam', ctx, src }` to `KNOWN_DEFAULT` array |
 | **Modify peak integration math** | `integrateRegion` (Line 2795), `procFull` (Line 3074), `autoIntegrate` (Line 3137) | Edit baseline fitting or numerical integration algorithms under `peak integration` |
-| **Modify SEC calibration fit** | `secCalFor` (Line 2894), `renderSec` (Line 10926), `onSec` (Line 10981) | Edit linear/polynomial calibration regression fitting in `size exclusion (SEC)` section |
-| **Modify gel band auto-detection** | `detectBands` (Line 4706), `autoCrop` (Line 4516), `autoLadder` (Line 5168) | Adjust sensitivity thresholds or peak picking in `gel densitometry` section |
-| **Modify lane purity calculation** | `lanePurity` (Line 5000), `renderBandTable` (Line 7411) | Adjust band background subtraction or total intensity normalization in `band tags and purity` |
-| **Add a new NanoDrop file format** | `parseNanoDrop` (Line 10685), `looksNanoDrop` (Line 10661), `addNanoDrop` (Line 10744) | Add header recognition and row parsing under `NanoDrop: protein A280 readings` |
-| **Modify step timeline / templates** | `LABQ` (Line 15295), `applyQuick` (Line 15368), `stepList` (Line 15157) | Edit protocol step templates in `quick fill` section |
-| **Add field to project export JSON** | `projectData` (Line 11362), `openProject` (Line 11398), `packCloud` (Line 11525), `unpackCloud` (Line 11651) | Update export serializer and import deserializer under `projects` |
-| **Modify figure SVG export (PNG/ZIP)** | `toPng` (Line 15572), `zip` (Line 15591), `downloads` (Line 15530), `saveFile` (Line 15533) | Update canvas rendering, resolution scaling, or archive creation in `export` section |
-| **Modify construct / expression SVG** | `buildPrepSVG` (Line 6224), `constructSVG` (Line 6503), `ncSVG` (Line 6329) | Edit vector layout in `construct and expression panel` section |
-| **Modify IndexedDB / Cloud storage** | `storeInit` (Line 11469), `saveOne` (Line 11728), `storeLoad` (Line 11754), `storeDelete` (Line 11764) | Edit storage drivers under `projects: browser & cloud storage` section |
-| **Modify home screen project list** | `renderHome` (Line 12119), `openStoredProject` (Line 12539) | Edit workspace card rendering under `home` section |
-| **Modify "What to do next" guidance** | `renderNext` (Line 11124), `nextStep` (Line 11094) | Edit step recommendation rules under `what to do next` section |
+| **Modify SEC calibration fit** | `secCalFor` (Line 2894), `renderSec` (Line 11059), `onSec` (Line 11114) | Edit linear/polynomial calibration regression fitting in `size exclusion (SEC)` section |
+| **Modify gel band auto-detection** | `detectBands` (Line 4839), `autoCrop` (Line 4649), `autoLadder` (Line 5301) | Adjust sensitivity thresholds or peak picking in `gel densitometry` section |
+| **Modify lane purity calculation** | `lanePurity` (Line 5133), `renderBandTable` (Line 7544) | Adjust band background subtraction or total intensity normalization in `band tags and purity` |
+| **Add a new NanoDrop file format** | `parseNanoDrop` (Line 10818), `looksNanoDrop` (Line 10794), `addNanoDrop` (Line 10877) | Add header recognition and row parsing under `NanoDrop: protein A280 readings` |
+| **Modify step timeline / templates** | `LABQ` (Line 15428), `applyQuick` (Line 15501), `stepList` (Line 15290) | Edit protocol step templates in `quick fill` section |
+| **Add field to project export JSON** | `projectData` (Line 11495), `openProject` (Line 11531), `packCloud` (Line 11658), `unpackCloud` (Line 11784) | Update export serializer and import deserializer under `projects` |
+| **Modify figure SVG export (PNG/ZIP)** | `toPng` (Line 15705), `zip` (Line 15724), `downloads` (Line 15663), `saveFile` (Line 15666) | Update canvas rendering, resolution scaling, or archive creation in `export` section |
+| **Modify construct / expression SVG** | `buildPrepSVG` (Line 6357), `constructSVG` (Line 6636), `ncSVG` (Line 6462) | Edit vector layout in `construct and expression panel` section |
+| **Modify IndexedDB / Cloud storage** | `storeInit` (Line 11602), `saveOne` (Line 11861), `storeLoad` (Line 11887), `storeDelete` (Line 11897) | Edit storage drivers under `projects: browser & cloud storage` section |
+| **Modify home screen project list** | `renderHome` (Line 12252), `openStoredProject` (Line 12672) | Edit workspace card rendering under `home` section |
+| **Modify "What to do next" guidance** | `renderNext` (Line 11257), `nextStep` (Line 11227) | Edit step recommendation rules under `what to do next` section |
 | **Modify figure preset dimensions** | `PRESETS` (Line 1945) | Update width, height, font size, line weight in `PRESETS` constant |
-| **Add a new UI panel or tab** | `render` (Line 6963), `syncControls` (Line 7308), Section `collapsible panel sections` | Add HTML panel markup and bind rendering update in `UI` section |
+| **Add a new UI panel or tab** | `render` (Line 7096), `syncControls` (Line 7441), Section `collapsible panel sections` | Add HTML panel markup and bind rendering update in `UI` section |
