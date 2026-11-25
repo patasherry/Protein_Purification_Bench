@@ -3445,11 +3445,13 @@ function insetDefault(S, m, iw, ih, beside, win, rTop){
   if (Math.abs(brY - botY) > 2) { c.push({x: trX, y: brY, k: 'br-low'}, {x: tlX, y: brY, k: 'bl-low'}); }
   const spanX = Math.max(0, trX - tlX);
   if (spanX > 6) [0.25, 0.5, 0.75].forEach((f, idx) => c.push({x: tlX + spanX*f, y: g.T + pad, k: 'top-' + idx}));
+  const topStrip = g.T + fontSize()*2.4, isTop = b => b.leg || b.y0 < topStrip;
   const addBelowLeg = (x0, key) => {
-    const hits = avoid.filter(b => b.leg && b.x1 > x0 && b.x0 < x0 + iw && b.y1 > g.T + pad && b.y0 < g.T + pad + ih);
-    if (hits.length) { const yb = Math.max(...avoid.filter(b => b.leg && b.x1 > x0 && b.x0 < x0 + iw).map(b => b.y1)) + pad; if (yb + ih <= plotB - 1) c.push({x: x0, y: yb, k: key}); }
+    const hits = avoid.filter(b => isTop(b) && b.x1 > x0 && b.x0 < x0 + iw && b.y1 > g.T + pad && b.y0 < g.T + pad + ih);
+    if (hits.length) { const yb = Math.max(...hits.map(b => b.y1)) + pad; if (yb + ih <= plotB - 1) c.push({x: x0, y: yb, k: key}); }
   };
   addBelowLeg(trX, 'tr-below'); addBelowLeg(tlX, 'tl-below');
+  if (spanX > 6) [0.25, 0.5, 0.75].forEach((f, idx) => addBelowLeg(tlX + spanX*f, 'top-' + idx + '-below'));
   /* tuck cleanly under a high horizontal %B plateau (e.g. 100% step elution) when the space beneath it is open */
   [trX, tlX].forEach((x0, idx) => {
     const b0 = Math.max(0, Math.floor((x0 - g.L)/cwCol)), b1 = Math.min(NB - 1, Math.floor((x0 + iw - g.L)/cwCol));
@@ -3551,7 +3553,7 @@ function insetHeadroom(m, iw, ih, win){
     let best = Infinity;
     for (let s = 0; s <= 8; s++) {
       const qx = tlX + span*s/8;
-      const legHits = obs.avoid.filter(b => b.leg && b.x1 > qx && b.x0 < qx + iw);
+      const legHits = obs.avoid.filter(b => (b.leg || b.y0 < T + fontSize()*2.4) && b.x1 > qx && b.x0 < qx + iw);
       const qy = legHits.length ? Math.max(...legHits.map(b => b.y1)) + pad : T + pad;
       if (skipSBox && obs.sBox && Math.min(qx + iw, obs.sBox.x1) - Math.max(qx, obs.sBox.x0) > 2) continue;
       const b0 = Math.max(0, Math.floor((qx - 2 - L)/obs.cwCol)), b1 = Math.min(obs.NB - 1, Math.floor((qx + iw + 2 - L)/obs.cwCol));
@@ -3561,7 +3563,7 @@ function insetHeadroom(m, iw, ih, win){
       if (availCurve <= Math.max(16, (plotB - T)*0.24)) continue;
       let y1Slot = isFinite(yMax) && yMax > g.y0 ? g.y0 + (yMax - g.y0)*(B - T)/availCurve : -Infinity;
       obs.avoid.forEach(b => {
-        if (b.leg || b.pool || b.x1 <= qx - 2 || b.x0 >= qx + iw + 2) return;
+        if (b.leg || b.pool || b.y0 < T + fontSize()*2.4 || b.x1 <= qx - 2 || b.x0 >= qx + iw + 2) return;
         const hLbl = Math.max(6, b.y1 - b.y0 + 3), availLbl = B - hLbl - (qy + ih + 3);
         if (availLbl <= Math.max(14, (plotB - T)*0.22)) { y1Slot = Infinity; return; }
         const yAnc = g.y0 + (B - Math.min(B, b.y1 + 2))/Math.max(1, B - T)*(g.y1 - g.y0);
@@ -3596,13 +3598,31 @@ function zoomCompose(S, m, win, buildIn, zObj, cfg){
   };
   let rTop = calcRTop(g);
   let def = above ? {x: 0, y: 0, hard: 0} : insetDefault(S, m, iw, ih, beside, win, rTop);
-  if (!beside && !above && old('x') === null && old('y') === null && def.hard > 0 && cfg.rebuildMain) {
-    const y1New = insetHeadroom(m, iw, ih, win);
-    if (y1New !== null) {
-      const m2 = cfg.rebuildMain(y1New);
-      if (m2 && m2.svg && m2.geo) { m = m2; g = m.geo; ({L, R, T, B} = g); rTop = calcRTop(g); def = insetDefault(S, m, iw, ih, false, win, rTop); }
+  const auto = !beside && !above && old('x') === null && old('y') === null;
+  /* fit (w, h) in open space, raising the main plot's headroom when the corners are taken; null when it cannot be done */
+  const fit = (w, h) => {
+    const d = insetDefault(S, m, w, h, false, win, rTop);
+    if (d.hard <= 0) return {m, d, rTop};
+    if (!cfg.rebuildMain) return null;
+    const y1New = insetHeadroom(m, w, h, win); if (y1New === null) return null;
+    const m2 = cfg.rebuildMain(y1New); if (!m2 || !m2.svg || !m2.geo) return null;
+    const rT2 = calcRTop(m2.geo), d2 = insetDefault(S, m2, w, h, false, win, rT2);
+    return {m: m2, d: d2, rTop: rT2, raised: true};
+  };
+  const take = q => { m = q.m; g = m.geo; ({L, R, T, B} = g); rTop = q.rTop; def = q.d; };
+  let fitted = false;
+  /* a workflow panel is small, so a fixed fraction leaves the magnified view too small to read: take the largest size that can sit in open space */
+  if (auto && cfg.nest && !(old('w') > 0) && !(old('h') > 0)) {
+    const room = plotB - T - pad*2, ar2 = Math.max(0.9, Math.min(1.6, ar));
+    for (const f of [0.58, 0.52, 0.46]) {
+      let w2 = (R - L)*f, h2 = w2/ar2;
+      if (h2 > room*0.6) { h2 = room*0.6; w2 = Math.min(w2, h2*1.6); }
+      if (w2 <= iw + 2 || h2 < minAutoH) continue;
+      const q = fit(w2, h2);
+      if (q && q.d.hard <= 0) { iw = w2; ih = h2; take(q); fitted = true; break; }
     }
   }
+  if (!fitted && auto && def.hard > 0) { const q = fit(iw, ih); if (q && q.raised) take(q); }
   let ix = old('x') !== null ? old('x') : def.x;
   let iy = old('y') !== null ? old('y') : def.y;
   ix = Math.max(0, Math.min(S.W - iw, ix)); iy = Math.max(0, Math.min(S.H - ih, iy));
@@ -3653,10 +3673,31 @@ function zoomCompose(S, m, win, buildIn, zObj, cfg){
     } else {
       const sy = dirY > 0 ? sBox.y1 : sBox.y0;
       const ty = dirY > 0 ? iBox.y0 : iBox.y1;
-      [sBox.x0, sBox.x1].forEach(xs => {
-        const xt = Math.max(iBox.x0, Math.min(iBox.x1, xs));
-        con += ln(xs, sy, xs, ty);
-        if (Math.abs(xt - xs) > 0.05) con += ln(xs, ty, xt, ty);
+      /* corners under the inset rise straight to it.  A horizontal run over the marked region would read as a second frame on it, so when the region
+         straddles the inset's side its in-span corner is the leader, and when the inset sits wholly to one side a single stepped leader leaves from the nearer corner */
+      const inSpan = xs => xs >= iBox.x0 - 0.05 && xs <= iBox.x1 + 0.05, ins0 = inSpan(sBox.x0), ins1 = inSpan(sBox.x1), legs = [];
+      if (ins0) legs.push([[sBox.x0, sy], [sBox.x0, ty]]);
+      if (ins1) legs.push([[sBox.x1, sy], [sBox.x1, ty]]);
+      /* straddling: the inset's own corner over the region drops straight to it, unless that would sit on the first leader */
+      if (ins0 !== ins1) { const xc = ins0 ? iBox.x1 : iBox.x0, xl = ins0 ? sBox.x0 : sBox.x1; if (Math.abs(xc - xl) > 4) legs.push([[xc, sy], [xc, ty]]); }
+      if (!ins0 && !ins1 && iBox.x0 >= sBox.x0 && iBox.x1 <= sBox.x1) legs.push([[iBox.x0, sy], [iBox.x0, ty]], [[iBox.x1, sy], [iBox.x1, ty]]);
+      else if (!ins0 && !ins1) {
+        const left = iBox.x1 < sBox.x0, xs = left ? sBox.x0 : sBox.x1, xc = left ? iBox.x1 : iBox.x0, ym = (sy + ty)/2;
+        legs.push(Math.abs(sy - ty) > 4 ? [[xs, sy], [xs, ym], [xc, ym], [xc, ty]] : [[xs, sy], [xs, ty], [xc, ty]]);
+      }
+      /* a leader never crosses a label (often the peak label sitting between the region and the inset): it leaves from the region's side just below the label and steps out past the label first, or is left out */
+      const lbl = ((def.obs || mainObstacles(m, win, rTop)).avoid || []).filter(b => !b.leg), segHit = (a, b) => lbl.find(q => Math.min(a[0], b[0]) < q.x1 && Math.max(a[0], b[0]) > q.x0 && Math.min(a[1], b[1]) < q.y1 && Math.max(a[1], b[1]) > q.y0);
+      const legHit = pts => { for (let k = 1; k < pts.length; k++) { const q = segHit(pts[k - 1], pts[k]); if (q) return q; } return null; };
+      legs.forEach(pts => {
+        let q = legHit(pts);
+        if (q && pts.length === 2 && pts[0][0] === pts[1][0]) {
+          const x0 = pts[0][0], out = x0 <= (sBox.x0 + sBox.x1)/2 ? -1 : 1, xo = out < 0 ? q.x0 - 1.5 : q.x1 + 1.5;
+          const ys = dirY > 0 ? Math.min(sy, q.y0 - 1.5) : Math.max(sy, q.y1 + 1.5), alt = [[x0, ys], [xo, ys], [xo, ty]];
+          if (ys < sBox.y0 - 0.05 || ys > sBox.y1 - 2) return;
+          if (inSpan(xo) && (out < 0 ? xo < sBox.x0 : xo > sBox.x1) && !legHit(alt)) { pts = alt; q = null; }
+        }
+        if (q) return;
+        for (let k = 1; k < pts.length; k++) con += ln(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]);
       });
     }
   }
@@ -3952,9 +3993,9 @@ function buildRunPlainSVG(run, ov){
   /* in a workflow every panel reserves the same room, so the chromatograms keep one height */
   const nCond = ov.nest && !isInset && COND_N ? Math.max(condL.length, COND_N) : condL.length, condH = nCond ? nCond*cf*1.2 + fs*0.5 : 0;
   const xlab = runXLabel(run);
-  const mB = tOut + (xlab ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*0.95) + (calNote ? fs*0.95 : 0) + condH, mT = ov.fixT != null ? ov.fixT : Math.max(compactIn ? 5.2 : 0, fs*0.7) + titleH + stdH + ndH, plotH0 = H0 - mB - mT;
+  const mB = tOut + (xlab ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*(compactIn ? 1.2 : 0.95)) + (calNote ? fs*0.95 : 0) + condH, unitTop = compactIn && !!o.rylabel && !hasActTrack, mT = ov.fixT != null ? ov.fixT : Math.max(compactIn ? 5.2 : 0, fs*(unitTop ? 1.45 : 0.7)) + titleH + stdH + ndH, plotH0 = H0 - mB - mT;
   /* room above the tallest peak for its label, so the label never sits on the trace */
-  const poolCap = compactIn && H0 < 55 ? '' : poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
+  const poolCap = compactIn ? '' : poolCaption(run), willLab = (secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (o.secLabel || 'mw')) : o.intLabel) !== 'none' && (secRun || (run.integ || []).length), top = 4 + (willLab ? fs*1.1 : 0) + (poolCap ? fs*1.05 : 0);
   const usable = Math.max(10, plotH0 - band - top);
   let y0 = ylo - yr*band/usable - yr*0.02, y1 = yhi + yr*top/usable;
   y0 = numOr(run.ymin, y0); y1 = numOr(run.ymax, y1); if (!(y1 > y0)) y1 = y0 + 1;
@@ -3972,7 +4013,7 @@ function buildRunPlainSVG(run, ov){
   let xt = ticks(xlo, xhi, Math.max(3, Math.round(W/72*2)));
   const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = compactIn ? 3 : 0;
   const maxLeftLen = Math.max(...ytl.map(s=>s.length), ...(atl.length ? atl.map(s=>s.length) : [0]));
-  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + maxLeftLen*cw + ((o.rylabel || hasActTrack) ? 5 + fs*1.2 : 2);
+  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + maxLeftLen*cw + ((o.rylabel || hasActTrack) && !unitTop ? 5 + fs*1.2 : 2);
   const mR = hasRight ? tOut + 3 + Math.max(...stl.map(s=>s.length))*cw + 5 + fs*(hasActOverlay ? 1.4 : 1.2) : compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8;
   /* keep a usable plot even when fonts or margins are too big for the figure size; compact insets never spill past W */
   const L = mL, R = ov.fixR != null ? ov.fixR : compactIn ? Math.max(mL + 8, W - mR) : Math.max(W - mR, mL + 24);
@@ -4043,18 +4084,23 @@ function buildRunPlainSVG(run, ov){
       let top = '', bot = ''; for (let j=0;j<=120;j++){ const xx = ga + (gb - ga)*j/120, d = (xx - mu)/sg; top += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + H*Math.exp(-0.5*d*d) + intShift(xx))); }
       for (let j=120;j>=0;j-=20){ const xx = ga + (gb - ga)*j/120; bot += 'L' + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + intShift(xx))); }
       s.push(`<path d="${top}${bot}Z" fill="${run.color}" fill-opacity="0.18" stroke="${run.color}" stroke-width="0.5" stroke-dasharray="2 1.5"/>`);
-      if (!doneCl.has(rw.cl.key)) { doneCl.add(rw.cl.key); const c = rw.cl; let d = '';
-        for (let j=0;j<=160;j++){ const xx = c.a + (c.b - c.a)*j/160; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(c.base(xx) + c.model(xx) + intShift(xx))); }
+      if (!doneCl.has(rw.cl.key)) { doneCl.add(rw.cl.key); const c = rw.cl, ca = Math.max(xlo, c.a), cb = Math.min(xhi, c.b); let d = '';
+        if (cb > ca) { for (let j=0;j<=160;j++){ const xx = ca + (cb - ca)*j/160; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(c.base(xx) + c.model(xx) + intShift(xx))); }
         s.push(`<path d="${d}" fill="none" stroke="#333333" stroke-width="0.6" stroke-dasharray="3 2"/>`);
-        s.push(`<line x1="${r2(px(c.a))}" y1="${r2(py(c.base(c.a) + intShift(c.a)))}" x2="${r2(px(c.b))}" y2="${r2(py(c.base(c.b) + intShift(c.b)))}" stroke="#555555" stroke-width="0.5"/>`); }
+        s.push(`<line x1="${r2(px(ca))}" y1="${r2(py(c.base(ca) + intShift(ca)))}" x2="${r2(px(cb))}" y2="${r2(py(c.base(cb) + intShift(cb)))}" stroke="#555555" stroke-width="0.5"/>`); } }
     });
+    /* drawn only where it falls inside the shown window: the picture is the same, and no guide reaches past a narrow inset's frame */
     iRows.forEach(rw => { if (rw.gauss) return;
-      const st = Math.max(1, Math.ceil((rw.i1 - rw.i0)/500)); let d = '';
-      for (let i=rw.i0;i<=rw.i1;i+=st) d += (d ? 'L' : 'M') + r2(px(rw.xs[i])) + ' ' + r2(py(rw.ys[i] + intShift(rw.xs[i])));
-      d += `L${r2(px(rw.b))} ${r2(py(rw.ys[rw.i1] + intShift(rw.b)))}L${r2(px(rw.b))} ${r2(py(rw.base(rw.b) + intShift(rw.b)))}L${r2(px(rw.a))} ${r2(py(rw.base(rw.a) + intShift(rw.a)))}Z`;
+      const ra = Math.max(xlo, rw.a), rb = Math.min(xhi, rw.b); if (!(rb > ra)) return;
+      let j0 = rw.i0, j1 = rw.i1; while (j0 < j1 && rw.xs[j0] < ra) j0++; while (j1 > j0 && rw.xs[j1] > rb) j1--;
+      const yAt = x => { const k = Math.max(rw.i0 + 1, Math.min(rw.i1, lowerBound(rw.xs, x))), x0 = rw.xs[k-1], x1 = rw.xs[k], f = x1 > x0 ? (x - x0)/(x1 - x0) : 0; return rw.ys[k-1] + (rw.ys[k] - rw.ys[k-1])*Math.max(0, Math.min(1, f)); };
+      const ya = ra > rw.a ? yAt(ra) : rw.ys[rw.i0], yb = rb < rw.b ? yAt(rb) : rw.ys[rw.i1];
+      const st = Math.max(1, Math.ceil((j1 - j0)/500)); let d = `M${r2(px(ra))} ${r2(py(ya + intShift(ra)))}`;
+      for (let i=j0;i<=j1;i+=st) d += 'L' + r2(px(rw.xs[i])) + ' ' + r2(py(rw.ys[i] + intShift(rw.xs[i])));
+      d += `L${r2(px(rb))} ${r2(py(yb + intShift(rb)))}L${r2(px(rb))} ${r2(py(rw.base(rb) + intShift(rb)))}L${r2(px(ra))} ${r2(py(rw.base(ra) + intShift(ra)))}Z`;
       s.push(`<path d="${d}" fill="${run.color}" fill-opacity="0.22" stroke="none"/>`);
-      s.push(`<line x1="${r2(px(rw.a))}" y1="${r2(py(rw.base(rw.a) + intShift(rw.a)))}" x2="${r2(px(rw.b))}" y2="${r2(py(rw.base(rw.b) + intShift(rw.b)))}" stroke="#555555" stroke-width="0.5"/>`);
-      [[rw.a, rw.ys[rw.i0]], [rw.b, rw.ys[rw.i1]]].forEach(([x, yv]) => s.push(`<line x1="${r2(px(x))}" y1="${r2(py(yv + intShift(x)))}" x2="${r2(px(x))}" y2="${r2(py(rw.base(x) + intShift(x)))}" stroke="#555555" stroke-width="0.5"/>`));
+      s.push(`<line x1="${r2(px(ra))}" y1="${r2(py(rw.base(ra) + intShift(ra)))}" x2="${r2(px(rb))}" y2="${r2(py(rw.base(rb) + intShift(rb)))}" stroke="#555555" stroke-width="0.5"/>`);
+      [[rw.a, rw.ys[rw.i0]], [rw.b, rw.ys[rw.i1]]].filter(([x]) => x >= xlo && x <= xhi).forEach(([x, yv]) => s.push(`<line x1="${r2(px(x))}" y1="${r2(py(yv + intShift(x)))}" x2="${r2(px(x))}" y2="${r2(py(rw.base(x) + intShift(x)))}" stroke="#555555" stroke-width="0.5"/>`));
     });
     s.push('</g>');
   }
@@ -4132,7 +4178,9 @@ function buildRunPlainSVG(run, ov){
   { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle"${halo}>${t}</text>`); }); }
   if (xlab) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle"${halo}>${esc(xlab)}</text>`);
   yt.v.forEach((v,i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
-  if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+plotB)/2)}) rotate(-90)" text-anchor="middle" fill="${hasRight ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
+  /* a compact inset names its unit across the top of its axis, so the rotated title does not take the width the magnified data needs */
+  if (o.rylabel && unitTop) s.push(`<text x="${r2(padL)}" y="${r2(Math.max(fs*0.8, T - fs*0.62))}" text-anchor="start" fill="${hasRight ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
+  else if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+plotB)/2)}) rotate(-90)" text-anchor="middle" fill="${hasRight ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
   if (hasRight) {
     st.v.forEach((v,i) => s.push(`<text x="${r2(R + tOut + 3)}" y="${r2(py2(v) + fs*0.35)}">${stl[i]}</text>`));
     if (secTitle) {
