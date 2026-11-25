@@ -2260,10 +2260,14 @@ function parseAkta(text, fname){
     const h = csvSplit(lines[i], dd).map(clean), x = h.findIndex(s => /^(ml|min)$/i.test(s)), ch = h.findIndex(s => /^channel$/i.test(s)), val = h.findIndex(s => /^value$/i.test(s));
     if (x < 0 || ch < 0 || val < 0) continue;
     const byName = new Map();
-    for (let j=i+1;j<lines.length;j++) { const f = csvSplit(lines[j], dd), name = clean(f[ch] || ''), xi = toNumInfo(f[x] || '', dd !== ','), yi = toNumInfo(f[val] || '', dd !== ',');
-      if (!name || !xi || !yi || !isFinite(xi.v) || !isFinite(yi.v)) continue;
+    for (let j=i+1;j<lines.length;j++) { const f = csvSplit(lines[j], dd), name = clean(f[ch] || ''), xi = toNumInfo(f[x] || '', dd !== ',');
+      if (!name || !xi || !isFinite(xi.v)) continue;
       if (!byName.has(name)) { const kind = curveKind(name, 'mAU'); byName.set(name, {name, xu: h[x], yu: kind === 'uv' ? 'mAU' : kind === 'cond' ? 'mS/cm' : kind === 'grad' ? '% B' : '', kind, xs: [], ys: [], ev: [], sat: 0, satMax: -Infinity}); }
-      const cv = byName.get(name); cv.xs.push(xi.v); cv.ys.push(yi.v); if (yi.sat) { cv.sat++; cv.satMax = Math.max(cv.satMax, Math.abs(yi.v)); }
+      const cv = byName.get(name);
+      if (cv.kind === 'frac' || cv.kind === 'log' || cv.kind === 'inj') { const label = clean(f[val] || ''); if (label) cv.ev.push({x: xi.v, label}); continue; }
+      const yi = toNumInfo(f[val] || '', dd !== ',');
+      if (!yi || !isFinite(yi.v)) continue;
+      cv.xs.push(xi.v); cv.ys.push(yi.v); if (yi.sat) { cv.sat++; cv.satMax = Math.max(cv.satMax, Math.abs(yi.v)); }
     }
     const curves = [...byName.values()]; curves.forEach(cv => { const cl = cleanXY(cv.xs, cv.ys); cv.xs = cl.xs; cv.ys = cl.ys; cv.dupX = cl.dupX; cv.dupDiff = cl.dupDiff; });
     const tidy = aktaFromCurves(curves, fname, {delimiter: dd}); if (tidy) return tidy;

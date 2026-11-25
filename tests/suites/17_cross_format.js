@@ -266,5 +266,45 @@ async function testFormat(filename, desc) {
     }
   });
 
+  /* #1767: Preserve string fraction events in long-format ÄKTA exports */
+  await T.t('long_format_fraction_events', async () => {
+    const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      await h.newProject('long-format fractions');
+
+      const lines = [
+        'mL,Channel,Value',
+        '0.0,UV 1_280,0.5',
+        '0.5,Fraction,F1',
+        '1.0,UV 1_280,10.2',
+        '1.5,Fraction,F2',
+        '2.0,UV 1_280,50.8',
+        '2.5,Fraction,F3',
+        '3.0,UV 1_280,15.1',
+        '4.0,UV 1_280,1.0'
+      ];
+      await p.setInputFiles('#file', {
+        name: 'long_format_fracs.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(lines.join('\n') + '\n')
+      });
+      await p.waitForTimeout(800);
+
+      const runCard = p.locator('.trace.run.sel').first();
+      const meta = await runCard.locator('.meta').textContent();
+      const poolInput = runCard.locator('label:has-text("Pooled fractions") input');
+      const poolVis = await poolInput.isVisible();
+
+      T.check('long_format_fracs/metadata', (meta || '').includes('3 fractions, F1 to F3'),
+        `Expected metadata to report '3 fractions, F1 to F3', got: ${meta}`);
+      T.check('long_format_fracs/pool-input-visible', poolVis,
+        'Pooled fractions input should be visible on selected run-card');
+      T.check('long_format_fracs/no-errors', errs.length === 0, errs.join(' | '));
+    } finally {
+      await close();
+    }
+  });
+
   T.done();
 })();
