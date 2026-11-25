@@ -99,7 +99,26 @@ const SYN_PDB = [
     T.check('nd_toast.no_hidden_tab', !!ndMsg && !/NanoDrop spectra tab/i.test(ndMsg), ndMsg || JSON.stringify(pills));
   });
 
-    await T.t('universal_labq_and_tidy16_migration', async () => {
+  await T.t('timeline_keyboard_nav', async () => {
+    await h.step('construct');
+    await h.wait(200);
+    const steps0 = await p.$$eval('#tl .tl-i[data-step]', els => els.filter(e => !e.hidden && e.getClientRects().length > 0).map(e => e.dataset.step));
+    await p.locator('#tl .tl-i[data-step="construct"]').focus();
+    await p.keyboard.press('ArrowDown');
+    await h.wait(200);
+    const afterDown = await p.$eval('#tl .tl-i[aria-current="step"]', e => ({step: e.dataset.step, focused: document.activeElement === e}));
+    T.check('tl_kbd.arrow_down_advances_step', steps0.length >= 2 && afterDown.step === steps0[1] && afterDown.focused, `expected=${steps0[1]}, got=${JSON.stringify(afterDown)}`);
+
+    await p.keyboard.press('End');
+    await h.wait(200);
+    const afterEnd = await p.$eval('#tl .tl-i[aria-current="step"]', e => e.dataset.step);
+    await p.keyboard.press('Home');
+    await h.wait(200);
+    const afterHome = await p.$eval('#tl .tl-i[aria-current="step"]', e => e.dataset.step);
+    T.check('tl_kbd.end_and_home_jump', afterEnd === steps0[steps0.length - 1] && afterHome === steps0[0], `afterEnd=${afterEnd}, afterHome=${afterHome}, steps=${JSON.stringify(steps0)}`);
+  });
+
+  await T.t('universal_labq_and_tidy16_migration', async () => {
     const personalRe = /HsGS|glnA|KPP-MM|hNADK/i;
     const scanStepChips = async stepName => {
       await h.step(stepName); await h.wait(150);
