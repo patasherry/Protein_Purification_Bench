@@ -201,6 +201,18 @@ function parseZip(buffer) {
         zipEntries.some(e => e.name.endsWith('.svg')) && zipEntries.some(e => e.name.endsWith('.png')),
         `contains svg & png files`
       );
+      const zSum = zipEntries.find(e => e.name === 'purification_summary.csv');
+      const zInt = zipEntries.find(e => e.name === 'peak_integration.csv');
+      const zBand = zipEntries.find(e => /^bands_.+\.csv$/.test(e.name));
+      const zMeth = zipEntries.find(e => e.name === 'methods_and_results.txt');
+      T.check(
+        'export.zip.source_data_and_methods',
+        !!(zSum && zSum.data.length > 0 && parseCsv(zSum.data.toString('utf8')).length >= 2 &&
+           zInt && zInt.data.length > 0 && parseCsv(zInt.data.toString('utf8')).length >= 2 &&
+           zBand && zBand.data.length > 0 && parseCsv(zBand.data.toString('utf8')).length >= 2 &&
+           zMeth && zMeth.data.toString('utf8').trim().length > 0),
+        `entries=${JSON.stringify(zipEntries.map(e => `${e.name}:${e.data.length}`))}`
+      );
     }
 
     // Summary CSV Export (#sumCsv)
@@ -219,6 +231,32 @@ function parseZip(buffer) {
         sumRows.every(r => r.every(c => !/\b(NaN|undefined|null)\b/i.test(c))),
         'no NaN, undefined or null'
       );
+    }
+
+    // Print Stylesheet (@media print)
+    await p.emulateMedia({ media: 'print' });
+    try {
+      const pr = await p.evaluate(() => {
+        const disp = s => { const el = document.querySelector(s); return el ? getComputedStyle(el).display : null; };
+        const vis = s => { const el = document.querySelector(s); if (!el) return false; const r = el.getBoundingClientRect(); return getComputedStyle(el).display !== 'none' && r.width > 0 && r.height > 0; };
+        return {
+          panel: disp('aside#panel'),
+          exportBtns: disp('.canvas-foot .export'),
+          topAct: disp('header.top .top-act'),
+          sumCsv: disp('#sumCsv'),
+          paperSvg: vis('#paper svg'),
+          sumTable: vis('#sumTable'),
+          methodsText: vis('#methodsText')
+        };
+      });
+      T.check(
+        'export.print_stylesheet',
+        pr.panel === 'none' && pr.exportBtns === 'none' && pr.topAct === 'none' && pr.sumCsv === 'none' &&
+        pr.paperSvg && pr.sumTable && pr.methodsText,
+        JSON.stringify(pr)
+      );
+    } finally {
+      await p.emulateMedia({ media: 'screen' });
     }
   });
 
