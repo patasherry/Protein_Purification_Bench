@@ -1019,7 +1019,7 @@ button,input,select,textarea{font-family:inherit}
     </section>
 
 
-    <section class="grp" data-for="workflow" data-step="figure">
+    <section class="grp" data-for="workflow passport" data-step="figure">
       <h2>Purification workflow</h2>
       <div class="seg" role="radiogroup" aria-label="Workflow layout">
         <input type="radio" name="wfLayout" id="wf-row" value="row" data-opt="wfLayout"><label for="wf-row">Side by side</label>
@@ -1037,6 +1037,7 @@ button,input,select,textarea{font-family:inherit}
         <label class="check" title="Show each step's assigned gel lanes over their full top-to-bottom height under the chromatogram instead of focusing on the main band. Single-run figures keep their Gel view setting"><input type="checkbox" id="o-wfGelFull" data-opt="wfGelFull">Full uncropped gel in the workflow</label>
         <label class="check" title="Draw each chromatogram over its whole run instead of the cropped window. The crop of the run itself is kept for the single-run figure"><input type="checkbox" id="o-wfFull" data-opt="wfFull">Full chromatogram in the workflow</label>
         <button class="btn quiet" id="wfFullView" type="button" title="Open a scalable SVG view with every workflow chromatogram shown over its whole run">View full chromatograms</button>
+        <label class="check" title="Switch to the optional QC Passport figure mode beside the workflow figure"><input type="checkbox" id="o-qcPassport" data-opt="qcPassport">QC Passport figure mode</label>
         <label class="check" title="One line under the figure with the final pool's mg, mg per L of culture and purity, from the summary table"><input type="checkbox" id="o-wfYield" data-opt="wfYield">Final yield under the figure</label>
       </div>
       <details class="cardtext" id="wfLayoutMore"><summary>Panel geometry and labels (optional)</summary>
@@ -1889,6 +1890,7 @@ button,input,select,textarea{font-family:inherit}
           <option value="1200">1200 dpi</option>
         </select></span>
         <button class="btn" id="saveAll" type="button" hidden>Save all (ZIP)</button>
+        <button class="btn" id="savePassportSvg" type="button" hidden>Export QC Passport</button>
       </div>
     </div>
     </section>
@@ -1946,7 +1948,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', extinction:'', epsMode:'auto', cysOx:false, path:2,
   wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
-  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600, uiTheme:'auto', tidy16:false};
+  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600, uiTheme:'auto', qcPassport:false, tidy16:false};
 const RANGE = ['xmin','xmax','ymin','ymax','zoomWinA','zoomWinB'];
 /* Native E. coli proteins commonly co-purified by IMAC (Bolanos-Garcia & Davies 2006, Table 1), DnaK, and common purification additives.
    Sizes are calculated masses in kDa; "app" is an apparent SDS-PAGE size where a protein is known to run off its mass. */
@@ -7254,10 +7256,155 @@ function assayMethodsParts(lc, v){
 }
 
 /* ---------- figures ---------- */
+function buildQcPassportSVG(){
+  const data = assembleQcPassport();
+  if (!data || !Array.isArray(data.rows) || !data.rows.length) return {svg: null, geo: null};
+  const wPt = Math.max(numOr(opt.wfW, 7.2), 6.4)*72, S = style({wPt, hPt: 200}), {fs, lw, aw} = S, W = wPt, isGray = opt.palette === 'gray';
+  const tw = (t, f) => typeof textW === 'function' ? textW(t, f) : String(t || '').length*f*0.62;
+  const fitTxt = (t, maxW, f) => { let q = String(t == null ? '' : t).trim(); if (tw(q, f) <= maxW) return q; while (q.length > 3 && tw(q + '…', f) > maxW) q = q.slice(0, -1).trim(); return q + '…'; };
+  const wrapTxt = (t, maxW, f) => { const words = String(t || '').split(/\s+/).filter(Boolean), out = []; let ln = ''; words.forEach(w => { const cand = ln ? ln + ' ' + w : w; if (ln && tw(cand, f) > maxW) { out.push(fitTxt(ln, maxW, f)); ln = w; } else ln = cand; }); if (ln) out.push(fitTxt(ln, maxW, f)); return out; };
+  const pad = Math.max(10, fs*1.4), cardW = W - pad*2, innerPad = Math.max(8, fs*0.95);
+  const cardH = Math.max(96, fs*12.2), rowGap = Math.max(8, fs*1.0), connW = Math.max(22, fs*2.9);
+  const defsMap = new Map(), body = [];
+  body.push(`<text x="${r2(pad)}" y="${r2(pad + fs*0.9)}" font-size="${r2(fs*1.08)}" font-weight="bold" fill="#000000">Purification QC Passport</text>`);
+  body.push(`<text x="${r2(W - pad)}" y="${r2(pad + fs*0.9)}" font-size="${r2(fs*0.82)}" fill="#475569" text-anchor="end">${data.rows.length} workflow step${data.rows.length === 1 ? '' : 's'}</text>`);
+  let curY = pad + fs*1.75;
+  const capParts = [];
+  data.rows.forEach((row, idx) => {
+    const ry = curY; curY += cardH + rowGap;
+    const stepLbl = (idx + 1) + '. ' + (row.stepTitle || row.runName || row.runId);
+    const det = row.detector || {}, detWl = det.wavelengthNm ? 'UV ' + det.wavelengthNm + ' nm' : (det.curveName || 'UV');
+    const detStr = `${detWl} · Path ${fmtAuto(det.effPathMm || 2)} mm (${det.pathAssumed ? 'assumed' : 'measured'})`;
+    body.push(`<g class="passport-row" data-run="${esc(row.runId)}">`);
+    body.push(`<rect class="passport-row-card" x="${r2(pad)}" y="${r2(ry)}" width="${r2(cardW)}" height="${r2(cardH)}" rx="4" fill="${isGray ? '#fafafa' : '#f8fafc'}" stroke="#cbd5e1" stroke-width="${r2(Math.max(0.6, aw))}"/>`);
+    const hy = ry + fs*1.32;
+    body.push(`<text x="${r2(pad + innerPad)}" y="${r2(hy)}" font-size="${r2(fs*0.94)}" font-weight="bold" fill="#000000">${esc(fitTxt(stepLbl, cardW*0.5, fs*0.94))}</text>`);
+    body.push(`<text x="${r2(pad + cardW - innerPad)}" y="${r2(hy)}" font-size="${r2(fs*0.76)}" fill="#334155" text-anchor="end">${esc(fitTxt(detStr, cardW*0.46, fs*0.76))}</text>`);
+    const secTop = ry + fs*2.0, secH = cardH - fs*2.6, usableW = cardW - innerPad*2 - connW*2;
+    const w1 = Math.round(usableW*0.35), w2 = Math.round(usableW*0.35), w3 = usableW - w1 - w2;
+    const x1 = pad + innerPad, x2 = x1 + w1 + connW, x3 = x2 + w2 + connW, midY = secTop + secH*0.54;
+    const drawArrow = (xa, xb, lbl) => {
+      const col = isGray ? '#555555' : '#475569', ah = Math.max(3, fs*0.42);
+      body.push(`<g class="passport-lineage"><line x1="${r2(xa)}" y1="${r2(midY)}" x2="${r2(xb - ah*0.6)}" y2="${r2(midY)}" stroke="${col}" stroke-width="${r2(Math.max(0.7, aw))}"/><polygon points="${r2(xb)},${r2(midY)} ${r2(xb - ah*1.35)},${r2(midY - ah*0.75)} ${r2(xb - ah*1.35)},${r2(midY + ah*0.75)}" fill="${col}"/><text x="${r2((xa + xb)/2)}" y="${r2(midY - ah - 2)}" font-size="${r2(fs*0.64)}" fill="${col}" text-anchor="middle">${esc(lbl)}</text></g>`);
+    };
+    drawArrow(x1 + w1 + 3, x2 - 3, 'pool');
+    drawArrow(x2 + w2 + 3, x3 - 3, 'sample');
+    /* Section 1: Chromatogram thumbnail */
+    const ch = row.chromatogram || {}, hasCh = !!(ch.hasData && Array.isArray(ch.points) && ch.points.length >= 2);
+    body.push(`<g class="passport-chrom"><rect x="${r2(x1)}" y="${r2(secTop)}" width="${r2(w1)}" height="${r2(secH)}" rx="3" fill="#ffffff" stroke="${hasCh ? '#cbd5e1' : '#94a3b8'}"${hasCh ? '' : ' stroke-dasharray="3 2"'} stroke-width="0.6"/>`);
+    const chHdr = ch.source === 'shade' && ch.pool ? 'Pool ' + (ch.pool.label || ch.shade) : ch.source === 'integ' && ch.integ && ch.integ.length ? `Integrated (${ch.integ.length} pk)` : 'Chromatogram';
+    body.push(`<text x="${r2(x1 + 5)}" y="${r2(secTop + fs*0.95)}" font-size="${r2(fs*0.74)}" font-weight="bold" fill="#0f172a">${esc(fitTxt(chHdr, w1 - 10, fs*0.74))}</text>`);
+    if (hasCh) {
+      const px0 = x1 + 6, py0 = secTop + fs*1.35, pw0 = w1 - 12, ph0 = secH - fs*2.35;
+      const xs = ch.points.map(p => p[0]), ys = ch.points.map(p => p[1]);
+      const xMin = Math.min(...xs), xMax = Math.max(...xs), xSpan = Math.max(1e-6, xMax - xMin);
+      const yMin = Math.min(0, ...ys), yMax = Math.max(yMin + 1e-6, Math.max(...ys)*1.08), ySpan = Math.max(1e-6, yMax - yMin);
+      const px = v => px0 + (v - xMin)/xSpan*pw0, py = v => py0 + ph0 - (v - yMin)/ySpan*ph0;
+      if (ch.window && ch.source !== 'trace') {
+        const wa = Math.max(xMin, Math.min(xMax, ch.window[0])), wb = Math.max(wa, Math.min(xMax, ch.window[1]));
+        body.push(`<rect class="passport-pool-shade" x="${r2(px(wa))}" y="${r2(py0)}" width="${r2(Math.max(1.2, px(wb) - px(wa)))}" height="${r2(ph0)}" fill="${isGray ? '#d4d4d4' : '#fde68a'}" fill-opacity="0.6"/>`);
+      }
+      const d = ch.points.map((pt, k) => (k ? 'L' : 'M') + r2(px(pt[0])) + ' ' + r2(py(pt[1]))).join('');
+      body.push(`<line x1="${r2(px0)}" y1="${r2(py0 + ph0)}" x2="${r2(px0 + pw0)}" y2="${r2(py0 + ph0)}" stroke="#64748b" stroke-width="0.5"/>`);
+      body.push(`<path class="passport-chrom-curve" d="${d}" fill="none" stroke="${isGray ? '#222222' : '#0072B2'}" stroke-width="${r2(Math.max(0.75, lw))}" stroke-linejoin="round"/>`);
+      const subCh = `${fmt(xMin, 1)}–${fmt(xMax, 1)} ${ch.unit || 'mL'}` + (ch.pool && ch.pool.mg != null ? ` · ${sig2(ch.pool.mg)} mg` : '');
+      body.push(`<text x="${r2(x1 + 5)}" y="${r2(secTop + secH - fs*0.3)}" font-size="${r2(fs*0.66)}" fill="#475569">${esc(fitTxt(subCh, w1 - 10, fs*0.66))}</text>`);
+    } else {
+      body.push(`<text class="passport-empty" x="${r2(x1 + w1/2)}" y="${r2(secTop + secH*0.58)}" font-size="${r2(fs*0.78)}" fill="#64748b" text-anchor="middle">No data</text>`);
+    }
+    body.push(`</g>`);
+    /* Section 2: Linked NanoDrop mini-plot and A280/A260 ratio */
+    const nd = row.nanodrop, s0 = nd && Array.isArray(nd.samples) && nd.samples.length ? nd.samples[0] : null;
+    body.push(`<g class="passport-nd"><rect x="${r2(x2)}" y="${r2(secTop)}" width="${r2(w2)}" height="${r2(secH)}" rx="3" fill="#ffffff" stroke="${s0 ? '#cbd5e1' : '#94a3b8'}"${s0 ? '' : ' stroke-dasharray="3 2"'} stroke-width="0.6"/>`);
+    body.push(`<text x="${r2(x2 + 5)}" y="${r2(secTop + fs*0.95)}" font-size="${r2(fs*0.74)}" font-weight="bold" fill="#0f172a">${esc(s0 ? fitTxt('NanoDrop: ' + (s0.name || 'Pool'), w2 - 10, fs*0.74) : 'NanoDrop')}</text>`);
+    const r280_260 = s0 ? (s0.r280_260 != null ? s0.r280_260 : (nd.summary && nd.summary.r280_260)) : null;
+    const r260_280 = s0 ? (s0.r260_280 != null ? s0.r260_280 : (nd.summary && nd.summary.r260_280)) : null;
+    if (s0) {
+      const nx0 = x2 + 6, ny0 = secTop + fs*1.38, nw0 = Math.max(28, Math.round(w2*0.42)), nh0 = secH - fs*2.38;
+      const rawS = ndSamples.find(q => q && q.id === s0.id);
+      if (rawS && rawS.spec && Array.isArray(rawS.spec.wl) && rawS.spec.wl.length >= 2) {
+        const pts = rawS.spec.wl.map((w, i) => [w, rawS.spec.ab[i]]).filter(p => p[0] >= 240 && p[0] <= 340 && isFinite(p[1]));
+        const usePts = pts.length >= 2 ? pts : rawS.spec.wl.map((w, i) => [w, rawS.spec.ab[i]]).filter(p => isFinite(p[1]));
+        const wl0 = Math.min(...usePts.map(p => p[0])), wl1 = Math.max(wl0 + 1, Math.max(...usePts.map(p => p[0])));
+        const ab0 = Math.min(0, ...usePts.map(p => p[1])), ab1 = Math.max(ab0 + 0.05, Math.max(...usePts.map(p => p[1]))*1.08);
+        const npx = w => nx0 + (w - wl0)/(wl1 - wl0)*nw0, npy = a => ny0 + nh0 - (a - ab0)/(ab1 - ab0)*nh0;
+        [260, 280].forEach(wl => { if (wl >= wl0 && wl <= wl1) body.push(`<line x1="${r2(npx(wl))}" y1="${r2(ny0)}" x2="${r2(npx(wl))}" y2="${r2(ny0 + nh0)}" stroke="#cbd5e1" stroke-width="0.5" stroke-dasharray="2 1.5"/>`); });
+        body.push(`<line x1="${r2(nx0)}" y1="${r2(ny0 + nh0)}" x2="${r2(nx0 + nw0)}" y2="${r2(ny0 + nh0)}" stroke="#64748b" stroke-width="0.5"/>`);
+        body.push(`<path class="passport-nd-plot" d="${usePts.map((p, k) => (k ? 'L' : 'M') + r2(npx(p[0])) + ' ' + r2(npy(p[1]))).join('')}" fill="none" stroke="${isGray ? '#222222' : '#009E73'}" stroke-width="${r2(Math.max(0.75, lw))}" stroke-linejoin="round"/>`);
+      } else {
+        const v280 = Math.max(0, +(s0.a280 ?? s0.conc ?? 0)), v260 = s0.a280 != null && r260_280 != null ? Math.max(0, s0.a280*r260_280) : 0, vMax = Math.max(0.1, v280, v260)*1.15;
+        const bw = Math.max(6, Math.min(14, Math.floor(nw0*0.28))), bx1 = nx0 + Math.round(nw0*0.26) - Math.floor(bw/2), bx2 = nx0 + Math.round(nw0*0.72) - Math.floor(bw/2);
+        const h260 = Math.max(1.5, (v260/vMax)*nh0), h280 = Math.max(1.5, (v280/vMax)*nh0);
+        body.push(`<g class="passport-nd-plot"><line x1="${r2(nx0)}" y1="${r2(ny0 + nh0)}" x2="${r2(nx0 + nw0)}" y2="${r2(ny0 + nh0)}" stroke="#64748b" stroke-width="0.5"/><rect x="${r2(bx1)}" y="${r2(ny0 + nh0 - h260)}" width="${r2(bw)}" height="${r2(h260)}" fill="${isGray ? '#737373' : '#56B4E9'}"/><rect x="${r2(bx2)}" y="${r2(ny0 + nh0 - h280)}" width="${r2(bw)}" height="${r2(h280)}" fill="${isGray ? '#222222' : '#0072B2'}"/></g>`);
+      }
+      body.push(`<text x="${r2(nx0 + nw0/2)}" y="${r2(secTop + secH - fs*0.3)}" font-size="${r2(fs*0.62)}" fill="#475569" text-anchor="middle">260 / 280 nm</text>`);
+      const mx = nx0 + nw0 + 6, mwMax = Math.max(24, x2 + w2 - mx - 4), mf = fs*0.72;
+      const m1 = s0.a280 != null ? `A280: ${fmt(s0.a280, 2)}` : (s0.conc != null ? `${fmt(s0.conc, 2)} ${s0.unit || 'mg/mL'}` : 'A280: n/a');
+      const m2 = r280_260 != null ? `A280/A260: ${fmt(r280_260, 2)}` : 'A280/A260: n/a';
+      const m3 = r260_280 != null ? `260/280: ${fmt(r260_280, 2)}` : (s0.conc != null && s0.a280 != null ? `${fmt(s0.conc, 2)} ${s0.unit || 'mg/mL'}` : '');
+      body.push(`<text x="${r2(mx)}" y="${r2(ny0 + fs*0.85)}" font-size="${r2(mf)}" fill="#0f172a">${esc(fitTxt(m1, mwMax, mf))}</text>`);
+      body.push(`<text x="${r2(mx)}" y="${r2(ny0 + fs*2.05)}" font-size="${r2(mf)}" fill="#0f172a">${esc(fitTxt(m2, mwMax, mf))}</text>`);
+      if (m3 && ny0 + fs*3.25 <= secTop + secH - fs*0.4) body.push(`<text x="${r2(mx)}" y="${r2(ny0 + fs*3.25)}" font-size="${r2(mf)}" fill="#475569">${esc(fitTxt(m3, mwMax, mf))}</text>`);
+    } else {
+      body.push(`<text class="passport-empty" x="${r2(x2 + w2/2)}" y="${r2(secTop + secH*0.58)}" font-size="${r2(fs*0.78)}" fill="#64748b" text-anchor="middle">No data</text>`);
+    }
+    body.push(`</g>`);
+    /* Section 3: Cropped SDS-PAGE gel lanes and purity basis */
+    const hasGel = Array.isArray(row.gelLanes) && row.gelLanes.length > 0;
+    body.push(`<g class="passport-gel"><rect x="${r2(x3)}" y="${r2(secTop)}" width="${r2(w3)}" height="${r2(secH)}" rx="3" fill="#ffffff" stroke="${hasGel ? '#cbd5e1' : '#94a3b8'}"${hasGel ? '' : ' stroke-dasharray="3 2"'} stroke-width="0.6"/>`);
+    body.push(`<text x="${r2(x3 + 5)}" y="${r2(secTop + fs*0.95)}" font-size="${r2(fs*0.74)}" font-weight="bold" fill="#0f172a">${esc(hasGel ? fitTxt(`SDS-PAGE (${row.gelLanes.length} lane${row.gelLanes.length > 1 ? 's' : ''})`, w3 - 10, fs*0.74) : 'SDS-PAGE')}</text>`);
+    if (hasGel) {
+      const gx0 = x3 + 6, gy0 = secTop + fs*1.38, gh0 = secH - fs*1.85;
+      const shown = row.gelLanes.slice(0, 2), stripW = Math.min(18, Math.max(11, Math.floor((w3*0.34)/shown.length)));
+      shown.forEach((gl, li) => {
+        const sxBox = gx0 + li*(stripW + 3), gObj = gels.find(q => q && q.id === gl.gelId);
+        if (gObj && gObj.out && gObj.out.url) {
+          if (!defsMap.has(gObj.id)) defsMap.set(gObj.id, `<image id="pp-gi-${gObj.id}" width="${gObj.out.w}" height="${gObj.out.h}" preserveAspectRatio="none" href="${gObj.out.url}" xlink:href="${gObj.out.url}"/>`);
+          const nL = Math.max(1, gelLabels(gObj).length), gt = gObj.pix && gObj.pix.w === gObj.out.w && opt.laneSnap !== false ? gridTrack(gObj) : null;
+          const k0 = gt ? gt.k(gObj.out.h*0.5) : 1, d0 = gt ? gt.d(gObj.out.h*0.5) : 0, srcW = gObj.out.w/nL*k0;
+          const lx = gObj.out.w/2 + ((gl.laneIndex + 0.5)*gObj.out.w/nL - gObj.out.w/2)*k0 + d0, sx = Math.max(0, Math.min(gObj.out.w - srcW, lx - srcW/2));
+          body.push(`<svg class="passport-gel-crop" x="${r2(sxBox)}" y="${r2(gy0)}" width="${r2(stripW)}" height="${r2(gh0)}" viewBox="${r2(sx)} 0 ${r2(srcW)} ${r2(gObj.out.h)}" preserveAspectRatio="none"><use href="#pp-gi-${gObj.id}" xlink:href="#pp-gi-${gObj.id}"/></svg>`);
+        }
+        body.push(`<rect x="${r2(sxBox)}" y="${r2(gy0)}" width="${r2(stripW)}" height="${r2(gh0)}" fill="${gObj && gObj.out ? 'none' : '#f1f5f9'}" stroke="#475569" stroke-width="0.5"/>`);
+      });
+      const tx = gx0 + shown.length*(stripW + 3) + 4, twMax = Math.max(24, x3 + w3 - tx - 4), gf = fs*0.72;
+      const pWith = row.gelLanes.find(l => l.purity != null);
+      const lNames = row.gelLanes.map(l => l.label || ('#' + (l.laneIndex + 1))).join(', ');
+      const basisTxt = row.gelLanes[0].purityBasis === 'tagged' ? 'tagged bands' : 'lane stain';
+      body.push(`<text x="${r2(tx)}" y="${r2(gy0 + fs*0.85)}" font-size="${r2(gf)}" fill="#0f172a">${esc(fitTxt('Lane: ' + lNames, twMax, gf))}</text>`);
+      body.push(`<text x="${r2(tx)}" y="${r2(gy0 + fs*2.05)}" font-size="${r2(gf)}" fill="#0f172a">${esc(fitTxt(pWith ? `Purity: ${fmt(pWith.purity, 1)}%` : 'Purity: unmeasured', twMax, gf))}</text>`);
+      if (gy0 + fs*3.25 <= secTop + secH - fs*0.35) body.push(`<text x="${r2(tx)}" y="${r2(gy0 + fs*3.25)}" font-size="${r2(gf)}" fill="#475569">${esc(fitTxt('Basis: ' + basisTxt, twMax, gf))}</text>`);
+    } else {
+      body.push(`<text class="passport-empty" x="${r2(x3 + w3/2)}" y="${r2(secTop + secH*0.58)}" font-size="${r2(fs*0.78)}" fill="#64748b" text-anchor="middle">No data</text>`);
+    }
+    body.push(`</g></g>`);
+    /* Row summary for measured-vs-absent caption */
+    const cCh = hasCh ? (ch.source === 'shade' ? 'chromatogram pool measured' : ch.source === 'integ' ? 'chromatogram peak integration measured' : 'chromatogram trace present') + ` (path ${fmtAuto(det.effPathMm || 2)} mm ${det.pathAssumed ? 'assumed' : 'measured'})` : 'chromatogram absent (No data)';
+    const cNd = s0 ? (r280_260 != null ? `NanoDrop A280 and A280/A260 measured (${fmt(r280_260, 2)})` : (s0.a280 != null || s0.conc != null ? 'NanoDrop concentration measured (A280/A260 absent)' : 'NanoDrop linked (values absent)')) : 'NanoDrop A280/A260 absent (No data)';
+    const pLane = hasGel ? row.gelLanes.find(l => l.purity != null) : null;
+    const cGel = hasGel ? (pLane ? `SDS-PAGE lane ${row.gelLanes.map(l => l.label || ('#' + (l.laneIndex + 1))).join('/')} purity measured (${fmt(pLane.purity, 1)}%, ${row.gelLanes[0].purityBasis === 'tagged' ? 'tagged' : 'lane stain'} basis)` : `SDS-PAGE lane ${row.gelLanes.map(l => l.label || ('#' + (l.laneIndex + 1))).join('/')} present (purity unmeasured)`) : 'SDS-PAGE gel lane absent (No data)';
+    capParts.push(`Step ${idx + 1} (${row.stepTitle || row.runName || row.runId}): ${cCh}; ${cNd}; ${cGel}.`);
+  });
+  curY -= rowGap * 0.35;
+  const foot = typeof buildQcPassportFooterSVG === 'function' ? buildQcPassportFooterSVG(data, {x: pad, y: curY, w: cardW, fs, aw, isGray, tw, fitTxt, wrapTxt}) : null;
+  if (foot && foot.svg) { body.push(foot.svg); curY += foot.h + fs*0.75; }
+  const capFs = fs*0.76, capLh = capFs*1.36, capLines = wrapTxt('Caption — ' + capParts.join(' '), cardW - 4, capFs);
+  body.push(`<g id="qcPassportCaption" class="passport-caption" font-size="${r2(capFs)}" fill="#334155">`);
+  capLines.forEach((ln, li) => { body.push(`<text x="${r2(pad)}" y="${r2(curY + fs*0.85 + li*capLh)}">${esc(ln)}</text>`); });
+  body.push(`</g>`);
+  const H = curY + fs*0.85 + Math.max(0, capLines.length - 1)*capLh + pad;
+  const head = style({wPt: W, hPt: H}).head, defs = defsMap.size ? `<defs>${[...defsMap.values()].join('')}</defs>` : '';
+  const out = [head];
+  if (defs) out.push(defs);
+  if (opt.bg) out.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
+  out.push(body.join(''), '</svg>');
+  return {svg: out.join(''), geo: {W, H, passport: true}};
+}
 function figures(){
   const f = [];
   if (traces.length) f.push({kind:'overlay', id:'overlay', name: traces.every(t=>t.ex) ? 'HPLC example' : 'HPLC overlay'});
   { const nwf = runs.filter(r => r.inWf).length, fp = prep.on && prep.finPanel && FIN_KEYS.some(k => hasTxt(prep[k])) && !finHasPlot() ? 1 : 0; if (nwf >= 2 || (nwf === 1 && (prepSteps().length || prep.cleave || fp)) || (PROJ && nwf + prepSteps().length + manSteps().length + fp >= 1)) f.push({kind:'workflow', id:'workflow', name:'Purification workflow'}); }
+  if (runs.some(r => r && r.inWf && !r.isStd) && (opt.qcPassport || cur === 'passport')) f.push({kind:'passport', id:'passport', name:'QC Passport'});
   /* in a project each upstream step has its own figure */
   if (PROJ && CL().type === 'cloning') clSteps().forEach(s => f.push({kind: 'step', id: 'step:' + s.k, name: s.t, step: s.k}));
   if (PROJ) manSteps().forEach(m => f.push({kind: 'step', id: 'step:' + m.id, name: manObj(m).name, step: m.id}));
@@ -7290,6 +7437,7 @@ function buildFig(f, screen){ const was = FIG_SCREEN; FIG_SCREEN = !!screen;
     if (!f) return {svg:null, geo:null};
     if (f.kind === 'run') return buildRunFig(f.run);
     if (f.kind === 'workflow') return buildWorkflow();
+    if (f.kind === 'passport') return buildQcPassportSVG();
     if (f.kind === 'gel') return buildGelSVG(f.gel);
     if (f.kind === 'cal') return buildCalSVG(f.cal);
     if (f.kind === 'struct') return buildStructSVG(struct);
@@ -7413,6 +7561,7 @@ function render(){
   if (tabs._cur !== cur && !tabs.hidden) { tabs._cur = cur; const at = tabs.querySelector('[aria-selected="true"]');
     if (at) { const l = at.offsetLeft - tabs.offsetLeft, r = l + at.offsetWidth; if (l < tabs.scrollLeft) tabs.scrollLeft = l - 8; else if (r > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = r - tabs.clientWidth + 8; } }
   $('#saveAll').hidden = figs.length < 2;
+  { const pb = $('#savePassportSvg'); if (pb) pb.hidden = !runs.some(r => r && r.inWf && !r.isStd); }
   list.querySelectorAll('.run,.gelc').forEach(el => el.classList.toggle('sel', el.dataset.id === cur));
   list.classList.toggle('focus', kind !== 'overlay' && kind !== 'workflow');
   $('#panel').dataset.kind = kind;
@@ -7798,6 +7947,7 @@ function onOpt(e){
   if (['zoomInsetPos', 'zoomInsetSize'].includes(k)) { insetClear(opt); runs.forEach(insetClear); }
   if (['peakDec', 'path', 'eps', 'extinction', 'protSeq', 'tagSeq', 'tagPreset'].includes(k)) { renderList(); syncAllChargeWarnings(); }
   if (k === 'uiTheme') { applyUiTheme(); syncControls(); saveOpt(); }
+  if (k === 'qcPassport') cur = v && runs.some(r => r && r.inWf && !r.isStd) ? 'passport' : 'workflow';
   if (k === 'runCond') syncControls();
   render();
 }
@@ -16373,7 +16523,7 @@ function selectStep(k){
   if (k !== curStep) $('#ssQuick')._all = false;
   if (k.startsWith('cal:')) { const pn = $('#secPanel'); if (pn) { pn.classList.remove('collapsed'); const h = pn.querySelector(':scope > h2'); if (h) h.setAttribute('aria-expanded', 'true'); } }
   curStep = k; prep.on = true;
-  cur = k === 'hplc' ? 'overlay' : (k.startsWith('cal:') || k.startsWith('assay:')) ? k : k.startsWith('btw:') ? 'conc:' + k.slice(4) : k.startsWith('run:') ? k.slice(4) : k.startsWith('man:') ? 'step:' + k.slice(4) : k === 'final' || k === 'figure' ? 'workflow' : 'step:' + k;
+  cur = k === 'hplc' ? 'overlay' : (k.startsWith('cal:') || k.startsWith('assay:')) ? k : k.startsWith('btw:') ? 'conc:' + k.slice(4) : k.startsWith('run:') ? k.slice(4) : k.startsWith('man:') ? 'step:' + k.slice(4) : k === 'final' || k === 'figure' ? (k === 'figure' && opt.qcPassport && runs.some(r => r && r.inWf && !r.isStd) ? 'passport' : 'workflow') : 'step:' + k;
   if (!figures().some(f => f.id === cur)) cur = k.startsWith('run:') || k.startsWith('btw:') ? k.slice(4) : k === 'final' && figures().some(f => f.id === 'step:final') ? 'step:final' : 'step:construct';
   marking = null; tagMode = ''; syncControls(); renderList(); render();
   const p = $('#panel'); if (p && p.scrollTo) p.scrollTo({top: 0, behavior: smooth()});
@@ -16423,6 +16573,7 @@ function baseName(f){
   if (f && f.kind === 'run') return safe(f.run.name);
   if (f && f.kind === 'gel') return 'gel_' + safe(f.gel.name);
   if (f && f.kind === 'workflow') return PROJ ? safe(PROJ.name) + '_workflow' : 'purification_workflow';
+  if (f && f.kind === 'passport') return (PROJ ? safe(PROJ.name) + '_' : '') + 'qc_passport';
   if (f && f.kind === 'step') return (PROJ ? safe(PROJ.name) + '_' : '') + safe(f.step);
   if (f && f.kind === 'struct') return 'structure_' + safe(struct ? struct.code : 'model');
   if (f && f.kind === 'nd') return 'nanodrop_spectra';
@@ -16455,6 +16606,7 @@ function toPng(svg, geo, dpi){
 }
 const XMLH = '<?xml version="1.0" encoding="UTF-8"?>\n';
 $('#saveSvg').addEventListener('click', () => { const f = curFig(), {svg} = buildFig(f); if (!svg) return toast('Nothing to save yet'); saveFile(baseName(f) + '.svg', XMLH + svg); });
+$('#savePassportSvg').addEventListener('click', () => { const f = {kind: 'passport', id: 'passport', name: 'QC Passport'}, {svg} = buildFig(f); if (!svg) return toast('Nothing to save yet'); saveFile(baseName(f) + '.svg', XMLH + svg); });
 $('#savePng').addEventListener('click', async () => {
   const f = curFig(), {svg, geo} = buildFig(f); if (!svg) return toast('Nothing to save yet');
   const dpi = +opt.dpi || 600;
