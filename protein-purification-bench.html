@@ -3313,21 +3313,40 @@ function assaySeriesData(a, run){
   items.forEach(q => { q.err = showErr === 'sem' ? q.sem : showErr === 'sd' ? q.sd : null; });
   return {disp, mode, color, yUnit, yLabel, showErr, placement, items, fitScale};
 }
-function drawAssayPointErr(s, X, Y, q, py, showErr, color, lw, fs){
+function assayErrNote(pts, showErr){
+  if (showErr !== 'sd' && showErr !== 'sem') return '';
+  const ep = (pts || []).filter(q => q && q.err != null && q.err > 0);
+  if (!ep.length) return '';
+  const ns = [...new Set(ep.map(q => Array.isArray(q.pts) ? q.pts.length : 0).filter(n => n > 1))].sort((a, b) => a - b);
+  const nPart = ns.length === 1 ? ` (n = ${ns[0]})` : ns.length > 1 ? ` (n = ${ns[0]}–${ns[ns.length - 1]})` : '';
+  return `Mean ± ${showErr.toUpperCase()}${nPart}`;
+}
+function drawAssayGlyph(s, X, Y, r, shape, fill, stroke, sw, cls){
+  const cAttr = cls ? ` class="${cls}"` : '';
+  if (shape === 'rect') {
+    const d = r*0.88;
+    s.push(`<rect${cAttr} x="${r2(X - d)}" y="${r2(Y - d)}" width="${r2(d*2)}" height="${r2(d*2)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`);
+  } else if (shape === 'tri') {
+    s.push(`<polygon${cAttr} points="${r2(X)},${r2(Y - r*1.12)} ${r2(X + r*1.02)},${r2(Y + r*0.78)} ${r2(X - r*1.02)},${r2(Y + r*0.78)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`);
+  } else {
+    s.push(`<circle${cAttr} cx="${r2(X)}" cy="${r2(Y)}" r="${r2(r)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`);
+  }
+}
+function drawAssayPointErr(s, X, Y, q, py, showErr, color, lw, fs, shape){
   if (showErr === 'points') {
     if (q.pts.length) {
       s.push(`<g class="assay-reps">`);
       q.pts.forEach(v => s.push(`<circle class="assay-rep" cx="${r2(X)}" cy="${r2(py(v))}" r="${r2(Math.max(1.4, fs*0.22))}" fill="${color}" fill-opacity="0.48" stroke="none"/>`));
       s.push(`</g>`);
     }
-    s.push(`<circle class="assay-pt" cx="${r2(X)}" cy="${r2(Y)}" r="${r2(Math.max(1.8, fs*0.28))}" fill="#ffffff" stroke="${color}" stroke-width="${r2(lw)}"/>`);
+    drawAssayGlyph(s, X, Y, Math.max(1.8, fs*0.28), shape, '#ffffff', color, r2(lw), 'assay-pt');
     return;
   }
   if (q.err != null && q.err > 0) {
     const yHi = py(q.y + q.err), yLo = py(q.y - q.err), cap = Math.max(1.8, fs*0.28);
     s.push(`<g class="assay-err" data-err="${esc(showErr)}" stroke="${color}" stroke-width="${r2(Math.max(0.5, lw*0.85))}"><line x1="${r2(X)}" y1="${r2(yHi)}" x2="${r2(X)}" y2="${r2(yLo)}"/><line x1="${r2(X - cap)}" y1="${r2(yHi)}" x2="${r2(X + cap)}" y2="${r2(yHi)}"/><line x1="${r2(X - cap)}" y1="${r2(yLo)}" x2="${r2(X + cap)}" y2="${r2(yLo)}"/></g>`);
   }
-  s.push(`<circle class="assay-pt" cx="${r2(X)}" cy="${r2(Y)}" r="${r2(Math.max(1.8, fs*0.3))}" fill="${color}" stroke="#ffffff" stroke-width="0.4"/>`);
+  drawAssayGlyph(s, X, Y, Math.max(1.8, fs*0.3), shape, color, '#ffffff', '0.4', 'assay-pt');
 }
 function buildAssaySVG(assay, ov){
   ov = ov || {};
@@ -3344,17 +3363,37 @@ function buildAssaySVG(assay, ov){
     : mode === 'fractions' ? (linkedRun ? runXLabel(linkedRun) : 'Fraction')
     : mode === 'profile' ? ((assay.entries && assay.entries[0] && ({pH: 'pH', temp: 'Temperature (°C)', substrate: 'Substrate', additive: 'Condition'})[assay.entries[0].group]) || 'Condition')
     : 'Purification step';
+  const seriesNames = [];
+  pts.forEach(q => { const sn = String(q.series || '').trim(); if (sn && !seriesNames.includes(sn)) seriesNames.push(sn); });
+  const isMulti = seriesNames.length >= 2, shapes = ['circle', 'rect', 'tri'];
+  const groups = isMulti ? seriesNames.map((sName, si) => {
+    const gPts = pts.filter(q => String(q.series || '').trim() === sName);
+    const gScale = ser.yUnit === 'rel%' ? ser.fitScale : (gPts[0] ? gPts[0].mul : ser.fitScale);
+    const gFit = mode === 'kinetics' ? fitAssayKinetics(assay, {series: sName}) : null;
+    return {name: sName, color: PAL.okabe[si % 8], shape: shapes[si % shapes.length], pts: gPts, scale: gScale, fit: gFit};
+  }) : null;
+  const errNote = assayErrNote(pts, ser.showErr);
   const allLow = pts.length ? pts.flatMap(q => ser.showErr === 'points' && q.pts.length ? q.pts : [q.y - (q.err || 0)]) : [0];
   const allHigh = pts.length ? pts.flatMap(q => ser.showErr === 'points' && q.pts.length ? q.pts : [q.y + (q.err || 0)]) : [1];
-  const fit = mode === 'kinetics' ? fitAssayKinetics(assay) : null;
-  if (fit && pts.length) { const xm = Math.max(...pts.map(q => q.x)); allHigh.push(fit.predict(xm)*ser.fitScale); }
-  const yMin0 = Math.min(0, ...allLow), yMax0 = Math.max(0, ...allHigh), ySpan = (yMax0 - yMin0) || 1;
-  const y0 = yMin0 < 0 ? yMin0 - ySpan*0.06 : 0, y1 = yMax0 + ySpan*0.14;
+  const fit = !isMulti && mode === 'kinetics' ? fitAssayKinetics(assay) : null;
+  if (isMulti && pts.length) {
+    const xm = Math.max(...pts.map(q => q.x));
+    groups.forEach(g => { if (g.fit) allHigh.push(g.fit.predict(xm)*g.scale); });
+  } else if (fit && pts.length) {
+    const xm = Math.max(...pts.map(q => q.x));
+    allHigh.push(fit.predict(xm)*ser.fitScale);
+  }
   const maxCatLen = !numX && pts.length ? Math.max(...pts.map(q => q.xLabel.length)) : 0;
   const rotCat = !numX && pts.length > 3 && maxCatLen > 5;
   const catExtra = rotCat ? Math.min(fs*3.2, maxCatLen*fs*0.42) : 0;
   const mT = Math.max(fs*0.75, 5) + titleH, mB = tOut + 3 + fs + catExtra + 4 + fs*1.25;
   const T = mT, B = Math.max(T + 24, H - mB), plotH = Math.max(12, B - T);
+  const legF = fs*0.72, errF = Math.max(5.2, fs*0.7);
+  const topOverlayPts = (isMulti ? groups.length*legF*1.28 + 2 : 0) + (errNote ? errF*1.28 + 2 : 0);
+  const yMin0 = Math.min(0, ...allLow), yMax0 = Math.max(0, ...allHigh), ySpan = (yMax0 - yMin0) || 1;
+  const y0 = yMin0 < 0 ? yMin0 - ySpan*0.06 : 0;
+  const headFrac = topOverlayPts > 0 ? Math.min(0.42, (topOverlayPts + 4)/Math.max(24, plotH)) : 0;
+  const y1 = yMax0 + ySpan*Math.max(0.14, headFrac/(1 - headFrac));
   let yt = ticks(y0, y1, Math.max(3, Math.round(plotH/72*2)));
   yt = fitTicks(yt, y0, y1, 4, plotH, 0, fs*1.25);
   const ytl = yt.v.map(v => tkf(v, yt.dec));
@@ -3368,7 +3407,7 @@ function buildAssaySVG(assay, ov){
     s.push(`<text x="${r2((L + R)/2)}" y="${r2((T + B)/2)}" text-anchor="middle" font-size="${r2(fs*0.85)}" fill="#777777">No activity data points</text></svg>`);
     return {svg: s.join(''), geo: {L, R, T, B, W, H, prep: ov.nest ? 'assay' : undefined, assay: true, used: H, fracC: [], nFr: 0}};
   }
-  let xlo = 0, xhi = 1, xt = null, px = x => L + (x - xlo)/(xhi - xlo)*(R - L);
+  let xlo = 0, xhi = 1, xt = null, px = x => L + (x - xlo)/(xhi - xlo)*(R - L), catLabels = null;
   if (numX) {
     const xs = pts.map(q => q.x);
     xlo = mode === 'kinetics' ? 0 : Math.min(...xs);
@@ -3378,35 +3417,88 @@ function buildAssaySVG(assay, ov){
     xhi += pad;
     xt = fitTicks(ticks(xlo, xhi, Math.max(3, Math.round((R - L)/72*2))), xlo, xhi, Math.max(3, Math.round((R - L)/72*2)), R - L, cw, fs);
     px = x => L + (x - xlo)/(xhi - xlo)*(R - L);
+  } else if (isMulti) {
+    catLabels = [];
+    pts.forEach(q => { if (!catLabels.includes(q.xLabel)) catLabels.push(q.xLabel); });
+    xlo = -0.5; xhi = catLabels.length - 0.5;
+    px = idx => L + (idx + 0.5)/catLabels.length*(R - L);
   } else {
     xlo = -0.5; xhi = pts.length - 0.5;
     px = idx => L + (idx + 0.5)/pts.length*(R - L);
   }
   s.push(`<g class="assay-panel-plot" data-assay-id="${esc(assay.id)}">`);
-  if (numX && mode === 'kinetics' && fit) {
-    let d = '';
-    for (let j = 0; j <= 120; j++) { const xx = xlo + (xhi - xlo)*j/120, yy = fit.predict(xx)*ser.fitScale; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(yy)); }
-    s.push(`<path class="assay-fit-curve" d="${d}" fill="none" stroke="${ser.color}" stroke-width="${r2(lw*1.15)}" stroke-linejoin="round"/>`);
-  } else if (numX) {
-    const sorted = pts.slice().sort((a, b) => a.x - b.x);
-    if (sorted.length > 1) {
-      let d = '';
-      sorted.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py(q.y)); });
-      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${ser.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
-    }
-  } else {
-    const bw = Math.min(fs*2.4, (R - L)/pts.length*0.56);
-    pts.forEach((q, j) => {
-      const X = px(j), yTop = py(Math.max(0, q.y)), yBot = py(Math.min(0, q.y));
-      s.push(`<rect class="assay-bar" x="${r2(X - bw/2)}" y="${r2(yTop)}" width="${r2(bw)}" height="${r2(Math.max(0.5, yBot - yTop))}" fill="${ser.color}" fill-opacity="0.28" stroke="${ser.color}" stroke-width="${r2(lw*0.8)}"/>`);
+  if (isMulti) {
+    groups.forEach((g, gi) => {
+      if (numX && mode === 'kinetics' && g.fit) {
+        let d = '';
+        for (let j = 0; j <= 120; j++) { const xx = xlo + (xhi - xlo)*j/120, yy = g.fit.predict(xx)*g.scale; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(yy)); }
+        s.push(`<path class="assay-fit-curve" data-series="${esc(g.name)}" d="${d}" fill="none" stroke="${g.color}" stroke-width="${r2(lw*1.15)}" stroke-linejoin="round"/>`);
+      } else if (numX) {
+        const sorted = g.pts.slice().sort((a, b) => a.x - b.x);
+        if (sorted.length > 1) {
+          let d = '';
+          sorted.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py(q.y)); });
+          s.push(`<path class="assay-curve" data-series="${esc(g.name)}" d="${d}" fill="none" stroke="${g.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+        }
+      } else if (catLabels) {
+        const slotW = (R - L)/catLabels.length*0.66, bw = Math.min(fs*1.8, slotW/groups.length);
+        g.pts.forEach(q => {
+          const ci = catLabels.indexOf(q.xLabel); if (ci < 0) return;
+          const X = px(ci) + (gi - (groups.length - 1)/2)*bw, yTop = py(Math.max(0, q.y)), yBot = py(Math.min(0, q.y));
+          s.push(`<rect class="assay-bar" x="${r2(X - bw*0.45)}" y="${r2(yTop)}" width="${r2(bw*0.9)}" height="${r2(Math.max(0.5, yBot - yTop))}" fill="${g.color}" fill-opacity="0.28" stroke="${g.color}" stroke-width="${r2(lw*0.8)}"/>`);
+        });
+      }
+      g.pts.forEach(q => {
+        const X = numX ? px(q.x) : (catLabels ? px(catLabels.indexOf(q.xLabel)) + (gi - (groups.length - 1)/2)*Math.min(fs*1.8, (R - L)/catLabels.length*0.66/groups.length) : L);
+        drawAssayPointErr(s, X, py(q.y), q, py, ser.showErr, g.color, lw, fs, g.shape);
+      });
     });
-  }
-  pts.forEach((q, j) => { const X = numX ? px(q.x) : px(j), Y = py(q.y); drawAssayPointErr(s, X, Y, q, py, ser.showErr, ser.color, lw, fs); });
-  if (fit) {
-    const kLbl = fit.model === 'hill' ? 'K₀.₅' : 'Km';
-    const kf = fs*0.76, lines = [`${kLbl} = ${sig2(fit.Km)} ${cUnit}`, fit.kcat != null ? `kcat = ${sig2(fit.kcat)} s⁻¹` : `Vmax = ${sig2(fit.Vmax*ser.fitScale)}`, fit.kcatKm != null ? `kcat/Km = ${fmtKcatKm(fit.kcatKm)} M⁻¹ s⁻¹` : '', fit.r2 != null ? `R² = ${fmt(fit.r2, 3)}` : ''].filter(Boolean);
-    const boxY0 = Math.max(T + kf, B - fs*0.4 - (lines.length - 1)*kf*1.2);
-    lines.forEach((ln, li) => s.push(`<text x="${r2(R - fs*0.35)}" y="${r2(boxY0 + li*kf*1.2)}" text-anchor="end" font-size="${r2(kf)}" fill="#333333">${esc(ln)}</text>`));
+    const maxLegChars = Math.max(16, Math.floor((R - L - fs*2.3)/(legF*0.58)));
+    s.push(`<g class="assay-series-legend">`);
+    let curLy = T + legF*0.95;
+    groups.forEach(g => {
+      let txt = g.name;
+      if (g.fit) {
+        const kLbl = g.fit.model === 'hill' ? 'K₀.₅' : 'Km';
+        const vPart = g.fit.kcat != null ? `kcat ${sig2(g.fit.kcat)} s⁻¹` : `Vmax ${sig2(g.fit.Vmax*g.scale)}`;
+        const full = `${g.name}: ${kLbl} ${sig2(g.fit.Km)} ${cUnit}, ${vPart}`;
+        txt = full.length <= maxLegChars ? full : `${g.name} (${kLbl} ${sig2(g.fit.Km)} ${cUnit})`.slice(0, maxLegChars);
+      } else if (txt.length > maxLegChars) txt = txt.slice(0, maxLegChars - 1) + '…';
+      const gx0 = L + fs*0.35, gx1 = L + fs*1.45, gy = curLy - legF*0.32;
+      s.push(`<line x1="${r2(gx0)}" y1="${r2(gy)}" x2="${r2(gx1)}" y2="${r2(gy)}" stroke="${g.color}" stroke-width="${r2(lw)}"/>`);
+      drawAssayGlyph(s, (gx0 + gx1)/2, gy, Math.max(1.6, legF*0.34), g.shape, g.color, '#ffffff', '0.35', 'assay-leg-pt');
+      s.push(`<text class="assay-legend-item" x="${r2(gx1 + fs*0.35)}" y="${r2(curLy)}" font-size="${r2(legF)}" fill="#222222">${esc(txt)}</text>`);
+      curLy += legF*1.28;
+    });
+    if (errNote) s.push(`<text class="assay-err-def" x="${r2(L + fs*0.35)}" y="${r2(curLy)}" font-size="${r2(errF)}" fill="#555555">${esc(errNote)}</text>`);
+    s.push(`</g>`);
+  } else {
+    if (numX && mode === 'kinetics' && fit) {
+      let d = '';
+      for (let j = 0; j <= 120; j++) { const xx = xlo + (xhi - xlo)*j/120, yy = fit.predict(xx)*ser.fitScale; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(yy)); }
+      s.push(`<path class="assay-fit-curve" d="${d}" fill="none" stroke="${ser.color}" stroke-width="${r2(lw*1.15)}" stroke-linejoin="round"/>`);
+    } else if (numX) {
+      const sorted = pts.slice().sort((a, b) => a.x - b.x);
+      if (sorted.length > 1) {
+        let d = '';
+        sorted.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py(q.y)); });
+        s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${ser.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+      }
+    } else {
+      const bw = Math.min(fs*2.4, (R - L)/pts.length*0.56);
+      pts.forEach((q, j) => {
+        const X = px(j), yTop = py(Math.max(0, q.y)), yBot = py(Math.min(0, q.y));
+        s.push(`<rect class="assay-bar" x="${r2(X - bw/2)}" y="${r2(yTop)}" width="${r2(bw)}" height="${r2(Math.max(0.5, yBot - yTop))}" fill="${ser.color}" fill-opacity="0.28" stroke="${ser.color}" stroke-width="${r2(lw*0.8)}"/>`);
+      });
+    }
+    pts.forEach((q, j) => { const X = numX ? px(q.x) : px(j), Y = py(q.y); drawAssayPointErr(s, X, Y, q, py, ser.showErr, ser.color, lw, fs); });
+    if (fit) {
+      const kLbl = fit.model === 'hill' ? 'K₀.₅' : 'Km';
+      const kf = fs*0.76, lines = [`${kLbl} = ${sig2(fit.Km)} ${cUnit}`, fit.kcat != null ? `kcat = ${sig2(fit.kcat)} s⁻¹` : `Vmax = ${sig2(fit.Vmax*ser.fitScale)}`, fit.kcatKm != null ? `kcat/Km = ${fmtKcatKm(fit.kcatKm)} M⁻¹ s⁻¹` : '', fit.r2 != null ? `R² = ${fmt(fit.r2, 3)}` : ''].filter(Boolean);
+      const boxY0 = Math.max(T + kf + (errNote ? errF*1.3 : 0), B - fs*0.4 - (lines.length - 1)*kf*1.2);
+      lines.forEach((ln, li) => s.push(`<text x="${r2(R - fs*0.35)}" y="${r2(boxY0 + li*kf*1.2)}" text-anchor="end" font-size="${r2(kf)}" fill="#333333">${esc(ln)}</text>`));
+    }
+    if (errNote) s.push(`<text class="assay-err-def" x="${r2(L + fs*0.35)}" y="${r2(T + errF*0.95)}" font-size="${r2(errF)}" fill="#555555">${esc(errNote)}</text>`);
   }
   s.push(`</g>`);
   const dir = o.ticksOut ? 1 : -1;
@@ -3414,6 +3506,7 @@ function buildAssaySVG(assay, ov){
   if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(T)}" width="${r2(R - L)}" height="${r2(B - T)}"/>`);
   else s.push(`<line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/><line x1="${r2(L)}" y1="${r2(T)}" x2="${r2(L)}" y2="${r2(B)}"/>`);
   if (numX && xt) xt.v.forEach(v => s.push(`<line x1="${r2(px(v))}" y1="${r2(B)}" x2="${r2(px(v))}" y2="${r2(B + dir*tl)}"/>`));
+  else if (catLabels) catLabels.forEach((_, j) => s.push(`<line x1="${r2(px(j))}" y1="${r2(B)}" x2="${r2(px(j))}" y2="${r2(B + dir*tl)}"/>`));
   else pts.forEach((_, j) => s.push(`<line x1="${r2(px(j))}" y1="${r2(B)}" x2="${r2(px(j))}" y2="${r2(B + dir*tl)}"/>`));
   yt.v.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - dir*tl)}" y2="${r2(py(v))}"/>`));
   s.push(`</g><g fill="#000000">`);
@@ -3422,17 +3515,17 @@ function buildAssaySVG(assay, ov){
     let xLast = -Infinity;
     xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = Math.max(hw + 1, Math.min(W - hw - 1, px(v))); if (x - hw < xLast + 2) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle">${t}</text>`); });
   } else {
-    const cf = fs*0.78;
+    const cf = fs*0.78, cats = catLabels || pts.map(q => q.xLabel);
     let xLast = -Infinity;
-    pts.forEach((q, j) => {
-      const lbl = q.xLabel.length > 12 ? q.xLabel.slice(0, 11) + '…' : q.xLabel, x = px(j);
+    cats.forEach((rawLbl, j) => {
+      const lbl = rawLbl.length > 12 ? rawLbl.slice(0, 11) + '…' : rawLbl, x = px(j);
       if (rotCat) { if (x - cf*0.6 < xLast + 1) return; xLast = x + cf*0.6; s.push(`<text transform="translate(${r2(x + cf*0.3)} ${r2(B + tOut + 3)}) rotate(-45)" text-anchor="end" font-size="${r2(cf)}">${esc(lbl)}</text>`); }
       else { const hw = lbl.length*cf*0.56/2, xc = Math.max(hw + 1, Math.min(W - hw - 1, x)); if (xc - hw < xLast + 2) return; xLast = xc + hw; s.push(`<text x="${r2(xc)}" y="${r2(xly)}" text-anchor="middle" font-size="${r2(cf)}">${esc(lbl)}</text>`); }
     });
   }
   s.push(`<text x="${r2((L + R)/2)}" y="${r2(xly + catExtra + 4 + fs*1.15)}" text-anchor="middle">${esc(xlab)}</text>`);
   yt.v.forEach((v, i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
-  s.push(`<text transform="translate(${r2(fs*0.88)} ${r2((T + B)/2)}) rotate(-90)" text-anchor="middle" font-size="${r2(ytf)}" fill="${ser.color}">${esc(ser.yLabel)}</text>`);
+  s.push(`<text transform="translate(${r2(fs*0.88)} ${r2((T + B)/2)}) rotate(-90)" text-anchor="middle" font-size="${r2(ytf)}" fill="${isMulti ? '#000000' : ser.color}">${esc(ser.yLabel)}</text>`);
   if (titleH) s.push(`<text x="${r2(L)}" y="${r2(fs*1.05)}" font-weight="bold">${esc(assay.name)}</text>`);
   s.push(`</g></svg>`);
   return {svg: s.join(''), geo: {L, R, T, B, W, H, prep: ov.nest ? 'assay' : undefined, assay: true, used: H, fracC: [], nFr: 0}};
@@ -4227,13 +4320,14 @@ function buildRunPlainSVG(run, ov){
   s.push(`<path d="${pathD(uv.xs, uv.ys, xlo, xhi, nb, px, py)}" stroke="${run.color}" stroke-width="${lw}"/>`);
   s.push('</g>');
   if (hasActOverlay) {
-    const sortedA = actPts.slice().sort((a, b) => a.x - b.x);
+    const sortedA = actPts.slice().sort((a, b) => a.x - b.x), ovErr = assayErrNote(sortedA, actSer.showErr);
     s.push(`<g class="assay-overlay" data-assay-id="${esc(runAssays[0].id)}">`);
     if (sortedA.length > 1) {
       let d = ''; sortedA.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py2(q.y)); });
       s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${actSer.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
     }
     sortedA.forEach(q => drawAssayPointErr(s, px(q.x), py2(q.y), q, py2, actSer.showErr, actSer.color, lw, fs));
+    if (ovErr) s.push(`<text class="assay-err-def" x="${r2(R - 3)}" y="${r2(T + Math.max(5.5, fs*0.75))}" text-anchor="end" font-size="${r2(Math.max(5, fs*0.68))}" fill="#555555">${esc(ovErr)}</text>`);
     s.push(`</g>`);
   }
   const dir = o.ticksOut ? 1 : -1;
@@ -4245,7 +4339,7 @@ function buildRunPlainSVG(run, ov){
   if (hasRight) st.v.forEach(v => { const y = r2(py2(v)); s.push(`<line x1="${r2(R)}" y1="${y}" x2="${r2(R + dir*tl)}" y2="${y}"/>`); });
   s.push('</g>');
   if (hasActTrack) {
-    const pyA = v => B - (v - ay0)/(ay1 - ay0)*(B - trkT), sortedA = actPts.slice().sort((a, b) => a.x - b.x);
+    const pyA = v => B - (v - ay0)/(ay1 - ay0)*(B - trkT), sortedA = actPts.slice().sort((a, b) => a.x - b.x), trkErr = assayErrNote(sortedA, actSer.showErr);
     const trkYtf = Math.min(trkTf, Math.max(5.5, (B - trkT - 4)/Math.max(1, actSer.yLabel.length*0.6)));
     s.push(`<g class="assay-track" data-assay-id="${esc(runAssays[0].id)}">`);
     if (pBlocks.length && o.poolStyle !== 'none') {
@@ -4258,6 +4352,7 @@ function buildRunPlainSVG(run, ov){
       s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${actSer.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
     }
     sortedA.forEach(q => drawAssayPointErr(s, px(q.x), pyA(q.y), q, pyA, actSer.showErr, actSer.color, lw, fs));
+    if (trkErr) s.push(`<text class="assay-err-def" x="${r2(R - 3)}" y="${r2(trkT + Math.max(5.5, fs*0.72))}" text-anchor="end" font-size="${r2(Math.max(5, fs*0.68))}" fill="#555555">${esc(trkErr)}</text>`);
     s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square">`);
     if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(trkT)}" width="${r2(R - L)}" height="${r2(B - trkT)}"/>`);
     else s.push(`<line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/><line x1="${r2(L)}" y1="${r2(trkT)}" x2="${r2(L)}" y2="${r2(B)}"/>`);
@@ -4388,12 +4483,13 @@ function buildCalSVG(cal){
   /* log axis from the 1-2-5 tick just below the smallest size to the one just above the largest */
   const seq = []; for (let e = -2; e <= 5; e++) [1, 2, 5].forEach(m => seq.push(m*Math.pow(10, e)));
   const mlo = Math.min(...ms), mhi = Math.max(...ms), tlo = seq.filter(v => v <= mlo*0.9).pop() || seq[0], thi = seq.find(v => v >= mhi*1.1) || seq[seq.length - 1];
-  const lmin = Math.log10(tlo), lmax = Math.log10(thi), yTicks = seq.filter(v => v >= tlo - 1e-12 && v <= thi + 1e-12);
+  const lmin = Math.log10(tlo), lmax = Math.log10(thi), rawYTicks = seq.filter(v => v >= tlo - 1e-12 && v <= thi + 1e-12);
   let xt = ticks(xlo, xhi, Math.max(3, Math.round(W/72*2)));
-  const mL = tOut + 3 + Math.max(...yTicks.map(v => kdaText(v).length))*cw + 5 + fs*1.2, mB = tOut + 3 + fs + 4 + fs*1.25, mT = fs*0.9, mR = fs*0.8;
+  const mL = tOut + 3 + Math.max(...rawYTicks.map(v => kdaText(v).length))*cw + 5 + fs*1.2, mB = tOut + 3 + fs + 4 + fs*1.25, mT = fs*0.9, mR = fs*0.8;
   const L = mL, R = Math.max(W - mR, L + 24), T = mT, B = Math.max(H - mB, T + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(W/72*2)), R - L, cw, fs);
   const px = x => L + (x - xlo)/(xhi - xlo)*(R - L), py = m => B - (Math.log10(m) - lmin)/(lmax - lmin)*(B - T);
+  const yTicks = []; rawYTicks.forEach(v => { if (!yTicks.length || Math.abs(py(v) - py(yTicks[yTicks.length - 1])) >= fs*1.1) yTicks.push(v); });
   const s = [S.head]; if (o.bg) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
   const dir = o.ticksOut ? 1 : -1;
   s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square"><line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/><line x1="${r2(L)}" y1="${r2(T)}" x2="${r2(L)}" y2="${r2(B)}"/>`);
@@ -4401,18 +4497,55 @@ function buildCalSVG(cal){
   yTicks.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - dir*tl)}" y2="${r2(py(v))}"/>`)); s.push('</g>');
   const fx0 = Math.max(xlo, fit.xlo - (fit.xhi - fit.xlo)*0.15), fx1 = Math.min(xhi, fit.xhi + (fit.xhi - fit.xlo)*0.15), fm = x => Math.pow(10, fit.a + fit.b*x);
   s.push(`<line x1="${r2(px(fx0))}" y1="${r2(py(fm(fx0)))}" x2="${r2(px(fx1))}" y2="${r2(py(fm(fx1)))}" stroke="#555555" stroke-width="${r2(lw)}"/>`);
-  s.push(`<g font-size="${r2(fs*0.8)}" fill="#000000">`);
-  fit.pts.forEach(q => { const X = px(q.x), right = X > (L + R)/2 + (R - L)*0.25; s.push(`<circle cx="${r2(X)}" cy="${r2(py(q.kda))}" r="${r2(fs*0.32)}" fill="#000000"/>`);
-    s.push(`<text x="${r2(X + (right ? -1 : 1)*fs*0.5)}" y="${r2(py(q.kda) + (right ? fs*1.05 : -fs*0.35))}"${right ? ' text-anchor="end"' : ''}>${esc(q.name)} (${kdaText(q.kda)})</text>`); });
-  samples.forEach(q => { s.push(`<circle cx="${r2(px(q.x))}" cy="${r2(py(q.mw))}" r="${r2(fs*0.36)}" fill="#ffffff" stroke="${RUN_COLORS.uv}" stroke-width="${r2(lw)}"/>`);
-    if (samples.length <= 6) { const left = px(q.x) > L + (R - L)*0.3; s.push(`<text x="${r2(px(q.x) + (left ? -1 : 1)*fs*0.5)}" y="${r2(py(q.mw) + fs*1.0)}"${left ? ' text-anchor="end"' : ''} fill="${RUN_COLORS.uv}">${esc(q.name)} ${q.extrap ? '~' : ''}${fmtAuto(q.mw)} kDa</text>`); } });
+  const lf = fs*0.8, r2Txt = `R² = ${fmt(fit.r2, 3)}`, r2W = r2Txt.length*lf*0.62 + 4, lbls = [];
+  s.push(`<g font-size="${r2(lf)}" fill="#000000">`);
+  fit.pts.forEach(q => {
+    const X = px(q.x), yA = py(q.kda);
+    s.push(`<circle cx="${r2(X)}" cy="${r2(yA)}" r="${r2(fs*0.32)}" fill="#000000"/>`);
+    lbls.push({text: `${q.name} (${kdaText(q.kda)})`, X, yAnchor: yA, color: ''});
+  });
+  samples.forEach(q => {
+    const X = px(q.x), yA = py(q.mw);
+    s.push(`<circle cx="${r2(X)}" cy="${r2(yA)}" r="${r2(fs*0.36)}" fill="#ffffff" stroke="${RUN_COLORS.uv}" stroke-width="${r2(lw)}"/>`);
+    if (samples.length <= 6) lbls.push({text: `${q.name} ${q.extrap ? '~' : ''}${fmtAuto(q.mw)} kDa`, X, yAnchor: yA, color: RUN_COLORS.uv});
+  });
+  lbls.forEach(it => {
+    const textW = it.text.length*lf*0.62, end = it.X + fs*0.55 + textW > R - 4;
+    it.anchor = end ? 'end' : 'start';
+    it.tx = end ? Math.min(R - 2, Math.max(Math.min(R - 2, L + 2 + textW), it.X - fs*0.55)) : Math.max(L + 2, Math.min(R - 2 - textW, it.X + fs*0.55));
+    const x0 = end ? it.tx - textW : it.tx, x1 = end ? it.tx : it.tx + textW;
+    it.yMin = x1 > R - r2W ? T + fs*1.75 : T + fs*0.95;
+  });
+  lbls.sort((a, b) => a.yAnchor - b.yAnchor);
+  const minGap = fs*1.18, yMax = B - 2.5;
+  lbls.forEach(it => { it.ty = Math.max(it.yMin, Math.min(yMax, it.yAnchor + lf*0.32)); });
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 1; i < lbls.length; i++) {
+      if (lbls[i].ty < lbls[i - 1].ty + minGap) lbls[i].ty = lbls[i - 1].ty + minGap;
+    }
+    if (lbls.length && lbls[lbls.length - 1].ty > yMax) lbls[lbls.length - 1].ty = yMax;
+    for (let i = lbls.length - 2; i >= 0; i--) {
+      if (lbls[i].ty > lbls[i + 1].ty - minGap) lbls[i].ty = lbls[i + 1].ty - minGap;
+    }
+    for (let i = 0; i < lbls.length; i++) {
+      if (lbls[i].ty < lbls[i].yMin) lbls[i].ty = lbls[i].yMin;
+      if (i > 0 && lbls[i].ty < lbls[i - 1].ty + minGap) lbls[i].ty = lbls[i - 1].ty + minGap;
+    }
+  }
+  lbls.forEach(it => {
+    const yc = it.ty - lf*0.3;
+    if (Math.abs(yc - it.yAnchor) > fs*0.45) {
+      s.push(`<line x1="${r2(it.X)}" y1="${r2(it.yAnchor)}" x2="${r2(it.anchor === 'end' ? it.tx + 1.5 : it.tx - 1.5)}" y2="${r2(yc)}" stroke="#666666" stroke-width="0.5"/>`);
+    }
+    s.push(`<text x="${r2(it.tx)}" y="${r2(it.ty)}"${it.anchor === 'end' ? ' text-anchor="end"' : ''}${it.color ? ` fill="${it.color}"` : ''}>${esc(it.text)}</text>`);
+  });
   s.push('</g><g fill="#000000">');
   const xly = B + tOut + 3 + fs*0.78;
   xt.v.forEach(v => s.push(`<text x="${r2(px(v))}" y="${r2(xly)}" text-anchor="middle">${tkf(v, xt.dec)}</text>`));
   s.push(`<text x="${r2((L + R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle">${fit.useKav ? 'K<tspan font-size="75%" dy="0.33em">av</tspan>' : cal.unit === 'min' ? 'Elution time (min)' : 'Elution volume (mL)'}</text>`);
   yTicks.forEach(v => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${kdaText(v)}</text>`));
   s.push(`<text transform="translate(${r2(fs*0.85)} ${r2((T + B)/2)}) rotate(-90)" text-anchor="middle">Apparent mass (kDa)</text>`);
-  s.push(`<text x="${r2(R)}" y="${r2(T + fs*0.6)}" text-anchor="end" font-size="${r2(fs*0.8)}">R² = ${fmt(fit.r2, 3)}</text>`);
+  s.push(`<text x="${r2(R)}" y="${r2(T + fs*0.6)}" text-anchor="end" font-size="${r2(lf)}">${r2Txt}</text>`);
   s.push('</g></svg>');
   return {svg: s.join(''), geo: {L, R, T, B, W, H, cal: true}};
 }
