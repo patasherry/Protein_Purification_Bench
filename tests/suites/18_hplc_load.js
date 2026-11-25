@@ -268,6 +268,37 @@ const IMAC = require('../data/gen_imac_missing');
     T.check('krow/compact-checkbox-width', cbW > 0 && cbW <= 20, `width=${cbW}`);
   });
 
+  await T.t('waters_empower_arw', async () => {
+    await p.reload(); await h.wait(400);
+    await h.newProject('Waters Empower ARW');
+    await p.locator('#toast').evaluate(e => e.replaceChildren());
+    const arwLines = [
+      '"SampleName"\t"Vial"\t"Inj"\t"Channel"\t"Date Acquired"\t"Acq Method Set"\t"System Name"\t"Sampling Rate"',
+      '"BSA_SEC"\t"1:A,2"\t1\t"PDA 280.0 nm"\t"2026-05-12 14:22:01"\t"SEC_280"\t"Alliance"\t2.0000'
+    ];
+    for (let i = 0; i <= 40; i++) {
+      const t = i * 0.25;
+      const au = i === 20 ? 0.42 : 0.0002 + 0.4198 * Math.exp(-0.5 * ((t - 5) / 0.35) ** 2);
+      arwLines.push(`${t.toFixed(5)}\t${au.toFixed(5)}`);
+    }
+    await p.setInputFiles('#file', {
+      name: 'empower_sec.arw',
+      mimeType: 'image/x-sony-arw',
+      buffer: Buffer.from(arwLines.join('\r\n') + '\r\n')
+    });
+    await h.wait(600);
+    const toasts = await h.toasts();
+    T.check('empower_arw/no-gel-hijack', toasts.some(t => /Loaded 1 trace/i.test(t)) && !toasts.some(t => /Could not open|Could not read|gel as PNG/i.test(t)), `toasts: ${toasts.join(' | ')}`);
+    const svgTexts = await p.$$eval('#paper svg text', els => els.map(e => e.textContent.trim())).catch(() => []);
+    T.check('empower_arw/svg-axes', svgTexts.includes('Time (min)') && svgTexts.includes('Absorbance (mAU)') && !svgTexts.some(s => /SampleName|Vial/i.test(s)), `svgTexts: ${svgTexts.join(' | ')}`);
+    const cardNames = await p.$$eval('#list .trace input[data-k="name"]', els => els.map(e => e.value.trim())).catch(() => []);
+    T.check('empower_arw/trace-name', cardNames.some(s => s.includes('BSA_SEC') && s.includes('PDA 280.0 nm')), `names: ${cardNames.join(' | ')}`);
+    const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 4000}).catch(() => null), p.click('#projSave').catch(() => null)]);
+    const saved = dl ? JSON.parse(fs.readFileSync(await dl.path(), 'utf8')) : {};
+    const tr = (saved.traces || []).find(x => x.source === 'empower_sec.arw');
+    T.check('empower_arw/au-scaled-and-uvwl', !!tr && tr.cols[0] === 'Time (min)' && tr.cols[1] === 'Absorbance (mAU)' && tr.uvWl === '280' && Math.abs(tr.rows[20][1] - 420) < 0.05, JSON.stringify(tr && {name: tr.name, cols: tr.cols, uvWl: tr.uvWl, apex: tr.rows[20]}));
+  });
+
   T.check('no-page-errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
