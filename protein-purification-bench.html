@@ -779,6 +779,21 @@ button,input,select,textarea{font-family:inherit}
 .dir-input,.dir-select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font-size:13px}
 .mini.danger{color:var(--t-con)}
 @media (prefers-reduced-motion:reduce){*,*::after{transition:none!important}}
+@media print{
+  :root,:root[data-theme="dark"]{--bg:#fff;--panel:#fff;--ink:#000;--muted:#333;--line:#ccc;--line2:#999;--paper:#fff;color-scheme:light}
+  body{background:#fff;color:#000;padding:0;margin:0}
+  header.top{position:static;border-bottom:1px solid #ccc;padding:4px 0 8px;background:#fff}
+  header.top .top-act,#projSettings,#rawPanel,#openDirBtn,aside#panel,#figtabs,#nextBar,#markPrompt,#wfTool,#wfSelBox,#dragBox,#readout,.canvas-foot .export,#toast,#sumMore,#sumCsv,#methodsCopy,#methodsGaps,#bandCsv,#intAuto,#intClear,#intMore,#intCsv,.intp-head .btns,.itab .xbtn,.zoom-inset-handles{display:none!important}
+  .app:not([hidden]){display:block;max-width:none;padding:0;margin:0}
+  main.stage{display:block}
+  .canvas,.paper,.intp{border:0;box-shadow:none;background:#fff;padding:6px 0;overflow:visible}
+  .paper{break-inside:avoid;min-height:0}
+  #paper svg{max-width:100%!important;max-height:none!important;width:100%;height:auto;cursor:default}
+  .tablewrap{overflow:visible}
+  .itab{font-size:10.5pt}
+  #sumTable th:first-child,#sumTable td:first-child{position:static;background:transparent}
+  #methodsText{border:0;padding:0;background:transparent;color:#000;resize:none;height:auto;min-height:14em;overflow:visible;white-space:pre-wrap}
+}
 </style>
 </head>
 <body>
@@ -7608,15 +7623,21 @@ $('#g-autoLadder').addEventListener('click', () => {
   const r = autoLadder(g); g._ladKey = null; if (r.err) { g.ladderMsg = r.err; toast(r.err); render(); return; }
   render(); toast(`Matched ${r.n} of ${r.of} ladder sizes to ${r.found} detected bands. Check the kDa marks against the gel.`);
 });
-$('#bandCsv').addEventListener('click', () => {
-  const g = curGel(); if (!g) return; const q = csvQuote, bl = gelBands(g), fys = bl.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean);
+function buildBandCsvString(g){
+  if (!g) return '';
+  const q = csvQuote, bl = gelBands(g), fys = bl.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean);
   const lines = [['Gel','Lane','Label','Goes with','Band','Estimated size (kDa)','% of lane','Saturated','Marked as','Possible identity (size match)','Lane purity (%)','Purity basis','Cleaved in lane (%)','Position (fraction of trimmed height)'].concat(anyFY ? ['Fraction protein (mg)','Fraction yield (%)'] : []).join(',')];
   bl.forEach((ln, idx) => { if (ln.marker) return; const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a), fy = fys[idx];
     const pu = lanePurity(g, ln), basis = opt.purBase === 'tagged' ? 'target + marked contaminants' : 'all stain in lane';
     ln.bands.forEach((b, k) => { const t = tagOf(g, ln.i, b);
       lines.push([q(g.name), ln.i + 1, q(ln.label), q(r ? r.name : ''), k + 1, b.mw == null ? '' : mwText(g, b.mw), b.pct.toFixed(2), b.sat ? 'yes' : '', t ? ({target: 'target (untagged)', tagged: 'tagged form', contam: 'contaminant'})[t.kind] : '', q(t ? '' : knownFor(g, ln.i, b).map(k => k.name).join(' / ')), pu && pu.purity != null ? pu.purity.toFixed(1) : '', pu && pu.purity != null ? q(basis) : '', pu && pu.cleaved != null ? pu.cleaved.toFixed(1) : '', ((b.yRot - g.crop.t)/(g.crop.b - g.crop.t)).toFixed(4)].concat(anyFY ? [fy && fy.mg != null ? fy.mg.toFixed(4) : '', fy && fy.yield != null ? fy.yield.toFixed(2) : ''] : []).join(',')); }); });
-  if (lines.length < 2) return toast('No bands detected yet');
-  saveFile(`bands_${safe(g.name)}.csv`, lines.join('\r\n'));
+  return lines.length < 2 ? '' : lines.join('\r\n');
+}
+$('#bandCsv').addEventListener('click', () => {
+  const g = curGel(); if (!g) return;
+  const csv = buildBandCsvString(g);
+  if (!csv) return toast('No bands detected yet');
+  saveFile(`bands_${safe(g.name)}.csv`, csv);
 });
 $('#g-autoCrop').addEventListener('click', () => { const g = curGel(); if (!g) return; const r = applyAutoCrop(g); if (!r.err) { $('#g-cropUndo').hidden = false; g.autoCropped = true; g.trimTouched = false; } syncControls(); render(); });
 $('#g-cropUndo').addEventListener('click', () => { const g = curGel(); if (!g || !g.cropPrev) return; Object.assign(g, g.cropPrev); g.cropPrev = null; processGel(g); if (g.autoLv) { autoContrast(g); processGel(g); } $('#g-cropUndo').hidden = true; syncControls(); render(); });
@@ -8196,7 +8217,8 @@ $('#methodsCopy').addEventListener('click', () => { const ta = $('#methodsText')
   const fb = () => { ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} toast(ok ? 'Methods copied' : 'Select the text and copy it'); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(() => { toast('Methods copied'); const b = $('#methodsCopy'); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy methods'; }, 1500); }, fb); else fb(); });
 $('#sumMore').addEventListener('click', () => { $('#sumTable').classList.toggle('all'); renderSumTable(); });
-$('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRows(), disp = sumDisplay(rows), actInfo = assaySummaryInfo(rows, disp); if (!rows.length && !actInfo) return toast('Set pooled fractions first');
+function buildSumCsvString(){
+  const q = csvQuote, rows = sumRows(), disp = sumDisplay(rows), actInfo = assaySummaryInfo(rows, disp); if (!rows.length && !actInfo) return '';
   const fn = (o, mg) => { if (o && o.prep === 'manual') { const clv = isCleavedStep(o), F = protForms(), fm = opt.epsMode === 'untagged' ? 'untagged' : opt.epsMode === 'tagged' ? 'tagged' : (clv ? 'untagged' : 'tagged'), noTag = fm === 'tagged' && F.length === 1 && opt.tagPreset && opt.tagPreset !== 'custom' && TAG_PRESETS[opt.tagPreset], f = F.length && !noTag ? (fm === 'tagged' && F[1] ? F[1] : F[0]) : null, man = manEps(), kda = man > 100 ? null : man > 0 ? (numOr(opt.protKda, 0) || null) : (f && f.a280 ? f.mass/1000 : null); return [kda > 0 ? (clv ? 'cleaved' : 'tagged') : '', kda > 0 && mg > 0 ? sig2(1000*mg/kda) : '']; } const E = o && ndEpsFor(o.id); return [E && E.kda > 0 ? (ndForm(o) === 'tagged' ? 'tagged' : 'cleaved') : '', E && E.kda > 0 && mg > 0 ? sig2(1000*mg/E.kda) : '']; };
   const actCsv = s => !actInfo ? [] : !s || s.unassayed ? ['', '', '', '', '', '', ...(actInfo.hasKcat ? [''] : []), ''] : [s.totalU != null ? s.totalU.toFixed(3) : '', s.uPerMl != null ? s.uPerMl.toFixed(3) : '', s.nkatPerMl != null ? s.nkatPerMl.toFixed(2) : '', s.sa != null ? s.sa.toFixed(3) : '', s.fold != null ? s.fold.toFixed(2) : '', s.yieldPct != null ? s.yieldPct.toFixed(1) : '', ...(actInfo.hasKcat ? [s.kcat != null ? s.kcat.toFixed(2) : ''] : []), s.rawYieldPct != null ? s.rawYieldPct.toFixed(1) : ''];
   const standCsv = s => ['', q(s.label), q('assay'), s.volMl != null ? s.volMl.toFixed(2) : '', '', s.protMg > 0 ? s.protMg.toFixed(3) : '', '', '', '', '', '', '', '', '', rows.basis || '', '', '', '', '', '', '', '', '', '', '', '', '', '', ...actCsv(s)].join(',');
@@ -8205,7 +8227,9 @@ $('#sumCsv').addEventListener('click', () => { const q = csvQuote, rows = sumRow
       return ['', q(d.man.name), q('no chromatogram'), d.vol ? d.vol.toFixed(2) : '', '', d.mg > 0 ? d.mg.toFixed(3) : '', '', '', '', '', '', '', d.yld == null ? '' : d.yld.toFixed(1), d.stepY == null ? '' : d.stepY.toFixed(1), rows.basis, '', cL > 0 && d.mg > 0 ? (d.mg/cL).toFixed(2) : '', cG > 0 && d.mg > 0 ? (d.mg/cG).toFixed(3) : '', q(m.resin || ''), q(m.buffer || ''), '', '', '', q(m.elution || ''), '', '', ...fn(d.man, d.mg), ...ac].join(','); }
     const x = d.run, k = d.k, n = x.nd, st = n && (n.F || n.P), E = ndEpsFor(x.r.id);
     return [k + 1, q(x.r.name), q(x.p.label), x.vol == null ? '' : x.vol.toFixed(2), x.p.area == null ? '' : x.p.area.toFixed(2), x.p.mg == null ? '' : x.p.mg.toFixed(3), st ? st.m.toFixed(3) : '', st && st.sd != null ? st.sd.toFixed(3) : '', st ? st.n : '', st ? ((n.F ? n.fv : n.pv) || '') : '', n && n.mg != null ? n.mg.toFixed(3) : '', E ? E.e.toFixed(3) : '', x.yld == null ? '' : x.yld.toFixed(1), x.stepY == null ? '' : x.stepY.toFixed(1), rows.basis, x.pur == null ? '' : x.pur.toFixed(1), (cL => cL > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cL).toFixed(2) : '')(prep.on ? numOr(prep.cultureL, 0) : 0), (cG => cG > 0 && rows.mgOf(x) > 0 ? (rows.mgOf(x)/cG).toFixed(3) : '')(prep.on ? numOr(prep.pellet, 0) : 0), ...(c => [c.mCol, c.mBufA, c.mBufB, c.mFlow, c.mTemp, c.mGrad, c.mLoad].map(q))(runCond(x.r)), E && cysNote(E.cys) ? q(cysNote(E.cys)) : '', ...fn(x.r, rows.mgOf(x)), ...ac].join(','); }), actInfo ? actInfo.postRows.map(standCsv) : []);
-  saveFile('purification_summary.csv', [hdr].concat(body).join('\r\n')); });
+  return body.length ? [hdr].concat(body).join('\r\n') : '';
+}
+$('#sumCsv').addEventListener('click', () => { const csv = buildSumCsvString(); if (!csv) return toast('Set pooled fractions first'); saveFile('purification_summary.csv', csv); });
 /* integration table */
 function renderIntTable(run){
   const rows = integRows(run), pool = poolRows(run), man = manEps(), E = ndEpsFor(run.id), hasEps = (man > 0 && man <= 100) || (!(man > 100) && !!(E && E.e > 0)), hasMg = (!massWhy(run) && hasEps) || !!(pool && pool.measured), gs = opt.intMethod === 'gauss', u = xUnit(run);
@@ -8244,7 +8268,7 @@ $('#intTable').addEventListener('change', e => { const el = e.target; if (el.dat
 $('#intTable').addEventListener('click', e => { const b = e.target.closest('[data-rdel]'); if (!b) return; const r = curRun(); if (!r) return; r.integ.splice(+b.dataset.rdel, 1); render(); });
 $('#intAuto').addEventListener('click', () => { const r = curRun(); if (!r) return; const n = autoIntegrate(r); render(); toast(n ? `Found ${n} peak${n > 1 ? 's' : ''}. Adjust start and end in the table if needed.` : 'No peaks above the detection prominence'); });
 $('#intClear').addEventListener('click', () => { const r = curRun(); if (!r) return; r.integ = []; render(); });
-$('#intCsv').addEventListener('click', () => {
+function buildIntCsvString(){
   const clean = typeof cleanSeq === 'function' ? cleanSeq : s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
   const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq)), man = manEps();
   const hasTheoRun = r => !massWhy(r) && hasSeq && !!theoFormFor(r) && (xUnit(r) !== 'min' || uvFlow(r) > 0), anyTheo = runs.some(hasTheoRun);
@@ -8264,8 +8288,12 @@ $('#intCsv').addEventListener('click', () => {
       lines.push(row.join(','));
     }
   });
-  if (lines.length < 2) return toast('No integrated regions or pools yet');
-  saveFile('peak_integration.csv', lines.join('\r\n'));
+  return lines.length < 2 ? '' : lines.join('\r\n');
+}
+$('#intCsv').addEventListener('click', () => {
+  const csv = buildIntCsvString();
+  if (!csv) return toast('No integrated regions or pools yet');
+  saveFile('peak_integration.csv', csv);
 });
 paper.addEventListener('mouseleave', () => { $('#readout').textContent = ''; });
 paper.addEventListener('click', e => {
@@ -15749,6 +15777,15 @@ $('#saveAll').addEventListener('click', async () => {
     try { const png = await withDpi(await toPng(svg, geo, dpi), dpi); files.push({name: `${b}_${dpi}dpi.png`, data: new Uint8Array(await png.arrayBuffer())}); } catch (e) {}
   }
   marking = keep;
+  const sumCsv = buildSumCsvString(); if (sumCsv) files.push({name: 'purification_summary.csv', data: enc.encode(sumCsv)});
+  const intCsv = buildIntCsvString(); if (intCsv) files.push({name: 'peak_integration.csv', data: enc.encode(intCsv)});
+  const usedBand = new Set();
+  for (const g of gels) {
+    const bCsv = buildBandCsvString(g); if (!bCsv) continue;
+    let bn = 'bands_' + safe(g.name), n = 2; while (usedBand.has(bn)) bn = 'bands_' + safe(g.name) + '_' + (n++); usedBand.add(bn);
+    files.push({name: bn + '.csv', data: enc.encode(bCsv)});
+  }
+  const mTxt = methodsText(); if (mTxt && mTxt.trim()) files.push({name: 'methods_and_results.txt', data: enc.encode(mTxt)});
   if (!files.length) return toast('Nothing to save yet');
   saveFile('chromatogram_figures.zip', zip(files));
 });
