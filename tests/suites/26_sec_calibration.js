@@ -523,5 +523,102 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     T.check('no page errors', !o.errs.length, o.errs.join(' | '));
     await o.close();
   });
+
+  await T.t('sec_column_change_clears_measured_ve', async () => {
+    const o = await open(), p3 = o.p, h3 = H(p3);
+    try {
+      const openFolds3 = loc => loc.evaluate(e => {
+        let d = e.closest('details');
+        while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+      });
+
+      await h3.newProject('SEC Column Change Clears Ve');
+      await h3.addRun(path.join(DATA, 'science/sec_inject2.csv'));
+      const rs = (await h3.timeline()).find(x => /^run:/.test(x.k));
+      if (rs) await h3.step(rs.k);
+      await h3.wait(300);
+      if (await p3.isVisible('#moreBtn') && /More options/i.test(await p3.locator('#moreBtn').textContent().catch(() => ''))) {
+        await p3.click('#moreBtn').catch(() => {});
+        await h3.wait(300);
+      }
+
+      const sc = p3.locator('#o-secStds');
+      await openFolds3(sc);
+      if (!(await sc.isChecked())) { await sc.check({force: true}); await h3.wait(300); }
+
+      // Ensure starting preset is s200i, customize standard 0/1 and enter Ve values
+      await p3.selectOption('#sec-col', 's200i');
+      await h3.wait(200);
+      await p3.fill('#ss-n0', 'Custom Std A'); await p3.dispatchEvent('#ss-n0', 'change');
+      await p3.fill('#ss-k0', '158'); await p3.dispatchEvent('#ss-k0', 'change');
+      await p3.fill('#ss-v0', '12.45'); await p3.dispatchEvent('#ss-v0', 'change');
+      await p3.fill('#ss-v1', '15.80'); await p3.dispatchEvent('#ss-v1', 'change');
+      const use1 = p3.locator('#ss-u1');
+      if (await use1.isChecked()) { await use1.uncheck({force: true}); await h3.wait(100); }
+      await h3.wait(200);
+
+      // Clear previous toasts, then switch physical column to Superdex 75 Increase 10/300 GL (s75i)
+      await p3.locator('#toast').evaluate(e => e.replaceChildren());
+      await p3.selectOption('#sec-col', 's75i');
+      await h3.wait(250);
+
+      const afterMls = await p3.evaluate(() => {
+        const vis = e => !!(e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+        const veInputs = [...document.querySelectorAll('#secStdList [data-f="ve"]')].filter(vis);
+        return {
+          veCount: veInputs.length,
+          allVeEmpty: veInputs.length > 0 && veInputs.every(el => el.value === ''),
+          veVals: veInputs.map(el => el.value),
+          n0: document.querySelector('#ss-n0')?.value,
+          k0: document.querySelector('#ss-k0')?.value,
+          u1Checked: document.querySelector('#ss-u1')?.checked,
+          vt: document.querySelector('#sec-vt')?.value,
+          v0: document.querySelector('#sec-v0')?.value,
+          v0Note: document.querySelector('#sec-v0note')?.textContent || ''
+        };
+      });
+      const toasts = await h3.toasts();
+
+      T.check(
+        'col_change_clears_all_visible_ve_inputs',
+        afterMls.allVeEmpty,
+        JSON.stringify(afterMls)
+      );
+      T.check(
+        'col_change_retains_std_identity_and_resets_ml_preset_v0_vt',
+        afterMls.n0 === 'Custom Std A' && afterMls.k0 === '158' && afterMls.u1Checked === false &&
+          afterMls.vt === '24' && afterMls.v0 === '8.64' && /Typical V₀/i.test(afterMls.v0Note) &&
+          toasts.some(t => /cleared/i.test(t) && /elution volumes|standard/i.test(t)),
+        JSON.stringify({afterMls, toasts})
+      );
+
+      // Minute calibration: changing column clears V0, Vt, and standard Ve values
+      await h3.addRun(path.join(DATA, 'chrom/sec_S200_Increase_minutes_u7.csv'));
+      const minSteps = (await h3.timeline()).filter(x => /^run:/.test(x.k));
+      if (minSteps.length) await h3.step(minSteps[minSteps.length - 1].k);
+      await h3.wait(300);
+      await p3.fill('#sec-v0', '6.5');
+      await p3.fill('#sec-vt', '18.0');
+      await p3.fill('#ss-v0', '10.2');
+      await h3.wait(150);
+      await p3.selectOption('#sec-col', 's75i5');
+      await h3.wait(250);
+      const afterMin = await p3.evaluate(() => ({
+        unit: document.querySelector('#sec-unit')?.value,
+        v0: document.querySelector('#sec-v0')?.value,
+        vt: document.querySelector('#sec-vt')?.value,
+        allVeEmpty: [...document.querySelectorAll('#secStdList [data-f="ve"]')].every(el => el.value === '')
+      }));
+      T.check(
+        'col_change_in_minutes_leaves_v0_vt_and_ve_blank',
+        afterMin.unit === 'min' && afterMin.v0 === '' && afterMin.vt === '' && afterMin.allVeEmpty,
+        JSON.stringify(afterMin)
+      );
+
+      T.check('col_change.no_page_errors', !o.errs.length, o.errs.join(' | '));
+    } finally {
+      await o.close();
+    }
+  });
   T.done();
 })();
