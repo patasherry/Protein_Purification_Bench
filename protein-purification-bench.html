@@ -2267,6 +2267,7 @@ function uvPathMm(curves){ const c = curves.find(q => q.kind === 'uvpath' && /^(
   if (!c) return null; const v = c.ys.filter(y => isFinite(y) && y > 0).sort((a, b) => a - b), m = v[v.length >> 1] * (/^cm$/i.test(c.yu.trim()) ? 10 : 1); return m >= 0.5 ? +m.toFixed(3) : null; }
 function aktaFromCurves(curves, fname, extra){
   const uvs = curves.filter(c => c.kind === 'uv' && c.xs.length > 1); if (!uvs.length) return null;
+  if (uvs.length > 1) { const idx280 = uvs.reduce((a, c, i) => (uvWavelengthOf(c.name) === 280 && a.push(i), a), []); if (idx280.length === 1 && idx280[0] > 0) uvs.unshift(uvs.splice(idx280[0], 1)[0]); }
   const pick = k => curves.find(c => c.kind === k && c.xs.length > 1) || null;
   const fr = (curves.find(c => c.kind === 'frac') || {ev: []}).ev.slice().sort((a,b)=>a.x-b.x);
   const log = (curves.find(c => c.kind === 'log') || {ev: []}).ev;
