@@ -13930,14 +13930,13 @@ function buildAgaroseGelSVG(stg){
   if (lanesAdj) disclosures.push('Lanes cropped or rearranged');
   if (a && a.rot && !disclosures.length) disclosures.push('Image rotated');
   const discDesc = disclosures.join('; ');
-  const maxLegChars = Math.max(16 + laneDetails.length, 22 + ladderDesc.length + condDesc.length, disclosures.length ? (16 + discDesc.length) : 0);
 
   const ladderW = 48;
   const gelX = pad + ladderW;
   const gelW = Math.max(160, nLanes * 52);
   const laneW = gelW / nLanes;
   const rightSpace = 150 + ((g.bottomToTop || g.showMigration) ? 36 : 0);
-  const W = Math.max(numOr(opt.w, 3.5) * 72, gelX + gelW + rightSpace + pad, pad * 2 + maxLegChars * fs * 0.56);
+  const W = Math.max(numOr(opt.w, 3.5) * 72, gelX + gelW + rightSpace + pad);
 
   const laneLabelH = fs * 2;
   const gelTop = pad + laneLabelH + 6;
@@ -13983,11 +13982,13 @@ function buildAgaroseGelSVG(stg){
 
   lanes.forEach((l, i) => {
     const cx = gelX + (i + 0.5) * laneW;
-    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">${esc(l.label || (l.type === 'DNA ladder' ? 'M' : 'Lane ' + (i + 1)))}</text>`);
+    const lbl = l.label || (l.type === 'DNA ladder' ? 'M' : 'Lane ' + (i + 1));
+    const lfs = Math.max(fs * 0.72, Math.min(fs * 1.05, (laneW - 5) / Math.max(1, lbl.length * 0.62)));
+    s.push(`<text x="${r2(cx)}" y="${r2(gelTop - 6)}" text-anchor="middle" font-size="${r2(lfs)}" font-weight="bold" fill="#000000">${esc(lbl)}</text>`);
   });
 
   const lLaneX = gelX + ladderLaneIdx * laneW;
-  const minDy = fs * 1.15;
+  const minDy = fs * 1.18;
   let prevLy = -Infinity;
   s.push(`<text x="${r2(gelX - 10)}" y="${r2(gelTop + 4)}" text-anchor="end" font-size="${r2(fs * 0.75)}" font-weight="bold" fill="#555555">bp</text>`);
   prevLy = gelTop + 4;
@@ -14006,6 +14007,7 @@ function buildAgaroseGelSVG(stg){
   });
 
   const agFit = agLadderKnown(g) ? agCalibration(g) : null;
+  const calloutMap = new Map(), callouts = [];
   lanes.forEach((l, i) => {
     if (i === ladderLaneIdx) return;
     const expStr = l.expected ? String(l.expected).trim() : '';
@@ -14032,11 +14034,41 @@ function buildAgaroseGelSVG(stg){
       szLabel = `${kb} kb`;
     }
     const fullArrowLabel = agFit && hasTxt(l.migration) ? `Estimated size: ${szLabel}` : `Expected product: ${szLabel}`;
-
     const arrowTipX = lx + laneW * 0.85;
-    const arrowTailX = gelX + gelW + 8;
-    s.push(`<line x1="${r2(arrowTailX)}" y1="${r2(y)}" x2="${r2(arrowTipX)}" y2="${r2(y)}" stroke="${okabe[0]}" stroke-width="1.2" marker-end="url(#ag-arr)"/>`);
-    s.push(`<text x="${r2(arrowTailX + 4)}" y="${r2(y + 3)}" font-size="${r2(fs * 0.9)}" font-weight="bold" fill="${okabe[0]}">${esc(fullArrowLabel)}</text>`);
+    const key = `${fullArrowLabel}\0${Math.round(y)}`;
+    const prev = calloutMap.get(key);
+    if (prev) {
+      prev.tipX = Math.max(prev.tipX, arrowTipX);
+    } else {
+      const item = {fullArrowLabel, y, ly: y, tipX: arrowTipX, bpVal};
+      calloutMap.set(key, item);
+      callouts.push(item);
+    }
+  });
+
+  callouts.sort((a, b) => (a.y - b.y) || (b.bpVal - a.bpVal));
+  const dMin = fs * 1.2, cyLo = gelTop + fs * 0.8, cyHi = Math.max(gelTop + gelH - 2, cyLo + Math.max(0, callouts.length - 1) * dMin);
+  callouts.forEach(it => { it.ly = Math.max(cyLo, Math.min(cyHi, it.y)); });
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 1; i < callouts.length; i++) {
+      if (callouts[i].ly < callouts[i - 1].ly + dMin) callouts[i].ly = callouts[i - 1].ly + dMin;
+    }
+    if (callouts.length && callouts[callouts.length - 1].ly > cyHi) callouts[callouts.length - 1].ly = cyHi;
+    for (let i = callouts.length - 2; i >= 0; i--) {
+      if (callouts[i].ly > callouts[i + 1].ly - dMin) callouts[i].ly = callouts[i + 1].ly - dMin;
+    }
+    if (callouts.length && callouts[0].ly < cyLo) callouts[0].ly = cyLo;
+  }
+  let maxCalloutLy = -Infinity;
+  const x1 = gelX + gelW + 3, xElbow = gelX + gelW + 10, xText = gelX + gelW + 16;
+  callouts.forEach(it => {
+    if (it.ly > maxCalloutLy) maxCalloutLy = it.ly;
+    if (Math.abs(it.ly - it.y) <= 0.5) {
+      s.push(`<line x1="${r2(xText - 3)}" y1="${r2(it.y)}" x2="${r2(it.tipX)}" y2="${r2(it.y)}" stroke="${okabe[0]}" stroke-width="1.1" marker-end="url(#ag-arr)"/>`);
+    } else {
+      s.push(`<polyline points="${r2(xText - 3)},${r2(it.ly)} ${r2(xElbow)},${r2(it.ly)} ${r2(x1)},${r2(it.y)} ${r2(it.tipX)},${r2(it.y)}" fill="none" stroke="${okabe[0]}" stroke-width="0.95" stroke-linejoin="round" marker-end="url(#ag-arr)"/>`);
+    }
+    s.push(`<text x="${r2(xText)}" y="${r2(it.ly + fs * 0.3)}" font-size="${r2(fs * 0.86)}" font-weight="bold" fill="${okabe[0]}">${esc(it.fullArrowLabel)}</text>`);
   });
 
   if (g.bottomToTop || g.showMigration) {
@@ -14052,26 +14084,38 @@ function buildAgaroseGelSVG(stg){
     }
   }
 
-  const legY0 = Math.max(gelTop + gelH, prevLy + 6) + 16;
+  const legY0 = Math.max(gelTop + gelH, prevLy + 6, maxCalloutLy + 6) + 16;
   const legX = pad;
   const legW = W - pad * 2;
+  const legFs = fs * 0.86;
+  const maxChars = Math.max(28, Math.floor(legW / (legFs * 0.58)));
   s.push(`<line x1="${r2(legX)}" y1="${r2(legY0)}" x2="${r2(legX + legW)}" y2="${r2(legY0)}" stroke="#d8dce6" stroke-width="0.8"/>`);
 
   const legTitleY = legY0 + fs * 1.5;
   s.push(`<text x="${r2(legX)}" y="${r2(legTitleY)}" font-size="${r2(fs * 1.05)}" font-weight="bold" fill="#000000">Figure Legend</text>`);
 
-  const legLanesY = legTitleY + fs * 1.45;
-  s.push(`<text x="${r2(legX)}" y="${r2(legLanesY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Lane contents: </tspan>${esc(laneDetails)}</text>`);
-
-  const legCondY = legLanesY + fs * 1.4;
-  s.push(`<text x="${r2(legX)}" y="${r2(legCondY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Ladder: </tspan>${esc(ladderDesc)} · <tspan font-weight="bold">Conditions: </tspan>${esc(condDesc)}</text>`);
-
-  let lastY = legCondY;
-  if (disclosures.length) {
-    const legDiscY = legCondY + fs * 1.4;
-    s.push(`<text x="${r2(legX)}" y="${r2(legDiscY)}" font-size="${r2(fs * 0.88)}" fill="#222222"><tspan font-weight="bold">Disclosures: </tspan>${esc(discDesc)}</text>`);
-    lastY = legDiscY;
+  let lastY = legTitleY + fs * 1.45 - fs * 1.28;
+  const emitBlock = (head, body, gap) => {
+    const full = `${head}${body}`, lines = wrapWords(full, maxChars);
+    lines.forEach((ln, idx) => {
+      lastY += idx === 0 ? gap : fs * 1.28;
+      if (idx === 0 && ln.startsWith(head)) {
+        s.push(`<text x="${r2(legX)}" y="${r2(lastY)}" font-size="${r2(legFs)}" fill="#222222"><tspan font-weight="bold">${esc(head)}</tspan>${esc(ln.slice(head.length))}</text>`);
+      } else {
+        s.push(`<text x="${r2(legX)}" y="${r2(lastY)}" font-size="${r2(legFs)}" fill="#222222">${esc(ln)}</text>`);
+      }
+    });
+  };
+  emitBlock('Lane contents: ', laneDetails, fs * 1.28);
+  const combLC = `Ladder: ${ladderDesc} · Conditions: ${condDesc}`;
+  if (combLC.length <= maxChars) {
+    lastY += fs * 1.38;
+    s.push(`<text x="${r2(legX)}" y="${r2(lastY)}" font-size="${r2(legFs)}" fill="#222222"><tspan font-weight="bold">Ladder: </tspan>${esc(ladderDesc)} · <tspan font-weight="bold">Conditions: </tspan>${esc(condDesc)}</text>`);
+  } else {
+    emitBlock('Ladder: ', ladderDesc, fs * 1.38);
+    emitBlock('Conditions: ', condDesc, fs * 1.28);
   }
+  if (disclosures.length) emitBlock('Disclosures: ', discDesc, fs * 1.38);
 
   const H = lastY + pad + 8;
   s[0] = svgHead(W, H).replace('<svg ', '<svg data-dpi="600" ');
