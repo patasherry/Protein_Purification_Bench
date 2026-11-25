@@ -40,15 +40,15 @@
 | 10852–10861 | `collapsible panel sections (remembered), each with a one-line summary when closed` | Expand/collapse accordion panel UI state persistence in `localStorage` |
 | 10862–10922 | `More options inside each section (open or closed remembered), and the settings search` | Condensed progressive disclosure sections (`details.more`), settings search filter (`#panelSearch`), and automatic expansion of non-default settings (`moreSync`) |
 | 10923–10966 | `what to do next: one suggestion above the figure, with a button that takes you there` | Guided workflow suggestion bar above figures with actionable next-step buttons |
-| 10967–11289 | `projects: everything in one JSON file` | Exporting workspace state to `.json` files and importing project files |
-| 11290–11650 | `projects: a project per purification, saved with the page (db + assets) or in this browser` | IndexedDB (`hfb-projects`) and cloud persistence for multi-project management and asset blob storage |
-| 11651–12382 | `home` | Home screen workspace project list and project creation/opening UI |
-| 12383–13373 | `projects: directory, folders, preparations, explorer and file attachments` |  |
-| 13374–14883 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
-| 14884–15036 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
-| 15037–15274 | `quick fill: the lab's usual procedures, one click per step; every field stays editable` | One-click lab protocol templates (`LABQ`) populating workflow steps (IMAC, SEC, cleavage, expression, lysis) |
-| 15275–15390 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
-| 15391–15411 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
+| 10967–11293 | `projects: everything in one JSON file` | Exporting workspace state to `.json` files and importing project files |
+| 11294–11681 | `projects: a project per purification, saved with the page (db + assets) or in this browser` | IndexedDB (`hfb-projects`) and cloud persistence for multi-project management and asset blob storage |
+| 11682–12413 | `home` | Home screen workspace project list and project creation/opening UI |
+| 12414–13419 | `projects: directory, folders, preparations, explorer and file attachments` |  |
+| 13420–14929 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
+| 14930–15082 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
+| 15083–15320 | `quick fill: the lab's usual procedures, one click per step; every field stays editable` | One-click lab protocol templates (`LABQ`) populating workflow steps (IMAC, SEC, cleavage, expression, lysis) |
+| 15321–15436 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
+| 15437–15457 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
 
 ---
 
@@ -280,8 +280,8 @@ Saved `.json` files or IndexedDB records:
 | `wfSet` | Line 7417 | Updates panel properties (title, arrow note, width, gel zoom, drag offsets `wfDx`/`wfDy`) | Panel item, field, value | `#wfTool` listeners |
 | `renderWfTool` | Line 7424 | Positions and renders floating panel editor toolbar (`#wfTool`) and selection box (`#wfSelBox`) | Active selection `wfSel` | Click handlers, `render` |
 | `constructModel` | Line 6019 | Generates translated protein sequence model from genetic construct cassette | `prep.gb`, `opt.protSeq` | `seqMass`, `buildPrepSVG`, `yieldLine` |
-| `stepList` | Line 14904 | Builds ordered list of purification steps across workflow pipeline | `runs`, `gels`, `prep` | `renderSteps`, `stepStatus`, `renderNext` |
-| `applyQuick` | Line 15115 | Applies lab protocol template (`LABQ`) to populate workflow steps and conditions | Quick template ID | UI event listener |
+| `stepList` | Line 14950 | Builds ordered list of purification steps across workflow pipeline | `runs`, `gels`, `prep` | `renderSteps`, `stepStatus`, `renderNext` |
+| `applyQuick` | Line 15161 | Applies lab protocol template (`LABQ`) to populate workflow steps and conditions | Quick template ID | UI event listener |
 | `manSentence` | Line 6456 | Formats written methods sentence for a manual workflow step | Step object | `methodsText` |
 | `btwSentence` | Line 6449 | Formats written methods sentence for inter-step transfers | Transfer object | `methodsText` |
 | `ndForm` | Line 10610 | Determines active protein form and extinction coefficient for NanoDrop sample | Run / sample object | `ndEpsFor`, `renderND` |
@@ -303,33 +303,33 @@ Saved `.json` files or IndexedDB records:
 | `grpStatus` | Line 10912 | Updates one-line status summary labels on closed panel section headers | `opt` object | `render`, `syncControls` |
 | `projectData` | Line 11199 | Packs current workspace state into exportable project JSON structure | `runs`, `gels`, `prep`, `opt` | `openProject`, `projSave` listener |
 | `openProject` | Line 11235 | Loads project JSON object into current workspace state | Project data JSON | `projFile` listener, `importAsProject` |
-| `importAsProject` | Line 11277 | Opens saved project file as a new isolated project in workspace | Project data JSON | `projFile` listener |
-| `storeInit` | Line 11302 | Initializes IndexedDB (`hfb-projects`) or Cloud storage backends | Window environment | `storeLoad`, `saveOne`, `storeDelete`, `renderHome` |
-| `packCloud` | Line 11358 | Packs project state and uploads heavy asset blobs to cloud storage | Workspace snapshot | `packFor`, `saveOne` |
-| `unpackCloud` | Line 11484 | Downloads cloud asset blobs and restores full project state | Cloud project state | `storeLoad` |
-| `saveOne` | Line 11561 | Saves project state to IndexedDB or Cloud database store | Project ID, snapshot | `flushSave` |
-| `storeLoad` | Line 11587 | Loads project state from IndexedDB or Cloud database store | Project ID | `openStoredProject` |
-| `storeDelete` | Line 11597 | Deletes project record from IndexedDB or Cloud database store | Project ID | UI event listener |
+| `importAsProject` | Line 11281 | Opens saved project file as a new isolated project in workspace | Project data JSON | `projFile` listener |
+| `storeInit` | Line 11306 | Initializes IndexedDB (`hfb-projects`) or Cloud storage backends | Window environment | `storeLoad`, `saveOne`, `storeDelete`, `renderHome` |
+| `packCloud` | Line 11362 | Packs project state and uploads heavy asset blobs to cloud storage | Workspace snapshot | `packFor`, `saveOne` |
+| `unpackCloud` | Line 11488 | Downloads cloud asset blobs and restores full project state | Cloud project state | `storeLoad` |
+| `saveOne` | Line 11565 | Saves project state to IndexedDB or Cloud database store | Project ID, snapshot | `flushSave` |
+| `storeLoad` | Line 11591 | Loads project state from IndexedDB or Cloud database store | Project ID | `openStoredProject` |
+| `storeDelete` | Line 11601 | Deletes project record from IndexedDB or Cloud database store | Project ID | UI event listener |
 | `render` | Line 6820 | Master UI render routine updating figures and active panels | Global app state | Event listeners, `openProject` |
 | `buildWorkflow` | Line 5625 | Generates multi-panel composite figure SVG (runs + gel lanes + yield line) | `runs`, `gels`, `prep` | `buildFig`, `render` |
-| `buildStepFig` | Line 15257 | Generates step timeline diagram SVG | `stepList()` | `renderSteps` |
+| `buildStepFig` | Line 15303 | Generates step timeline diagram SVG | `stepList()` | `renderSteps` |
 | `buildConcFig` | Line 10719 | Generates NanoDrop $A_{280}$ concentration bar chart SVG | `ndSamples` | `buildNDSVG` |
 | `buildNDSVG` | Line 10722 | Generates full NanoDrop panel SVG (spectra or bar chart) | `ndSamples` | `renderND` |
 | `buildPrepSVG` | Line 6081 | Generates construct / expression / lysis panel SVG diagram | `prep` state | `renderPrep` |
 | `buildStructSVG` | Line 9009 | Generates PDB protein structure domain diagram SVG | `struct` state | `renderProt` |
 | `renderList` | Line 6944 | Renders sidebar list of loaded runs, gels, and traces | `runs`, `gels`, `traces` | `render` |
 | `syncControls` | Line 7165 | Synchronizes HTML input controls with `opt` settings state | `opt` object | `render`, `openProject` |
-| `renderHome` | Line 11925 | Renders home screen project workspace cards list | `storeList()` | `showHome` |
-| `renderSteps` | Line 14974 | Renders step timeline HTML controls and SVG diagram | `stepList()` | `render` |
-| `renderStepSheet` | Line 14984 | Renders step detail editor sheet in UI | Selected step | `selectStep`, `render` |
+| `renderHome` | Line 11956 | Renders home screen project workspace cards list | `storeList()` | `showHome` |
+| `renderSteps` | Line 15020 | Renders step timeline HTML controls and SVG diagram | `stepList()` | `render` |
+| `renderStepSheet` | Line 15030 | Renders step detail editor sheet in UI | Selected step | `selectStep`, `render` |
 | `renderND` | Line 10663 | Renders NanoDrop data table, stats, and spectrum SVG | `ndSamples` | `render` |
 | `renderSec` | Line 10763 | Renders SEC calibration standards panel and curve SVG | `secCals`, `runs` | `render` |
 | `renderPrep` | Line 8608 | Renders construct / expression panel HTML controls and SVG | `prep` state | `render` |
 | `renderNext` | Line 10961 | Renders next suggested action banner above figure | `nextStep()` | `render` |
-| `downloads` | Line 15277 | Triggers browser file download of SVG, PNG, or JSON | Content blob, filename | Export event listeners |
-| `toPng` | Line 15319 | Renders SVG string onto HTML canvas and exports High-DPI PNG | SVG string, DPI/scale | Export event listeners |
-| `zip` | Line 15338 | Creates ZIP archive containing exported figure files | Files map | Export event listeners |
-| `saveFile` | Line 15280 | Triggers browser file download for text or binary content | Filename, content | `projSave`, export listeners |
+| `downloads` | Line 15323 | Triggers browser file download of SVG, PNG, or JSON | Content blob, filename | Export event listeners |
+| `toPng` | Line 15365 | Renders SVG string onto HTML canvas and exports High-DPI PNG | SVG string, DPI/scale | Export event listeners |
+| `zip` | Line 15384 | Creates ZIP archive containing exported figure files | Files map | Export event listeners |
+| `saveFile` | Line 15326 | Triggers browser file download for text or binary content | Filename, content | `projSave`, export listeners |
 
 ---
 
@@ -355,12 +355,12 @@ Saved `.json` files or IndexedDB records:
 | **Modify gel band auto-detection** | `detectBands` (Line 4563), `autoCrop` (Line 4373), `autoLadder` (Line 5025) | Adjust sensitivity thresholds or peak picking in `gel densitometry` section |
 | **Modify lane purity calculation** | `lanePurity` (Line 4857), `renderBandTable` (Line 7268) | Adjust band background subtraction or total intensity normalization in `band tags and purity` |
 | **Add a new NanoDrop file format** | `parseNanoDrop` (Line 10522), `looksNanoDrop` (Line 10498), `addNanoDrop` (Line 10581) | Add header recognition and row parsing under `NanoDrop: protein A280 readings` |
-| **Modify step timeline / templates** | `LABQ` (Line 15042), `applyQuick` (Line 15115), `stepList` (Line 14904) | Edit protocol step templates in `quick fill` section |
-| **Add field to project export JSON** | `projectData` (Line 11199), `openProject` (Line 11235), `packCloud` (Line 11358), `unpackCloud` (Line 11484) | Update export serializer and import deserializer under `projects` |
-| **Modify figure SVG export (PNG/ZIP)** | `toPng` (Line 15319), `zip` (Line 15338), `downloads` (Line 15277), `saveFile` (Line 15280) | Update canvas rendering, resolution scaling, or archive creation in `export` section |
+| **Modify step timeline / templates** | `LABQ` (Line 15088), `applyQuick` (Line 15161), `stepList` (Line 14950) | Edit protocol step templates in `quick fill` section |
+| **Add field to project export JSON** | `projectData` (Line 11199), `openProject` (Line 11235), `packCloud` (Line 11362), `unpackCloud` (Line 11488) | Update export serializer and import deserializer under `projects` |
+| **Modify figure SVG export (PNG/ZIP)** | `toPng` (Line 15365), `zip` (Line 15384), `downloads` (Line 15323), `saveFile` (Line 15326) | Update canvas rendering, resolution scaling, or archive creation in `export` section |
 | **Modify construct / expression SVG** | `buildPrepSVG` (Line 6081), `constructSVG` (Line 6360), `ncSVG` (Line 6186) | Edit vector layout in `construct and expression panel` section |
-| **Modify IndexedDB / Cloud storage** | `storeInit` (Line 11302), `saveOne` (Line 11561), `storeLoad` (Line 11587), `storeDelete` (Line 11597) | Edit storage drivers under `projects: browser & cloud storage` section |
-| **Modify home screen project list** | `renderHome` (Line 11925), `openStoredProject` (Line 12345) | Edit workspace card rendering under `home` section |
+| **Modify IndexedDB / Cloud storage** | `storeInit` (Line 11306), `saveOne` (Line 11565), `storeLoad` (Line 11591), `storeDelete` (Line 11601) | Edit storage drivers under `projects: browser & cloud storage` section |
+| **Modify home screen project list** | `renderHome` (Line 11956), `openStoredProject` (Line 12376) | Edit workspace card rendering under `home` section |
 | **Modify "What to do next" guidance** | `renderNext` (Line 10961), `nextStep` (Line 10931) | Edit step recommendation rules under `what to do next` section |
 | **Modify figure preset dimensions** | `PRESETS` (Line 1943) | Update width, height, font size, line weight in `PRESETS` constant |
 | **Add a new UI panel or tab** | `render` (Line 6820), `syncControls` (Line 7165), Section `collapsible panel sections` | Add HTML panel markup and bind rendering update in `UI` section |
