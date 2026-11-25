@@ -640,6 +640,138 @@ const {open, H, suite, src, fs, path} = require('../lib/harness');
     } finally { await cc(); }
   });
 
+  /* #1706: font-aware textW metrics, 12-lane workflow gel headers, 2-line panel title tab-stop, grayscale step/construct fills, and trace dash styles */
+  await T.t('typography_grayscale_and_dash_traces', async () => {
+    const setOpt = (pg, id, v) => pg.evaluate(([id, v]) => {
+      const el = document.getElementById(id); if (!el) return false;
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = !!v; else el.value = v;
+      el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true}));
+      return true;
+    }, [id, v]);
+    const findOverlaps = texts => {
+      const hits = [];
+      for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
+        const a = texts[i], b = texts[j], w = Math.min(a.right, b.right) - Math.max(a.x, b.x), h = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+        if (w > 0 && h > 0 && w * h > 0.2 * Math.min(a.w * a.h, b.w * b.h)) hits.push(`"${a.t}" vs "${b.t}"`);
+      }
+      return hits;
+    };
+
+    // Part 1: Quick mode overlay — wide uppercase sample label ('WWWWMMMMWWWWMMMM 100%'), #o-dashTraces, and >=8 trace auto-dash
+    const {p: pq, errs: eq, close: cq} = await open(), hq = H(pq);
+    try {
+      await pq.click('#homeQuick'); await hq.wait(600);
+      const nameIn = pq.locator('.trace:not(.run) input[data-k="name"]').first();
+      await nameIn.fill('WWWWMMMMWWWWMMMM 100%'); await nameIn.dispatchEvent('change'); await hq.wait(250);
+      const ovBoxes = await hq.svgBoxes(await hq.exportSvg());
+      T.check('typo/uppercase_overlay_unclipped', ovBoxes.clipped.length === 0 && findOverlaps(ovBoxes.texts).length === 0, JSON.stringify({clip: ovBoxes.clipped, ov: findOverlaps(ovBoxes.texts)}));
+
+      await pq.evaluate(() => {
+        document.querySelectorAll('#panel .grp.collapsed').forEach(g => g.classList.remove('collapsed'));
+        const m = document.querySelector('details.more[data-more="Figure style"]');
+        if (m) m.open = true;
+      });
+      const dashLoc = pq.locator('#o-dashTraces');
+      const dashVis = await dashLoc.isVisible().catch(() => false);
+      T.check('typo/dash_traces_control_in_more', dashVis, '#o-dashTraces visible in Figure style More options');
+      if (dashVis) {
+        await setOpt(pq, 'o-zoomInset', true);
+        await dashLoc.check(); await hq.wait(300);
+        const dashSvg = await hq.exportSvg();
+        const hasMainDash = /<g[^>]*data-plot="main"[\s\S]*?<path[^>]*stroke-dasharray=/.test(dashSvg);
+        const hasLegDash = /<line[^>]*stroke-dasharray=/.test(dashSvg);
+        const hasInsetDash = /id="zoom-inset"[\s\S]*?<path[^>]*stroke-dasharray=/.test(dashSvg);
+        T.check('typo/dash_traces_main_legend_inset', hasMainDash && hasLegDash && hasInsetDash, JSON.stringify({hasMainDash, hasLegDash, hasInsetDash}));
+        await dashLoc.uncheck();
+        await setOpt(pq, 'o-zoomInset', false); await hq.wait(200);
+      }
+
+      // Automatic dash cycling when trace index >= 8 (loading user files replaces example traces, so load 9 synthetic traces)
+      const nineFiles = Array.from({length: 9}, (_, k) => ({
+        name: `syn_trace_${k + 1}.csv`,
+        mimeType: 'text/csv',
+        buffer: Buffer.from('Time (min),UV280 (mAU)\n' + Array.from({length: 40}, (__, i) => `${(i * 0.5).toFixed(2)},${(Math.exp(-Math.pow((i * 0.5 - (3 + k * 1.4)) / 0.8, 2)) * 80).toFixed(2)}`).join('\n'))
+      }));
+      await pq.setInputFiles('#file', nineFiles); await hq.wait(600);
+      const nineSvg = await hq.exportSvg();
+      const mainPaths = [...nineSvg.matchAll(/<path d="M[^"]+" stroke="[^"]*"([^/]*)\/>/g)].map(m => m[1]);
+      T.check('typo/auto_dash_trace_idx_ge_8', mainPaths.length >= 9 && mainPaths.slice(0, 8).every(a => !/stroke-dasharray/.test(a)) && /stroke-dasharray/.test(mainPaths[8]), `paths=${mainPaths.length}, p8=${mainPaths[8] || ''}`);
+      errs.push(...eq);
+    } finally { await cq(); }
+
+    // Part 2: Workflow layout — 12-lane narrow gel, uppercase sample/step label, 2-line panel title tab-stop, and grayscale Construct/Expression
+    const {p: pt, errs: et, close: ct} = await open(), ht = H(pt);
+    try {
+      await ht.newProject('Typography & Grayscale');
+      await pt.evaluate(() => {
+        ['pr-on', 'pr-construct', 'pr-expr'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el && !el.checked) { el.checked = true; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); }
+        });
+      });
+      await ht.gb(src('gb'));
+      await ht.step('expr');
+      await pt.fill('#pr-strain', 'BL21(DE3)'); await pt.locator('#pr-strain').dispatchEvent('change');
+      await pt.fill('#pr-medium', 'TB'); await pt.locator('#pr-medium').dispatchEvent('change');
+      await pt.fill('#pr-inducer', '0.5'); await pt.locator('#pr-inducer').dispatchEvent('change');
+
+      await ht.addRun(src('his'));
+      const b64Gel12 = await pt.evaluate(() => {
+        const c = document.createElement('canvas'); c.width = 480; c.height = 170;
+        const x = c.getContext('2d'); x.fillStyle = '#f6f6f6'; x.fillRect(0, 0, c.width, c.height);
+        for (let i = 0; i < 12; i++) {
+          const lx = 12 + i * 39;
+          const ys = i === 0 ? [22, 42, 62, 84, 108, 130, 150] : [62, 108];
+          ys.forEach((yy, k) => { x.fillStyle = i === 0 || k === 0 ? '#1f1f1f' : '#555555'; x.fillRect(lx, yy, 20, 5); });
+        }
+        return c.toDataURL('image/png').split(',')[1];
+      });
+      await pt.setInputFiles('#file', {name: 'unlabelled_12lane.png', mimeType: 'image/png', buffer: Buffer.from(b64Gel12, 'base64')});
+      await ht.wait(700);
+      await pt.evaluate(() => {
+        const sn = document.querySelector('.trace.run input[data-k="stepName"]');
+        if (sn) { sn.value = 'IMACWWWWMMMM 100% affinity capture and immobilized metal chelate chromatography'; sn.dispatchEvent(new Event('input', {bubbles: true})); sn.dispatchEvent(new Event('change', {bubbles: true})); }
+        const nEl = document.querySelector('#g-n'); if (nEl && +nEl.value !== 12) { nEl.value = '12'; nEl.dispatchEvent(new Event('input', {bubbles: true})); nEl.dispatchEvent(new Event('change', {bubbles: true})); }
+        const lEl = document.querySelector('#g-labels'); if (lEl) { lEl.value = 'MW, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11'; lEl.dispatchEvent(new Event('input', {bubbles: true})); }
+      });
+      await ht.addRun(src('q'));
+      await ht.addRun(src('s200'));
+      await ht.step('figure'); await ht.wait(600);
+      await setOpt(pt, 'o-font', 'Times'); await ht.wait(300);
+
+      const wfSvg = await ht.exportSvg();
+      const wfBoxes = await ht.svgBoxes(wfSvg);
+      T.check('typo/workflow_12lane_and_uppercase_clean', wfBoxes.clipped.length === 0 && findOverlaps(wfBoxes.texts).length === 0, JSON.stringify({clip: wfBoxes.clipped, ov: findOverlaps(wfBoxes.texts)}));
+
+      // Measure rendered 2-line workflow panel title tab-stop alignment via SVG getStartPositionOfChar geometry
+      const titleAlign = await pt.evaluate(svgText => {
+        const host = document.createElement('div'); host.style.cssText = 'position:fixed;left:-9999px;top:0'; host.innerHTML = svgText; document.body.appendChild(host);
+        try {
+          const texts = [...host.querySelectorAll('svg text')];
+          const idx = texts.findIndex(t => /^C\s{1,3}IMACWWWWMMMM/.test(t.textContent.trim()));
+          if (idx < 0) return {ok: false, reason: 'no C title'};
+          const t1 = texts[idx], t2 = texts[idx + 1];
+          if (!t2 || !/affinity|100%|capture|chelate/.test(t2.textContent)) return {ok: false, reason: 'not wrapped', t1: t1.textContent, t2: t2 && t2.textContent};
+          const collapsedIdx = t1.textContent.trim().replace(/\s+/g, ' ').indexOf('IMAC');
+          const xTitle1 = collapsedIdx >= 0 ? t1.getStartPositionOfChar(collapsedIdx).x : NaN;
+          const xLine2 = t2.getStartPositionOfChar(0).x;
+          return {ok: /^[A-Z]\s{1,3}\S/.test(t1.textContent.trim()) && isFinite(xTitle1) && isFinite(xLine2) && Math.abs(xTitle1 - xLine2) < 0.25, xTitle1, xLine2, t1: t1.textContent.trim(), t2: t2.textContent.trim()};
+        } finally { host.remove(); }
+      }, wfSvg);
+      T.check('typo/panel_title_2line_tabstop', titleAlign.ok, JSON.stringify(titleAlign));
+
+      // (b) Select #o-palette = 'gray' on workflow with Construct + Expression -> zero non-neutral hex fills in exported SVG
+      await setOpt(pt, 'o-palette', 'gray'); await ht.wait(400);
+      const graySvg = await ht.exportSvg();
+      const nonNeutralFills = [...graySvg.matchAll(/fill="#([0-9a-fA-F]{6})"/g)]
+        .map(m => m[1].toLowerCase())
+        .filter(hex => !(hex.slice(0, 2) === hex.slice(2, 4) && hex.slice(2, 4) === hex.slice(4, 6)));
+      T.check('typo/grayscale_zero_nonneutral_fills', nonNeutralFills.length === 0, `non-neutral fills: ${[...new Set(nonNeutralFills)].join(', ')}`);
+
+      errs.push(...et);
+    } finally { await ct(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

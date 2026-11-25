@@ -1775,7 +1775,7 @@ button,input,select,textarea{font-family:inherit}
             <option value="Times">Times New Roman</option>
           </select>
         </label>
-        <label class="f" data-for="overlay">Colors
+        <label class="f" data-for="overlay workflow step growth">Colors
           <select id="o-palette" data-opt="palette">
             <option value="okabe">Colorblind safe</option>
             <option value="gray">Grayscale</option>
@@ -1785,6 +1785,7 @@ button,input,select,textarea{font-family:inherit}
         </label>
       </div>
       <label class="check"><input type="checkbox" id="o-bg" data-opt="bg">White background (off gives a transparent SVG)</label>
+      <label class="check" data-for="overlay"><input type="checkbox" id="o-dashTraces" data-opt="dashTraces">Distinct dash styles per trace</label>
       <div class="btns"><button class="btn danger" id="optReset" type="button">Restore default settings</button></div>
       <p class="hint">Settings are remembered in this browser. Restoring the defaults keeps your data, gels, SEC calibrations and known-protein list.</p>
     </section>
@@ -1933,7 +1934,7 @@ const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'ov
   intMethod:'gauss', poolStyle:'band', poolColor:'#E69F00', poolAlpha:0.3, intBase:'line', intLabel:'num', intProm:5, intFill:true, eps:'', extinction:'', epsMode:'auto', cysOx:false, path:2,
   wfLayout:'row', wfYield:false, runCond:'short', wfTitle:'step', wfFit:true, noGelSlot:false, wfW:7.2, wfH:2.2, wfPad:'', wfGelH:1.3, wfLetters:true, wfGels:true, wfGelFull:false, wfFull:false, wfArrows:true, gelFrame:true, ladder:'biorad',
   zoomMode:false, zoomInset:false, zoomInsetPos:'tr', zoomInsetSize:0.4, zoomInsetW:0, zoomInsetH:0, zoomInsetX:null, zoomInsetY:null, zoomWinA:'', zoomWinB:'',
-  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dpi:600};
+  preset:'single', w:3.5, h:2.6, fs:8, lw:0.75, font:'Arial', palette:'okabe', bg:true, dashTraces:false, dpi:600};
 const RANGE = ['xmin','xmax','ymin','ymax','zoomWinA','zoomWinB'];
 /* Native E. coli proteins commonly co-purified by IMAC (Bolanos-Garcia & Davies 2006, Table 1), DnaK, and common purification additives.
    Sizes are calculated masses in kDa; "app" is an apparent SDS-PAGE size where a protein is known to run off its mass. */
@@ -3242,6 +3243,29 @@ function yLabelText(){
   }
   return opt.ylabel;
 }
+function textW(str, fs){
+  const s = String(str == null ? '' : str); if (!s) return 0;
+  const f = fs || fontSize(), fam = opt.font === 'Times' ? 0.88 : opt.font === 'Calibri' ? 0.94 : 1;
+  let u = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === 'W') u += 0.95;
+    else if (c === 'M' || c === '%' || c === '@') u += 0.88;
+    else if (c === 'm' || c === 'w' || c === '—' || c === '≈' || c === '±') u += 0.80;
+    else if (c >= 'A' && c <= 'Z' && c !== 'I' && c !== 'J') u += 0.68;
+    else if ('il1.,:;|!\'` '.includes(c) || c === '\u00a0') u += 0.30;
+    else if ('ftjIJ()[]/-–'.includes(c)) u += 0.36;
+    else u += 0.56;
+  }
+  return u * f * fam;
+}
+const DASH_PATS = [null, [4.5, 2.2], [1.4, 2.0], [5.2, 2.0, 1.3, 2.0], [2.6, 1.8]];
+function traceDashAttr(idx, lw){
+  const pat = opt.dashTraces ? DASH_PATS[idx % DASH_PATS.length] : idx >= 8 ? DASH_PATS[1 + ((idx - 8) % (DASH_PATS.length - 1))] : null;
+  if (!pat) return '';
+  const k = Math.max(0.75, lw || 0.75);
+  return ` stroke-dasharray="${pat.map(v => r2(v * k)).join(' ')}"`;
+}
 function style(ov){
   ov = ov || {};
   const o = opt, W = ov.wPt || numOr(o.w,3.5)*72, H = ov.hPt || numOr(o.h,2.6)*72, fs = fontSize(), lw = Math.max(0.1, numOr(o.lw,0.75));
@@ -3753,7 +3777,7 @@ function zoomDefaultWin(run, lo, hi, zA, zB, wa, wb){
   return zoomWindow(lo, hi, zA, zB);
 }
 /* the inset shares its parent's ordinate, so its Y title is the unit alone, and none when even that is longer than the inset's side */
-function zoomYTitle(t, fsz, side){ t = String(t || '').trim(); const u = t.match(/\(([^()]+)\)\s*$/), s = u ? u[1].trim() : t; return s && s.length*fsz*0.56 <= side ? s : ''; }
+function zoomYTitle(t, fsz, side){ t = String(t || '').trim(); const u = t.match(/\(([^()]+)\)\s*$/), s = u ? u[1].trim() : t; return s && textW(s, fsz) <= side ? s : ''; }
 function insetHeadroom(m, iw, ih, win){
   const g = m.geo, {L, R, T, B} = g, plotB = B - (g.band || 0), pad = 3, obs = mainObstacles(m, win, T);
   const tlX = L + pad, trX = R - iw - pad, span = Math.max(0, trX - tlX);
@@ -3942,7 +3966,7 @@ function buildOverlaySVG(ov){
   ov = ov || {};
   const o = opt, S = style(ov), {W, H, fs, lw, aw, cw, tl, tOut} = S, idp = ov.idp || '', isInset = /zi-$/.test(idp), compactIn = isInset && !ov.split;
   const vis = traces.filter(t => t.visible); const order = o.flip ? vis.slice().reverse() : vis;
-  const P = order.map(t => Object.assign({t}, processTrace(t))).filter(p => p.xs.length > 1);
+  const P = order.map(t => Object.assign({t, idx: vis.indexOf(t)}, processTrace(t))).filter(p => p.xs.length > 1);
   if (!P.length) return {svg: null, geo: null};
   if (o.mode === 'stack') {
     let maxR = 0; P.forEach(p => { p.mn = arrMin(p.ys); maxR = Math.max(maxR, arrMax(p.ys) - p.mn); });
@@ -3961,11 +3985,11 @@ function buildOverlaySVG(ov){
     if (visFirst && visFirst.cols && visFirst.cols[visFirst.xc]) xLabel = visFirst.cols[visFirst.xc];
   }
   const mB0 = tOut + (xLabel ? 3 + fs + 4 + fs*1.25 : 2.5 + fs*0.95), pf0 = fs*0.85;
-  let ml = o.ovPeakText !== 'x' ? 10 : 4;
-  if (anyPeaks) P.forEach(p => p.t.peaks.forEach(pk => { ml = Math.max(ml, (pk.label || fmt(pk.x, numOr(o.peakDec,2))).length); }));
-  const minTop = anyPeaks && o.peakRot && (isInset || (ov.nest && ['beside', 'above'].includes(zoomPos()))) ? Math.min(H*0.28, ml*pf0*0.62 + 6) : Math.max(compactIn ? 5.2 : 0, fs*0.7);
+  let maxRotW = (o.ovPeakText !== 'x' ? 10 : 4)*pf0*0.62;
+  if (anyPeaks) P.forEach(p => p.t.peaks.forEach(pk => { maxRotW = Math.max(maxRotW, textW(pk.label || fmt(pk.x, numOr(o.peakDec,2)), pf0)); }));
+  const minTop = anyPeaks && o.peakRot && (isInset || (ov.nest && ['beside', 'above'].includes(zoomPos()))) ? Math.min(H*0.28, maxRotW + 6) : Math.max(compactIn ? 5.2 : 0, fs*0.7);
   const plotH0 = H - mB0 - minTop;
-  let padPts = 4 + (anyPeaks ? (o.peakRot ? ml*pf0*0.62 + 4 : pf0*2.2) : 0);
+  let padPts = 4 + (anyPeaks ? (o.peakRot ? maxRotW + 4 : pf0*2.2) : 0);
   if ((o.legend === 'inside' || o.legend === 'insideL') && P.length) padPts += P.length*fs*1.3 + fs*0.3;
   padPts = Math.min(padPts, plotH0*(compactIn ? 0.28 : 0.6));
   let y0 = ylo - yr*0.03; let y1 = yhi + (yhi - y0)*padPts/Math.max(1, plotH0 - padPts);
@@ -3974,13 +3998,13 @@ function buildOverlaySVG(ov){
   let yt = ticks(y0, y1, Math.max(3, Math.round(numOr(o.h,2.6)*1.8)));
   let xt = ticks(xlo, xhi, Math.max(4, Math.round(numOr(o.w,3.5)*2)));
   const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = compactIn ? 3 : 0, yl = o.showY ? yLabelText() : '';
-  const mL = ov.fixL != null ? ov.fixL : padL + (o.showY ? (tOut + 3 + Math.max(...ytl.map(s=>s.length))*cw + (yl ? 5 + fs*1.2 : 2)) : fs*0.8);
+  const mL = ov.fixL != null ? ov.fixL : padL + (o.showY ? (tOut + 3 + Math.max(0, ...ytl.map(s=>textW(s, fs))) + (yl ? 5 + fs*1.2 : 2)) : fs*0.8);
   const mB = mB0, mT = ov.fixT != null ? ov.fixT : minTop;
   const B = ov.fixB != null ? ov.fixB : compactIn ? Math.max(mT + 8, H - mB) : Math.max(H - mB, mT + 24), T = mT;
   const plotH = Math.max(8, B - T);
   yt = fitTicks(yt, y0, y1, Math.max(3, Math.round(numOr(o.h,2.6)*1.8)), plotH, 0, fs*1.28);
   let mR = compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8, sbV = 0, sbLab = '';
-  if (o.scalebar) { sbV = numOr(o.sbValue, niceStep((y1-y0)*0.2)); sbLab = fmtAuto(sbV) + (o.sbUnit ? ' ' + o.sbUnit : ''); mR += 10 + sbLab.length*cw; }
+  if (o.scalebar) { sbV = numOr(o.sbValue, niceStep((y1-y0)*0.2)); sbLab = fmtAuto(sbV) + (o.sbUnit ? ' ' + o.sbUnit : ''); mR += 10 + textW(sbLab, fs); }
   /* keep a usable plot even when fonts or margins are too big for the figure size; compact insets never spill past W */
   const L = mL, R = ov.fixR != null ? ov.fixR : compactIn ? Math.max(mL + 8, W - mR) : Math.max(W - mR, mL + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(numOr(o.w,3.5)*2)), R - L, cw, fs);
@@ -3990,7 +4014,7 @@ function buildOverlaySVG(ov){
   s.push(`<defs><clipPath id="${idp}plot-area"><rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(B-T)}"/></clipPath></defs>`);
   s.push(`<g clip-path="url(#${idp}plot-area)" fill="none" stroke-width="${lw}" stroke-linejoin="round" stroke-linecap="round">`);
   const nb = Math.max(200, Math.round((R-L)*4));
-  P.forEach(p => s.push(`<path d="${pathD(p.xs, p.yp, xlo, xhi, nb, px, py)}" stroke="${p.t.color}"/>`));
+  P.forEach(p => s.push(`<path d="${pathD(p.xs, p.yp, xlo, xhi, nb, px, py)}" stroke="${p.t.color}"${traceDashAttr(p.idx, lw)}/>`));
   s.push('</g>');
   s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square">`);
   if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(T)}" width="${r2(R-L)}" height="${r2(B-T)}"/>`);
@@ -4001,7 +4025,7 @@ function buildOverlaySVG(ov){
   s.push('</g>');
   s.push(`<g fill="#000000">`);
   const xly = B + tOut + 3 + fs*0.78;
-  { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle">${t}</text>`); }); }
+  { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = textW(t, fs)/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle">${t}</text>`); }); }
   if (xLabel) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle">${esc(xLabel)}</text>`);
   if (o.showY) {
     yt.v.forEach((v,i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
@@ -4010,10 +4034,10 @@ function buildOverlaySVG(ov){
   s.push('</g>');
   const lblLeft = [];
   if (anyPeaks) {
-    const pf = fs*0.85, pcw = pf*0.56, boxes = [], items = [], axisBoxes = [];
+    const pf = fs*0.85, boxes = [], items = [], axisBoxes = [];
     /* peak labels can reach into the margin at the plot edge; include tick text and inward tick marks */
-    xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v), y = xly; axisBoxes.push({x1:x - t.length*cw/2, x2:x + t.length*cw/2, y1:y - fs*0.8, y2:y + fs*0.2}); if (!o.ticksOut) axisBoxes.push({x1:x - aw, x2:x + aw, y1:B - tl, y2:B}); });
-    if (o.showY) yt.v.forEach((v, i) => { const y0t = py(v), y = y0t + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; axisBoxes.push({x1:x - w, x2:x, y1:y - fs*0.8, y2:y + fs*0.2}); if (!o.ticksOut) axisBoxes.push({x1:L, x2:L + tl, y1:y0t - aw, y2:y0t + aw}); });
+    xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v), y = xly, hw = textW(t, fs)/2; axisBoxes.push({x1:x - hw, x2:x + hw, y1:y - fs*0.8, y2:y + fs*0.2}); if (!o.ticksOut) axisBoxes.push({x1:x - aw, x2:x + aw, y1:B - tl, y2:B}); });
+    if (o.showY) yt.v.forEach((v, i) => { const y0t = py(v), y = y0t + fs*0.35, x = L - tOut - 3, w = textW(ytl[i], fs); axisBoxes.push({x1:x - w, x2:x, y1:y - fs*0.8, y2:y + fs*0.2}); if (!o.ticksOut) axisBoxes.push({x1:L, x2:L + tl, y1:y0t - aw, y2:y0t + aw}); });
     P.forEach(p => {
       const col = o.peakColor === 'trace' ? p.t.color : '#000000', sh = +p.t.xshift || 0;
       p.t.peaks.forEach(pk => {
@@ -4024,13 +4048,14 @@ function buildOverlaySVG(ov){
     });
     /* each label clears every trace under it, and gets a thin leader when that lifts it away from its own peak */
     const k = (xhi - xlo)/(R - L), topIn = (a, b) => { let m = -Infinity; P.forEach(p => { for (let i = Math.max(0, lowerBound(p.xs, a)); i < p.xs.length && p.xs[i] <= b; i++) if (p.yp[i] > m) m = p.yp[i]; }); return m; };
-    items.forEach(it => { it.w = o.peakRot ? pf : it.raw.length*pcw; it.h = o.peakRot ? it.raw.length*pf*0.62 + 2 : pf; if (compactIn && !o.peakRot) it.X = Math.max(L + it.w/2 + 1, Math.min(W - it.w/2 - 1.5, it.X)); const xd = xlo + (it.X - L)*k, m = topIn(xd - it.w/2*k, xd + it.w/2*k);
+    items.forEach(it => { it.w = o.peakRot ? pf : textW(it.raw, pf); it.h = o.peakRot ? textW(it.raw, pf) + 2 : pf; if (!o.peakRot && it.w <= W - 3) it.X = Math.max((compactIn ? L : 0) + it.w/2 + 1.5, Math.min(W - it.w/2 - 1.5, it.X)); const xd = xlo + (it.X - L)*k, m = topIn(xd - it.w/2*k, xd + it.w/2*k);
       it.Y0 = Math.max(T + it.h, Math.min(it.Y, isFinite(m) ? py(m) - 3 : it.Y)); });
     items.sort((a,b) => b.Y0 - a.Y0);
     const leaders = [], lTop = compactIn ? 2 : o.peakRot ? 2 : 0;
     s.push(`<g class="zoom-inset-avoid" font-size="${r2(pf)}">`);
     /* a label that would have to leave the figure to clear the others is left off and named under the figure */
     items.forEach(it => {
+      if (!o.peakRot && it.w > W - 3) { lblLeft.push(it.raw); return; }
       let bot = placeLabel(boxes, it.X - it.w/2, it.X + it.w/2, it.Y0, it.h, lTop);
       if (bot == null) { lblLeft.push(it.raw); return; }
       const own = () => ({x1:it.X - it.w/2, x2:it.X + it.w/2, y1:bot - it.h, y2:bot});
@@ -4056,24 +4081,26 @@ function buildOverlaySVG(ov){
   }
   if ((o.legend === 'inside' || o.legend === 'insideL') && P.length) {
     const items = o.mode === 'stack' ? P.slice().reverse() : P;
-    const rowH = fs*1.3, ll = fs*1.6, maxW = Math.max(...items.map(p=>p.t.name.length))*cw;
+    const rowH = fs*1.3, ll = fs*1.6, maxW = Math.max(...items.map(p=>textW(p.t.name, fs)));
     const x0 = o.legend === 'inside' ? Math.max(L + 4, R - fs*0.4 - maxW - ll - 4) : L + fs*0.8;
-    const roomCh = Math.max(6, Math.floor((R - (x0 + ll + 4) - 2)/cw));
+    const availW = Math.max(fs*3, R - (x0 + ll + 4) - 2);
     s.push(`<g class="zoom-inset-avoid">`);
-    items.forEach((p,k) => { const y = T + fs*0.8 + k*rowH, nm = p.t.name.length > roomCh + 2 ? p.t.name.slice(0, Math.max(4, roomCh - 1)).trim() + '…' : p.t.name;
-      s.push(`<line x1="${r2(x0)}" y1="${r2(y - fs*0.3)}" x2="${r2(x0+ll)}" y2="${r2(y - fs*0.3)}" stroke="${p.t.color}" stroke-width="${Math.max(lw,1)}" stroke-linecap="round"/>`);
+    items.forEach((p,k) => { const y = T + fs*0.8 + k*rowH; let nm = p.t.name; if (textW(nm, fs) > availW) { while (nm.length > 3 && textW(nm + '…', fs) > availW) nm = nm.slice(0, -1).trim(); nm += '…'; }
+      s.push(`<line x1="${r2(x0)}" y1="${r2(y - fs*0.3)}" x2="${r2(x0+ll)}" y2="${r2(y - fs*0.3)}" stroke="${p.t.color}" stroke-width="${Math.max(lw,1)}" stroke-linecap="round"${traceDashAttr(p.idx, Math.max(lw,1))}/>`);
       s.push(`<text x="${r2(x0+ll+4)}" y="${r2(y)}" fill="#000000">${esc(nm)}</text>`); });
     s.push('</g>');
   }
   if (o.legend === 'direct') {
+    const maxDirW = Math.max(fs*3, R - L - 4);
     const labs = P.map(p => {
-      const w = p.t.name.length*cw, xa = invX(R - w - 2);
+      let nm = p.t.name; if (textW(nm, fs) > maxDirW) { while (nm.length > 3 && textW(nm + '…', fs) > maxDirW) nm = nm.slice(0, -1).trim(); nm += '…'; }
+      const w = textW(nm, fs), xa = invX(R - w - 2);
       let top = -Infinity; for (let i = lowerBound(p.xs, xa); i < p.xs.length && p.xs[i] <= xhi; i++) if (p.yp[i] > top) top = p.yp[i];
       if (!isFinite(top)) top = p.yp[p.yp.length-1];
-      return {p, y: Math.max(T + fs, py(top) - fs*0.45), w};
+      return {p, nm, y: Math.max(T + fs, py(top) - fs*0.45), w};
     }).sort((a,b)=>b.y-a.y);
     for (let k=1;k<labs.length;k++) if (labs[k-1].y - labs[k].y < fs*1.1) labs[k].y = labs[k-1].y - fs*1.1;
-    labs.forEach(l => { extraAvoid.push({x0: R - l.w, x1: R, y0: l.y - fs*0.9, y1: l.y + fs*0.25}); s.push(`<text x="${r2(R)}" y="${r2(l.y)}" text-anchor="end" fill="${l.p.t.color}">${esc(l.p.t.name)}</text>`); });
+    labs.forEach(l => { extraAvoid.push({x0: R - l.w, x1: R, y0: l.y - fs*0.9, y1: l.y + fs*0.25}); s.push(`<text x="${r2(R)}" y="${r2(l.y)}" text-anchor="end" fill="${l.p.t.color}">${esc(l.nm)}</text>`); });
   }
   if (o.scalebar && sbV > 0) {
     const bx = R + 6, len = sbV/(y1-y0)*(B-T), yb = B, ytp = B - len;
@@ -4168,26 +4195,26 @@ function buildRunPlainSVG(run, ov){
 
   let s0 = 0, s1 = 104, st = null, stl = [], secTitle = '', secCol = '';
   if (hasSec) {
-    if (o.sec === 'grad') { secTitle = o.y2grad; secCol = RUN_COLORS.grad; st = {v:[0,25,50,75,100], dec:0};
+    if (o.sec === 'grad') { secTitle = o.y2grad; secCol = o.palette === 'gray' ? '#555555' : RUN_COLORS.grad; st = {v:[0,25,50,75,100], dec:0};
       /* with buffer B's strength typed on the run card (e.g. 500 mM imidazole), the axis reads in concentration */
       const bb = axisConc(run); if (bb) { const ct = ticks(bb.a, bb.c, 5), cv = ct.v.filter(v => v >= bb.a - 1e-9 && v <= bb.c*1.001); st = {v: cv.map(v => (v - bb.a)*100/(bb.c - bb.a)), dec: ct.dec}; stl = cv.map(v => tkf(v, ct.dec)); secTitle = `${bb.name} (${bb.u})`; } }
-    else { const a = arrMin(sec.ys), b = arrMax(sec.ys), r = (b-a) || 1; s0 = a - r*0.05; s1 = b + r*0.1; secTitle = o.y2cond; secCol = RUN_COLORS.cond; st = ticks(s0, s1, Math.max(3, Math.round(H0/72*1.8))); }
+    else { const a = arrMin(sec.ys), b = arrMax(sec.ys), r = (b-a) || 1; s0 = a - r*0.05; s1 = b + r*0.1; secTitle = o.y2cond; secCol = o.palette === 'gray' ? '#555555' : RUN_COLORS.cond; st = ticks(s0, s1, Math.max(3, Math.round(H0/72*1.8))); }
     if (!stl.length) stl = st.v.map(v => tkf(v, st.dec));
   } else if (hasActOverlay) {
-    s0 = ay0; s1 = ay1; secTitle = actSer.yLabel; secCol = actSer.color;
+    s0 = ay0; s1 = ay1; secTitle = actSer.yLabel; secCol = o.palette === 'gray' ? '#444444' : actSer.color;
     st = ticks(s0, s1, Math.max(3, Math.round(H0/72*1.8)));
     stl = st.v.map(v => tkf(v, st.dec));
   }
   const estW = W - fs*6 - (hasRight ? fs*6 : fs);
   const widths = nonW.map(sg => (Math.min(sg.b,xhi) - Math.max(sg.a,xlo))/(xhi-xlo)*estW).sort((a,b)=>a-b);
   const medW = widths.length ? widths[Math.floor(widths.length/2)] : 0;
-  const maxLab = nonW.reduce((m,sg) => Math.max(m, labOf(sg).length), 1);
+  const maxLabW = nonW.reduce((m,sg) => Math.max(m, textW(labOf(sg), pf)), pcw);
   let rot = false, every = numOr(o.fracEvery, 0);
   if (effFracFmt !== 'none' && showFr) {
-    if (maxLab*pcw + 2 > medW) rot = true;
+    if (maxLabW + 2 > medW) rot = true;
     if (!every) every = rot ? Math.max(1, Math.ceil((pf*1.05)/Math.max(0.1, medW))) : 1;
   }
-  const labH = effFracFmt === 'none' ? 0 : rot ? maxLab*pcw : pf;
+  const labH = effFracFmt === 'none' ? 0 : rot ? maxLabW : pf;
   const band = showFr ? fTick + (effFracFmt === 'none' ? 1 : 2 + labH + 3) : 0;
 
   const ylo = arrMin(uv.ys), yhi = arrMax(uv.ys), yr = (yhi - ylo) || 1;
@@ -4221,9 +4248,9 @@ function buildRunPlainSVG(run, ov){
   if (band && (run.ymin ?? '') === '') { const keep = yt.v.filter(v => v >= ylo - yr*0.05); if (keep.length >= 2) yt.v = keep; }
   let xt = ticks(xlo, xhi, Math.max(3, Math.round(W/72*2)));
   const ytl = yt.v.map(v => tkf(v, yt.dec)), padL = compactIn ? 3 : 0;
-  const maxLeftLen = Math.max(...ytl.map(s=>s.length), ...(atl.length ? atl.map(s=>s.length) : [0]));
-  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + maxLeftLen*cw + ((o.rylabel || hasActTrack) && !unitTop ? 5 + fs*1.2 : 2);
-  const mR = hasRight ? tOut + 3 + Math.max(...stl.map(s=>s.length))*cw + 5 + fs*(hasActOverlay ? 1.4 : 1.2) : compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8;
+  const maxLeftW = Math.max(0, ...ytl.map(s=>textW(s, fs)), ...(atl.length ? atl.map(s=>textW(s, fs)) : [0]));
+  const mL = ov.fixL != null ? ov.fixL : padL + tOut + 3 + maxLeftW + ((o.rylabel || hasActTrack) && !unitTop ? 5 + fs*1.2 : 2);
+  const mR = hasRight ? tOut + 3 + Math.max(0, ...stl.map(s=>textW(s, fs))) + 5 + fs*(hasActOverlay ? 1.4 : 1.2) : compactIn ? Math.max(fs*0.85, 5.5) : fs*0.8;
   /* keep a usable plot even when fonts or margins are too big for the figure size; compact insets never spill past W */
   const L = mL, R = ov.fixR != null ? ov.fixR : compactIn ? Math.max(mL + 8, W - mR) : Math.max(W - mR, mL + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(W/72*2)), R - L, cw, fs);
@@ -4238,12 +4265,13 @@ function buildRunPlainSVG(run, ov){
   const bLow = (() => { const v = uv.ys.filter((_, k) => uv.xs[k] >= xlo && uv.xs[k] <= xhi).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length*0.03)] : 0; })();
   const yBase = Math.min(plotB - band, py(Math.min(y1, Math.max(y0, Math.min(0, bLow)))));
   const links = [...laneLinks().values()].filter(l => l.run === run), laneFills = o.laneMark !== 'strip' && laneLinks().size > 0;
-  if (ndTxt && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), nf = fs*0.8, w = ndTxt.length*nf*0.5;
+  if (ndTxt && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), nf = fs*0.8, w = textW(ndTxt, nf);
     const X = Math.max(L + w/2, Math.min(R - w/2, px((a + b)/2))), Y = T - fs*0.4;
     extraAvoid.push({x0: X - w/2, x1: X + w/2, y0: Y - nf, y1: Y + nf*0.3});
     s.push(`<text x="${r2(X)}" y="${r2(Y)}" text-anchor="middle" font-size="${r2(nf)}" fill="${poolDark()}">${esc(ndTxt)}</text>`); }
+  const poolFill = o.palette === 'gray' ? '#d4d4d4' : o.poolColor;
   if (pBlocks.length && o.poolStyle !== 'none') {
-    s.push(`<g clip-path="url(#${idp}plot-area)" fill="${esc(o.poolColor)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*(laneFills ? 0.5 : 1))}" stroke="none">`);
+    s.push(`<g clip-path="url(#${idp}plot-area)" fill="${esc(poolFill)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*(laneFills ? 0.5 : 1))}" stroke="none">`);
     pBlocks.forEach(k => {
       extraAvoid.push({x0: px(k.a), x1: px(k.b), y0: T, y1: plotB - band, pool: true});
       if (o.poolStyle === 'area') {
@@ -4255,7 +4283,7 @@ function buildRunPlainSVG(run, ov){
     s.push('</g>');
   }
   let capSvg = '';
-  if (poolCap && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), cf = fs*0.8, w = poolCap.length*cf*0.52;
+  if (poolCap && pBlocks.length) { const a = Math.min(...pBlocks.map(k => k.a)), b = Math.max(...pBlocks.map(k => k.b)), cf = fs*0.8, w = textW(poolCap, cf);
     const X = Math.max(L + w/2 + 2.5, Math.min((compactIn ? W : R) - w/2 - 1.5, px((a + b)/2))), capY = compactIn ? Math.max(T + 4.5, T + 1) : T + 1;
     extraAvoid.push({x0: X - w/2 - 2, x1: X + w/2 + 2, y0: capY, y1: capY + cf*1.25});
     capSvg = `<rect x="${r2(X - w/2 - 2)}" y="${r2(capY)}" width="${r2(w + 4)}" height="${r2(cf*1.2)}" fill="#ffffff" fill-opacity="0.85"/><text x="${r2(X)}" y="${r2(capY + cf*0.95)}" text-anchor="middle" font-size="${r2(cf)}" fill="${poolDark()}" stroke="#ffffff" stroke-width="${r2(cf*0.4)}" stroke-linejoin="round" paint-order="stroke">${esc(poolCap)}</text>`; }
@@ -4282,6 +4310,7 @@ function buildRunPlainSVG(run, ov){
     s.push('</g>');
   }
   const labMode = secRun ? (!o.secStds && ['olig', 'mw'].includes(o.secLabel || 'mw') ? 've' : (run.isStd && o.secLabel === 'olig') ? 'mw' : (o.secLabel || 'mw')) : o.intLabel;
+  const uvCol = o.palette === 'gray' && run.color === RUN_COLORS.uv ? '#1a1a1a' : run.color;
   const iRows = (o.intFill || labMode !== 'none') ? integRows(run) : [];
   if (iRows.length && o.intFill) {
     /* integration keeps its recorded-trace area, but its guides must sit on the baseline-corrected display trace */
@@ -4292,7 +4321,7 @@ function buildRunPlainSVG(run, ov){
       const {H, mu, s: sg} = rw.gauss, ga = Math.max(xlo, rw.cl.a, mu - 4*sg), gb = Math.min(xhi, rw.cl.b, mu + 4*sg); if (!(gb > ga)) return;
       let top = '', bot = ''; for (let j=0;j<=120;j++){ const xx = ga + (gb - ga)*j/120, d = (xx - mu)/sg; top += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + H*Math.exp(-0.5*d*d) + intShift(xx))); }
       for (let j=120;j>=0;j-=20){ const xx = ga + (gb - ga)*j/120; bot += 'L' + r2(px(xx)) + ' ' + r2(py(rw.base(xx) + intShift(xx))); }
-      s.push(`<path d="${top}${bot}Z" fill="${run.color}" fill-opacity="0.18" stroke="${run.color}" stroke-width="0.5" stroke-dasharray="2 1.5"/>`);
+      s.push(`<path d="${top}${bot}Z" fill="${uvCol}" fill-opacity="0.18" stroke="${uvCol}" stroke-width="0.5" stroke-dasharray="2 1.5"/>`);
       if (!doneCl.has(rw.cl.key)) { doneCl.add(rw.cl.key); const c = rw.cl, ca = Math.max(xlo, c.a), cb = Math.min(xhi, c.b); let d = '';
         if (cb > ca) { for (let j=0;j<=160;j++){ const xx = ca + (cb - ca)*j/160; d += (j ? 'L' : 'M') + r2(px(xx)) + ' ' + r2(py(c.base(xx) + c.model(xx) + intShift(xx))); }
         s.push(`<path d="${d}" fill="none" stroke="#333333" stroke-width="0.6" stroke-dasharray="3 2"/>`);
@@ -4307,7 +4336,7 @@ function buildRunPlainSVG(run, ov){
       const st = Math.max(1, Math.ceil((j1 - j0)/500)); let d = `M${r2(px(ra))} ${r2(py(ya + intShift(ra)))}`;
       for (let i=j0;i<=j1;i+=st) d += 'L' + r2(px(rw.xs[i])) + ' ' + r2(py(rw.ys[i] + intShift(rw.xs[i])));
       d += `L${r2(px(rb))} ${r2(py(yb + intShift(rb)))}L${r2(px(rb))} ${r2(py(rw.base(rb) + intShift(rb)))}L${r2(px(ra))} ${r2(py(rw.base(ra) + intShift(ra)))}Z`;
-      s.push(`<path d="${d}" fill="${run.color}" fill-opacity="0.22" stroke="none"/>`);
+      s.push(`<path d="${d}" fill="${uvCol}" fill-opacity="0.22" stroke="none"/>`);
       s.push(`<line x1="${r2(px(ra))}" y1="${r2(py(rw.base(ra) + intShift(ra)))}" x2="${r2(px(rb))}" y2="${r2(py(rw.base(rb) + intShift(rb)))}" stroke="#555555" stroke-width="0.5"/>`);
       [[rw.a, rw.ys[rw.i0]], [rw.b, rw.ys[rw.i1]]].filter(([x]) => x >= xlo && x <= xhi).forEach(([x, yv]) => s.push(`<line x1="${r2(px(x))}" y1="${r2(py(yv + intShift(x)))}" x2="${r2(px(x))}" y2="${r2(py(rw.base(x) + intShift(x)))}" stroke="#555555" stroke-width="0.5"/>`));
     });
@@ -4338,16 +4367,16 @@ function buildRunPlainSVG(run, ov){
   const nb = Math.max(200, Math.round((R-L)*4));
   s.push(`<g clip-path="url(#${idp}plot-area)" fill="none" stroke-linejoin="round" stroke-linecap="round">`);
   if (hasSec) s.push(`<path d="${pathD(sec.xs, sec.ys, xlo, xhi, nb, px, py2)}" stroke="${secCol}" stroke-width="${r2(lw*0.9)}" stroke-dasharray="${r2(lw*4)} ${r2(lw*2.5)}"/>`);
-  s.push(`<path d="${pathD(uv.xs, uv.ys, xlo, xhi, nb, px, py)}" stroke="${run.color}" stroke-width="${lw}"/>`);
+  s.push(`<path d="${pathD(uv.xs, uv.ys, xlo, xhi, nb, px, py)}" stroke="${uvCol}" stroke-width="${lw}"/>`);
   s.push('</g>');
   if (hasActOverlay) {
-    const sortedA = actPts.slice().sort((a, b) => a.x - b.x), ovErr = assayErrNote(sortedA, actSer.showErr);
+    const sortedA = actPts.slice().sort((a, b) => a.x - b.x), ovErr = assayErrNote(sortedA, actSer.showErr), aCol = o.palette === 'gray' ? '#444444' : actSer.color;
     s.push(`<g class="assay-overlay" data-assay-id="${esc(runAssays[0].id)}">`);
     if (sortedA.length > 1) {
       let d = ''; sortedA.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(py2(q.y)); });
-      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${actSer.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${aCol}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
     }
-    sortedA.forEach(q => drawAssayPointErr(s, px(q.x), py2(q.y), q, py2, actSer.showErr, actSer.color, lw, fs));
+    sortedA.forEach(q => drawAssayPointErr(s, px(q.x), py2(q.y), q, py2, actSer.showErr, aCol, lw, fs));
     if (ovErr) s.push(`<text class="assay-err-def" x="${r2(R - 3)}" y="${r2(T + Math.max(5.5, fs*0.75))}" text-anchor="end" font-size="${r2(Math.max(5, fs*0.68))}" fill="#555555">${esc(ovErr)}</text>`);
     s.push(`</g>`);
   }
@@ -4360,19 +4389,19 @@ function buildRunPlainSVG(run, ov){
   if (hasRight) st.v.forEach(v => { const y = r2(py2(v)); s.push(`<line x1="${r2(R)}" y1="${y}" x2="${r2(R + dir*tl)}" y2="${y}"/>`); });
   s.push('</g>');
   if (hasActTrack) {
-    const pyA = v => B - (v - ay0)/(ay1 - ay0)*(B - trkT), sortedA = actPts.slice().sort((a, b) => a.x - b.x), trkErr = assayErrNote(sortedA, actSer.showErr);
+    const pyA = v => B - (v - ay0)/(ay1 - ay0)*(B - trkT), sortedA = actPts.slice().sort((a, b) => a.x - b.x), trkErr = assayErrNote(sortedA, actSer.showErr), aCol = o.palette === 'gray' ? '#444444' : actSer.color;
     const trkYtf = Math.min(trkTf, Math.max(5.5, (B - trkT - 4)/Math.max(1, actSer.yLabel.length*0.6)));
     s.push(`<g class="assay-track" data-assay-id="${esc(runAssays[0].id)}">`);
     if (pBlocks.length && o.poolStyle !== 'none') {
-      s.push(`<g fill="${esc(o.poolColor)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*0.75)}" stroke="none">`);
+      s.push(`<g fill="${esc(poolFill)}" fill-opacity="${r2(numOr(o.poolAlpha, 0.3)*0.75)}" stroke="none">`);
       pBlocks.forEach(k => s.push(`<rect x="${r2(px(k.a))}" y="${r2(trkT)}" width="${r2(px(k.b) - px(k.a))}" height="${r2(B - trkT)}"/>`));
       s.push(`</g>`);
     }
     if (sortedA.length > 1) {
       let d = ''; sortedA.forEach((q, j) => { d += (j ? 'L' : 'M') + r2(px(q.x)) + ' ' + r2(pyA(q.y)); });
-      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${actSer.color}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
+      s.push(`<path class="assay-curve" d="${d}" fill="none" stroke="${aCol}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`);
     }
-    sortedA.forEach(q => drawAssayPointErr(s, px(q.x), pyA(q.y), q, pyA, actSer.showErr, actSer.color, lw, fs));
+    sortedA.forEach(q => drawAssayPointErr(s, px(q.x), pyA(q.y), q, pyA, actSer.showErr, aCol, lw, fs));
     if (trkErr) s.push(`<text class="assay-err-def" x="${r2(R - 3)}" y="${r2(trkT + Math.max(5.5, fs*0.72))}" text-anchor="end" font-size="${r2(Math.max(5, fs*0.68))}" fill="#555555">${esc(trkErr)}</text>`);
     s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none" stroke-linecap="square">`);
     if (o.frame) s.push(`<rect x="${r2(L)}" y="${r2(trkT)}" width="${r2(R - L)}" height="${r2(B - trkT)}"/>`);
@@ -4380,18 +4409,18 @@ function buildRunPlainSVG(run, ov){
     at.v.forEach(v => { const y = r2(pyA(v)); s.push(`<line x1="${r2(L)}" y1="${y}" x2="${r2(L - dir*tl)}" y2="${y}"/>`); });
     s.push(`</g><g fill="#000000">`);
     at.v.forEach((v, i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(pyA(v) + fs*0.35)}" text-anchor="end">${atl[i]}</text>`));
-    s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((trkT + B)/2)}) rotate(-90)" text-anchor="middle" font-size="${r2(trkYtf)}" fill="${actSer.color}">${esc(actSer.yLabel)}</text>`);
+    s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((trkT + B)/2)}) rotate(-90)" text-anchor="middle" font-size="${r2(trkYtf)}" fill="${aCol}">${esc(actSer.yLabel)}</text>`);
     s.push(`</g></g>`);
   }
   s.push(`<g fill="#000000">`);
   const xly = B + tOut + 3 + fs*0.78;
   const halo = ov && ov.nest ? ` stroke="#ffffff" stroke-width="${r2(fs*0.32)}" paint-order="stroke" stroke-linejoin="round"` : '';
-  { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = t.length*cw/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle"${halo}>${t}</text>`); }); }
+  { let xLast = -Infinity; xt.v.forEach(v => { const t = tkf(v, xt.dec), hw = textW(t, fs)/2, x = compactIn ? Math.max(hw + 1.5, Math.min(W - hw - 1.5, px(v))) : px(v); if (compactIn && x - hw < xLast + 2.5) return; xLast = x + hw; s.push(`<text x="${r2(x)}" y="${r2(xly)}" text-anchor="middle"${halo}>${t}</text>`); }); }
   if (xlab) s.push(`<text x="${r2((L+R)/2)}" y="${r2(xly + 4 + fs*1.15)}" text-anchor="middle"${halo}>${esc(xlab)}</text>`);
   yt.v.forEach((v,i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
   /* a compact inset names its unit across the top of its axis, so the rotated title does not take the width the magnified data needs */
-  if (o.rylabel && unitTop) s.push(`<text x="${r2(padL)}" y="${r2(Math.max(fs*0.8, T - fs*0.62))}" text-anchor="start" fill="${hasRight ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
-  else if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+plotB)/2)}) rotate(-90)" text-anchor="middle" fill="${hasRight ? run.color : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
+  if (o.rylabel && unitTop) s.push(`<text x="${r2(padL)}" y="${r2(Math.max(fs*0.8, T - fs*0.62))}" text-anchor="start" fill="${hasRight ? uvCol : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
+  else if (o.rylabel) s.push(`<text transform="translate(${r2(padL + fs*0.85)} ${r2((T+plotB)/2)}) rotate(-90)" text-anchor="middle" fill="${hasRight ? uvCol : '#000000'}">${uvTitle(o.rylabel, uvOf(run))}</text>`);
   if (hasRight) {
     st.v.forEach((v,i) => s.push(`<text x="${r2(R + tOut + 3)}" y="${r2(py2(v) + fs*0.35)}">${stl[i]}</text>`));
     if (secTitle) {
@@ -4403,14 +4432,14 @@ function buildRunPlainSVG(run, ov){
   if (titleH) s.push(`<text x="${r2(L)}" y="${r2(fs*1.05)}" font-weight="bold">${esc(run.name)}</text>`);
   s.push('</g>');
   const tickBoxes = [], hitBox = (a, b) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
-  xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v); tickBoxes.push({x1: x - t.length*cw/2, x2: x + t.length*cw/2, y1: xly - fs*0.8, y2: xly + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: x - aw, x2: x + aw, y1: B - tl, y2: B}); });
-  yt.v.forEach((v, i) => { const y = py(v), ty = y + fs*0.35, x = L - tOut - 3, w = ytl[i].length*cw; tickBoxes.push({x1: x - w, x2: x, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: L, x2: L + tl, y1: y - aw, y2: y + aw}); });
-  if (hasRight) st.v.forEach((v, i) => { const y = py2(v), ty = y + fs*0.35, x = R + tOut + 3, w = stl[i].length*cw; tickBoxes.push({x1: x, x2: x + w, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: R - tl, x2: R, y1: y - aw, y2: y + aw}); });
+  xt.v.forEach(v => { const t = tkf(v, xt.dec), x = px(v), hw = textW(t, fs)/2; tickBoxes.push({x1: x - hw, x2: x + hw, y1: xly - fs*0.8, y2: xly + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: x - aw, x2: x + aw, y1: B - tl, y2: B}); });
+  yt.v.forEach((v, i) => { const y = py(v), ty = y + fs*0.35, x = L - tOut - 3, w = textW(ytl[i], fs); tickBoxes.push({x1: x - w, x2: x, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: L, x2: L + tl, y1: y - aw, y2: y + aw}); });
+  if (hasRight) st.v.forEach((v, i) => { const y = py2(v), ty = y + fs*0.35, x = R + tOut + 3, w = textW(stl[i], fs); tickBoxes.push({x1: x, x2: x + w, y1: ty - fs*0.8, y2: ty + fs*0.2}); if (!o.ticksOut) tickBoxes.push({x1: R - tl, x2: R, y1: y - aw, y2: y + aw}); });
   if (showVoid) [[sfit.v0, 'V₀'], [sfit.vt, 'Vₜ']].forEach(([x, t]) => { if (x > xlo && x < xhi) { const xr = px(x) - 2, vf = pf*0.95, vw = t.length*vf*0.68 + 2; tickBoxes.push({x1: xr - vw, x2: xr + 3, y1: T, y2: T + vf*1.25}); } });
   if (capSvg) s.push(capSvg);
   /* an uncalibrated SEC run says so, instead of leaving the reader to guess the size */
   if (calNote) s.push(`<text x="${r2((L + R)/2)}" y="${r2(H - 2 - condH)}" text-anchor="middle" font-size="${r2(fs*0.75)}" font-style="italic" fill="#777777">column not calibrated</text>`);
-  { const wOf = t => t.length*cf*0.52, maxW = Math.max(0, ...condL.map(q => wOf(q.t) + (q.cont ? cf*0.8 : 0)));
+  { const wOf = t => textW(t, cf), maxW = Math.max(0, ...condL.map(q => wOf(q.t) + (q.cont ? cf*0.8 : 0)));
     condL.forEach((q, i) => { const y = H - condH + fs*0.2 + (i + 0.85)*cf*1.2 - 2;
       if (cFull) { const x0 = Math.max(fs*0.2, Math.min(L, W - maxW - fs*0.2)); s.push(`<text x="${r2(x0 + (q.cont ? cf*0.8 : 0))}" y="${r2(y)}" font-size="${r2(cf)}" fill="#555555">${richLine(q.t, cf)}</text>`); }
       else { const hw = wOf(q.t)/2, x = Math.max(hw + fs*0.2, Math.min(W - hw - fs*0.2, (L + R)/2)); s.push(`<text x="${r2(x)}" y="${r2(y)}" text-anchor="middle" font-size="${r2(cf)}" fill="#555555">${richLine(q.t, cf)}</text>`); } }); }
@@ -4427,8 +4456,8 @@ function buildRunPlainSVG(run, ov){
          nothing is drawn on top of either y axis or an axis tick */
       const cOf = sg => (Math.max(sg.a, xlo) + Math.min(sg.b, xhi))/2, linkOf = sg => links.find(l => l.t.x !== undefined && Math.abs(l.t.a - sg.a) < 1e-9);
       const impOf = (sg, k) => !!linkOf(sg) || (shaded.has(sg.i) && o.poolStyle !== 'none' && (!nonW[k-1] || !shaded.has(nonW[k-1].i) || !nonW[k+1] || !shaded.has(nonW[k+1].i)));
-      const yb = plotB - fTick - 2, fBox = (sg, X) => rot ? {x1: X - pf*0.5, x2: X + pf*0.5, y1: yb - labOf(sg).length*pcw, y2: yb} : {x1: X - labOf(sg).length*pcw/2, x2: X + labOf(sg).length*pcw/2, y1: yb - pf*0.85, y2: yb + pf*0.15};
-      const wOfL = sg => rot ? pf*1.15 : labOf(sg).length*pf*0.56 + pf*0.5, placedX = [], keep = new Set();
+      const yb = plotB - fTick - 2, fBox = (sg, X) => { const lw2 = textW(labOf(sg), pf); return rot ? {x1: X - pf*0.5, x2: X + pf*0.5, y1: yb - lw2, y2: yb} : {x1: X - lw2/2, x2: X + lw2/2, y1: yb - pf*0.85, y2: yb + pf*0.15}; };
+      const wOfL = sg => rot ? pf*1.15 : textW(labOf(sg), pf) + pf*0.5, placedX = [], keep = new Set();
       const tryPut = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c), fb = fBox(sg, X); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25 || fb.x2 > R - pf*0.25 || tickBoxes.some(b => hitBox(fb, b))) return;
         if (placedX.some(p => Math.abs(p.X - X) < (p.w + wOfL(sg))/2)) return; placedX.push({X, w: wOfL(sg)}); keep.add(k); };
       const tryImp = (sg, k) => { const c = cOf(sg); if (c < xlo || c > xhi) return; const X = px(c), fb = fBox(sg, X); if (X - (rot ? pf*0.5 : wOfL(sg)/2) < L + pf*0.25 || fb.x2 > R - pf*0.25 || tickBoxes.some(b => hitBox(fb, b))) return;
@@ -4454,7 +4483,7 @@ function buildRunPlainSVG(run, ov){
       /* the V₀ line already names the void: no second label on the peak */
       if (showVoid && rw.sec && rw.sec.void && (labMode === 'mw' || labMode === 'olig')) return;
       if (labMode === 'mg') { const top = Math.max(...iRows.map(q => q.mg || 0)); if (!(rw.mg > 0) || rw.mg < 0.05*top) return; }
-      const t = labMode === 'mg' ? (rw.mg > 0 ? (isSec(run) ? `${fmt(rw.apex, 2)} ${xUnit(run)}, ${sig2(rw.mg)} mg` : `${sig2(rw.mg)} mg`) : rw.name) : labMode === 'area' ? `${fmtAuto(rw.area)} mAU·${xUnit(run)}` : labMode === 've' ? `${fmt(rw.apex, 2)} ${xUnit(run)}` : (labMode === 'mw' || labMode === 'olig') ? (secLabel(rw.sec, labMode) || `${fmt(rw.apex, 2)} ${xUnit(run)}`) : rw.name, X = px(rw.apex), w = t.length*fs*0.45;
+      const t = labMode === 'mg' ? (rw.mg > 0 ? (isSec(run) ? `${fmt(rw.apex, 2)} ${xUnit(run)}, ${sig2(rw.mg)} mg` : `${sig2(rw.mg)} mg`) : rw.name) : labMode === 'area' ? `${fmtAuto(rw.area)} mAU·${xUnit(run)}` : labMode === 've' ? `${fmt(rw.apex, 2)} ${xUnit(run)}` : (labMode === 'mw' || labMode === 'olig') ? (secLabel(rw.sec, labMode) || `${fmt(rw.apex, 2)} ${xUnit(run)}`) : rw.name, X = px(rw.apex), w = textW(t, fs*0.8);
       /* centered over the apex, or beside it when a neighbouring peak's flank would run through the text */
       const k = (xhi - xlo)/(R - L), hiIn = (a, b) => { let m = -Infinity; for (let i = Math.max(0, lowerBound(uv.xs, a)); i < uv.xs.length && uv.xs[i] <= b; i++) m = Math.max(m, uv.ys[i]); return m; };
       const yTr = uv.ys[nearestIdx(uv.xs, rw.apex)], base = Math.max(rw.apexY, yTr);
@@ -4462,11 +4491,11 @@ function buildRunPlainSVG(run, ov){
       const pick = Object.assign({}, rw.sec && rw.sec.void ? opts[1] : opts[0].lift <= base*1.04 ? opts[0] : opts.reduce((m, q) => q.lift < m.lift - 1e-9 ? q : m, opts[0]));
       /* keep the text inside the plot so it never runs into the axis or its title */
       let tt = t, ww = w; const maxRight = compactIn ? Math.min(R - 1, W - 2) : R - 1;
-      if (compactIn && ww > maxRight - (L + 1)) { tt = tt.replace(/\s+(mL|min|CV)$/, ''); ww = tt.length*fs*0.45; }
+      if (compactIn && ww > maxRight - (L + 1)) { tt = tt.replace(/\s+(mL|min|CV)$/, ''); ww = textW(tt, fs*0.8); }
       const xOrig = pick.x, ext = () => pick.an === 'middle' ? [-ww/2, ww/2] : pick.an === 'start' ? [0, ww] : [-ww, 0];
       const clampX = () => { const e = ext(), x0 = pick.x, minL = compactIn ? Math.min(L + 1, Math.max(2, maxRight - ww)) : L + 1; if (pick.x + e[0] < minL) pick.x = minL - e[0]; if (pick.x + e[1] > maxRight) pick.x = maxRight - e[1]; return Math.abs(pick.x - x0); };
       /* a label pushed off its peak by the plot edge drops its note in brackets ("void (aggregate)" becomes "void") */
-      if (clampX() > ww*0.2 && /\s\(.*\)$/.test(tt)) { tt = tt.replace(/\s*\(.*\)$/, ''); ww = tt.length*fs*0.45; pick.x = xOrig; clampX(); }
+      if (clampX() > ww*0.2 && /\s\(.*\)$/.test(tt)) { tt = tt.replace(/\s*\(.*\)$/, ''); ww = textW(tt, fs*0.8); pick.x = xOrig; clampX(); }
       const e2 = ext(), lift = Math.max(base, hiIn(xlo + (pick.x + e2[0] - L)*k, xlo + (pick.x + e2[1] - L)*k));
       let Y = Math.max(T + fs*0.8, py(lift) - 3);
       const pBox = (y, x = pick.x) => { const e = ext(); return {x1: x + e[0], x2: x + e[1], y1: y - fs*0.75, y2: y + fs*0.2}; };
@@ -4506,7 +4535,7 @@ function buildCalSVG(cal){
   const mlo = Math.min(...ms), mhi = Math.max(...ms), tlo = seq.filter(v => v <= mlo*0.9).pop() || seq[0], thi = seq.find(v => v >= mhi*1.1) || seq[seq.length - 1];
   const lmin = Math.log10(tlo), lmax = Math.log10(thi), rawYTicks = seq.filter(v => v >= tlo - 1e-12 && v <= thi + 1e-12);
   let xt = ticks(xlo, xhi, Math.max(3, Math.round(W/72*2)));
-  const mL = tOut + 3 + Math.max(...rawYTicks.map(v => kdaText(v).length))*cw + 5 + fs*1.2, mB = tOut + 3 + fs + 4 + fs*1.25, mT = fs*0.9, mR = fs*0.8;
+  const mL = tOut + 3 + Math.max(...rawYTicks.map(v => textW(kdaText(v), fs))) + 5 + fs*1.2, mB = tOut + 3 + fs + 4 + fs*1.25, mT = fs*0.9, mR = fs*0.8;
   const L = mL, R = Math.max(W - mR, L + 24), T = mT, B = Math.max(H - mB, T + 24);
   xt = fitTicks(xt, xlo, xhi, Math.max(3, Math.round(W/72*2)), R - L, cw, fs);
   const px = x => L + (x - xlo)/(xhi - xlo)*(R - L), py = m => B - (Math.log10(m) - lmin)/(lmax - lmin)*(B - T);
@@ -4518,7 +4547,7 @@ function buildCalSVG(cal){
   yTicks.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - dir*tl)}" y2="${r2(py(v))}"/>`)); s.push('</g>');
   const fx0 = Math.max(xlo, fit.xlo - (fit.xhi - fit.xlo)*0.15), fx1 = Math.min(xhi, fit.xhi + (fit.xhi - fit.xlo)*0.15), fm = x => Math.pow(10, fit.a + fit.b*x);
   s.push(`<line x1="${r2(px(fx0))}" y1="${r2(py(fm(fx0)))}" x2="${r2(px(fx1))}" y2="${r2(py(fm(fx1)))}" stroke="#555555" stroke-width="${r2(lw)}"/>`);
-  const lf = fs*0.8, r2Txt = `R² = ${fmt(fit.r2, 3)}`, r2W = r2Txt.length*lf*0.62 + 4, lbls = [];
+  const lf = fs*0.8, r2Txt = `R² = ${fmt(fit.r2, 3)}`, r2W = textW(r2Txt, lf) + 4, lbls = [], sCol = o.palette === 'gray' ? '#333333' : RUN_COLORS.uv;
   s.push(`<g font-size="${r2(lf)}" fill="#000000">`);
   fit.pts.forEach(q => {
     const X = px(q.x), yA = py(q.kda);
@@ -4527,14 +4556,14 @@ function buildCalSVG(cal){
   });
   samples.forEach(q => {
     const X = px(q.x), yA = py(q.mw);
-    s.push(`<circle cx="${r2(X)}" cy="${r2(yA)}" r="${r2(fs*0.36)}" fill="#ffffff" stroke="${RUN_COLORS.uv}" stroke-width="${r2(lw)}"/>`);
-    if (samples.length <= 6) lbls.push({text: `${q.name} ${q.extrap ? '~' : ''}${fmtAuto(q.mw)} kDa`, X, yAnchor: yA, color: RUN_COLORS.uv});
+    s.push(`<circle cx="${r2(X)}" cy="${r2(yA)}" r="${r2(fs*0.36)}" fill="#ffffff" stroke="${sCol}" stroke-width="${r2(lw)}"/>`);
+    if (samples.length <= 6) lbls.push({text: `${q.name} ${q.extrap ? '~' : ''}${fmtAuto(q.mw)} kDa`, X, yAnchor: yA, color: sCol});
   });
   lbls.forEach(it => {
-    const textW = it.text.length*lf*0.62, end = it.X + fs*0.55 + textW > R - 4;
+    const tw = textW(it.text, lf)*1.05, end = it.X + fs*0.55 + tw > R - 4;
     it.anchor = end ? 'end' : 'start';
-    it.tx = end ? Math.min(R - 2, Math.max(Math.min(R - 2, L + 2 + textW), it.X - fs*0.55)) : Math.max(L + 2, Math.min(R - 2 - textW, it.X + fs*0.55));
-    const x0 = end ? it.tx - textW : it.tx, x1 = end ? it.tx : it.tx + textW;
+    it.tx = end ? Math.min(R - 2, Math.max(Math.min(R - 2, L + 2 + tw), it.X - fs*0.55)) : Math.max(L + 2, Math.min(R - 2 - tw, it.X + fs*0.55));
+    const x0 = end ? it.tx - tw : it.tx, x1 = end ? it.tx : it.tx + tw;
     it.yMin = x1 > R - r2W ? T + fs*1.75 : T + fs*0.95;
   });
   lbls.sort((a, b) => a.yAnchor - b.yAnchor);
@@ -4627,7 +4656,7 @@ function autoAssign(g){
 }
 function lanesFor(g, id){ return gelLabels(g).map((_, i) => i).filter(i => laneAssign(g, i) === id); }
 function poolLabelSet(r){ return new Set([...shadeSet(r)].map(i => ((r.fracs[i] || {}).label || '').toUpperCase())); }
-const poolDark = () => lerpHex(/^#[0-9a-f]{6}$/i.test(opt.poolColor) ? opt.poolColor : '#E69F00', '#000000', 0.35);
+const poolDark = () => opt.palette === 'gray' ? '#333333' : lerpHex(/^#[0-9a-f]{6}$/i.test(opt.poolColor) ? opt.poolColor : '#E69F00', '#000000', 0.35);
 function makeGel(name, canvas, existingId){
   const id = existingId != null && String(existingId).trim() !== '' ? existingId : nextUid('g');
   return Object.assign({}, ENTITY_CODECS.Gel.def, {id, name, src: canvas, thumb: canvas.toDataURL('image/jpeg', 0.6), assign: [],
@@ -5441,10 +5470,14 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
   /* full labels if they fit, else short ones ("uncleaved?", "49.3 kDa"), else arrowheads only */
   tas.forEach(a => { const nm = (a.names && a.names[0] || a.text).replace(/\?$/, ''), q = a.kind === 'known-label' ? '' : a.kind.startsWith('known') ? '?' : '';
     const m = /\((cleaved|uncleaved)\)$/.exec(nm); a.short = a.kind === 'exp' ? a.text.replace(/ kDa$/, '') : a.kind.startsWith('known') ? (m ? m[1] : /^free /.test(nm) ? 'free tag' : nm.replace(/\s*\(.*\)$/, '')) + q : (a.text.match(/[\d.<>]+ kDa$/) || [a.text])[0]; });
-  const wOf = key => tas.length ? Math.max(...tas.map(a => a[key].length))*fs*0.56 + fs*1.2 : 0;
+  const wOf = key => tas.length ? Math.max(...tas.map(a => textW(a[key], fs))) + fs*1.2 : 0;
+  const spill0 = (view && view.spill) || 0, minLaneRoom = (5/0.75)*1.25;
   let taW = wOf('text'), taText = 'text';
   if (extraW) { iw += taW; }
-  else if (taW > iw*0.45) { taW = wOf('short'); taText = 'short'; if (taW > iw*0.62) { taText = ''; taW = tas.length ? fs*1.1 : 0; } }
+  else {
+    if (taW > iw*0.45 || (idx.length > 6 && (iw - Math.max(0, taW - spill0))/idx.length < minLaneRoom)) { taW = wOf('short'); taText = 'short'; }
+    if (taText === 'short' && (taW > iw*0.62 || (idx.length > 6 && (iw - Math.max(0, taW - spill0))/idx.length < minLaneRoom))) { taText = ''; taW = tas.length ? fs*1.1 : 0; }
+  }
   /* one arrow-label style for every gel in the figure */
   if (view && view.taMode != null && tas.length) { const m0 = taText === 'text' ? 0 : taText === 'short' ? 1 : 2; if (view.taMode !== m0) { if (view.taMode === 1) { taText = 'short'; taW = wOf('short'); } else if (view.taMode === 0) { taText = 'text'; taW = wOf('text'); } else { taText = ''; taW = fs*1.1; } } }
   /* arrow labels may hang into the gap beside the panel instead of shrinking the gel */
@@ -5468,15 +5501,21 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
   const fy = f => iy + (f - wa)/span*ih;
   const pos = {}, gx = []; let cx = x0;
   groups.forEach(gr => { gx.push({x: cx, gr}); gr.forEach((i, k) => { pos[i] = cx + (k + 0.5)*laneW; }); cx += gr.length*laneW + gap; });
-  const maxLen = idx.reduce((m, i) => Math.max(m, laneShow(labs[i]).length), 1);
+  const maxLabW = idx.reduce((m, i) => Math.max(m, textW(laneShow(labs[i]), lf)), lcw);
   /* labels sit flat when they fit, at 45° when lanes allow, else upright at 90° (shrunk if the lanes are very narrow) */
-  let fits = maxLen*lcw <= laneW*0.95, vert = !fits && laneW*0.707 < lf*1.05, vf = vert ? Math.max(5/0.75, Math.min(lf, laneW*0.78)) : Math.max(5/0.75, lf);
+  let fits = maxLabW <= laneW*0.95, vert = !fits && laneW*0.707 < lf*1.22, vf = vert ? Math.max(5/0.75, Math.min(lf, laneW*0.78)) : Math.max(5/0.75, lf);
+  if (!extraW && !fits && !vert) {
+    const rMax = ix + iwAll + (view && view.spill || 0), over45 = Math.max(0, ...idx.map(i => (pos[i] - lf*0.2 + textW(laneShow(labs[i] || ''), lf)*0.72) - rMax));
+    if (over45 > 0) { vert = true; vf = Math.max(5/0.75, Math.min(lf, laneW*0.78)); }
+  }
   /* one label style for every gel in a figure: the most compact any of them needs */
   const mode0 = fits ? 0 : vert ? 2 : 1;
   if (view && view.labMode != null && view.labMode > mode0) { fits = false; vert = view.labMode === 2; if (vert) vf = Math.max(5/0.75, Math.min(lf, laneW*0.78)); }
   if (view && view.vf && vert) vf = Math.min(vf, view.vf);
+  const maxVertW = vert ? idx.reduce((m, i) => Math.max(m, textW(laneShow(labs[i]), vf)), vf*0.56) : 0;
+  const diagOver = !fits && !vert ? Math.max(0, ...idx.map(i => (pos[i] - lf*0.2 + textW(laneShow(labs[i] || ''), lf)*0.74) - (x0 + totW))) : 0;
   const LL = laneLinks(), bars = opt.laneColors && idx.some(i => LL.has(g.id + ':' + i)), barH = Math.max(1.2, fs*0.2), lb = bars ? barH + 1.6 : 0;
-  const labH = Math.max(view && view.labH || 0, lb + (fits ? lf*1.3 : vert ? maxLen*vf*0.56 + lf*0.5 : maxLen*lcw*0.72 + lf*0.9)), iy = y + labH;
+  const labH = Math.max(view && view.labH || 0, lb + (fits ? lf*1.3 : vert ? maxVertW + lf*0.55 : maxLabW*0.74 + lf*0.95)), iy = y + labH;
   const pooled = i => { const r = runs.find(x => x.id === laneAssign(g, i)); if (!r) return false; const l = (labs[i] || '').trim();
     if (/^pool|\bpool(ed)?\b/i.test(l)) return true; const ps = poolLabelSet(r), parts = l.split(RANGE_SPLIT_RE);
     const sset = shadeSet(r);
@@ -5518,7 +5557,7 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
   /* crowded labels spread up and down around their arrowheads, not only downward */
   const tys = vis.map(v => v.yy); for (let it = 0; it < 40; it++) { let moved = false; for (let k = 1; k < tys.length; k++) { const o = dMin - (tys[k] - tys[k - 1]); if (o > 0.01) { tys[k - 1] -= o/2; tys[k] += o/2; moved = true; } } if (!moved) break; }
   vis.forEach((v, k) => { const ta = v.ta, yy = v.yy, near = Math.min(k ? yy - vis[k - 1].yy : Infinity, k < vis.length - 1 ? vis[k + 1].yy - yy : Infinity);
-    const ah = Math.max(fs*0.2, Math.min(fs*0.45, near*0.42)), ty = tys[k], col = ta.col || TAG_COL[ta.kind] || KNOWN_COL[ta.kind.replace('known-', '')];
+    const ah = Math.max(fs*0.2, Math.min(fs*0.45, near*0.42)), ty = tys[k], col = opt.palette === 'gray' ? '#333333' : (ta.col || TAG_COL[ta.kind] || KNOWN_COL[ta.kind.replace('known-', '')]);
     s.push(`<path d="M${r2(xa)} ${r2(yy)}l${r2(ah*1.6)} ${r2(-ah)}v${r2(ah*2)}Z" ${ta.kind === 'exp' ? `fill="#ffffff" stroke="${col}" stroke-width="0.75" stroke-linejoin="round"` : `fill="${col}"`}/>`);
     if (taText && Math.abs(ty - yy) > fs*0.3) s.push(`<path d="M${r2(xa + ah*1.6 + 0.5)} ${r2(yy)}L${r2(xT - 1.5)} ${r2(ty)}" stroke="${col}" stroke-width="0.4" fill="none"/>`);
     if (taText) s.push(`<text x="${r2(xT)}" y="${r2(ty + fs*0.33)}" fill="${lerpHex(col, '#000000', 0.3)}"${ta.kind === 'exp' ? '' : ' font-weight="bold"'}>${esc(ta[taText])}</text>`); });
@@ -5559,8 +5598,8 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
           if (!t && opt.knownShow === 'arrows' && !shownArrow.has(kn[0].name + '|' + i)) return;
           if (!inWin(b.hl/P.h) || !inWin(b.hr/P.h)) return;
           const y1 = fy(Math.max(0, b.hl - 1)/P.h), y2 = fy(Math.min(P.h, b.hr + 2)/P.h);
-          if (!t) { s.push(`<rect x="${r2(pos[i] - laneW/2 + 1.2)}" y="${r2(y1)}" width="${r2(Math.max(0.1, laneW - 2.4))}" height="${r2(Math.max(1.5, y2 - y1))}" stroke="${KNOWN_COL[kn[0].kind]}" stroke-dasharray="0.8 1.2"/>`); return; }
-          s.push(`<rect x="${r2(pos[i] - laneW/2 + 1.2)}" y="${r2(y1)}" width="${r2(Math.max(0.1, laneW - 2.4))}" height="${r2(Math.max(1.5, y2 - y1))}" stroke="${TAG_COL[t.kind]}"${t.kind === 'contam' ? ' stroke-dasharray="2 1.2"' : ''}/>`); }); });
+          if (!t) { s.push(`<rect x="${r2(pos[i] - laneW/2 + 1.2)}" y="${r2(y1)}" width="${r2(Math.max(0.1, laneW - 2.4))}" height="${r2(Math.max(1.5, y2 - y1))}" stroke="${opt.palette === 'gray' ? '#555555' : KNOWN_COL[kn[0].kind]}" stroke-dasharray="0.8 1.2"/>`); return; }
+          s.push(`<rect x="${r2(pos[i] - laneW/2 + 1.2)}" y="${r2(y1)}" width="${r2(Math.max(0.1, laneW - 2.4))}" height="${r2(Math.max(1.5, y2 - y1))}" stroke="${opt.palette === 'gray' ? '#333333' : TAG_COL[t.kind]}"${t.kind === 'contam' ? ' stroke-dasharray="2 1.2"' : ''}/>`); }); });
       s.push('</g>');
     }
     if (opt.knownShow === 'inline') {
@@ -5569,14 +5608,14 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
       idx.forEach(i => { const ln = bl[i]; if (!ln || ln.marker) return;
         ln.bands.forEach(b => { const kn = knownShown(g, i, b); if (!kn.length || !inWin(b.hl/P.h) || !inWin(b.hr/P.h)) return;
           const yb = fy(Math.min(P.h, b.hr + 2)/P.h) + kf*0.95;
-          const full = (kn[0].kind === 'label' ? '' : '≈ ') + kn.slice(0, 2).map(k => k.name).join('/'), room = Math.floor(laneW/(kf*0.56)); if (room < 3) return;
-          const txt = full.length <= room ? full : full.slice(0, Math.max(2, room - 1)).trim() + '…';
-          s.push(`<text x="${r2(pos[i])}" y="${r2(yb)}" fill="${KNOWN_COL[kn[0].kind]}"><title>${esc(full)}</title>${esc(txt)}</text>`); }); });
+          const full = (kn[0].kind === 'label' ? '' : '≈ ') + kn.slice(0, 2).map(k => k.name).join('/'); if (laneW < kf*1.6) return;
+          let txt = full; if (textW(txt, kf) > laneW) { while (txt.length > 2 && textW(txt + '…', kf) > laneW) txt = txt.slice(0, -1).trim(); txt += '…'; }
+          s.push(`<text x="${r2(pos[i])}" y="${r2(yb)}" fill="${opt.palette === 'gray' ? '#444444' : KNOWN_COL[kn[0].kind]}"><title>${esc(full)}</title>${esc(txt)}</text>`); }); });
       s.push('</g>');
     }
     if (opt.purRow) {
       const pf = Math.max(5/0.75, fs*0.75), py = iy + ih + (extraH ? extraH + fs*0.35 : 0) + pf*1.15;
-      s.push(`<g font-size="${r2(pf)}" fill="${lerpHex(TAG_COL.target, '#000000', 0.25)}" text-anchor="middle">`);
+      s.push(`<g font-size="${r2(pf)}" fill="${opt.palette === 'gray' ? '#222222' : lerpHex(TAG_COL.target, '#000000', 0.25)}" text-anchor="middle">`);
       let anyP = false;
       idx.forEach(i => { const pu = lanePurity(g, bl[i]); if (!pu || pu.purity == null) return; anyP = true;
         const lk = LL.get(g.id + ':' + i), fc = lk ? ` fill="${lerpHex(lk.color, '#000000', 0.2)}" font-weight="bold"` : '';
@@ -5585,15 +5624,15 @@ function gelPart(g, ix, y, iw, maxH, laneIdx, extraW, view){
       s.push('</g>');
     }
   }
-  return {s: s.join(''), defs, id: g.id, labH, taMode: !tas.length ? 0 : taText === 'text' ? 0 : taText === 'short' ? 1 : 2, labMode: fits ? 0 : vert ? 2 : 1, vf, labTop: i => iy - lb - 1 - (fits ? lf*1.05 : vert ? laneShow(labs[i] || '').length*vf*0.56 : Infinity), h: labH + ih + extraH, fillH: room*g.out.h*span/srcW, arrowW: tas.length ? taW : 0, laneX: i => pos[i], labels: labs, idx, top: y, imgTop: iy, ix: x0, iw: totW, ih, laneW};
+  return {s: s.join(''), defs, id: g.id, labH, diagOver, taMode: !tas.length ? 0 : taText === 'text' ? 0 : taText === 'short' ? 1 : 2, labMode: fits ? 0 : vert ? 2 : 1, vf, labTop: i => iy - lb - 1 - (fits ? lf*1.05 : vert ? textW(laneShow(labs[i] || ''), vf) : Infinity), h: labH + ih + extraH, fillH: room*g.out.h*span/srcW, arrowW: tas.length ? taW : 0, laneX: i => pos[i], labels: labs, idx, top: y, imgTop: iy, ix: x0, iw: totW, ih, laneW};
 }
 function buildGelSVG(g){
   if (!g.out) return {svg: null, geo: null};
   const fs = fontSize(), pad = fs*0.6, pf = Math.max(5/0.75, fs*0.75); let W = numOr(opt.w, 3.5)*72;
-  let mwW = (g.marks.length || marking) ? 3*fs*0.56 + 8 : 0;
+  let mwW = (g.marks.length || marking) ? textW('250', fs) + 8 : 0;
   if (opt.purRow) mwW = Math.max(mwW, opt.purBase === 'tagged' ? pf*8.2 + 6 : pf*2.4 + 5);
   const ix = pad + mwW, iw = Math.max(fs*2, W - ix - pad); W = Math.max(W, ix + iw + pad);
-  const pre = gelPart(g, ix, pad, iw, Infinity, null, true), rOver = opt.purRow ? Math.max(0, pf*1.4 - pre.laneW/2) : 0, grow = Math.max(0, pre.ix + pre.iw + Math.max(pre.arrowW, rOver) - (ix + iw)); W += grow;
+  const pre = gelPart(g, ix, pad, iw, Infinity, null, true), rOver = Math.max(opt.purRow ? Math.max(0, pf*1.4 - pre.laneW/2) : 0, pre.diagOver || 0), grow = Math.max(0, pre.ix + pre.iw + Math.max(pre.arrowW, rOver) - (ix + iw)); W += grow;
   const p = grow ? gelPart(g, ix, pad, iw, Infinity, null, true) : pre, H = p.h + pad*2;
   const s = [svgHead(W, H), `<defs>${p.defs}</defs>`];
   if (opt.bg) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
@@ -5626,11 +5665,13 @@ function laneTarget(r, label, cg){
 /* Each gel lane that points at a fraction, a range or the pool gets its own color, unique across all runs and gels */
 /* no ambers or browns: those belong to the pool shading */
 const LANE_COLORS = ['#D55E00','#009E73','#CC79A7','#56B4E9','#7F3C8D','#1B9E77','#E7298A','#66A61E','#3969AC','#B24745','#11A579','#80BA5A','#666666','#0072B2'];
+const LANE_GRAYS = ['#222222','#555555','#777777','#383838','#666666','#888888'];
 function laneLinks(){
   const map = new Map(); if (!opt.laneColors) return map; let k = 0;
+  const pal = opt.palette === 'gray' ? LANE_GRAYS : LANE_COLORS;
   runs.forEach(r => gels.forEach(g => lanesFor(g, r.id).forEach(i => {
     const t = laneTarget(r, gelLabels(g)[i]); if (!t) return;
-    map.set(g.id + ':' + i, {run: r, t, color: LANE_COLORS[k++ % LANE_COLORS.length]}); })));
+    map.set(g.id + ':' + i, {run: r, t, color: pal[k++ % pal.length]}); })));
   return map;
 }
 function gelsFor(r){ return gels.filter(g => g.out && lanesFor(g, r.id).length); }
@@ -5648,8 +5689,8 @@ function composeRuns(list, cfg){
   /* a grid row holds two panels; a branch starts a new row */
   const gcell = []; if (grid) { let rw = 0, cl = 0; list.forEach((r, i) => { if (i > 0 && (cl === 2 || (par[i] >= 0 && par[i] !== i - 1 && r.prep !== 'assay'))) { rw++; cl = 0; } gcell.push({row: rw, col: cl}); cl++; }); }
   if (n > 1 && cfg.arrows) {
-    if (row || grid) { const words = list.slice(0, -1).flatMap(r => poolLabel(r).split(' ')), nw = list.slice(0, -1).flatMap((r, i) => edgeNote(i).split(/\s+/)).reduce((m, w) => Math.max(m, w.length), 0);
-      gap = Math.max(fs*3.4, words.reduce((m,w) => Math.max(m, w.length), 0)*cw + 10, nw ? Math.min(fs*7, Math.max(nw*fs*0.8*0.52 + 8, fs*5.5)) : 0); }
+    if (row || grid) { const words = list.slice(0, -1).flatMap(r => poolLabel(r).split(' ')), nw = list.slice(0, -1).flatMap((r, i) => edgeNote(i).split(/\s+/)).reduce((m, w) => Math.max(m, textW(w, fs*0.8)), 0);
+      gap = Math.max(fs*3.4, words.reduce((m,w) => Math.max(m, textW(w, fs*0.9)), 0) + 10, nw ? Math.min(fs*7.5, Math.max(nw + 8, fs*5.5)) : 0); }
     else gap = fs*3;
   }
   /* panel widths: equal, or weighted per run in the side-by-side workflow */
@@ -5658,10 +5699,10 @@ function composeRuns(list, cfg){
   /* a panel too narrow for its two axes gets the room it needs, so the trace never shrinks to a sliver */
   /* and a trace too short for its axis titles gets taller, so the rotated titles never run into the panel title */
   let widened = 0, taller = 0; const ovL = [], ovR = [];
-  const yTitle = Math.max(String(opt.rylabel || '').length, String(opt.y2grad || '').length, 12)*fs*0.56 + fs;
+  const yTitle = Math.max(textW(opt.rylabel || '', fs), textW(opt.y2grad || '', fs), 12*fs*0.56) + fs;
   const sideK = r => opt.gelPos === 'right' && cfg.showGels && gelsFor(r).length ? Math.min(0.9, Math.max(0.3, numOr(opt.gelSide, 60)/100)) : 1;
-  list.forEach((r, i) => { const k = sideK(r), c = buildRunSVG(r, {wPt: pw[i]*k, hPt: chromH, idp: 'dry-', nest: true}); if (!c.geo) { ovL[i] = fs*4; ovR[i] = fs; if (purL && cfg.showGels && gelsFor(r).length && pw[i] < gelPad + fs*4.5) { pw[i] = gelPad + fs*4.5; widened = 1; } return; } ovL[i] = c.geo.L; ovR[i] = pw[i]*k - c.geo.R;
-    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5; let need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (purL && cfg.showGels && gelsFor(r).length) need = Math.max(need, side ? Math.max(purL, need*k + fs*2.8) + fs*5 : gelPad + fs*4.5); if (pw[i] < need) { pw[i] = need; widened = 1; } }
+  list.forEach((r, i) => { const k = sideK(r), c = buildRunSVG(r, {wPt: pw[i]*k, hPt: chromH, idp: 'dry-', nest: true}); const nGl = cfg.showGels && gelsFor(r).length ? Math.max(0, ...gelsFor(r).map(g => lanesFor(g, 'marker').length + lanesFor(g, r.id).length)) : 0, minGlW = !side && nGl > 6 ? gelPad + nGl*(5/0.75)*1.32 + fs*1.2 : 0; if (!c.geo) { ovL[i] = fs*4; ovR[i] = fs; const nd0 = Math.max(minGlW, purL && cfg.showGels && gelsFor(r).length ? gelPad + fs*4.5 : 0); if (pw[i] < nd0) { pw[i] = nd0; widened = 1; } return; } ovL[i] = c.geo.L; ovR[i] = pw[i]*k - c.geo.R;
+    { const minIn = r.wfZoom && insetVisible(r, true) ? fs*14.5 : fs*9.5; let need = c.geo.prep ? fs*(c.geo.prep === 'construct' ? 14 : c.geo.prep === 'assay' ? 15 : 10.5) : (pw[i]*k - (c.geo.R - c.geo.L) + minIn)/k; if (purL && cfg.showGels && gelsFor(r).length) need = Math.max(need, side ? Math.max(purL, need*k + fs*2.8) + fs*5 : gelPad + fs*4.5); if (minGlW) need = Math.max(need, minGlW); if (pw[i] < need) { pw[i] = need; widened = 1; } }
     const bPlot = c.geo.plotB != null ? c.geo.plotB : c.geo.B, needH = chromH - (bPlot - c.geo.T) + Math.max(fs*9, yTitle); if (chromH < needH) { chromH = needH; taller = 1; } });
   if (widened) Wt = row ? pw.reduce((a, b) => a + b, 0) + (n-1)*gap : grid ? 2*Math.max(...pw) + gap : Math.max(...pw);
   if (widened && !row) pw.fill(grid ? (Wt - gap)/2 : Wt);
@@ -5669,11 +5710,12 @@ function composeRuns(list, cfg){
   if (cfg.bandH) cfg = Object.assign({}, cfg, {bandH: Math.max(cfg.bandH, ...list.map((r, i) => { const c = buildRunSVG(r, {wPt: pw[i], hPt: chromH, nest: true}); return c.geo && c.geo.used ? c.geo.used + textPad(fs) : 0; }))});
   /* panel titles wrap onto a second line instead of being cut off */
   /* if any title has to drop its shared prefix, all of them do, so the panels read alike */
-  const roomOf = i => Math.max(4, Math.floor((pw[i] - (cfg.letters ? fs*1.6 : 0))/(fs*0.55))), anyShort = list.some((r, i) => stepTitle(r) === r.name && r.name.length > roomOf(i) && shortRunName(r) !== r.name);
-  const tLines = list.map((r, i) => { const room = roomOf(i); let nm = stepTitle(r); if (anyShort && nm === r.name) nm = shortRunName(r);
-    if (nm.length <= room) return [nm]; const w = nm.split(/\s+/), a = []; let ln = '';
-    w.forEach(t => { if (a.length < 1 && ln && (ln + ' ' + t).length > room) { a.push(ln); ln = t; } else ln = ln ? ln + ' ' + t : t; });
-    a.push(ln.length > room ? ln.slice(0, room - 1).trim() + '…' : ln); return a; });
+  const tInd = cfg.letters ? fs*1.45 : 0, roomWOf = i => Math.max(fs*2.5, pw[i] - tInd - fs*0.2), anyShort = list.some((r, i) => stepTitle(r) === r.name && textW(r.name, fs) > roomWOf(i) && shortRunName(r) !== r.name);
+  const fitLine = (s, maxW) => { if (textW(s, fs) <= maxW) return s; let q = s; while (q.length > 3 && textW(q + '…', fs) > maxW) q = q.slice(0, -1).trim(); return q + '…'; };
+  const tLines = list.map((r, i) => { const maxW = roomWOf(i); let nm = stepTitle(r); if (anyShort && nm === r.name) nm = shortRunName(r);
+    if (textW(nm, fs) <= maxW) return [nm]; const w = nm.split(/\s+/), a = []; let ln = '';
+    w.forEach(t => { if (a.length < 1 && ln && textW(ln + ' ' + t, fs) > maxW) { a.push(fitLine(ln, maxW)); ln = t; } else ln = ln ? ln + ' ' + t : t; });
+    a.push(fitLine(ln, maxW)); return a; });
   const titleH = cfg.titles ? (tLines.some(t => t.length > 1) ? fs*2.95 : fs*1.8) : 0;
   const scale = Math.max(0.2, numOr(opt.gelScale, 100)/100), extraGap = Math.max(0, numOr(opt.gelGap, 0));
   const gH = chromH*Math.max(1, scale), shared = new Map();
@@ -5702,7 +5744,7 @@ function composeRuns(list, cfg){
     /* fillH: the height at which a gel's lanes fill the plot width at true proportions; a gel with many lanes may also use the panel's margin */
     const fullW = it => Math.max(wOf(it), pw[list.indexOf(it.r)] - gelPad);
     items.forEach(it => { if (sideOf(it)) return; it.fillP = gelPart(it.g, 0, 0, wOf(it), gH, it.idx, false, {fit: true, win: it.win, fixedH: 1e5}).fillH; it.fillW = gelPart(it.g, 0, 0, fullW(it), gH, it.idx, false, {fit: true, win: it.win, fixedH: 1e5}).fillH; });
-    const fill = items.map(it => it.fillP || 0).filter(v => v > 0).sort((a, b) => a - b);
+    const fill = items.map(it => (wOf(it)/it.idx.length < fs*1.8 ? it.fillW : it.fillP) || 0).filter(v => v > 0).sort((a, b) => a - b);
     /* the tallest height at which every gel still fits its width without distortion, so all gels share one height */
     const Hc = fill.length ? Math.min(gH, fill[(fill.length - 1) >> 1])*(cfg.gelK || 1) : 0;
     items.forEach(it => { it.wide = (it.fillP > 0 && it.fillP < Hc*0.98) || wOf(it)/it.idx.length < fs*1.8; it.gw = it.wide ? fullW(it) : wOf(it); });
@@ -5775,9 +5817,9 @@ function composeRuns(list, cfg){
   panels.forEach((p, i) => {
     const {x, y} = pos[i];
     if (cfg.titles) {
-      const letter = cfg.letters ? `<tspan font-weight="bold">${String.fromCharCode(65 + i + (cfg.letterOff || 0))}</tspan>  ` : '';
-      const tl = tLines[i], ind = cfg.letters ? fs*1.25 : 0;
-      body.push(`<text x="${r2(x)}" y="${r2(y + fs*1.1)}" fill="#000000">${letter}${esc(tl[0])}</text>`);
+      const tl = tLines[i], ind = cfg.letters ? fs*1.45 : 0;
+      const l1 = cfg.letters ? `<tspan font-weight="bold">${String.fromCharCode(65 + i + (cfg.letterOff || 0))}</tspan>  <tspan x="${r2(x + ind)}">${esc(tl[0])}</tspan>` : esc(tl[0]);
+      body.push(`<text x="${r2(x)}" y="${r2(y + fs*1.1)}" fill="#000000">${l1}</text>`);
       if (tl[1]) body.push(`<text x="${r2(x + ind)}" y="${r2(y + fs*2.25)}" fill="#000000">${esc(tl[1])}</text>`);
     }
     if (p.chart.svg) body.push(`<g data-wfp="${esc(p.r.id)}" transform="translate(${r2(x)} ${r2(y + titleH)})">${p.chart.svg}</g>`);
@@ -6383,9 +6425,14 @@ function buildPrepSVG(r, ov){
 }
 /* publication-grade step schematics on a unified 180x116 viewBox (Okabe-Ito palette, >=0.85 strokes, collision-free) */
 const sgClip = (s, n) => { const t = String(s == null ? '' : s).replace(/\s+/g, ' ').replace(/\((mL|nm|min|kDa)\)/gi, '$1').trim(); return t.length > n ? t.slice(0, Math.max(2, n - 1)).trim() + '…' : t; };
+const GLYPH_GRAY_FILL = {'#ffffff':'#ffffff','#f8fafc':'#f5f5f5','#e2e8f0':'#e6e6e6','#56b4e9':'#e6e6e6','#009e73':'#e6e6e6','#cbd5e1':'#d4d4d4','#e69f00':'#d4d4d4','#0072b2':'#d4d4d4','#d55e00':'#bdbdbd','#7c5c47':'#bdbdbd','#475569':'#555555','#1e293b':'#222222'};
+const GLYPH_GRAY_STROKE = {'#ffffff':'#ffffff','#1e293b':'#222222','#475569':'#555555','#94a3b8':'#8c8c8c'};
 function stepGlyphSVG(kind, info){
   const d = info || {}, x = numOr(d.x, 0), y = numOr(d.y, 0), w = numOr(d.w, 180), h = numOr(d.h, 116);
-  const wrap = (body, extra) => `<svg x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" viewBox="0 0 180 116" font-family="Instrument Sans, Helvetica, Arial, sans-serif" data-glyph="${esc(kind)}"${extra || ''}>${body}</svg>`;
+  const wrap = (body, extra) => {
+    if (opt.palette === 'gray') body = body.replace(/<text([^>]*?)fill="#[0-9a-fA-F]{6}"/g, '<text$1fill="#333333"').replace(/fill="(#[0-9a-fA-F]{6})"(\s+fill-opacity="0\.[123]\d*")?/g, (m, c) => `fill="${GLYPH_GRAY_FILL[c.toLowerCase()] || '#d4d4d4'}"`).replace(/stroke="(#[0-9a-fA-F]{6})"/g, (m, c) => `stroke="${GLYPH_GRAY_STROKE[c.toLowerCase()] || '#444444'}"`);
+    return `<svg x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" viewBox="0 0 180 116" font-family="Instrument Sans, Helvetica, Arial, sans-serif" data-glyph="${esc(kind)}"${extra || ''}>${body}</svg>`;
+  };
   if (kind === 'transform') {
     const m = String(d.trMethod != null ? d.trMethod : prep.trMethod || '').trim(), elec = /electropor|puls/i.test(m), glyc = /glycerol/i.test(m);
     const selRaw = String(d.trSel != null ? d.trSel : (prep.trSel || (prep.resist ? (RES_SHORT[prep.resist] || prep.resist) : ''))).trim();
@@ -6488,12 +6535,12 @@ function ncSVG(W, H, fs, aw, run){ const nf = fs*0.85, lh = nf*1.3, s = [], line
   if (!sp.length) { const rec = (run && prep.btw && prep.btw[run.id]) || {}, how = rec.how || 'conc', gk = ({conc: 'btw_conc', dil: 'btw_dil', exch: 'btw_exch', filt: 'btw_filt', hold: 'btw_hold'})[how] || 'btw_conc';
     const gy = y + fs*0.15, availW = Math.max(48, W - fs*0.5), availH = Math.max(38, H - gy - fs*0.25), gw = Math.min(availW, availH*(180/116), fs*18.5), gh = gw*(116/180), gx = Math.max(L0, (W - gw)/2);
     s.push(stepGlyphSVG(gk, {x: gx, y: gy, w: gw, h: gh, mwco: rec.mwco, vIn: rec.vIn, vOut: rec.vOut, device: rec.device, note: rec.note, unit: runVolUnit(run)})); PREP_USED = Math.min(H, gy + gh + fs*0.2); return s.join(''); }
-  const xlo = 240, xhi = 340, pal = PAL.okabe, ys = sp.flatMap(q => q.spec.ab.filter((v, i) => q.spec.wl[i] >= xlo && q.spec.wl[i] <= xhi)), y0 = Math.min(0, ...ys), y1 = Math.max(...ys)*1.08 || 1;
+  const xlo = 240, xhi = 340, pal = PAL[opt.palette] || PAL.okabe, ys = sp.flatMap(q => q.spec.ab.filter((v, i) => q.spec.wl[i] >= xlo && q.spec.wl[i] <= xhi)), y0 = Math.min(0, ...ys), y1 = Math.max(...ys)*1.08 || 1;
   const B = NC_ALIGN && NC_ALIGN.B > y + fs*3 ? NC_ALIGN.B : H - tf*2.9, T = Math.max(y + fs*0.3, NC_ALIGN ? NC_ALIGN.T : 0);
   let yt = ticks(y0, y1, 3); yt = fitTicks(yt, y0, y1, 3, B - T, 0, fs*1.28); if (yt.v.length > 1) yt.v = yt.v.filter(v => v > y0); const ytl = yt.v.map(v => fmt(v, yt.dec)), L = L0 + yTitleW + Math.max(...ytl.map(t => t.length))*tf*0.56 + 4, R = W - fs*0.9;
   const px = x => L + (x - xlo)/(xhi - xlo)*(R - L), py = v => B - (v - y0)/(y1 - y0)*(B - T), tl = fs*0.35;
   s.push(`<line x1="${r2(px(280))}" y1="${r2(T)}" x2="${r2(px(280))}" y2="${r2(B)}" stroke="#a0a0a0" stroke-width="${r2(aw*0.6)}" stroke-dasharray="2 2"/>`);
-  sp.forEach((q, k) => { let d = ''; q.spec.wl.forEach((w, i) => { if (w < xlo || w > xhi) return; d += (d ? 'L' : 'M') + r2(px(w)) + ' ' + r2(py(q.spec.ab[i])); }); s.push(`<path d="${d}" fill="none" stroke="${sp.length > 1 ? pal[k % pal.length] : '#0072B2'}" stroke-width="${r2(Math.max(0.6, aw*1.1))}" stroke-linejoin="round"/>`); });
+  sp.forEach((q, k) => { let d = ''; q.spec.wl.forEach((w, i) => { if (w < xlo || w > xhi) return; d += (d ? 'L' : 'M') + r2(px(w)) + ' ' + r2(py(q.spec.ab[i])); }); s.push(`<path d="${d}" fill="none" stroke="${sp.length > 1 ? pal[k % pal.length] : (opt.palette === 'gray' ? '#222222' : '#0072B2')}" stroke-width="${r2(Math.max(0.6, aw*1.1))}" stroke-linejoin="round"/>`); });
   s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none"><path d="M${r2(L)} ${r2(T)}V${r2(B)}H${r2(R)}"/>`);
   [250, 280, 310, 340].forEach(w => s.push(`<line x1="${r2(px(w))}" y1="${r2(B)}" x2="${r2(px(w))}" y2="${r2(B + tl)}"/>`)); yt.v.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - tl)}" y2="${r2(py(v))}"/>`)); s.push('</g>');
   s.push(`<g font-size="${r2(tf)}" fill="#000000">`); [250, 280, 310, 340].forEach(w => s.push(`<text x="${r2(px(w))}" y="${r2(B + tl + 3 + fs*0.78)}" text-anchor="middle">${w}</text>`));
@@ -6595,8 +6642,8 @@ function buildGrowthSpecBody(o){
   let xt = ticks(xMin, xMax, 5); xt = fitTicks(xt, xMin, xMax, 5, pw, 2, fs * 0.6);
   const s = [], pal = growthPalette();
   if (600 >= xMin && 600 <= xMax) {
-    const x6 = px(600), mf = fs * 0.78, mw = 6 * mf * 0.56, lx = Math.max(L + mw / 2, Math.min(R - mw / 2, x6));
-    s.push(`<g class="od-mark-600"><line x1="${r2(x6)}" y1="${r2(T)}" x2="${r2(x6)}" y2="${r2(B)}" stroke="#D55E00" stroke-width="${r2(Math.max(0.8, aw * 1.1))}" stroke-dasharray="3 2" data-mark-600="1"/><text x="${r2(lx)}" y="${r2(T - fs * 0.35)}" text-anchor="middle" font-size="${r2(mf)}" fill="#D55E00">600 nm</text></g>`);
+    const x6 = px(600), mf = fs * 0.78, mw = textW('600 nm', mf), lx = Math.max(L + mw / 2, Math.min(R - mw / 2, x6)), mc = opt.palette === 'gray' ? '#444444' : '#D55E00';
+    s.push(`<g class="od-mark-600"><line x1="${r2(x6)}" y1="${r2(T)}" x2="${r2(x6)}" y2="${r2(B)}" stroke="${mc}" stroke-width="${r2(Math.max(0.8, aw * 1.1))}" stroke-dasharray="3 2" data-mark-600="1"/><text x="${r2(lx)}" y="${r2(T - fs * 0.35)}" text-anchor="middle" font-size="${r2(mf)}" fill="${mc}">600 nm</text></g>`);
   }
   sp.forEach((r, idx) => {
     const d = r.spec.wl.map((w, i) => `${i ? 'L' : 'M'}${r2(px(w))} ${r2(py(r.spec.ab[i]))}`).join(' ');
@@ -6671,12 +6718,13 @@ function constructSVG(W, H, fs, aw){
     else { const rr = w*0.42; s.push(`<path d="M${r2(x + w/2 - rr)} ${r2(yLine)}A${r2(rr)} ${r2(rr)} 0 0 1 ${r2(x + w/2 + rr)} ${r2(yLine)}Z" fill="#ffffff" stroke="${stroke}" stroke-width="${sw}"/>`); below.push([x + w/2, 'RBS', 0]); }
     x += w + gapP; });
   /* the ORF: parts to scale in residues, but never narrower than a short label */
-  const sg0 = i => m.segs[i].kind === 'prot' ? fs*1.1 : Math.min(orfW*0.3, m.segs[i].name.length*lf*0.56 + fs*0.6);
+  const isGray = opt.palette === 'gray';
+  const sg0 = i => m.segs[i].kind === 'prot' ? fs*1.1 : Math.min(orfW*0.3, textW(m.segs[i].name, lf) + fs*0.6);
   const n = m.tx.length, minW = fs*1.1, raw = m.segs.map(sg => (sg.b - sg.a + 1)/n*orfW), need = raw.map((w, i) => Math.max(sg0(i), w));
   /* the room taken by widened tags comes out of each part's width above its own minimum */
   const over = need.reduce((t, w) => t + w, 0) - orfW, big = need.map((w, i) => Math.max(0, w - sg0(i))), bigT = big.reduce((t, w) => t + w, 0) || 1;
   const ws = need.map((w, i) => w - over*(big[i]/bigT)), x0 = x, x1 = x + orfW, y0 = yLine - bh/2, y1 = yLine + bh/2;
-  const fillOf = k => k === 'prot' ? lerpHex(TAG_COL.target, '#ffffff', 0.6) : k === 'his' ? lerpHex(TAG_COL.tagged, '#ffffff', 0.35) : lerpHex(TAG_COL.tagged, '#ffffff', 0.68);
+  const fillOf = k => isGray ? (k === 'prot' ? '#e6e6e6' : k === 'his' ? '#bdbdbd' : '#d4d4d4') : (k === 'prot' ? lerpHex(TAG_COL.target, '#ffffff', 0.6) : k === 'his' ? lerpHex(TAG_COL.tagged, '#ffffff', 0.35) : lerpHex(TAG_COL.tagged, '#ffffff', 0.68));
   const clip = `cl-orf-${Math.round(x0*10)}`; s.push(`<defs><clipPath id="${clip}"><path d="M${r2(x0)} ${r2(y0)}H${r2(x1 - ah)}L${r2(x1)} ${r2(yLine)}L${r2(x1 - ah)} ${r2(y1)}H${r2(x0)}Z"/></clipPath></defs><g clip-path="url(#${clip})">`);
   let xx = x0; const segX = m.segs.map((sg, i) => { const a = xx; xx += ws[i]; return [a, xx]; });
   m.segs.forEach((sg, i) => s.push(`<rect x="${r2(segX[i][0])}" y="${r2(y0)}" width="${r2(segX[i][1] - segX[i][0] + 0.3)}" height="${r2(bh)}" fill="${fillOf(sg.kind)}"/>`));
@@ -6685,21 +6733,21 @@ function constructSVG(W, H, fs, aw){
   s.push(`<path d="M${r2(x0)} ${r2(y0)}H${r2(x1 - ah)}L${r2(x1)} ${r2(yLine)}L${r2(x1 - ah)} ${r2(y1)}H${r2(x0)}Z" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`);
   /* names inside their part when they fit, else above it */
   const above = [];
-  m.segs.forEach((sg, i) => { const [a, b] = segX[i], room = (b - a) - (i === m.segs.length - 1 ? ah*0.7 : 0) - fs*0.2, nm = sg.name, w = nm.length*lf*0.55;
+  m.segs.forEach((sg, i) => { const [a, b] = segX[i], room = (b - a) - (i === m.segs.length - 1 ? ah*0.7 : 0) - fs*0.2, nm = sg.name, w = textW(nm, lf);
     if (w <= room) s.push(`<text x="${r2(a + (b - a - (i === m.segs.length - 1 ? ah*0.5 : 0))/2)}" y="${r2(yLine + lf*0.36)}" text-anchor="middle" font-size="${r2(lf)}" fill="#000000">${esc(nm)}</text>`);
     else above.push([(a + b)/2, nm]); });
   let aboveN = 0; const cutX = m.cut ? (ci => ci < 0 ? null : m.cterm ? segX[ci][1] : segX[ci][0])(m.segs.findIndex(sg => sg.kind === 'prot')) : null;
   /* a name that would sit on the protease mark is left off: the lines under the drawing name every part */
-  above.forEach(([cx0, nm]) => { const hw = nm.length*lf*0.55/2, cx = Math.max(x0 + hw, Math.min(x1 - hw, cx0)); if (cutX != null && cutX > cx - hw - fs*0.35 && cutX < cx + hw + fs*0.35) return; aboveN++; s.push(`<text x="${r2(cx)}" y="${r2(y0 - lf*0.35)}" text-anchor="middle" font-size="${r2(lf)}" fill="#000000">${esc(nm)}</text>`); });
+  above.forEach(([cx0, nm]) => { const hw = textW(nm, lf)/2, cx = Math.max(x0 + hw, Math.min(x1 - hw, cx0)); if (cutX != null && cutX > cx - hw - fs*0.35 && cutX < cx + hw + fs*0.35) return; aboveN++; s.push(`<text x="${r2(cx)}" y="${r2(y0 - lf*0.35)}" text-anchor="middle" font-size="${r2(lf)}" fill="#000000">${esc(nm)}</text>`); });
   /* residue numbers at the ends and the boundaries */
   const ticks = [1].concat(m.segs.map(sg => sg.b)), tkX = [x0].concat(segX.map(p => p[1])); let lastX = -1e9;
-  const endL = Math.min(R, x1) - (String(ticks[ticks.length - 1]).length + 3)*sf*0.55;
-  tkX.forEach((X, i) => { const t = String(ticks[i]), w = (t.length + (i === tkX.length - 1 ? 3 : 0))*sf*0.55, last = i === tkX.length - 1; if (last) X = x1; if (!last && (X - lastX < w + fs*0.3 || (i > 0 && X + w/2 > endL - fs*0.3))) return; lastX = X;
+  const endL = Math.min(R, x1) - textW(String(ticks[ticks.length - 1]) + ' aa', sf);
+  tkX.forEach((X, i) => { const t = String(ticks[i]), w = textW(t + (i === tkX.length - 1 ? ' aa' : ''), sf), last = i === tkX.length - 1; if (last) X = x1; if (!last && (X - lastX < w + fs*0.3 || (i > 0 && X + w/2 > endL - fs*0.3))) return; lastX = X;
     s.push(`<text x="${r2(Math.min(R, X))}" y="${r2(y1 + sf*1.05)}" text-anchor="${i === 0 ? 'start' : i === tkX.length - 1 ? 'end' : 'middle'}" font-size="${r2(sf)}" fill="#555555">${t}${i === tkX.length - 1 ? ' aa' : ''}</text>`); });
   /* the protease cut: a small wedge above the boundary with its name */
   if (m.cut) { const ci = m.segs.findIndex(sg => sg.kind === 'prot'), bx = m.cterm ? segX[ci][1] : segX[ci][0], ty = y0 - (aboveN ? lf*1.25 : 0) - fs*0.2;
-    s.push(`<path d="M${r2(bx)} ${r2(y0 - 0.5)}L${r2(bx - fs*0.28)} ${r2(ty - fs*0.45)}H${r2(bx + fs*0.28)}Z" fill="${TAG_COL.contam}"/>`);
-    const tw = m.cut.name.length*lf*0.55, cx = Math.max(L + tw/2, Math.min((m.term ? x1 + gapP + fs*0.45 - 4*lf*0.3 - fs*0.3 : R) - tw/2, bx)); s.push(`<text x="${r2(cx)}" y="${r2(ty - fs*0.6)}" text-anchor="middle" font-size="${r2(lf)}" fill="${lerpHex(TAG_COL.contam, '#000000', 0.25)}">${esc(m.cut.name)}</text>`); }
+    s.push(`<path d="M${r2(bx)} ${r2(y0 - 0.5)}L${r2(bx - fs*0.28)} ${r2(ty - fs*0.45)}H${r2(bx + fs*0.28)}Z" fill="${isGray ? '#555555' : TAG_COL.contam}"/>`);
+    const tw = textW(m.cut.name, lf), cx = Math.max(L + tw/2, Math.min((m.term ? x1 + gapP + fs*0.45 - 4*lf*0.3 - fs*0.3 : R) - tw/2, bx)); s.push(`<text x="${r2(cx)}" y="${r2(ty - fs*0.6)}" text-anchor="middle" font-size="${r2(lf)}" fill="${isGray ? '#222222' : lerpHex(TAG_COL.contam, '#000000', 0.25)}">${esc(m.cut.name)}</text>`); }
   x = x1 + gapP;
   if (m.term) { const tx = x + fs*0.45; s.push(`<path d="M${r2(tx)} ${r2(yLine)}V${r2(yLine - bh*0.8)}M${r2(tx - fs*0.38)} ${r2(yLine - bh*0.8)}H${r2(tx + fs*0.38)}" fill="none" stroke="${stroke}" stroke-width="${r2(sw*1.3)}"/>`); below.push([tx, 'term', 1]); }
   /* operator and terminator are named above the line, the RBS below it, so neighbours never run together */
@@ -6710,12 +6758,13 @@ function constructSVG(W, H, fs, aw){
   if (head) wrapWords(nbsp(head), room).forEach((t, i) => out.push({t, b: i === 0 && !!m.name}));
   if (m.src !== 'gb') out.push({t: 'Drawn from the Protein section sequence', c: '#555555'});
   if (sub) wrapWords(nbsp(sub), room).forEach(t => out.push({t, c: '#444444'}));
-  if (m.tagParts.length) { out.push({gap: true}); wrapWords(nbsp(`${m.tn} ${fmt(m.mTag, 1)} kDa`), room).forEach(t => out.push({t, col: TAG_COL.tagged}));
-    if (m.cut) { wrapWords(nbsp(`${m.pn} ${fmt(m.mProt, 1)} kDa (${m.protSeq.length} aa) after cleavage`), room).forEach(t => out.push({t, col: lerpHex(TAG_COL.target, '#000000', 0.15)}));
+  const tagTxtCol = isGray ? '#222222' : TAG_COL.tagged, targTxtCol = isGray ? '#222222' : lerpHex(TAG_COL.target, '#000000', 0.15);
+  if (m.tagParts.length) { out.push({gap: true}); wrapWords(nbsp(`${m.tn} ${fmt(m.mTag, 1)} kDa`), room).forEach(t => out.push({t, col: tagTxtCol}));
+    if (m.cut) { wrapWords(nbsp(`${m.pn} ${fmt(m.mProt, 1)} kDa (${m.protSeq.length} aa) after cleavage`), room).forEach(t => out.push({t, col: targTxtCol}));
       wrapWords(nbsp(`Free ${m.tagParts.join('-')} ${fmt(m.mFree, 1)} kDa`), room).forEach(t => out.push({t, c: '#555555'})); }
     else wrapWords(nbsp(`${m.pn} ${fmt(m.mProt, 1)} kDa (${m.protSeq.length} aa) without the tag, no protease site found`), room).forEach(t => out.push({t, c: '#555555'}));
     const e1 = seqA280(m.protSeq); wrapWords(nbsp(`Cleaved: pI ${fmt(m.pi, 1)}${e1 ? `, A280 (1 mg/mL) ${fmt(e1, 2)}` : ''}`), room).forEach(t => out.push({t, c: '#444444'})); }
-  else out.push({t: nbsp(`${m.pn} ${fmt(m.mTag, 1)} kDa`), col: lerpHex(TAG_COL.target, '#000000', 0.15)});
+  else out.push({t: nbsp(`${m.pn} ${fmt(m.mTag, 1)} kDa`), col: targTxtCol});
   /* when the plasmid's ORF and the Protein section disagree, the figure says which one the gel sizes come from */
   if (FIG_SCREEN && m.src === 'gb' && m.match && !m.match.ok) out.push({t: 'Gel sizes use the Protein section, not this ORF (not in exports)', col: '#9a3b3b'});
   out.forEach(o => { if (o.gap) { y += nf*0.35; return; } if (y > H - fs*0.1) return; s.push(`<text x="${r2(L)}" y="${r2(y)}" font-size="${r2(nf)}"${o.b ? ' font-weight="bold"' : ''} fill="${o.col || o.c || '#000000'}">${richLine(o.t, nf)}</text>`); PREP_USED = Math.max(PREP_USED, y + nf*0.35); y += nf*1.25; });
@@ -7346,9 +7395,9 @@ list.addEventListener('input', e => {
   else if (k === 'runId' && t.src) { const asg = gelLabels(t).map((_, i) => laneAssign(t, i)); t.runId = el.value; t.assign = asg.map(a => a === 'marker' ? 'marker' : el.value); if (curGel() === t) renderLaneTable(); }
   else if (k === 'pathCell') { if (el.value === 'custom') return; t.path = el.value; delete t.pathFromFile; const pi = el.closest('.trace') && el.closest('.trace').querySelector('[data-k="path"]'); if (pi) pi.value = t.path; }
   else { t[k] = el.value; if (k === 'mPh') delete t.mPH; if (!document.body.classList.contains('searching') && MORE_COND_KEYS.includes(k)) { const st = runFolds.get(t); if (st) { st.auto.more = hasMoreCond(t); if (PROJ && st.auto.more) st.auto.runcond = true; } } if (k === 'path') { delete t.pathFromFile; const cs = el.closest('.trace') && el.closest('.trace').querySelector('[data-k="pathCell"]'); if (cs) { const ck = uvCellKey(t); if (ck !== 'custom') cs.value = ck; } } }
-  if (k === 'name' || COND_KEYS.includes(k)) { syncImacCondWarnings(t, el.closest('.trace')); syncChargeWarnings(t, el.closest('.trace')); }
+  if (runs.includes(t) && (k === 'name' || COND_KEYS.includes(k))) { syncImacCondWarnings(t, el.closest('.trace')); syncChargeWarnings(t, el.closest('.trace')); }
   if (k === 'crop') { t.xmin = t.xmax = ''; }
-  if (k === 'name') { const tb = $('#figtabs'); tb._h = null; const sn = document.getElementById('sn' + t.id); if (sn) sn.placeholder = opt.wfTitle === 'name' ? t.name : guessStep(t) || t.name; }
+  if (k === 'name') { const tb = $('#figtabs'); tb._h = null; const sn = runs.includes(t) && document.getElementById('sn' + t.id); if (sn) sn.placeholder = opt.wfTitle === 'name' ? t.name : guessStep(t) || t.name; }
   if (k === 'runId' || k === 'inWf') { renderList(); if (document.body.classList.contains('searching') && $('#panelSearch')) $('#panelSearch').dispatchEvent(new Event('input')); }
   render();
 });
@@ -11257,17 +11306,17 @@ function buildConcFig(r){ const sp = ndFinalOf(r).filter(x => x.spec), info = nc
   const fs = fontSize(), W = Math.max(numOr(opt.w, 3.5), 3.4)*72; return composeRuns([ncObj(r)], {layout: 'row', W, chromH: numOr(opt.wfH, 2.2)*72, titles: true, letters: false, showGels: false, connectors: false, arrows: false, gelMaxH: 0, bandH: fs*5}); }
 function buildNDSVG(only, info){
   const sp = (only || ndSamples.filter(s => s.stage !== 'conc')).filter(s => s.spec && !s.hide); if (!sp.length) return {svg: null, geo: null}; info = info || [];
-  const S = style({}), {W, H, fs, lw, aw, cw, tl, tOut} = S, o = opt, pal = PAL.okabe, norm = o.ndNorm === 'a280';
+  const S = style({}), {W, H, fs, lw, aw, cw, tl, tOut} = S, o = opt, pal = PAL[o.palette] || PAL.okabe, norm = o.ndNorm === 'a280', lf = fs*0.82;
   const val = (s, i) => norm && s.a280 ? s.spec.ab[i]/s.a280 : s.spec.ab[i];
   const xs = sp.flatMap(s => s.spec.wl), xlo = Math.max(numOr(o.ndFrom, 240), Math.min(...xs)), xhi = Math.min(350, Math.max(...xs));
   const ys = sp.flatMap(s => s.spec.ab.map((v, i) => s.spec.wl[i] >= xlo && s.spec.wl[i] <= xhi ? val(s, i) : null).filter(v => v != null)), y0 = Math.min(0, ...ys), y1 = Math.max(...ys)*1.06 || 1;
-  const legW = Math.min(W*0.38, Math.max(...sp.map(s => s.name.length))*fs*0.47 + fs*2.4), n = Math.max(3, Math.round(H/72*1.8));
+  const legW = Math.min(W*0.38, Math.max(...sp.map(s => textW(s.name, lf))) + fs*2.5), n = Math.max(3, Math.round(H/72*1.8));
   let yt = ticks(y0, y1, n);
   const T = fs*1.2 + info.length*fs*1.25, B = H - (tOut + 3 + fs + 4 + fs*1.25);
   const plotH = B - T;
   yt = fitTicks(yt, y0, y1, n, plotH, 0, fs*1.28);
   const ytl = yt.v.map(v => fmt(v, yt.dec));
-  const L = tOut + 3 + Math.max(...ytl.map(t => t.length))*cw + 5 + fs*1.2, R = W - legW;
+  const L = tOut + 3 + Math.max(...ytl.map(t => textW(t, fs))) + 5 + fs*1.2, R = W - legW;
   let xt = ticks(xlo, xhi, 6); xt = fitTicks(xt, xlo, xhi, 6, R - L, cw, fs);
   const px = x => L + (x - xlo)/(xhi - xlo)*(R - L), py = y => B - (y - y0)/(y1 - y0)*(B - T), dir = o.ticksOut ? 1 : -1;
   const s = [S.head]; if (o.bg) s.push(`<rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>`);
@@ -11275,15 +11324,15 @@ function buildNDSVG(only, info){
   info.forEach((t, i) => s.push(`<text x="${r2(L)}" y="${r2(fs*0.95 + i*fs*1.25)}"${i === 0 ? ' font-weight="bold"' : ''}>${esc(t)}</text>`));
   s.push(`<defs><clipPath id="ndclip"><rect x="${r2(L)}" y="${r2(T)}" width="${r2(R - L)}" height="${r2(B - T)}"/></clipPath></defs><g clip-path="url(#ndclip)">`);
   sp.forEach((smp, k) => { let d = ''; smp.spec.wl.forEach((w, i) => { if (w < xlo || w > xhi) return; d += (d ? 'L' : 'M') + r2(px(w)) + ' ' + r2(py(val(smp, i))); });
-    s.push(`<path d="${d}" fill="none" stroke="${pal[k % pal.length]}" stroke-width="${r2(lw)}" stroke-linejoin="round"/>`); });
+    s.push(`<path d="${d}" fill="none" stroke="${pal[k % pal.length]}" stroke-width="${r2(lw)}" stroke-linejoin="round"${traceDashAttr(k, lw)}/>`); });
   s.push('</g>');
   s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none"><line x1="${r2(L)}" y1="${r2(B)}" x2="${r2(R)}" y2="${r2(B)}"/><line x1="${r2(L)}" y1="${r2(T)}" x2="${r2(L)}" y2="${r2(B)}"/>`);
   xt.v.forEach(v => s.push(`<line x1="${r2(px(v))}" y1="${r2(B)}" x2="${r2(px(v))}" y2="${r2(B + dir*tl)}"/>`)); yt.v.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - dir*tl)}" y2="${r2(py(v))}"/>`)); s.push('</g>');
   s.push(`<g fill="#000000">`); xt.v.forEach(v => s.push(`<text x="${r2(px(v))}" y="${r2(B + tOut + 3 + fs*0.85)}" text-anchor="middle">${tkf(v, xt.dec)}</text>`));
   yt.v.forEach((v, i) => s.push(`<text x="${r2(L - tOut - 3)}" y="${r2(py(v) + fs*0.35)}" text-anchor="end">${ytl[i]}</text>`));
   s.push(`<text x="${r2((L + R)/2)}" y="${r2(H - fs*0.35)}" text-anchor="middle">Wavelength (nm)</text><text transform="translate(${r2(fs*0.85)} ${r2((T + B)/2)}) rotate(-90)" text-anchor="middle">${norm ? 'Absorbance / A<tspan font-size="75%" dy="0.33em">280</tspan>' : 'Absorbance (10 mm)'}</text></g>`);
-  const lf = fs*0.82, maxC = Math.max(6, Math.floor((legW - fs*2.4)/(lf*0.52)));
-  sp.forEach((smp, k) => { const yy = T + fs*0.6 + k*fs*1.3, nm = smp.name.length > maxC ? smp.name.slice(0, maxC - 1) + '…' : smp.name; s.push(`<line x1="${r2(R + fs*0.7)}" y1="${r2(yy - fs*0.3)}" x2="${r2(R + fs*1.8)}" y2="${r2(yy - fs*0.3)}" stroke="${pal[k % pal.length]}" stroke-width="${r2(lw*1.6)}"/><text x="${r2(R + fs*2.1)}" y="${r2(yy)}" font-size="${r2(lf)}">${esc(nm)}</text>`); });
+  const maxLegTxtW = Math.max(fs*2.5, legW - fs*2.4);
+  sp.forEach((smp, k) => { const yy = T + fs*0.6 + k*fs*1.3; let nm = smp.name; while (nm.length > 4 && textW(nm, lf) > maxLegTxtW) nm = nm.replace(/…$/, '').slice(0, -1) + '…'; s.push(`<line x1="${r2(R + fs*0.7)}" y1="${r2(yy - fs*0.3)}" x2="${r2(R + fs*1.8)}" y2="${r2(yy - fs*0.3)}" stroke="${pal[k % pal.length]}" stroke-width="${r2(lw*1.6)}"${traceDashAttr(k, lw)}/><text x="${r2(R + fs*2.1)}" y="${r2(yy)}" font-size="${r2(lf)}">${esc(nm)}</text>`); });
   s.push('</svg>'); return {svg: s.join(''), geo: {W, H, nd: true}};
 }
 
@@ -11399,7 +11448,7 @@ document.querySelectorAll('#panel > .grp').forEach(sec => { const h = sec.queryS
 /* rarely changed settings: moved, never removed, so every id and label stays. A setting changed from its default opens its More options. */
 const ADV = {'sub:rwin': ['o-fracEvery', 'o-runPad'], 'sub:rgel': ['o-gelAlign', 'o-gelGap', 'o-gelSide', 'o-linkFrom', 'o-laneMark', 'o-laneAlpha', 'gelSizeReset', 'gelOffReset'], 'sub:rpool': ['o-poolColor'],
   'Peak integration': ['o-intProm', 'o-path', 'o-eps', 'o-intFill'], 'Processing': ['o-baseline', 'o-smooth'], 'Peak labels': ['o-peakRot', 'o-peakDec', 'o-prom', 'o-peakColor', 'o-peakMax'],
-  'Window': ['o-zoomInsetPos', 'o-zoomInsetSize'], 'Axes': ['o-ticksOut', 'o-y2grad', 'o-y2cond', 'o-sbValue', 'o-sbUnit'], 'Figure style': ['o-lw', 'o-font', 'o-bg'], 'Layout': ['o-stack'],
+  'Window': ['o-zoomInsetPos', 'o-zoomInsetSize'], 'Axes': ['o-ticksOut', 'o-y2grad', 'o-y2cond', 'o-sbValue', 'o-sbUnit'], 'Figure style': ['o-lw', 'o-font', 'o-bg', 'o-dashTraces'], 'Layout': ['o-stack'],
   'sub:gcrop': ['o-gelAutoCrop', 'o-gelFrame'], 'sub:gbands': ['o-targetArrow', 'o-tagShow', 'o-purRow', 'o-tagCounts', 'o-bandLabels', 'o-purBase', 'o-tagTol', 'o-bandSens', 'recoveryMatrix'], 'sub:gknown': ['o-knownTol', 'o-knownMin', 'o-knownCount']};
 const moreBoxes = [];
 Object.entries(ADV).forEach(([key, ids]) => {
