@@ -282,6 +282,12 @@ body.proj #panel:has(> #clonePanel.cl-after:not([hidden])) > :is(#stepsPanel,#st
 #prepPanel .subhead,#ndPanel .subhead{margin:6px 0 -2px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);grid-column:1/-1} #prepPanel label:has(#pr-trCol){order:1}
 body.proj #prepPanel > h2, body.proj #prepPanel details.sub > summary{display:none}
 body.proj #prepPanel details.sub{border:0;padding-top:0;margin-top:0} body.proj #prepPanel{padding:10px 16px 12px} body.proj #prepPanel details.sub[data-sub="pbtw"] > *:not(summary){margin-top:3px}
+#odGrowthSec{min-width:0;max-width:100%} #odGrowthSec[open]{grid-template-columns:minmax(0,1fr)} #odGrowthSec > *{min-width:0;max-width:100%} #odGrowthSec .btns .btn{padding:5px 9px;font-size:12.5px}
+#odGrowthPlot svg,#odSpecPlot svg{display:block;width:100%;max-width:100%;height:auto;border:1px solid var(--line);border-radius:var(--r-s);background:var(--paper)}
+#odTableWrap{overflow-x:auto;max-width:100%;max-height:260px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--field)}
+#odTable{border-collapse:collapse;width:100%;font-size:12px} #odTable th{font-weight:500;font-size:11.5px;color:var(--muted);text-align:left;padding:4px 6px;border-bottom:1px solid var(--line2);white-space:nowrap}
+#odTable td{padding:3px 5px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap} #odTable tbody tr:last-child td{border-bottom:0}
+#odTable input,#odTable select{font-size:12px;padding:2px 5px;min-height:26px;width:auto} #odTable input[data-od="timestamp"]{width:9.5em} #odTable input[data-od="elapsed"],#odTable input[data-od="rawOd"],#odTable input[data-od="dilution"],#odTable input[data-od="blank"]{width:4.8em} #odTable input[data-od="cultureId"],#odTable input[data-od="instrument"],#odTable input[data-od="notes"]{width:7.2em} #odTable input[data-od="operator"]{width:4.5em} #odTable select[data-od="marker"]{width:7.6em;padding-right:22px} #odTable .od-corr{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink);text-align:right;padding-inline:6px}
 .tl{max-height:min(54vh,600px);overflow:auto;overscroll-behavior:contain;padding-right:2px}
 .tl li.warn .mk{background:var(--panel);border-color:var(--warn);color:var(--warn)}
 .tl li.warn .ts{color:var(--warn)}
@@ -1014,7 +1020,7 @@ button,input,select,textarea{font-family:inherit}
       <p class="hint noproj">Steps follow the order of the runs in the Data list. Use ↑ to reorder and untick "In workflow" to leave a run out. Arrow labels come from each run's pooled fractions.</p>
     </section>
 
-    <section class="grp" id="prepPanel" data-for="workflow run" data-step="construct transform expr lysis cleave final btw man">
+    <section class="grp" id="prepPanel" data-for="workflow run growth" data-step="construct transform expr lysis cleave final btw man">
       <h2>Construct, expression and cleavage</h2>
       <label class="check" id="prOnWrap"><input type="checkbox" id="pr-on" data-prep="on">Show construct, expression and lysis panels</label>
       <details class="sub" data-sub="pcon" open><summary>Construct</summary>
@@ -1084,6 +1090,25 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Time (h)<input type="text" id="pr-time" data-prep="time" placeholder="e.g. 16"></label>
           <label class="f">Cells (g, wet)<input type="number" id="pr-pellet" data-prep="pellet" min="0" step="0.1"></label>
         </div>
+        <details class="cardtext" id="odGrowthSec" open><summary>OD₆₀₀ growth monitoring</summary>
+          <div class="btns">
+            <button type="button" class="btn" id="odAddBtn">Add reading</button>
+            <button type="button" class="btn" id="odCsvBtn">Import CSV</button><input type="file" id="odCsvFile" accept=".csv,.tsv,.txt" hidden>
+            <button type="button" class="btn" id="odNdBtn">Attach NanoDrop</button><input type="file" id="odNdFile" accept=".csv,.tsv,.txt" hidden>
+            <button type="button" class="btn quiet" id="odExportCsvBtn">Export CSV</button>
+            <button type="button" class="btn quiet" id="odFigBtn" hidden>Show in figure</button>
+          </div>
+          <p class="hint" id="odLinkSummary"></p>
+          <div id="odGrowthPlot"></div>
+          <div id="odSpecPlot" hidden></div>
+          <div id="odTableWrap" hidden>
+            <table id="odTable">
+              <thead><tr><th>Timestamp</th><th>Elapsed (h)</th><th>Culture ID</th><th>Raw OD₆₀₀</th><th>Dilution</th><th>Corrected OD₆₀₀</th><th>Blank</th><th>Instrument</th><th>Operator</th><th>Marker</th><th>Notes</th><th></th></tr></thead>
+              <tbody id="odTableBody"></tbody>
+            </table>
+          </div>
+          <datalist id="dl-od-cultures"></datalist>
+        </details>
         <details class="cardtext" id="expMore"><summary>Starter, harvest and figure details (optional)</summary>
           <div class="row"><label class="f">OD₆₀₀ at induction<input type="text" id="pr-od" data-prep="od" placeholder="e.g. 0.8"></label></div>
           <label class="f">Starter culture<input type="text" id="pr-exStarter" data-prep="exStarter" placeholder="e.g. 50 mL LB with kanamycin, 37 °C overnight"></label>
@@ -1700,7 +1725,7 @@ button,input,select,textarea{font-family:inherit}
 
     <section class="grp optsec">
       <h2>Figure style</h2>
-      <div data-for="overlay run gel struct nd" class="stackf">
+      <div data-for="overlay run gel struct nd growth" class="stackf">
         <label class="f">Size preset
           <select id="o-preset" data-opt="preset">
             <option value="single">Journal, single column (3.5 × 2.6 in, 8 pt)</option>
@@ -1954,12 +1979,12 @@ function maxEntityUid(extra){
   let mx = 0;
   const scan = list => { if (!Array.isArray(list)) return; for (let i = 0; i < list.length; i++) { const x = list[i]; if (!x || x.id == null) continue; const m = UID_RE.exec(String(x.id).trim()); if (m) mx = Math.max(mx, +m[1]); } };
   scan(runs); scan(traces); scan(gels); scan(ndSamples); scan(assays);
-  if (prep) { scan(prep.manual); scan(prep.constructs); scan(prep.primers); scan(prep.clones); }
+  if (prep) { scan(prep.manual); scan(prep.constructs); scan(prep.primers); scan(prep.clones); scan(prep.growth); }
   if (opt) scan(opt.secCals);
   if (PROJ && PROJ.directory && Array.isArray(PROJ.directory.preparations)) PROJ.directory.preparations.forEach(ip => {
     const pd = ip && ip.data; if (!pd) return;
     scan(pd.runs); scan(pd.traces); scan(pd.gels); scan(pd.ndSamples || pd.nanodrop); scan(pd.assays);
-    if (pd.prep) { scan(pd.prep.manual); scan(pd.prep.constructs); scan(pd.prep.primers); scan(pd.prep.clones); }
+    if (pd.prep) { scan(pd.prep.manual); scan(pd.prep.constructs); scan(pd.prep.primers); scan(pd.prep.clones); scan(pd.prep.growth); }
     if (pd.opt) scan(pd.opt.secCals);
   });
   if (Array.isArray(extra)) extra.forEach(scan);
@@ -5662,9 +5687,36 @@ function canonClones(pr){
   return pr;
 }
 const selClone = () => (prep.clones || []).find(c => c.id === prep.selectedCloneId && c.status !== 'failed') || null;
+const OD_MARKERS = [['inoculation', 'Inoculation'], ['induction', 'Induction'], ['temp_shift', 'Temp. shift'], ['sampling', 'Sampling'], ['harvest', 'Harvest']];
+function normOdMarker(v){ const s = String(v == null ? '' : v).trim().toLowerCase(); return !s ? '' : /^inoc/.test(s) ? 'inoculation' : /^induc/.test(s) ? 'induction' : /temp|shift/.test(s) ? 'temp_shift' : /^sampl/.test(s) ? 'sampling' : /^harv/.test(s) ? 'harvest' : ''; }
+function normalizeGrowthRow(r, idx){
+  const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
+  const id = String(o.id != null && String(o.id).trim() !== '' ? o.id : ('gr' + (idx + 1) + '_' + Date.now().toString(36)));
+  const timestamp = String(o.timestamp != null ? o.timestamp : (o.time != null ? o.time : ''));
+  const elRaw = o.elapsed === '' || o.elapsed == null || !isFinite(+o.elapsed) ? null : +o.elapsed;
+  const dilRaw = o.dilution !== undefined ? o.dilution : o.dil;
+  const dilution = dilRaw === '' || dilRaw == null || !isFinite(+dilRaw) || +dilRaw <= 0 ? 1 : +dilRaw;
+  const rawIn = o.rawOd === '' || o.rawOd == null || !isFinite(+o.rawOd) ? null : +o.rawOd;
+  const corrIn = o.correctedOd !== undefined ? o.correctedOd : o.od;
+  const corrFb = corrIn === '' || corrIn == null || !isFinite(+corrIn) ? null : +corrIn;
+  const rawOd = rawIn != null ? rawIn : (corrFb != null ? +(corrFb / dilution).toFixed(6) : null);
+  const correctedOd = rawOd != null ? +(rawOd * dilution).toFixed(6) : null;
+  const sp = o.spec && typeof o.spec === 'object' && Array.isArray(o.spec.wl) && Array.isArray(o.spec.ab) && o.spec.wl.length >= 2 && o.spec.wl.length === o.spec.ab.length
+    ? {wl: o.spec.wl.map(Number).filter(isFinite), ab: o.spec.ab.map(Number).filter(isFinite)} : null;
+  const spec = sp && sp.wl.length >= 2 && sp.wl.length === sp.ab.length ? sp : null;
+  const marker = normOdMarker(o.marker);
+  return {id, timestamp, elapsed: elRaw, cultureId: String(o.cultureId == null ? '' : o.cultureId), rawOd, dilution, correctedOd, blank: String(o.blank == null ? '' : o.blank), instrument: String(o.instrument == null ? '' : o.instrument), operator: String(o.operator == null ? '' : o.operator), marker, harvestLink: marker === 'harvest' || !!o.harvestLink, notes: String(o.notes == null ? '' : o.notes), spec};
+}
+function canonGrowth(pr){
+  if (!pr || typeof pr !== 'object') return pr;
+  const raw = Array.isArray(pr.growth) ? pr.growth : Array.isArray(pr.odReadings) ? pr.odReadings : [];
+  const seen = new Set();
+  pr.growth = raw.filter(x => x && typeof x === 'object' && !Array.isArray(x)).map((x, i) => { const r = normalizeGrowthRow(x, i); if (seen.has(r.id)) r.id = r.id + '_' + (i + 1); seen.add(r.id); return r; });
+  return pr;
+}
 const PREP_DEF = {on: true, construct: true, transform: false, expr: true, lysis: true, finPanel: false, name: '', backbone: '', promoter: 'T7', resist: '', strain: '', medium: '', cultureL: '', od: '', inducer: '', temp: '', time: '', pellet: '', lysMethod: '', lysBuffer: '', clarify: '', lysVol: '', lysLanes: false, indKind: 'IPTG', gb: null,
   cleave: false, cleaveAfter: '', protease: '', ratio: '', clvTemp: '', clvTime: '', dialBuffer: '', mwco: '', dialVol: '', dialChanges: '', store: '',
-  trPlasmid: '', trMethod: '', trSel: '', trCol: '', trStock: '', clones: [], selectedCloneId: null, exStarter: '', exHarvest: '', exStore: '', lysAdd: '', lysSet: '', finConc: '', finVol: '', finRatio: '', finBuffer: '', qcPurity: '', qcMass: '', qcActivity: '', btw: {}, manual: [], skip: {}, stepMeta: {}, wfOff: {},
+  trPlasmid: '', trMethod: '', trSel: '', trCol: '', trStock: '', clones: [], selectedCloneId: null, exStarter: '', exHarvest: '', exStore: '', lysAdd: '', lysSet: '', finConc: '', finVol: '', finRatio: '', finBuffer: '', qcPurity: '', qcMass: '', qcActivity: '', btw: {}, manual: [], skip: {}, stepMeta: {}, wfOff: {}, growth: [],
   constructs: [], primers: [], parentConstructId: null, derivedConstructIds: [],
   cMethod: 'plasmid', cEnz: '', cOverlap: '', cRecomb: '', cDetails: { digest: {}, overlap: {}, recomb: {} },
   /* the cloning workflow (#1402). includeCloning is deliberately not here: CL() sets it, so a project saved before it existed is migrated from its records */
@@ -6147,6 +6199,133 @@ function ncSVG(W, H, fs, aw, run){ const nf = fs*0.85, lh = nf*1.3, s = [], line
   yt.v.forEach((v, i) => s.push(`<text x="${r2(L - tl - 2)}" y="${r2(py(v) + tf*0.35)}" text-anchor="end">${ytl[i]}</text>`));
   s.push(`<text x="${r2((L + R)/2)}" y="${r2(B + tl + 7 + fs*1.93)}" text-anchor="middle">Wavelength (nm)</text><text transform="translate(${r2(L0 + tf*0.8)} ${r2((T + B)/2)}) rotate(-90)" text-anchor="middle">A (10 mm)</text></g>`);
   PREP_USED = H; return s.join(''); }
+/* OD600 growth curves and optional full-spectrum absorbance plots (no smoothing, extrapolation, invented error bars, or phase assignment) */
+function growthValidReadings(list){
+  const a = Array.isArray(list) ? list : (Array.isArray(prep.growth) ? prep.growth : []);
+  return a.filter(r => r && r.elapsed != null && isFinite(+r.elapsed) && r.correctedOd != null && isFinite(+r.correctedOd));
+}
+function growthPalette(){ const p = PAL[opt.palette] || PAL.okabe; return p === PAL.okabe ? ['#0072B2', '#D55E00', '#009E73', '#CC79A7', '#E69F00', '#56B4E9', '#8C564B', '#1a1a1a'] : p; }
+function buildGrowthCurveBody(o){
+  const ox = o.ox || 0, oy = o.oy || 0, W = o.W || 360, H = o.H || 210, fs = o.fs || 10, aw = Math.max(0.6, o.aw || 0.85), tl = fs*0.42;
+  const valid = growthValidReadings(o.readings);
+  if (!valid.length) return `<text x="${r2(ox + W/2)}" y="${r2(oy + H/2)}" text-anchor="middle" font-size="${r2(fs)}" fill="#666666">No OD600 readings entered</text>`;
+  const defCult = String(prep.strain || '').trim() ? `${String(prep.strain).trim()} culture` : 'Culture 1';
+  const groups = new Map();
+  valid.forEach(r => { const k = String(r.cultureId || defCult).trim() || defCult; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+  groups.forEach(arr => arr.sort((a, b) => (+a.elapsed) - (+b.elapsed)));
+  const xs = valid.map(r => +r.elapsed), ys = valid.map(r => +r.correctedOd);
+  const xMin = Math.min(0, ...xs), xMaxRaw = Math.max(...xs), xMax = xMaxRaw > xMin ? xMaxRaw * 1.06 : xMin + 1;
+  const yMin = 0, yMaxRaw = Math.max(...ys), yMax = yMaxRaw > 0 ? yMaxRaw * 1.16 : 1;
+  const tf = fs * 0.85;
+  let yt = ticks(yMin, yMax, 4); yt = fitTicks(yt, yMin, yMax, 4, H * 0.65, 0, fs * 1.25);
+  const ytl = yt.v.map(v => fmt(v, yt.dec)), maxYCh = Math.max(3, ...ytl.map(t => t.length));
+  const L = ox + Math.max(fs * 4.4, fs * 1.7 + maxYCh * tf * 0.58 + tl + 6);
+  const legNames = [...groups.keys()];
+  const maxLegCh = groups.size > 1 ? Math.min(14, Math.max(4, ...legNames.map(n => n.length))) : 0;
+  const legW = groups.size > 1 ? Math.min(W * 0.34, maxLegCh * tf * 0.55 + fs * 2.3) : 0;
+  const R = ox + W - (groups.size > 1 ? legW + fs * 0.9 : Math.max(fs * 1.8, 14));
+  const T = oy + Math.max(fs * 2.1, 18), B = oy + H - Math.max(fs * 3.1, 28);
+  const pw = Math.max(24, R - L), ph = Math.max(24, B - T);
+  const px = x => L + (x - xMin) / (xMax - xMin || 1) * pw, py = y => B - (y - yMin) / (yMax - yMin || 1) * ph;
+  let xt = ticks(xMin, xMax, 5); xt = fitTicks(xt, xMin, xMax, 5, pw, 2, fs * 0.6);
+  const s = [];
+  s.push(`<g stroke="#e5e7eb" stroke-width="${r2(Math.max(0.4, aw * 0.6))}">`);
+  yt.v.forEach(v => { if (v > yMin && v < yMax) s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(R)}" y2="${r2(py(v))}"/>`); });
+  s.push(`</g>`);
+  const pal = growthPalette(), mMap = Object.fromEntries(OD_MARKERS), placed = [];
+  let ci = 0;
+  groups.forEach((arr, name) => {
+    const col = pal[ci++ % pal.length];
+    const d = arr.map((pt, i) => `${i ? 'L' : 'M'}${r2(px(+pt.elapsed))} ${r2(py(+pt.correctedOd))}`).join(' ');
+    s.push(`<path d="${d}" fill="none" stroke="${col}" stroke-width="${r2(Math.max(1.2, aw * 1.45))}" stroke-linejoin="round" data-culture="${esc(name)}"/>`);
+    arr.forEach(pt => {
+      const X = px(+pt.elapsed), Y = py(+pt.correctedOd);
+      s.push(`<circle cx="${r2(X)}" cy="${r2(Y)}" r="${r2(Math.max(2.3, fs * 0.26))}" fill="${col}" stroke="#ffffff" stroke-width="${r2(Math.max(0.5, aw * 0.7))}" data-pt-od="${pt.correctedOd}" data-pt-t="${pt.elapsed}"/>`);
+      if (pt.marker && mMap[pt.marker]) {
+        const lbl = mMap[pt.marker], mf = fs * 0.76, lw = lbl.length * mf * 0.56 + 4;
+        const lx = Math.max(L + lw / 2, Math.min(R - lw / 2, X));
+        const by = placeLabel(placed, lx - lw / 2, lx + lw / 2, Y - fs * 0.55, mf * 1.15, oy + mf * 1.15);
+        s.push(`<g class="od-marker" data-marker="${esc(pt.marker)}"><line x1="${r2(X)}" y1="${r2(B)}" x2="${r2(X)}" y2="${r2(Y)}" stroke="#666666" stroke-width="${r2(Math.max(0.5, aw * 0.75))}" stroke-dasharray="2.5 2"/>` +
+          (by != null ? `<text x="${r2(lx)}" y="${r2(by)}" text-anchor="middle" font-size="${r2(mf)}" fill="#222222">${esc(lbl)}</text>` : '') + `</g>`);
+      }
+    });
+  });
+  s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none"><path d="M${r2(L)} ${r2(T)}V${r2(B)}H${r2(R)}"/>`);
+  xt.v.forEach(v => s.push(`<line x1="${r2(px(v))}" y1="${r2(B)}" x2="${r2(px(v))}" y2="${r2(B + tl)}"/>`));
+  yt.v.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - tl)}" y2="${r2(py(v))}"/>`));
+  s.push(`</g><g font-size="${r2(tf)}" fill="#000000">`);
+  xt.v.forEach(v => s.push(`<text x="${r2(px(v))}" y="${r2(B + tl + tf * 0.95)}" text-anchor="middle">${fmt(v, xt.dec)}</text>`));
+  yt.v.forEach((v, i) => s.push(`<text x="${r2(L - tl - 3)}" y="${r2(py(v) + tf * 0.34)}" text-anchor="end">${ytl[i]}</text>`));
+  s.push(`<text x="${r2((L + R) / 2)}" y="${r2(oy + H - fs * 0.55)}" text-anchor="middle" font-size="${r2(fs * 0.92)}">Elapsed time (h)</text>`);
+  s.push(`<text transform="translate(${r2(ox + fs * 1.15)} ${r2((T + B) / 2)}) rotate(-90)" text-anchor="middle" font-size="${r2(fs * 0.92)}">Corrected OD600</text></g>`);
+  if (groups.size > 1) {
+    let ly = T + tf * 0.85, lx = R + fs * 0.65; ci = 0;
+    groups.forEach((_, name) => {
+      if (ly > B) return;
+      const col = pal[ci++ % pal.length], disp = name.length > 14 ? name.slice(0, 13) + '…' : name;
+      s.push(`<g font-size="${r2(tf * 0.92)}" fill="#000000"><line x1="${r2(lx)}" y1="${r2(ly - tf * 0.3)}" x2="${r2(lx + fs * 1.0)}" y2="${r2(ly - tf * 0.3)}" stroke="${col}" stroke-width="${r2(Math.max(1.2, aw * 1.45))}"/><circle cx="${r2(lx + fs * 0.5)}" cy="${r2(ly - tf * 0.3)}" r="${r2(Math.max(1.8, fs * 0.2))}" fill="${col}"/><text x="${r2(lx + fs * 1.3)}" y="${r2(ly)}">${esc(disp)}</text></g>`);
+      ly += tf * 1.3;
+    });
+  }
+  return s.join('');
+}
+function buildGrowthCurveSVG(o){
+  const W = (o && o.W) || 360, H = (o && o.H) || 205, fs = (o && o.fs) || 10.5, font = FONTS[opt.font] || FONTS.Arial;
+  return `<svg width="${r2(W)}" height="${r2(H)}" viewBox="0 0 ${r2(W)} ${r2(H)}" xmlns="http://www.w3.org/2000/svg" font-family="${esc(font)}" font-size="${r2(fs)}" data-chart="od-growth"><rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>${buildGrowthCurveBody(Object.assign({W, H, fs}, o))}</svg>`;
+}
+function growthSpecReadings(list){
+  const a = Array.isArray(list) ? list : (Array.isArray(prep.growth) ? prep.growth : []);
+  return a.filter(r => r && r.spec && Array.isArray(r.spec.wl) && Array.isArray(r.spec.ab) && r.spec.wl.length >= 2 && r.spec.wl.length === r.spec.ab.length);
+}
+function buildGrowthSpecBody(o){
+  const sp = growthSpecReadings(o && o.readings);
+  if (!sp.length) return '';
+  const ox = o.ox || 0, oy = o.oy || 0, W = o.W || 360, H = o.H || 165, fs = o.fs || 10, aw = Math.max(0.6, o.aw || 0.85), tl = fs * 0.42, tf = fs * 0.85;
+  let xMin = Infinity, xMax = -Infinity, yMin = 0, yMax = -Infinity;
+  sp.forEach(r => r.spec.wl.forEach((w, i) => { const v = r.spec.ab[i]; if (w < xMin) xMin = w; if (w > xMax) xMax = w; if (v < yMin) yMin = v; if (v > yMax) yMax = v; }));
+  if (!(xMax > xMin)) { xMin -= 10; xMax += 10; }
+  yMax = yMax > yMin ? yMax * 1.15 : yMin + 0.5;
+  let yt = ticks(yMin, yMax, 3); yt = fitTicks(yt, yMin, yMax, 3, H * 0.6, 0, fs * 1.25);
+  const ytl = yt.v.map(v => fmt(v, yt.dec)), maxYCh = Math.max(3, ...ytl.map(t => t.length));
+  const L = ox + Math.max(fs * 4.4, fs * 1.7 + maxYCh * tf * 0.58 + tl + 6), R = ox + W - Math.max(fs * 1.8, 14);
+  const T = oy + Math.max(fs * 2.1, 18), B = oy + H - Math.max(fs * 3.1, 28);
+  const pw = Math.max(24, R - L), ph = Math.max(24, B - T);
+  const px = x => L + (x - xMin) / (xMax - xMin || 1) * pw, py = y => B - (y - yMin) / (yMax - yMin || 1) * ph;
+  let xt = ticks(xMin, xMax, 5); xt = fitTicks(xt, xMin, xMax, 5, pw, 2, fs * 0.6);
+  const s = [], pal = growthPalette();
+  if (600 >= xMin && 600 <= xMax) {
+    const x6 = px(600), mf = fs * 0.78, mw = 6 * mf * 0.56, lx = Math.max(L + mw / 2, Math.min(R - mw / 2, x6));
+    s.push(`<g class="od-mark-600"><line x1="${r2(x6)}" y1="${r2(T)}" x2="${r2(x6)}" y2="${r2(B)}" stroke="#D55E00" stroke-width="${r2(Math.max(0.8, aw * 1.1))}" stroke-dasharray="3 2" data-mark-600="1"/><text x="${r2(lx)}" y="${r2(T - fs * 0.35)}" text-anchor="middle" font-size="${r2(mf)}" fill="#D55E00">600 nm</text></g>`);
+  }
+  sp.forEach((r, idx) => {
+    const d = r.spec.wl.map((w, i) => `${i ? 'L' : 'M'}${r2(px(w))} ${r2(py(r.spec.ab[i]))}`).join(' ');
+    s.push(`<path d="${d}" fill="none" stroke="${pal[idx % pal.length]}" stroke-width="${r2(Math.max(1.0, aw * 1.25))}" stroke-linejoin="round"/>`);
+  });
+  s.push(`<g stroke="#000000" stroke-width="${r2(aw)}" fill="none"><path d="M${r2(L)} ${r2(T)}V${r2(B)}H${r2(R)}"/>`);
+  xt.v.forEach(v => s.push(`<line x1="${r2(px(v))}" y1="${r2(B)}" x2="${r2(px(v))}" y2="${r2(B + tl)}"/>`));
+  yt.v.forEach(v => s.push(`<line x1="${r2(L)}" y1="${r2(py(v))}" x2="${r2(L - tl)}" y2="${r2(py(v))}"/>`));
+  s.push(`</g><g font-size="${r2(tf)}" fill="#000000">`);
+  xt.v.forEach(v => s.push(`<text x="${r2(px(v))}" y="${r2(B + tl + tf * 0.95)}" text-anchor="middle">${fmt(v, xt.dec)}</text>`));
+  yt.v.forEach((v, i) => s.push(`<text x="${r2(L - tl - 3)}" y="${r2(py(v) + tf * 0.34)}" text-anchor="end">${ytl[i]}</text>`));
+  s.push(`<text x="${r2((L + R) / 2)}" y="${r2(oy + H - fs * 0.55)}" text-anchor="middle" font-size="${r2(fs * 0.92)}">Wavelength (nm)</text>`);
+  s.push(`<text transform="translate(${r2(ox + fs * 1.15)} ${r2((T + B) / 2)}) rotate(-90)" text-anchor="middle" font-size="${r2(fs * 0.92)}">Absorbance</text></g>`);
+  return s.join('');
+}
+function buildGrowthSpecSVG(o){
+  const body = buildGrowthSpecBody(o || {}); if (!body) return '';
+  const W = (o && o.W) || 360, H = (o && o.H) || 165, fs = (o && o.fs) || 10.5, font = FONTS[opt.font] || FONTS.Arial;
+  return `<svg width="${r2(W)}" height="${r2(H)}" viewBox="0 0 ${r2(W)} ${r2(H)}" xmlns="http://www.w3.org/2000/svg" font-family="${esc(font)}" font-size="${r2(fs)}" data-chart="od-spectrum"><rect width="${r2(W)}" height="${r2(H)}" fill="#ffffff"/>${body}</svg>`;
+}
+function buildGrowthFig(){
+  const S = style({}), W = Math.max(S.W, 240), topH = Math.max(S.H, 180), {fs, aw} = S;
+  const hasSpec = growthSpecReadings().length > 0, botH = hasSpec ? Math.max(150, Math.round(topH * 0.78)) : 0, totH = topH + botH;
+  const s = [svgHead(W, totH)];
+  if (opt.bg) s.push(`<rect width="${r2(W)}" height="${r2(totH)}" fill="#ffffff"/>`);
+  s.push(buildGrowthCurveBody({ox: 0, oy: 0, W, H: topH, fs, aw, readings: prep.growth}));
+  if (hasSpec) s.push(buildGrowthSpecBody({ox: 0, oy: topH, W, H: botH, fs, aw, readings: prep.growth}));
+  s.push('</svg>');
+  return {svg: s.join(''), geo: {W, H: totH, growth: true}};
+}
 function condSVG(k, W, H, fs, aw, r){
   const nf = fs*0.85, lh = nf*1.28, m = k === 'manual' && r && r.man ? r.man : null;
   let gk = k === 'final' ? 'final_storage' : k, gInfo = {};
@@ -6389,6 +6568,7 @@ function methodsText(){
     const ind = kind === 'auto' || (/auto|5052/i.test(md) && !amt) ? 'by autoinduction' : amt ? `with ${/^\d+(\.\d+)?$/.test(amt) ? (kind === 'IPTG' ? `${amt} mM IPTG` : `${amt}% L-${kind}`) : amt}${od ? ` at an OD600 of ${od}` : ''}` : od ? `at an OD600 of ${od}` : '';
     if (hasTxt(prep.exStarter)) P.push(`A starter culture (${v(prep.exStarter).replace(/\.$/, '')}) was used to inoculate the expression culture.`);
     P.push(`${trSaid ? 'Cells were' : st ? `E. coli ${st.replace(/^e\.? ?coli\s*/i, '')} cells were` : 'Cells were'} grown${L > 0 ? ` in ${fmtAuto(L)} L` : ''}${md ? ` of ${md}` : ''}${ind ? `, induced ${ind}` : ''}${T || h ? `, and expressed${T ? ` at ${deg(T)}` : ''}${h ? ` for ${hrs(h)}` : ''}` : ''}${g > 0 ? `, giving ${fmtAuto(g)} g of wet cells` : ''}.`);
+    { const gr = growthValidReadings(); if (gr.length) P.push(`Culture growth was monitored by OD600 (${gr.length} reading${gr.length === 1 ? '' : 's'}).`); }
     { const hv = v(prep.exHarvest), ks = v(prep.exStore); if (hv || ks) P.push(`Cells were ${hv ? `harvested by centrifugation (${hv.replace(/\.$/, '')})` : ''}${hv && ks ? ' and ' : ''}${ks ? lc(ks).replace(/\.$/, '') : ''}.`); } }
   if (prep.on && !skipped('lysis') && LYS_KEYS.some(k => hasTxt(prep[k]))) { const m = v(prep.lysMethod), b = v(prep.lysBuffer), c = v(prep.clarify), vol = numOr(prep.lysVol, 0);
     const ad = v(prep.lysAdd), se2 = v(prep.lysSet);
@@ -6566,6 +6746,7 @@ function figures(){
     const pl = (a.display && a.display.placement) || '';
     if (pl === 'panel' || a.mode === 'kinetics' || a.mode === 'profile' || !a.runId) f.push({kind: 'assay', id: 'assay:' + a.id, name: a.name || 'Activity assay', assay: a});
   });
+  if (growthValidReadings().length) f.push({kind: 'growth', id: 'growth', name: 'OD600 growth curve'});
   return f;
 }
 function curFig(){ const f = figures(); return f.find(x => x.id === cur) || f[0] || null; }
@@ -6585,6 +6766,7 @@ function buildFig(f, screen){ const was = FIG_SCREEN; FIG_SCREEN = !!screen;
     if (f.kind === 'step') return buildStepFig(f.step);
     if (f.kind === 'nd') return buildNDSVG();
     if (f.kind === 'conc') return buildConcFig(f.run);
+    if (f.kind === 'growth') return buildGrowthFig();
     if (f.kind === 'assay') return buildAssaySVG(f.assay);
     return buildSVG();
   } finally { FIG_SCREEN = was; }
@@ -6651,7 +6833,7 @@ function render(){
       else if (MODE !== 'proj' && dc._projAuto) { dc._projAuto = 0; setDc(sv !== '0'); } } }
   document.querySelectorAll('[data-for]').forEach(el => { el.hidden = !el.dataset.for.split(' ').includes(kind); });
   /* in a project the panel shows only what the current step needs */
-  if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
+  if (PROJ) { const sk = curStep.startsWith('clone:') ? 'clone' : (curStep === 'construct' && kind === 'struct') ? 'construct' : (curStep === 'expr' && kind === 'growth') ? 'expr' : curStep.startsWith('btw:') && (kind === 'run' || kind === 'conc') ? 'btw' : kind === 'step' ? (isManId(f.step) ? 'man' : f.step) : kind === 'run' ? 'run' : kind === 'gel' ? 'gel' : kind === 'overlay' ? 'hplc' : curStep === 'final' ? 'final' : 'figure';
     document.querySelectorAll('#panel [data-step]').forEach(el => { if (el.closest('#stepsPanel, #stepSheet')) return; el.hidden = !el.dataset.step.split(' ').includes(sk); });
     document.querySelectorAll('#prepPanel details.sub').forEach(d => { d.hidden = ({pcon: 'construct', ptr: 'transform', pexp: 'expr', plys: 'lysis', pclv: 'cleave', pbtw: 'btw', pman: 'man', pfin: 'final'})[d.dataset.sub] !== sk; if (!d.hidden) d.open = true; });
     if (sk === 'btw') syncBtw(); if (sk === 'man') syncMan(); document.querySelectorAll('#prepPanel > p.hint, #prepPanel > details.tip').forEach(x => { x.hidden = true; }); }
@@ -8363,6 +8545,7 @@ function renderPrep(){
   else if (m) h = `Drawn from the Protein section${m.tagParts.length ? ` with the ${esc(m.tagParts.join('-'))} tag` : ''}. Load the plasmid's GenBank file to draw its own parts.`;
   else h = '<button type="button" class="linkbtn" id="gbGoProt">Enter protein sequence</button>, or load a GenBank file.';
   if (st._h !== h) { st._h = h; st.innerHTML = h; }
+  renderGrowth();
   { const cp = $('#clonePanel'); if (cp) cp.classList.toggle('cl-after', !!(PROJ && curStep === 'transform' && !prep.includeCloning));
     const rst = pn._prep !== prep || pn._proj !== PROJ, srch = !!($('#panelSearch') && $('#panelSearch').value.trim()); pn._prep = prep; pn._proj = PROJ;
     const fold = (id, nd, k, b) => { const d = $('#' + id); if (!d) return; if (rst || d._k !== k || d._b !== b) { d._prep = prep; d._proj = PROJ; d._k = k; d._b = b; d._nd = nd; if (!srch) d.open = nd; } else { if (nd && !d._nd) d.open = true; d._nd = nd; } };
@@ -8416,6 +8599,310 @@ $('#gbClear').addEventListener('click', () => { prep.gb = null; prep.prevProt = 
 $('#gbStatus').addEventListener('click', e => { if (e.target.id === 'gbUse') { prep.prevProt = null; useOrf(constructModel()); }
   else if (e.target.id === 'gbBack' && prep.prevProt) { Object.assign(opt, prep.prevProt); prep.prevProt = null; applyProt(); }
   else if (e.target.id === 'gbGoProt') { if (typeof selectStep === 'function' && PROJ && curStep !== 'construct') selectStep('construct'); const p = $('#protPanel'), el = $('#protSeq'); if (p) { p.hidden = false; const d = p.closest('details'); if (d) d.open = true; } if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } } });
+/* OD600 growth monitoring: preserves raw and corrected (raw * dilution) readings, links to expression culture and harvest, never smooths or extrapolates */
+let odSeq = 1, odRenderT = 0;
+const nextOdId = () => 'gr' + Date.now().toString(36) + '_' + (odSeq++);
+const defCultureLabel = () => String(prep.strain || '').trim() ? `${String(prep.strain).trim()} culture` : 'Culture 1';
+function syncPrepOdFromGrowth(){
+  const ind = (prep.growth || []).find(r => r && r.marker === 'induction' && r.correctedOd != null && isFinite(+r.correctedOd));
+  if (!ind) return;
+  prep.od = String(+((+ind.correctedOd).toFixed(3)));
+  const inp = $('#pr-od');
+  if (inp && inp !== document.activeElement) inp.value = prep.od;
+}
+function renderGrowthSummary(){
+  const el = $('#odLinkSummary'); if (!el) return;
+  const list = Array.isArray(prep.growth) ? prep.growth : [];
+  const sc = selClone(), st = String(prep.strain || '').trim(), md = String(prep.medium || '').trim(), vol = numOr(prep.cultureL, 0), pel = numOr(prep.pellet, 0), hv = String(prep.exHarvest || '').trim();
+  const cultDesc = [st ? `E. coli ${st.replace(/^e\.? ?coli\s*/i, '')}` : 'Expression culture', sc && sc.name ? `clone ${sc.name.trim()}` : '', vol > 0 ? `${fmtAuto(vol)} L${md ? ' ' + md : ''}` : md].filter(Boolean).join(', ');
+  const harvDesc = [pel > 0 ? `${fmtAuto(pel)} g wet cells` : '', hv].filter(Boolean).join(', ');
+  const indPts = list.filter(r => r && r.marker === 'induction' && r.correctedOd != null && isFinite(+r.correctedOd));
+  const harvPts = list.filter(r => r && r.marker === 'harvest' && r.correctedOd != null && isFinite(+r.correctedOd));
+  const parts = [`Culture: ${cultDesc}`];
+  if (harvDesc) parts.push(`Harvest sample: ${harvDesc}`);
+  if (indPts.length) parts.push(`Induction OD600 ${(+indPts[indPts.length - 1].correctedOd).toFixed(2)}`);
+  if (harvPts.length) parts.push(`Harvest OD600 ${(+harvPts[harvPts.length - 1].correctedOd).toFixed(2)}`);
+  el.textContent = parts.join(' · ');
+}
+function renderGrowthPlots(){
+  const gBox = $('#odGrowthPlot'), sBox = $('#odSpecPlot'), figBtn = $('#odFigBtn');
+  const list = Array.isArray(prep.growth) ? prep.growth : [], valid = growthValidReadings();
+  if (figBtn) figBtn.hidden = !valid.length;
+  if (gBox) {
+    if (!valid.length) gBox.innerHTML = list.length ? '<p class="hint">Enter elapsed time and raw OD600 to plot the growth curve.</p>' : '<p class="hint">No OD600 readings recorded yet.</p>';
+    else gBox.innerHTML = buildGrowthCurveSVG({W: 360, H: 205, fs: 10.5, aw: 1, readings: list});
+  }
+  if (sBox) {
+    const spSvg = buildGrowthSpecSVG({W: 360, H: 165, fs: 10.5, aw: 1, readings: list});
+    sBox.hidden = !spSvg;
+    sBox.innerHTML = spSvg;
+  }
+}
+function renderGrowth(forceTable){
+  if (!Array.isArray(prep.growth)) prep.growth = [];
+  const list = prep.growth, wrap = $('#odTableWrap'), body = $('#odTableBody'), dl = $('#dl-od-cultures');
+  if (wrap) wrap.hidden = !list.length;
+  if (dl) {
+    const names = [...new Set([defCultureLabel(), ...list.map(r => String(r.cultureId || '').trim()).filter(Boolean)])];
+    const dh = names.map(n => `<option value="${esc(n)}">`).join('');
+    if (dl._h !== dh) { dl._h = dh; dl.innerHTML = dh; }
+  }
+  if (body) {
+    const activeRow = !forceTable && document.activeElement && document.activeElement.closest('#odTableBody tr');
+    if (activeRow) {
+      const r = list.find(x => x.id === activeRow.dataset.odId);
+      const cell = activeRow.querySelector('.od-corr');
+      if (r && cell) cell.textContent = r.correctedOd != null && isFinite(+r.correctedOd) ? (+r.correctedOd).toFixed(3) : '—';
+    } else {
+      const html = list.map(r => `<tr data-od-id="${esc(r.id)}">` +
+        `<td><input type="text" data-od="timestamp" value="${esc(r.timestamp || '')}" placeholder="YYYY-MM-DD HH:MM" aria-label="Timestamp"></td>` +
+        `<td><input type="number" step="any" min="0" data-od="elapsed" value="${r.elapsed ?? ''}" placeholder="0" aria-label="Elapsed hours"></td>` +
+        `<td><input type="text" data-od="cultureId" list="dl-od-cultures" value="${esc(r.cultureId || '')}" placeholder="${esc(defCultureLabel())}" aria-label="Culture ID"></td>` +
+        `<td><input type="number" step="any" min="0" data-od="rawOd" value="${r.rawOd ?? ''}" placeholder="0.00" aria-label="Raw OD600"></td>` +
+        `<td><input type="number" step="any" min="0.0001" data-od="dilution" value="${r.dilution ?? 1}" placeholder="1" aria-label="Dilution factor"></td>` +
+        `<td class="od-corr">${r.correctedOd != null && isFinite(+r.correctedOd) ? (+r.correctedOd).toFixed(3) : '—'}</td>` +
+        `<td><input type="text" data-od="blank" value="${esc(r.blank ?? '')}" placeholder="0.00" aria-label="Blank"></td>` +
+        `<td><input type="text" data-od="instrument" value="${esc(r.instrument || '')}" placeholder="Spectrophotometer" aria-label="Instrument"></td>` +
+        `<td><input type="text" data-od="operator" value="${esc(r.operator || '')}" placeholder="Initials" aria-label="Operator"></td>` +
+        `<td><select data-od="marker" aria-label="Marker"><option value="">—</option>${OD_MARKERS.map(([k, lbl]) => `<option value="${k}"${r.marker === k ? ' selected' : ''}>${lbl}</option>`).join('')}</select></td>` +
+        `<td><input type="text" data-od="notes" value="${esc(r.notes || '')}" placeholder="Notes" aria-label="Notes"></td>` +
+        `<td><button type="button" class="xbtn" data-od-del="${esc(r.id)}" title="Remove reading" aria-label="Remove reading">×</button></td>` +
+        `</tr>`).join('');
+      if (body._h !== html) { body._h = html; body.innerHTML = html; }
+    }
+  }
+  renderGrowthSummary();
+  renderGrowthPlots();
+}
+function parseOdClockHours(s){
+  const str = String(s || '').trim(); if (!str) return null;
+  const d = Date.parse(str); if (isFinite(d)) return d / 3600000;
+  const m = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  return m ? (+m[1]) + (+m[2])/60 + (+(m[3] || 0))/3600 : null;
+}
+function parseGrowthCSV(text){
+  const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith('#'));
+  if (lines.length < 2) return [];
+  const l0 = lines[0], d = (l0.match(/\t/g) || []).length >= 1 && (l0.match(/\t/g) || []).length >= (l0.match(/,/g) || []).length ? '\t' : (l0.match(/;/g) || []).length > (l0.match(/,/g) || []).length ? ';' : ',';
+  const heads = splitRow(l0, d).map(h => h.trim()), low = heads.map(h => h.toLowerCase().replace(/\s+/g, ' '));
+  const col = re => low.findIndex(h => re.test(h));
+  const cTs = col(/^(timestamp|date ?time|time|date)$/);
+  const cEl = col(/^(elapsed|elapsed time|elapsed \(h\)|elapsed time \(h\)|time \(h\)|hours|hr|t \(h\))$/);
+  const cElMin = col(/^(elapsed \(min\)|time \(min\)|minutes|mins?)$/);
+  const cCult = col(/^(culture|culture id|flask|condition|sample|sample name|strain)$/);
+  const cRaw = col(/^(raw|raw od|raw od600|od600 raw|raw a600|a600 raw)$/);
+  const cCorr = col(/^(corrected|corrected od|corrected od600|corr\.? od600|od600 corrected)$/);
+  const cOd = col(/^(od600|od 600|od|a600|600 ?nm|absorbance)$/);
+  const cDil = col(/^(dilution|dilution factor|dil|df)$/);
+  const cBlank = col(/^(blank|blank od|blank od600|ref)$/);
+  const cInst = col(/^(instrument|spectrophotometer|device|reader)$/);
+  const cOp = col(/^(operator|analyst|user|by)$/);
+  const cMark = col(/^(marker|event|milestone|stage)$/);
+  const cNotes = col(/^(notes?|comments?|remarks?)$/);
+  const wlCols = [];
+  heads.forEach((h, idx) => {
+    const m = h.trim().match(/^(\d{3}(?:\.\d+)?)\s*(?:nm)?$/i);
+    if (m && +m[1] >= 190 && +m[1] <= 900) wlCols.push({idx, w: +m[1]});
+  });
+  const hasSpecCols = wlCols.length >= 5 && wlCols.some(q => Math.abs(q.w - 600) <= 2);
+  if (cRaw < 0 && cCorr < 0 && cOd < 0 && !hasSpecCols) return [];
+  const pNum = v => { const s = String(v ?? '').trim(); if (!s) return null; const n = +s.replace(',', '.'); return isFinite(n) ? n : null; };
+  const t0ByCult = new Map(), out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = splitRow(lines[i], d);
+    if (!row.length || row.every(c => !String(c || '').trim())) continue;
+    const cell = idx => idx >= 0 ? String(row[idx] ?? '').trim() : '';
+    const cult = cell(cCult) || defCultureLabel();
+    const ts = cell(cTs);
+    let el = cEl >= 0 ? pNum(cell(cEl)) : null;
+    if (el == null && cElMin >= 0) { const em = pNum(cell(cElMin)); if (em != null) el = +(em / 60).toFixed(4); }
+    if (el == null && ts) {
+      const hVal = parseOdClockHours(ts);
+      if (hVal != null) {
+        if (!t0ByCult.has(cult)) t0ByCult.set(cult, hVal);
+        el = +((hVal - t0ByCult.get(cult))).toFixed(4);
+      }
+    }
+    if (el == null) el = out.filter(x => x.cultureId === cult).length;
+    const dilVal = cDil >= 0 ? pNum(cell(cDil)) : null;
+    const dilution = dilVal != null && dilVal > 0 ? dilVal : 1;
+    let spec = null, spec600 = null;
+    if (hasSpecCols) {
+      const wl = [], ab = [];
+      wlCols.forEach(q => { const v = pNum(row[q.idx]); if (v != null) { wl.push(q.w); ab.push(v); } });
+      if (wl.length >= 5) {
+        spec = {wl, ab};
+        let bi = -1, bd = 99;
+        wl.forEach((w, k) => { const df = Math.abs(w - 600); if (df < bd) { bd = df; bi = k; } });
+        if (bi >= 0 && bd <= 2) spec600 = ab[bi];
+      }
+    }
+    let rawOd = cRaw >= 0 ? pNum(cell(cRaw)) : null;
+    const corrCell = cCorr >= 0 ? pNum(cell(cCorr)) : null;
+    if (rawOd == null && cOd >= 0) rawOd = pNum(cell(cOd));
+    if (rawOd == null && spec600 != null) rawOd = spec600;
+    if (rawOd == null && corrCell != null) rawOd = +(corrCell / dilution).toFixed(6);
+    if (rawOd == null) continue;
+    out.push(normalizeGrowthRow({
+      id: nextOdId(), timestamp: ts, elapsed: el, cultureId: cult,
+      rawOd, dilution, correctedOd: +(rawOd * dilution).toFixed(6),
+      blank: cell(cBlank), instrument: cell(cInst), operator: cell(cOp),
+      marker: cell(cMark), notes: cell(cNotes), spec
+    }, out.length));
+  }
+  return out;
+}
+function specAt600(wl, ab){
+  if (!Array.isArray(wl) || !Array.isArray(ab) || !wl.length) return null;
+  let bi = -1, bd = Infinity;
+  wl.forEach((w, i) => { const df = Math.abs(w - 600); if (df < bd) { bd = df; bi = i; } });
+  if (bi >= 0 && bd <= 0.6) return ab[bi];
+  for (let i = 0; i < wl.length - 1; i++) {
+    const w0 = wl[i], w1 = wl[i + 1];
+    if ((w0 <= 600 && w1 >= 600) || (w1 <= 600 && w0 >= 600)) {
+      const f = w1 === w0 ? 0 : (600 - w0) / (w1 - w0);
+      return +(ab[i] + f * (ab[i + 1] - ab[i])).toFixed(6);
+    }
+  }
+  return bi >= 0 && bd <= 2 ? ab[bi] : null;
+}
+function parseGrowthNanoDrop(text){
+  const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return [];
+  const hs = lines.reduce((a, l, i) => (/^wavelength/i.test(l.trim()) && /absorbance/i.test(l) && a.push(i), a), []);
+  if (hs.length) {
+    const isMeta = l => { const c = l.split(/\t|,/)[0].trim(); return c && !c.startsWith('//') && isNaN(parseFloat(c)); };
+    const starts = hs.map((h, k) => { const lo = k ? hs[k - 1] + 1 : 0; let st = h; while (st > lo && h - st < 3 && isMeta(lines[st - 1])) st--; return k ? st : 0; });
+    const out = [], baseLen = (prep.growth || []).length;
+    hs.forEach((h, k) => {
+      const blk = lines.slice(starts[k], k + 1 < hs.length ? starts[k + 1] : lines.length);
+      const hi = blk.findIndex(l => /^wavelength/i.test(l.trim()) && /absorbance/i.test(l));
+      if (hi < 0) return;
+      const nm = hi > 0 ? blk[0].trim() : '', when = hi > 1 ? blk[1].trim() : '';
+      const wl = [], ab = [];
+      blk.slice(hi + 1).forEach(l => {
+        const c = l.split(/\t|,/).map(x => x.trim());
+        if (!c[0] || c[0].startsWith('//')) return;
+        const w = ndNum(c[0]), v = ndNum(c[1]);
+        if (w != null && v != null && w >= 190 && w <= 900) { wl.push(w); ab.push(v); }
+      });
+      const rawOd = specAt600(wl, ab);
+      if (rawOd == null) return;
+      out.push(normalizeGrowthRow({
+        id: nextOdId(), timestamp: when, elapsed: baseLen + out.length,
+        cultureId: defCultureLabel(), rawOd, dilution: 1, correctedOd: rawOd,
+        blank: '', instrument: 'NanoDrop', operator: '',
+        marker: normOdMarker(nm), notes: nm,
+        spec: wl.length >= 2 ? {wl, ab} : null
+      }, out.length));
+    });
+    if (out.length) return out;
+  }
+  const csvRows = parseGrowthCSV(text);
+  if (csvRows.length) return csvRows.map(r => Object.assign(r, {instrument: r.instrument || 'NanoDrop'}));
+  return [];
+}
+function exportGrowthCSV(){
+  const list = Array.isArray(prep.growth) ? prep.growth : [];
+  if (!list.length) { toast('No OD600 readings to export'); return; }
+  const rows = [['Timestamp', 'Elapsed time (h)', 'Culture ID', 'Raw OD600', 'Dilution factor', 'Corrected OD600', 'Blank', 'Instrument', 'Operator', 'Marker', 'Notes']];
+  list.forEach(r => rows.push([
+    r.timestamp || '', r.elapsed ?? '', r.cultureId || '',
+    r.rawOd ?? '', r.dilution ?? 1, r.correctedOd ?? '',
+    r.blank ?? '', r.instrument || '', r.operator || '', r.marker || '', r.notes || ''
+  ]));
+  const csv = rows.map(r => r.map(v => csvQuote(v ?? '')).join(',')).join('\r\n');
+  saveFile(`${safe(prep.name || prep.strain || (PROJ && PROJ.name) || 'expression')}_OD600_growth.csv`, csv);
+}
+function onGrowthEdit(e){
+  const el = e.target, row = el.closest && el.closest('#odTableBody tr');
+  if (!row || !el.dataset || !el.dataset.od) return;
+  const list = prep.growth = Array.isArray(prep.growth) ? prep.growth : [];
+  const r = list.find(x => x.id === row.dataset.odId); if (!r) return;
+  const k = el.dataset.od, val = el.value;
+  if (k === 'rawOd') {
+    r.rawOd = val === '' || !isFinite(+val) ? null : +val;
+    r.correctedOd = r.rawOd == null ? null : +(r.rawOd * (r.dilution || 1)).toFixed(6);
+  } else if (k === 'dilution') {
+    const dv = val === '' || !isFinite(+val) || +val <= 0 ? 1 : +val;
+    r.dilution = dv;
+    r.correctedOd = r.rawOd == null ? null : +(r.rawOd * dv).toFixed(6);
+  } else if (k === 'elapsed') {
+    r.elapsed = val === '' || !isFinite(+val) ? null : +val;
+  } else if (k === 'marker') {
+    r.marker = normOdMarker(val);
+    r.harvestLink = r.marker === 'harvest';
+  } else if (k === 'timestamp') {
+    r.timestamp = val;
+    if (r.elapsed == null && val.trim()) {
+      const hNow = parseOdClockHours(val), first = list.find(x => x !== r && (x.cultureId || '') === (r.cultureId || '') && parseOdClockHours(x.timestamp) != null);
+      if (hNow != null && first) {
+        const elNew = +((hNow - parseOdClockHours(first.timestamp)) + (numOr(first.elapsed, 0))).toFixed(2);
+        if (elNew >= 0) { r.elapsed = elNew; const ei = row.querySelector('[data-od="elapsed"]'); if (ei && ei !== document.activeElement) ei.value = String(elNew); }
+      }
+    }
+  } else {
+    r[k] = val;
+  }
+  const cell = row.querySelector('.od-corr');
+  if (cell) cell.textContent = r.correctedOd != null && isFinite(+r.correctedOd) ? (+r.correctedOd).toFixed(3) : '—';
+  if (r.marker === 'induction') syncPrepOdFromGrowth();
+  clearTimeout(odRenderT);
+  odRenderT = setTimeout(() => {
+    renderGrowthSummary();
+    renderGrowthPlots();
+    if (curFig() && curFig().id === 'growth') refreshPaperFig();
+    queueSave();
+  }, 80);
+}
+$('#prepPanel').addEventListener('input', onGrowthEdit);
+$('#prepPanel').addEventListener('change', onGrowthEdit);
+$('#prepPanel').addEventListener('click', e => {
+  const del = e.target.closest('[data-od-del]');
+  if (del) {
+    prep.growth = (prep.growth || []).filter(r => r.id !== del.dataset.odDel);
+    renderGrowth(true);
+    if (cur === 'growth' && !growthValidReadings().length) cur = PROJ ? 'step:expr' : 'overlay';
+    render(); queueSave(); return;
+  }
+  if (e.target.closest('#odAddBtn')) {
+    const list = prep.growth = Array.isArray(prep.growth) ? prep.growth : [], last = list[list.length - 1];
+    const nextEl = last && last.elapsed != null && isFinite(+last.elapsed) ? +(+last.elapsed + 1).toFixed(2) : 0;
+    list.push(normalizeGrowthRow({
+      id: nextOdId(), timestamp: '', elapsed: nextEl,
+      cultureId: (last && last.cultureId) || defCultureLabel(),
+      rawOd: null, dilution: 1, correctedOd: null,
+      blank: last ? last.blank : '', instrument: last ? last.instrument : '', operator: last ? last.operator : '',
+      marker: '', notes: '', spec: null
+    }, list.length));
+    renderGrowth(true);
+    const rows = document.querySelectorAll('#odTableBody tr');
+    if (rows.length) { const inp = rows[rows.length - 1].querySelector('[data-od="rawOd"]'); if (inp) inp.focus(); }
+    queueSave(); return;
+  }
+  if (e.target.closest('#odCsvBtn')) { $('#odCsvFile').click(); return; }
+  if (e.target.closest('#odNdBtn')) { $('#odNdFile').click(); return; }
+  if (e.target.closest('#odExportCsvBtn')) { exportGrowthCSV(); return; }
+  if (e.target.closest('#odFigBtn')) { if (growthValidReadings().length) { cur = 'growth'; render(); } return; }
+});
+$('#odCsvFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const rows = parseGrowthCSV(decode(await f.arrayBuffer()));
+  if (!rows.length) { toast(`No OD600 readings found in ${f.name}`); return; }
+  prep.growth = (prep.growth || []).concat(rows);
+  syncPrepOdFromGrowth();
+  renderGrowth(true); render(); queueSave();
+  toast(`Imported ${rows.length} OD600 reading${rows.length === 1 ? '' : 's'} from ${f.name}`);
+});
+$('#odNdFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const rows = parseGrowthNanoDrop(decode(await f.arrayBuffer()));
+  if (!rows.length) { toast(`No 600 nm OD reading found in ${f.name}`); return; }
+  prep.growth = (prep.growth || []).concat(rows);
+  syncPrepOdFromGrowth();
+  renderGrowth(true); render(); queueSave();
+  toast(`Attached ${rows.length} NanoDrop reading${rows.length === 1 ? '' : 's'} from ${f.name}`);
+});
 /* structure figure: Cα trace of the asymmetric unit, turned so its longest axis runs across, colored by chain, with a 10 Å bar */
 function eig3(A){ const a = A.map(r => r.slice()), V = [[1,0,0],[0,1,0],[0,0,1]];
   for (let it = 0; it < 50; it++) { let p = 0, q = 1; if (Math.abs(a[0][2]) > Math.abs(a[p][q])) { p = 0; q = 2; } if (Math.abs(a[1][2]) > Math.abs(a[p][q])) { p = 1; q = 2; } if (Math.abs(a[p][q]) < 1e-9) break;
@@ -10483,7 +10970,7 @@ const ENTITY_CODECS = {
       if (!out.cMethod) out.cMethod = 'plasmid';
       if (!isO(out.cDetails)) out.cDetails = {};
       ['digest', 'overlap', 'recomb'].forEach(k => { if (!isO(out.cDetails[k])) out.cDetails[k] = {}; });
-      canonClones(out); canonCloning(out);
+      canonClones(out); canonCloning(out); canonGrowth(out);
       if (out.gb && !Array.isArray(out.gb.feats)) out.gb = null;
       return out;
     }
@@ -10557,10 +11044,10 @@ function migrateProject(rawData){
   }
   let mx = 0;
   const scanList = L => { if (!Array.isArray(L)) return; L.forEach(x => { if (!x || x.id == null) return; const m = UID_RE.exec(String(x.id).trim()); if (m) mx = Math.max(mx, +m[1]); }); };
-  [rawRuns, rawTraces, rawGels, rawNd, rawAssays, prepOut.manual, prepOut.constructs, prepOut.primers, prepOut.clones, optOut && optOut.secCals].forEach(scanList);
+  [rawRuns, rawTraces, rawGels, rawNd, rawAssays, prepOut.manual, prepOut.constructs, prepOut.primers, prepOut.clones, prepOut.growth, optOut && optOut.secCals].forEach(scanList);
   if (isO(rawData.directory) && Array.isArray(rawData.directory.preparations)) rawData.directory.preparations.forEach(ip => {
     const pd = ip && ip.data; if (!isO(pd)) return;
-    [pd.runs, pd.traces, pd.gels, pd.ndSamples || pd.nanodrop, pd.assays, pd.prep && pd.prep.manual, pd.prep && pd.prep.constructs, pd.prep && pd.prep.primers, pd.prep && pd.prep.clones, pd.opt && pd.opt.secCals].forEach(scanList);
+    [pd.runs, pd.traces, pd.gels, pd.ndSamples || pd.nanodrop, pd.assays, pd.prep && pd.prep.manual, pd.prep && pd.prep.constructs, pd.prep && pd.prep.primers, pd.prep && pd.prep.clones, pd.prep && pd.prep.growth, pd.opt && pd.opt.secCals].forEach(scanList);
   });
   let nextN = Math.max(1, mx + 1, numOr(prepOut.nextUid, 0));
   const alloc = pfx => pfx ? pfx + (nextN++) : (nextN++);
@@ -10578,6 +11065,7 @@ function migrateProject(rawData){
   dedup(prepOut.manual, 'm', stepSeen);
   dedup(prepOut.constructs, 'c');
   dedup(prepOut.primers, 'pr');
+  dedup(prepOut.growth, 'od');
   const runIds = new Set(runsOut.map(r => r.id));
   const ndOut = dedup(rawNd.map(n => ENTITY_CODECS.NanoDrop.fromJSON(n, runIds, prepOut.btw)), 'nd');
   const assaysOut = dedup(rawAssays.map(a => makeAssay(a, true)), 'a');
@@ -10682,8 +11170,8 @@ async function openProject(rawData, name, noUndo){
   nextHidden.delete('undoOpen'); renderNext();
 }
 $('#projSave').addEventListener('click', () => {
-  const hasDir = PROJ && PROJ.directory && ((PROJ.directory.folders || []).length > 1 || (PROJ.directory.files || []).length > 0 || (PROJ.directory.preparations || []).length > 1 || (PROJ.directory.preparations || []).some(p => p && p.data && ((p.data.runs && p.data.runs.length) || (p.data.gels && p.data.gels.length) || p.data.struct || (p.data.traces && p.data.traces.some(t => !t.ex)) || (p.data.assays && p.data.assays.length) || (p.data.prep && (p.data.prep.name || p.data.prep.gb || p.data.prep.parentConstructId)))));
-  if (!hasDir && !runs.length && !gels.length && !struct && !traces.some(t => !t.ex) && !assays.length && !prep.gb && !cleanSeq(opt.protSeq) && !prep.name && !prep.parentConstructId && !(prep.constructs && prep.constructs.length) && !prep.cEnz && !prep.cOverlap && !prep.cRecomb && !CL().stages.length) { toast('Load some data first'); return; }
+  const hasDir = PROJ && PROJ.directory && ((PROJ.directory.folders || []).length > 1 || (PROJ.directory.files || []).length > 0 || (PROJ.directory.preparations || []).length > 1 || (PROJ.directory.preparations || []).some(p => p && p.data && ((p.data.runs && p.data.runs.length) || (p.data.gels && p.data.gels.length) || p.data.struct || (p.data.traces && p.data.traces.some(t => !t.ex)) || (p.data.assays && p.data.assays.length) || (p.data.prep && (p.data.prep.name || p.data.prep.gb || p.data.prep.parentConstructId || (p.data.prep.growth && p.data.prep.growth.length))))));
+  if (!hasDir && !runs.length && !gels.length && !struct && !traces.some(t => !t.ex) && !assays.length && !prep.gb && !cleanSeq(opt.protSeq) && !prep.name && !prep.parentConstructId && !(prep.constructs && prep.constructs.length) && !(prep.growth && prep.growth.length) && !prep.cEnz && !prep.cOverlap && !prep.cRecomb && !CL().stages.length) { toast('Load some data first'); return; }
   const nm = (runs[0] && runs[0].name) || (gels[0] && gels[0].name) || (traces.find(t => !t.ex) || {}).name || (PROJ && PROJ.name) || 'figures'; const d = projectData(); if (MODE === 'quick') d.quick = true; saveFile(`${safe(nm)}_project.json`, JSON.stringify(d)); });
 $('#projOpen').addEventListener('click', () => $('#projFile').click());
 $('#projFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; let data;
@@ -11743,7 +12231,7 @@ const QKEYS = ['pdbCode', 'protSeq', 'protSrc', 'tagSeq', 'targetName', 'taggedN
 let QUICK = null;
 function leaveWorkspace(){
   ['#cloneArchiveModal', '#projExplorerModal', '#dirPromptModal', '#dirMoveModal', '#homePromptModal', '#homeMoveModal', '#homeSettingsModal'].forEach(sel => { const m = $(sel); if (m && m.open) m.close(); });
-  if (MODE === 'quick' && (runs.length || gels.length || struct || assays.length || traces.some(t => !t.ex))) { QUICK = {runs, traces, gels, struct, ndSamples, assays, prep, cur, customTagSeq, o: {}}; QKEYS.forEach(k => { QUICK.o[k] = opt[k]; }); }
+  if (MODE === 'quick' && (runs.length || gels.length || struct || assays.length || (prep.growth && prep.growth.length) || traces.some(t => !t.ex))) { QUICK = {runs, traces, gels, struct, ndSamples, assays, prep, cur, customTagSeq, o: {}}; QKEYS.forEach(k => { QUICK.o[k] = opt[k]; }); }
   const p = PROJ ? flushSave() : saveChain; PROJ = null; MODE = 'home'; return p;
 }
 function showHome(){ leaveWorkspace().then(() => { if (MODE === 'home') renderHome(); }); setSaveState(''); document.body.classList.remove('proj'); $('#home').hidden = false; document.querySelector('.app').hidden = true; window.scrollTo(0, 0); applyProjUI(); renderHome(); }
@@ -11823,7 +12311,7 @@ function cleanDirectory(d){
       pd.rawFiles = Array.isArray(pd.rawFiles) ? pd.rawFiles.filter(isO) : [];
       if (!isO(pd.struct)) pd.struct = null;
       if (!isO(pd.opt)) pd.opt = null;
-      if (isO(pd.prep)) { canonClones(pd.prep); canonCloning(pd.prep); }
+      if (isO(pd.prep)) { canonClones(pd.prep); canonCloning(pd.prep); canonGrowth(pd.prep); }
     }
     return p;
   }) : [];
@@ -14721,6 +15209,7 @@ function baseName(f){
   if (f && f.kind === 'conc') return 'concentrated_' + String(stepTitle(f.run)).toLowerCase().replace(/[^a-z0-9]+/g, '_');
   if (f && f.kind === 'cal') return 'sec_calibration_' + safe(f.cal.name);
   if (f && f.kind === 'assay') return 'assay_' + safe(f.assay.name || f.assay.id);
+  if (f && f.kind === 'growth') return (PROJ ? safe(PROJ.name) + '_' : '') + 'od600_growth';
   const t = traces.find(t => t.visible); return safe(t ? t.name : 'chromatogram') + (traces.filter(t=>t.visible).length > 1 ? '_overlay' : '');
 }
 const CRC = (() => { const t = new Uint32Array(256); for (let n=0;n<256;n++){ let c=n; for (let k=0;k<8;k++) c = c & 1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
