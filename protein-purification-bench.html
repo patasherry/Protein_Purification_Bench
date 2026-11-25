@@ -2031,7 +2031,7 @@ function splitLine(L, d){ return d === 'ws' ? L.trim().split(/\s+/) : L.split(d)
 /* after the delimiter is chosen: a quoted comma or semicolon ("UV, 280 nm") stays in its field; whitespace, tabs and lines with unbalanced quotes split as before */
 function splitFields(L, d){ return (d === ',' || d === ';') && L.includes('"') && !((L.match(/"/g) || []).length % 2) ? csvSplit(L, d) : splitLine(L, d); }
 /* Generic chromatogram and ÄKTA CSV values use this directly; NanoDrop first applies its delimiter-specific decimal normalization. Zero is a measurement, while blank and malformed fields are not. */
-function parseMeas(v){ const s = clean(String(v ?? '')); if (!s) return null; const m = SAT_NUM.exec(s); if (m && (m[1] || m[3])) return {v: parseFloat(m[2]), sat: true}; return NUM.test(s) ? {v: parseFloat(s), sat: false} : null; }
+function parseMeas(v){ const s = clean(String(v ?? '')); if (!s) return null; const m = SAT_NUM.exec(s); if (m && (m[1] || m[3])) return {v: parseFloat(m[2]), sat: !!(m[1] && m[1][0] === '>' || m[3])}; return NUM.test(s) ? {v: parseFloat(s), sat: false} : null; }
 function measurementNumber(v){ const r = parseMeas(v); if (!r) return null; if (r.sat) satCount++; return r.v; }
 function toNumInfo(f, dc){ f = clean(String(f ?? '')); if (dc) f = f.replace(/^(?:[<>]=?\s*)?[-+]?\d+,\d+(?:[eE][-+]?\d+)?(?:\s*[*#]+)?$/, m => m.replace(',', '.')); return parseMeas(f); }
 function toNum(f, dc){ const r = toNumInfo(f, dc); if (!r) return NaN; if (r.sat) satCount++; return r.v; }

@@ -1,6 +1,7 @@
 // 30 robustness (QA): bad inputs, seeded operation fuzz with invariants, persistence round trips, performance budgets.
 // UI and DOM only. App-specific selectors not in the harness are collected in SEL below, so a rewrite needs one edit here.
 const {open, H, suite, path, ROOT, DATA, fs, src} = require('../lib/harness');
+const {measurementLimitCsv} = require('../data/gen_measurement_limits');
 const Q = path.join(DATA, 'qa'), CH = path.join(DATA, 'chrom');
 const F = {his: src('his'), q: src('q'),
   ortho: src('ortho'), s200: src('s200'), zip: src('secZip'),
@@ -25,6 +26,26 @@ async function openCard(p, name){ const ok = await p.evaluate(([c, n, nm]) => { 
 const sel1 = async (p, h, k) => { await p.click(`#tl [data-step="${k}"]`); await p.waitForTimeout(250); };
 
 (async () => {
+/* Below-reporting-limit values are retained, but only upper limits and suffix flags warn of saturation. */
+for (const [id, value, saturated] of [['lt', '<0.01', false], ['le', '<=0.01', false],
+  ['gt', '>0.01', true], ['ge', '>=0.01', true], ['star', '0.01*', true], ['hash', '0.01#', true]]) {
+  await T.t(`measurement-limit.${id}`, async () => { const {p, errs, close} = await open(), h = H(p);
+    try {
+      p.setDefaultTimeout(15000);
+      await h.newProject('Measurement limit ' + id);
+      await p.setInputFiles('#file', {name: `limit_${id}.csv`, mimeType: 'text/csv', buffer: Buffer.from(measurementLimitCsv(value))});
+      const trace = p.locator('.trace[data-kind="trace"]');
+      await trace.waitFor({state: 'attached'});
+      T.check(`measurement-limit.${id}.loads`, await trace.count() === 1, value);
+      const diag = (await trace.locator('.source-diag').allTextContents()).join(' ');
+      T.check(`measurement-limit.${id}.saturation`, diag.includes('detector-saturated') === saturated, `${value}: ${diag || 'no source diagnostic'}`);
+      const [dl] = await Promise.all([p.waitForEvent('download', {timeout: 15000}), p.click(SEL.exportBtn)]);
+      const saved = JSON.parse(fs.readFileSync(await dl.path(), 'utf8')), rows = (saved.traces || [])[0]?.rows || [];
+      T.check(`measurement-limit.${id}.values`, rows.length === 20 && rows.every((r, i) => r[0] === i / 10 && r[1] === (i === 10 ? 0.01 : 0.02)), `rows=${rows.length}, marked value=${rows[10]?.[1]}`);
+      T.check(`measurement-limit.${id}.no-error`, !errs.length, errs.join(' | '));
+    } finally { await close(); }
+  });
+}
 /* ---------------- bad inputs ---------------- */
 await T.t('bad', async () => { const {p, errs, close} = await open(), h = H(p); await h.newProject('Bad inputs'); await watchToasts(p);
   await h.dropFiles(F.his); await h.pool('T1-T6'); await takeToasts(p);
