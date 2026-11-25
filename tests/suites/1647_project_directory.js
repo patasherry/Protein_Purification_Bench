@@ -646,6 +646,90 @@ const {open, H, suite, fs, path, src} = require('../lib/harness');
     }
   });
 
+  await T.t('breadcrumb-switcher-summary-and-overlay-copy', async () => {
+    const {p: p5, errs: errs5, close: close5} = await open(), h5 = H(p5);
+    try {
+      await h5.newProject('Breadcrumb Switcher Project');
+      await h5.step('construct');
+      if (await p5.isVisible('#gbGoProt')) await p5.click('#gbGoProt');
+      await p5.fill('#protSeq', 'M' + 'WAKGSAEKL'.repeat(18));
+      await p5.dispatchEvent('#protSeq', 'input');
+      await p5.dispatchEvent('#protSeq', 'change');
+      await h5.step('expr');
+      await p5.fill('#pr-cultureL', '2');
+      await p5.dispatchEvent('#pr-cultureL', 'input');
+      await p5.dispatchEvent('#pr-cultureL', 'change');
+
+      await h5.addRun(src('his'));
+      await h5.pool('T1-T6');
+      await h5.wait(300);
+
+      const copyBtn = p5.locator('#list .trace.run [data-act="copyTrace"]').first();
+      const hasCopyBtn = await copyBtn.isVisible();
+      if (hasCopyBtn) {
+        await copyBtn.click();
+        await h5.wait(300);
+      }
+
+      // Open Explorer, create Prep 002, and switch to Prep 002
+      await p5.click('#openDirBtn');
+      await h5.wait(250);
+      await p5.click('#dirNewPrep');
+      await h5.wait(150);
+      await p5.fill('#dirPromptInput', 'Prep 002');
+      await p5.click('#dirPromptConfirm');
+      await h5.wait(300);
+      await p5.click('#dirContent [data-dir-name="Prep 002"] [data-dir-open]');
+      await h5.wait(500);
+
+      // Reopen Explorer while Prep 002 is active and check Summary column on both preparations
+      await p5.click('#openDirBtn');
+      await h5.wait(300);
+      const p1RowText = await p5.locator('#dirContent .dir-row[data-dir-name="Prep 001"]').innerText();
+      const p2RowText = await p5.locator('#dirContent .dir-row[data-dir-name="Prep 002"]').innerText();
+      T.check(
+        'explorer-prep-summary-column',
+        /1 run\s*·\s*[\d.]+\s*mg\s*\([\d.]+\s*mg\/L\)/.test(p1RowText) && /\bEmpty\b/.test(p2RowText),
+        `Prep 001="${p1RowText}" | Prep 002="${p2RowText}"`
+      );
+      await p5.click('#projExplorerClose');
+      await h5.wait(250);
+
+      // Verify 🧪 remains in #projDirCrumbs and switch from Prep 002 -> Prep 001 in 1 interaction
+      const multiCrumbs = await p5.$eval('#projDirCrumbs', el => el.innerText);
+      const switcher = p5.locator('#projDirCrumbs .crumb-prep-sel');
+      const hasSwitcher = await switcher.isVisible();
+      if (hasSwitcher) {
+        await switcher.selectOption({label: 'Prep 001'});
+        await h5.wait(500);
+      }
+      const modalStayedClosed = !(await p5.locator('#projExplorerModal').isVisible());
+      const runsAfterSwitch = await p5.locator('#tl [data-step^="run:"]').count();
+      T.check(
+        'breadcrumb-1click-prep-switcher',
+        multiCrumbs.includes('🧪') && hasSwitcher && modalStayedClosed && runsAfterSwitch === 1,
+        `crumbs="${multiCrumbs}" hasSwitcher=${hasSwitcher} modalClosed=${modalStayedClosed} runs=${runsAfterSwitch}`
+      );
+
+      // Verify Copy as overlay trace created an HPLC overlay trace preserved across preparation switch
+      const hplcSteps = await p5.locator('#tl [data-step="hplc"]').count();
+      if (hplcSteps > 0) {
+        await h5.step('hplc');
+        await h5.wait(300);
+      }
+      const overlayPaths = hplcSteps > 0 ? await p5.locator('#paper svg path').count() : 0;
+      T.check(
+        'run-card-copy-as-overlay-trace',
+        hasCopyBtn && hplcSteps === 1 && overlayPaths > 0,
+        `hasCopyBtn=${hasCopyBtn} hplcSteps=${hplcSteps} overlayPaths=${overlayPaths}`
+      );
+
+      errs.push(...errs5);
+    } finally {
+      await close5();
+    }
+  });
+
   T.check('no-page-errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

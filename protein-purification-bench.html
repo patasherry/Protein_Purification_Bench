@@ -729,10 +729,12 @@ button,input,select,textarea{font-family:inherit}
 #panel .check{min-height:32px;gap:10px}
 /* Project Directory / Windows File Explorer styles */
 .proj-dir-nav{display:inline-flex;align-items:center;gap:6px;margin:0 4px}
-.proj-dir-crumbs{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;cursor:pointer}
+.proj-dir-crumbs{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(480px,60vw);cursor:pointer}
 .dir-bar-crumb{display:inline-flex;align-items:center;padding:2px 4px;border-radius:4px}
 .dir-bar-crumb:hover{background:var(--soft)}
-.dir-bar-crumb.active-prep{font-weight:600;color:var(--ink)}
+.dir-bar-crumb.active-prep{font-weight:600;color:var(--ink);gap:4px}
+.crumb-prep-sel{font:inherit;font-size:12.5px;font-weight:600;width:auto;min-height:24px;padding:1px 22px 1px 6px;border:1px solid var(--line2);border-radius:4px;background-color:var(--field);color:var(--ink);cursor:pointer;background-position:calc(100% - 11px) 55%,calc(100% - 7px) 55%}
+.dir-summary-cell{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .proj-explorer-modal{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--bg);color:var(--ink);width:920px;max-width:95vw;height:650px;max-height:90vh;box-shadow:0 12px 36px rgba(0,0,0,0.3);overflow:hidden}
 .proj-explorer-modal::backdrop{background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)}
 .dir-window{display:flex;flex-direction:column;height:100%}
@@ -7248,6 +7250,7 @@ const runFolds = new WeakMap(), MORE_COND_KEYS = ['mCV', 'mFrac', 'mPh', 'mTemp'
       <div class="cardopts">
         ${PROJ ? '' : wfOpt}${secOpt}
         <label class="eye" title="UV flow cell path of the instrument this run was on (ÄKTA usually 2 mm, HPLC often 10 mm). Used for mg from the A280 area">UV path (mm)<input type="number" step="any" min="0.1" id="up${r.id}" data-k="path" value="${esc(r.path ?? '')}" placeholder="assumed: ${esc(String(effPathMm()))}" class="tiny autoval" title="Not in the file. ÄKTA monitors are usually 2 mm, HPLC flow cells often 10 mm"></label>
+        <button type="button" class="mini" data-act="copyTrace" title="Copy this run's UV curve into HPLC traces for overlay comparison across preparations">Copy as overlay trace</button>
       </div>
       ${r.inWf && !(poolRows(r) || {}).measured ? (massWhy(r) ? `<p class="hint uvhint">No mg from the UV area: ${esc(massWhy(r))}.</p>` : !hasTxt(r.path) ? `<p class="hint uvhint">UV path assumed ${esc(fmtAuto(effPathMm()))} mm (not in the file); set above for UV area mg.</p>` : '') : ''}
       ${(() => { const imacWarn = imacCondWarnings(r), f = (k, lab, ph, extra) => { const warn = imacWarn[k] || '', wid = `cw-${k}${r.id}`, val = r[k] == null ? (k === 'mPh' && r.mPH != null ? r.mPH : (k === 'mBufA' && r.bufA != null ? r.bufA : (k === 'mBufB' && r.bufB != null ? r.bufB : (k === 'mCol' && r.col != null ? r.col : '')))) : r[k]; const isBuf = k === 'mBufA' || k === 'mBufB', badge = isBuf ? chargeBadgeHtml(r, k) : ''; return `<label class="f${warn ? ' condmissing' : ''}"><span class="flab">${lab}${badge}</span><input type="${extra && extra.num ? 'number' : 'text'}"${extra && extra.num ? ' step="any" min="0"' : ''} id="${k}${r.id}" data-k="${k}" value="${esc(val)}" placeholder="${esc(c.auto[k] ? 'auto: ' + c.auto[k] : ph)}"${c.auto[k] ? ` class="autoval" title="Read from the run: ${esc(c.auto[k])}. This is what the figure and methods use until you type your own."` : ''}${imacWarn && Object.prototype.hasOwnProperty.call(imacWarn, k) ? ` aria-describedby="${wid}" aria-invalid="true"` : ''}>${guessStep(r) === 'IMAC' ? `<span class="condwarn" id="${wid}" data-condwarn="${k}" aria-live="polite"${warn ? '' : ' hidden'}>${esc(warn)}</span>` : ''}</label>`; };
@@ -7396,7 +7399,19 @@ list.addEventListener('click', e => {
         renderList(); syncControls(); render();
       }}); }
     else if (a === 'up' && i > 0) { runs.splice(i, 1); runs.splice(i-1, 0, t); }
-    else if (a === 'suggest') { let sg = suggestPool(t); if (!sg) { toast('No clear peak in the collected fractions'); return; } if (isPlate(t)) sg = sg.split(/\s*([,;–-])\s*/).map(x => /^[,;–-]$/.test(x) ? x : plateShort(x)).join(''); t.shade = sg; toast(`Pooled ${sg} (suggested)`); } }
+    else if (a === 'suggest') { let sg = suggestPool(t); if (!sg) { toast('No clear peak in the collected fractions'); return; } if (isPlate(t)) sg = sg.split(/\s*([,;–-])\s*/).map(x => /^[,;–-]$/.test(x) ? x : plateShort(x)).join(''); t.shade = sg; toast(`Pooled ${sg} (suggested)`); }
+    else if (a === 'copyTrace') {
+      const uv = uvOf(t); if (!uv || !uv.xs || !uv.xs.length) { toast('No UV trace to copy'); return; }
+      const sh = isSec(t) && t.injX && !t.injShift ? +t.injX : 0, xu = xUnit(t), yu = uv.yu || 'mAU';
+      const cols = [`${xu === 'min' ? 'Time' : 'Volume'} (${xu})`, `${uv.name || 'UV'} (${yu})`], rows = Array.from(uv.xs, (x, idx) => [x - sh, uv.ys[idx]]);
+      traces = traces.filter(tr => !tr.ex);
+      const pName = PROJ && PROJ.directory ? ((PROJ.directory.preparations.find(p => p.id === PROJ.directory.activePrepId) || {}).name || '') : '';
+      const baseNm = pName && !t.name.includes(pName) ? `${t.name} (${pName})` : t.name;
+      let nm = baseNm, n = 2; while (traces.some(tr => tr.name === nm)) nm = `${baseNm} #${n++}`;
+      const tr = makeTrace(nm, {rows, cols, xc: 0, yc: 1, uvWl: uvWl(uv) || undefined, source: t.source || t.file || null});
+      tr.overlayShared = true; traces.push(tr); detectPeaks(tr);
+      toast(`Copied "${tr.name}" to HPLC traces`, PROJ ? {label: 'View overlay', fn: () => selectStep('hplc')} : undefined);
+    } }
   else if (kind === 'gel') {
     if (a === 'del') {
       const savedIdx = gels.indexOf(t), savedGel = t;
@@ -7422,6 +7437,7 @@ list.addEventListener('click', e => {
       const savedCur = cur;
       const savedCurStep = (typeof curStep !== 'undefined') ? curStep : null;
       traces.splice(i, 1);
+      if (t.overlayShared && PROJ && PROJ.directory) PROJ.directory.preparations.forEach(p => { if (p.data && Array.isArray(p.data.traces)) p.data.traces = p.data.traces.filter(tr => tr.id !== t.id); });
       const srcK = t.source || t.file;
       if (srcK && !traces.some(tr => (tr.source || tr.file) === srcK)) clearSourceDiag(srcK);
       toast(`Removed ${t.name}`, {label: 'Undo', fn: () => {
@@ -13060,6 +13076,7 @@ function saveActivePrepState(keepTime){
 async function switchActivePrep(prepId){
   if (!PROJ || !PROJ.directory) return;
   if (PROJ.directory.activePrepId === prepId) return;
+  const sharedTraces = traces.filter(t => t && t.overlayShared && !t.ex);
   saveActivePrepState();
   const target = PROJ.directory.preparations.find(x => x.id === prepId);
   if (!target) return;
@@ -13105,6 +13122,7 @@ async function switchActivePrep(prepId){
     curStep = 'construct';
     cur = 'overlay';
   }
+  sharedTraces.forEach(st => { if (!traces.some(t => t.id === st.id)) traces.push(ENTITY_CODECS.Trace.fromJSON(plain(st), traces.length, traces.length + 1, paletteColor)); });
   clHtml = ''; clPickTpl = false;
   const ks = stepList().map(s => s.k); if (!ks.includes(curStep)) curStep = (stepList().find(s => !s.done && !s.add && s.k !== 'figure') || {k: 'construct'}).k;
   PROJ.editSeq = (PROJ.editSeq || 0) + 1;
@@ -13431,7 +13449,8 @@ function renderProjDirBar(){
   const el = $('#projDirCrumbs');
   if (!el) return;
   if (!PROJ || !PROJ.directory) { el.innerHTML = ''; return; }
-  const curP = PROJ.directory.preparations.find(p => p.id === PROJ.directory.activePrepId && !p.archived);
+  const livePreps = PROJ.directory.preparations.filter(p => !p.archived);
+  const curP = livePreps.find(p => p.id === PROJ.directory.activePrepId);
   const pName = curP ? curP.name : 'No active prep';
   const fPath = [];
   if (curP && curP.folderId && curP.folderId !== 'root') {
@@ -13446,7 +13465,66 @@ function renderProjDirBar(){
   const fCrumbs = fPath.length
     ? fPath.map((f, idx) => `<span class="dir-bar-crumb" data-dir-jump="${esc(f.id)}">${idx === 0 ? '📁 ' : ''}${esc(f.name)}</span>`).join(' <span class="crumb-sep">/</span> ')
     : `<span class="dir-bar-crumb" data-dir-jump="root">📁 Root</span>`;
-  el.innerHTML = `${fCrumbs} <span class="crumb-sep">/</span> <span class="dir-bar-crumb active-prep">🧪 ${esc(pName)}</span>`;
+  let prepCrumb = `<span class="dir-bar-crumb active-prep">🧪 ${esc(pName)}</span>`;
+  if (livePreps.length > 1) {
+    const counts = {}; livePreps.forEach(p => { counts[p.name] = (counts[p.name] || 0) + 1; });
+    const opts = livePreps.map(p => {
+      let lab = p.name;
+      if (counts[p.name] > 1) {
+        const f = p.folderId && p.folderId !== 'root' ? PROJ.directory.folders.find(x => x.id === p.folderId) : null;
+        lab = `${p.name} (${f ? f.name : 'Root'})`;
+      }
+      return `<option value="${esc(p.id)}"${curP && p.id === curP.id ? ' selected' : ''}>${esc(lab)}</option>`;
+    }).join('');
+    prepCrumb = `<span class="dir-bar-crumb active-prep">🧪 <select class="crumb-prep-sel" aria-label="Active preparation">${opts}</select></span>`;
+  }
+  el.innerHTML = `${fCrumbs} <span class="crumb-sep">/</span> ${prepCrumb}`;
+}
+
+function summarizePrepWorkspace(nGels){
+  const nR = runs.length, nG = nGels != null ? nGels : gels.length, nT = traces.filter(t => !t.ex && !t.overlayShared).length, nN = ndSamples.length, nA = assays.length;
+  if (!nR && !nG && !nT && !nN && !nA && !hasTxt(prep && prep.name) && !hasTxt(opt.protSeq)) return 'Empty';
+  const rows = sumRows(), disp = sumDisplay(rows);
+  let lastMg = null, lastArea = null;
+  for (let i = disp.length - 1; i >= 0; i--) {
+    const d = disp[i], m = d.man || d.conc ? d.mg : (d.run ? (rows.mgOf(d.run) ?? d.run.p.mg ?? (d.run.nd && d.run.nd.mg)) : null);
+    if (m > 0) { lastMg = m; break; }
+  }
+  if (!(lastMg > 0)) {
+    for (let i = rows.length - 1; i >= 0; i--) { if (rows[i].p && rows[i].p.area > 0) { lastArea = rows[i].p.area; break; } }
+  }
+  const cL = prep && prep.on ? numOr(prep.cultureL, 0) : 0, parts = [];
+  if (nR) parts.push(`${nR} run${nR === 1 ? '' : 's'}`);
+  else if (nG) parts.push(`${nG} gel${nG === 1 ? '' : 's'}`);
+  else if (nT) parts.push(`${nT} trace${nT === 1 ? '' : 's'}`);
+  if (lastMg > 0) parts.push(`${sig2(lastMg)} mg${cL > 0 ? ` (${sig2(lastMg / cL)} mg/L)` : ''}`);
+  else if (lastArea > 0) parts.push(`pooled (${fmtAuto(lastArea)} mAU·mL)`);
+  return parts.length ? parts.join(' · ') : 'In progress';
+}
+
+function prepDirSummary(item, dir){
+  if (!item || item.itemType !== 'prep') return '—';
+  if (item.id === dir.activePrepId) return summarizePrepWorkspace(gels.length);
+  const d = item.data;
+  if (!d || typeof d !== 'object') return 'Empty';
+  const sR = runs, sT = traces, sG = gels, sN = ndSamples, sA = assays, sP = prep, sOpt = plain(opt);
+  try {
+    const isLive = Array.isArray(d.runs) && d.runs.every(r => r && Object.prototype.hasOwnProperty.call(r, 'secAuto')) && Array.isArray(d.ndSamples);
+    if (isLive) {
+      runs = d.runs; traces = d.traces || []; gels = []; ndSamples = d.ndSamples; assays = d.assays || [];
+      prep = Object.assign({on: true}, d.prep || {});
+      if (d.opt) { Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), d.opt); }
+      return summarizePrepWorkspace((d.gels || []).length);
+    }
+    const md = migrateProject(Object.assign({app: 'HPLC Figure Bench'}, d));
+    runs = md.runs.map(r => makeRun(r)); traces = md.traces || []; gels = []; ndSamples = md.nanodrop || []; assays = md.assays || [];
+    prep = Object.assign({on: true}, md.prep || {});
+    if (md.opt) { Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, JSON.parse(JSON.stringify(DEF)), md.opt); }
+    return summarizePrepWorkspace((md.gels || []).length);
+  } finally {
+    runs = sR; traces = sT; gels = sG; ndSamples = sN; assays = sA; prep = sP;
+    Object.keys(opt).forEach(k => delete opt[k]); Object.assign(opt, sOpt);
+  }
 }
 
 function renderExplorer(){
@@ -13560,10 +13638,11 @@ function renderExplorer(){
       const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
       const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
       const fsInfo = fileStatusInfo(item);
+      const sumTxt = item.itemType === 'prep' ? prepDirSummary(item, dir) : '';
       return `<div class="dir-card ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
         <div class="dir-card-icon">${icon}</div>
         <div class="dir-card-name" title="${esc(item.name)}">${esc(item.name)}${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div>
-        <div class="dir-card-meta">${typeLabel}</div>
+        <div class="dir-card-meta">${typeLabel}${sumTxt ? ' · ' + esc(sumTxt) : ''}</div>
         <div class="dir-card-acts">
           <button type="button" class="mini" data-dir-open="${esc(item.id)}" data-dir-type="${esc(item.itemType)}"${fsInfo.hollow ? ' disabled title="Files over 5 MB are not embedded in .json exports"' : ''}>Open</button>
           ${item.itemType === 'prep' && !dirShowArchive ? `<button type="button" class="mini" data-dir-dup="${esc(item.id)}">Duplicate</button>` : ''}
@@ -13582,7 +13661,7 @@ function renderExplorer(){
     // List view table
     contentEl.innerHTML = `<table>
       <thead>
-        <tr><th>Name</th><th>Type</th><th>Modified</th><th style="text-align:right">Actions</th></tr>
+        <tr><th>Name</th><th>Type</th><th>Summary</th><th>Modified</th><th style="text-align:right">Actions</th></tr>
       </thead>
       <tbody>
         ${items.map(item => {
@@ -13590,9 +13669,11 @@ function renderExplorer(){
           const isCurPrep = item.itemType === 'prep' && item.id === dir.activePrepId;
           const typeLabel = item.itemType === 'folder' ? 'Folder' : item.itemType === 'prep' ? 'Preparation' : 'File';
           const fsInfo = fileStatusInfo(item);
+          const sumTxt = item.itemType === 'prep' ? prepDirSummary(item, dir) : (item.itemType === 'file' && item.size ? fmtSize(item.size) : '—');
           return `<tr class="dir-row ${isCurPrep ? 'active-prep' : ''}" draggable="true" data-dir-type="${esc(item.itemType)}" data-dir-id="${esc(item.id)}" data-dir-name="${esc(item.name)}" ${item.itemType === 'folder' ? `data-folder-id="${esc(item.id)}"` : ''}>
             <td><div class="dir-name-cell"><span>${icon}</span> <span>${esc(item.name)}</span>${isCurPrep ? ' <span class="dir-badge">Active</span>' : ''}${fsInfo.badge}</div></td>
             <td>${typeLabel}</td>
+            <td class="dir-summary-cell">${esc(sumTxt)}</td>
             <td>${fmtWhen(item.updated || item.created)}</td>
             <td>
               <div class="dir-acts-cell">
@@ -13670,6 +13751,7 @@ $('#openDirBtn').addEventListener('click', () => {
   $('#projExplorerModal').showModal();
 });
 $('#projDirCrumbs').addEventListener('click', e => {
+  if (e.target.closest('.crumb-prep-sel')) return;
   if (!PROJ) return;
   if (!PROJ.directory) initProjectDirectory(PROJ);
   const jmp = e.target.closest('[data-dir-jump]');
@@ -13684,6 +13766,10 @@ $('#projDirCrumbs').addEventListener('click', e => {
   $('#dirSearch').value = '';
   renderExplorer();
   $('#projExplorerModal').showModal();
+});
+$('#projDirCrumbs').addEventListener('change', e => {
+  const sel = e.target.closest('.crumb-prep-sel');
+  if (sel && sel.value) switchActivePrep(sel.value);
 });
 $('#projExplorerClose').addEventListener('click', () => $('#projExplorerModal').close());
 
