@@ -374,7 +374,108 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     } finally { await close5(); }
   });
 
+  await T.t('project_mode_sec_cal_navigation', async () => {
+    const {p: pn, errs: en, close: cn} = await open(), hn = H(pn);
+    try {
+      await hn.newProject('SEC Cal Nav');
+      await hn.addRun(src('secZip'));
+      const secStep = (await hn.timeline()).find(x => /^run:/.test(x.k));
+      if (secStep) await hn.step(secStep.k);
+      await hn.wait(300);
+
+      // .tl-menu has 1-line drag-and-drop tip
+      await pn.click('#tl [data-addmenu]'); await hn.wait(100);
+      const hasTlTip = await pn.locator('#tl .tl-menu').evaluate(el => /drag and drop/i.test(el.textContent || '')).catch(() => false);
+      await pn.click('#tl [data-addmenu]'); await hn.wait(100);
+      T.check('proj_sec.tl_menu_drag_tip', hasTlTip, 'tl-menu includes 1-line drag-and-drop tip');
+
+      // By default More options is closed and #secPanel is hidden
+      const secVis0 = await pn.locator('#secPanel').isVisible().catch(() => false);
+      const openBtn = pn.locator('.trace.run [data-open-sec="1"]').first();
+      const hasOpenBtn = await openBtn.isVisible().catch(() => false);
+      T.check('proj_sec.default_closed_and_card_btn', !secVis0 && hasOpenBtn, `secVis0=${secVis0} hasOpenBtn=${hasOpenBtn}`);
+
+      // Clicking SEC calibration & sizing… opens More options + #secPanel without jumping #stepsPanel off-screen
+      if (hasOpenBtn) {
+        await openBtn.click(); await hn.wait(250);
+      } else if (await pn.isVisible('#moreBtn')) {
+        await pn.click('#moreBtn'); await hn.wait(250);
+      }
+      const afterOpen = await pn.evaluate(() => {
+        const sp = document.getElementById('secPanel'), st = document.getElementById('stepsPanel');
+        return {
+          moreOpen: document.body.classList.contains('moreopen'),
+          secVis: !!(sp && !sp.hidden && sp.getClientRects().length > 0 && !sp.classList.contains('collapsed')),
+          winY: window.scrollY,
+          stepsInDom: !!(st && st.getBoundingClientRect().width > 0)
+        };
+      });
+      T.check('proj_sec.open_sec_btn_activates_panel', hasOpenBtn && afterOpen.moreOpen && afterOpen.secVis && afterOpen.winY < 50 && afterOpen.stepsInDom, JSON.stringify(afterOpen));
+
+      // Configure calibration standards so cal:<id> becomes active
+      const stdsChk = pn.locator('#o-secStds');
+      if (!(await stdsChk.isChecked())) { await stdsChk.check(); await hn.wait(200); }
+      await pn.selectOption('#sec-set', 'cyHMW'); await pn.dispatchEvent('#sec-set', 'change'); await hn.wait(150);
+      await pn.fill('#sec-v0', '8.0'); await pn.dispatchEvent('#sec-v0', 'change');
+      await pn.fill('#sec-vt', '24.0'); await pn.dispatchEvent('#sec-vt', 'change');
+      for (const [i, v] of [[0, '9.5'], [1, '11.2'], [2, '13.8']]) {
+        await pn.fill(`#ss-v${i}`, v); await pn.dispatchEvent(`#ss-v${i}`, 'change');
+      }
+      await hn.wait(250);
+
+      // #sec-viewCal switches to calibration plot and back
+      const viewCal = pn.locator('#sec-viewCal');
+      const viewCalVis = await viewCal.isVisible().catch(() => false);
+      T.check('proj_sec.view_cal_btn_visible', viewCalVis && /View calibration plot/i.test(await viewCal.textContent()), viewCalVis ? await viewCal.textContent() : 'hidden');
+      if (viewCalVis) {
+        await viewCal.click(); await hn.wait(300);
+        const backTxt = await viewCal.textContent();
+        T.check('proj_sec.view_cal_toggles_back_label', /Back to SEC run/i.test(backTxt), backTxt);
+        await viewCal.click(); await hn.wait(250);
+      } else {
+        T.check('proj_sec.view_cal_toggles_back_label', false, 'missing #sec-viewCal');
+      }
+
+      // Close More options, also add an HPLC trace + assay, and verify at most 1 Analysis header & direct #tl cal:<id> navigation
+      if (await pn.locator('#moreBtn').getAttribute('aria-expanded') === 'true') {
+        await pn.click('#moreBtn'); await hn.wait(200);
+      }
+      await pn.setInputFiles('#file', {name: 'analyt.csv', mimeType: 'text/csv', buffer: Buffer.from('Time (min),UV280 (mAU)\n0,0\n5,100\n10,0\n')});
+      await hn.wait(500);
+      await pn.click('#tl [data-step^="run:"]'); await hn.wait(200);
+      if (await pn.locator('#ssGels [data-addassay]').isVisible().catch(() => false)) {
+        await pn.click('#ssGels [data-addassay]'); await hn.wait(200);
+        await pn.selectOption('#assayPanel [data-ak="mode"]', 'kinetics'); await hn.wait(200);
+      }
+      const analysisHeads = await pn.$$eval('#tl .tl-h > span:first-child', els => els.map(e => e.textContent.trim()).filter(t => t === 'Analysis'));
+      T.check('proj_sec.single_analysis_header', analysisHeads.length === 1, JSON.stringify(analysisHeads));
+
+      const calStepBtn = pn.locator('#tl [data-step^="cal:"]').first();
+      const hasCalStep = await calStepBtn.isVisible().catch(() => false);
+      T.check('proj_sec.tl_cal_step_present', hasCalStep, 'cal:<id> present in #tl');
+      if (hasCalStep) {
+        await calStepBtn.click(); await hn.wait(300);
+        const calState = await pn.evaluate(() => {
+          const sp = document.getElementById('secPanel');
+          const txt = [...document.querySelectorAll('#paper svg text')].map(t => t.textContent.trim()).join(' | ');
+          return {
+            moreOpen: document.body.classList.contains('moreopen'),
+            dataCal: document.getElementById('panel').dataset.cal || '',
+            secVis: !!(sp && !sp.hidden && sp.getClientRects().length > 0),
+            hasCalPlot: /Kav|Elution|Molecular weight|kDa/i.test(txt) && /R²/.test(txt),
+            txt
+          };
+        });
+        T.check('proj_sec.tl_cal_renders_with_more_closed', !calState.moreOpen && calState.dataCal === '1' && calState.secVis && calState.hasCalPlot, JSON.stringify(calState));
+      } else {
+        T.check('proj_sec.tl_cal_renders_with_more_closed', false, 'missing cal:<id> in #tl');
+      }
+      errs.push(...en);
+    } finally { await cn(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
 })();
+

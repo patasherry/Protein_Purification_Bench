@@ -1170,6 +1170,43 @@ async function txt(root, sel) {
       T.check('kinetics-svg-shows-kcatkm-and-hill-k05',
         texts.some(t => t.startsWith('Km = 0.40 uM')) && texts.some(t => t.includes('kcat/Km = 5.00e+8')) && texts.some(t => t.startsWith('K₀.₅ = 2.00 mM')) && boxes.clipped.length === 0,
         JSON.stringify({texts, clipped: boxes.clipped}));
+      // #1708: Project-mode standalone assay navigation via #tl assay:<id> and [data-assay-act="view"] with More options closed
+      const anaHeads = await p.$$eval('#tl .tl-h > span:first-child', els => els.map(e => e.textContent.trim()).filter(t => t === 'Analysis'));
+      const tlMm = p.locator('#tl [data-step="assay:ak_mm"]');
+      const hasTlAssay = (await tlMm.count()) === 1 && await tlMm.isVisible();
+      T.check('proj-nav/single-analysis-head-and-assay-step', anaHeads.length === 1 && hasTlAssay, JSON.stringify({anaHeads, hasTlAssay}));
+      if (hasTlAssay) {
+        await tlMm.click(); await h.wait(250);
+        const mmState = await p.evaluate(() => {
+          const ap = document.getElementById('assayPanel');
+          const txt = [...document.querySelectorAll('#paper svg text')].map(t => t.textContent.trim()).join(' | ');
+          return {
+            moreOpen: document.body.classList.contains('moreopen'),
+            assayPanelVis: !!(ap && !ap.hidden && ap.getClientRects().length > 0),
+            hasMmPlot: txt.includes('Km = 0.40 uM') && !txt.includes('K₀.₅ = 2.00 mM'),
+            txt
+          };
+        });
+        T.check('proj-nav/tl-assay-renders-solo-plot-and-keeps-panel', !mmState.moreOpen && mmState.assayPanelVis && mmState.hasMmPlot, JSON.stringify(mmState));
+
+        const hillViewBtn = p.locator('#assayPanel .assay-card[data-assay-id="ak_hill"] [data-assay-act="view"]');
+        const hasHillBtn = (await hillViewBtn.count()) === 1 && await hillViewBtn.isVisible();
+        if (hasHillBtn) { await hillViewBtn.click(); await h.wait(250); }
+        const hillState = await p.evaluate(() => {
+          const ap = document.getElementById('assayPanel');
+          const txt = [...document.querySelectorAll('#paper svg text')].map(t => t.textContent.trim()).join(' | ');
+          return {
+            assayPanelVis: !!(ap && !ap.hidden && ap.getClientRects().length > 0),
+            hasHillPlot: txt.includes('K₀.₅ = 2.00 mM') && !txt.includes('Km = 0.40 uM'),
+            txt
+          };
+        });
+        T.check('proj-nav/card-view-btn-switches-assay-plot', hasHillBtn && hillState.assayPanelVis && hillState.hasHillPlot, JSON.stringify({hasHillBtn, hillState}));
+      } else {
+        T.check('proj-nav/tl-assay-renders-solo-plot-and-keeps-panel', false, 'missing #tl [data-step="assay:ak_mm"]');
+        T.check('proj-nav/card-view-btn-switches-assay-plot', false, 'missing #tl [data-step="assay:ak_mm"]');
+      }
+
       T.check('kinetics-rigor-no-page-errors', errs.length === 0, errs.join('; '));
     } finally {
       await close();
