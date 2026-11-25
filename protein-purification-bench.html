@@ -85,7 +85,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projlist{display:flex;flex-direction:column}
 .proj-header{display:grid;grid-template-columns:28px minmax(180px,2fr) 75px minmax(110px,1.2fr) minmax(130px,1.3fr) 115px 95px minmax(105px,auto);align-items:center;gap:6px 10px;padding:7px 12px;background:var(--panel,#f8fafc);border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;user-select:none}
 .proj-header span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.projlist .empty-p{color:var(--muted);margin:0;padding:16px 14px}
+.projlist .empty-p{color:var(--muted);margin:0;padding:24px 14px;text-align:center;grid-column:1/-1}
 .home-cb-wrap{display:grid;place-items:center;padding:2px;cursor:pointer}
 .home-cb{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer}
 .home-kind-badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;letter-spacing:.02em;flex:none;line-height:1.3}
@@ -145,7 +145,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .pdot{width:8px;height:8px;border-radius:50%;background:var(--line2)}
 .pdot.done{background:var(--accent)}
 .pdot.warn{background:var(--warn)}
-@media (max-width:860px){
+@media (max-width:880px){
   .proj-header{grid-template-columns:28px minmax(140px,2fr) minmax(100px,1.2fr) 105px minmax(90px,auto)}
   .proj-header .ph-type,.proj-header .ph-mod{display:none}
   .pcard,.fcard{grid-template-columns:28px minmax(140px,2fr) minmax(100px,1.2fr) 105px minmax(90px,auto)}
@@ -168,7 +168,7 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;flex:1 1 260px}
 .projbar .pb-sep{color:var(--line2);font-size:18px} .projbar .pb-lab{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .proj-settings{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
-.proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted)}
+.proj-settings summary{cursor:pointer;white-space:nowrap;color:var(--muted);min-height:24px;padding-block:3px;line-height:18px}
 .proj-settings-body{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:100%} .projname-pair,.projtheme-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%} .projtheme-pair .seg label{padding:3px 8px;min-height:24px;font-size:12px}
 .np-type{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center} .np-type .hint{margin:0}
 /* Include Cloning switch (#1433): one on/off control, a real button so Space and Enter work */
@@ -217,14 +217,14 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 "Instrument Sans",syst
 .projname:hover{border-color:var(--line)} .projname:focus{outline:none;border-color:var(--accent);background:var(--field)}
 .savestate{color:var(--muted);font-size:12.5px;white-space:nowrap}
 .savestate.err{color:var(--t-con)}
-.rawfiles{position:relative;font-size:12.5px;color:var(--muted)} .rawfiles summary{cursor:pointer;white-space:nowrap} .rawlist{position:absolute;top:100%;left:0;z-index:30;background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:8px;min-width:300px;max-height:50vh;overflow:auto;color:var(--ink)}
+.rawfiles{position:relative;font-size:12.5px;color:var(--muted)} .rawfiles summary{cursor:pointer;white-space:nowrap;min-height:24px;padding-block:3px;line-height:18px} .rawlist{position:absolute;top:100%;left:0;z-index:30;background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:8px;min-width:300px;max-height:50vh;overflow:auto;color:var(--ink)}
 .rawlist .rawrow{display:flex;align-items:center;gap:8px;padding:3px 0} .rawlist .rawname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl{list-style:none;margin:0;padding:0;display:grid;counter-reset:step}
 .tl li{position:relative}
 .tl li:not(:last-child)::before{content:"";position:absolute;left:13px;top:26px;bottom:-4px;width:1.5px;background:var(--line)}
 .tl li.done:not(:last-child)::before{background:var(--accent);opacity:.45}
 .tl .tl-h{margin:10px 0 4px;color:var(--muted);font-size:11.5px;letter-spacing:.04em;padding-left:36px;display:flex;align-items:center;justify-content:space-between;padding-right:8px}
-.tl-stage-add{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:1px solid var(--line2);border-radius:4px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1;cursor:pointer}
+.tl-stage-add{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;width:24px;height:24px;padding:0;border:1px solid var(--line2);border-radius:4px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1;cursor:pointer}
 .tl-stage-add:hover{color:var(--ink);border-color:var(--line);background:var(--hover)}
 .tl-stage-add:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .tl li.tl-head::before{display:none}
@@ -518,10 +518,11 @@ label.f.condmissing>input{border-color:var(--warn)}
 .nextbar > span:first-child{display:flex;gap:9px;align-items:baseline;flex:1;min-width:0}
 .nextbar .btns{flex:none;flex-wrap:nowrap}
 .nextbar > span:first-child::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent);transform:translateY(-1px)}
-.grp > h2{cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
-.grp > h2::after{content:"";margin-left:auto;flex:none;width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .15s}
-.grp.collapsed > h2::after{transform:rotate(-45deg)}
-.grp > h2:hover::after{border-color:var(--ink)}
+.grp > h2{cursor:default;display:flex;align-items:center;gap:6px}
+#panel > .grp > h2[role="button"]{cursor:pointer;user-select:none}
+#panel > .grp > h2[role="button"]::after{content:"";margin-left:auto;flex:none;width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .15s}
+#panel > .grp.collapsed > h2[role="button"]::after{transform:rotate(-45deg)}
+#panel > .grp > h2[role="button"]:hover::after{border-color:var(--ink)}
 .grp.collapsed{padding-bottom:14px}
 .grp.collapsed > :not(h2){display:none!important}
 .grp > h2 .st,.grp > h2 .steps-prog{font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;color:var(--muted);margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -532,7 +533,7 @@ label.f.condmissing>input{border-color:var(--warn)}
 .figtabs{display:flex;gap:2px;padding:4px 8px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--sb) transparent}
 .figtab{font:inherit;font-size:13px;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);padding:7px 12px 8px;margin-bottom:-1px;cursor:pointer;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none;border-radius:6px 6px 0 0}
 .figtab:hover{color:var(--ink);background:var(--hover)}
-.figtab[aria-pressed="true"]{color:var(--ink);font-weight:500;border-bottom-color:var(--accent)}
+.figtab[aria-selected="true"]{color:var(--ink);font-weight:500;border-bottom-color:var(--accent)}
 .paper{background:var(--paper);border:1px solid var(--paper-edge);border-radius:6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.92),0 1px 2px rgba(21,26,40,.06),var(--shadow);padding:clamp(10px,3vw,36px);display:flex;justify-content:center;align-items:center;min-height:260px}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .paper{box-shadow:0 0 0 1px rgba(255,255,255,.08),var(--shadow)}}
 :root[data-theme="dark"] .paper{box-shadow:0 0 0 1px rgba(255,255,255,.08),var(--shadow)}
@@ -540,9 +541,10 @@ label.f.condmissing>input{border-color:var(--warn)}
 .wfsel{position:absolute;pointer-events:none;border:2px solid #0058c4;border-radius:4px;background:rgba(0,88,196,.06);box-shadow:0 0 0 1px rgba(255,255,255,.9)}
 .wfsel::after{content:"";position:absolute;top:-5px;left:-5px;right:-5px;bottom:-5px;background-image:radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px),radial-gradient(circle, #fff 1.5px, #0058c4 2px, #0058c4 3.5px, transparent 4px);background-position:top left, top right, bottom left, bottom right;background-size:8px 8px;background-repeat:no-repeat}
 .wftool{position:absolute;z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:6px;max-width:min(560px, calc(100% - 16px));padding:8px;background:var(--card, #fff);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:13px}
-.wftool input[type=text]{flex:1 1 150px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:5px;font:inherit;background:var(--well, #fff);color:inherit}
-.wftool #wfA{flex-basis:260px;min-width:min(260px,100%);text-overflow:clip}
-.wftool .wfl{color:var(--muted);font-size:12px}
+.wftool input[type=text]{flex:1 1 90px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:5px;font:inherit;background:var(--well, #fff);color:inherit}
+.wftool #wfA{min-width:248px;flex:3 1 248px;text-overflow:clip}
+@media (max-width:480px){.wftool{max-width:calc(100% - 4px);padding:6px;gap:5px}.wftool input[type=text]{font-size:12px;padding:4px 6px}.wftool #wfA{min-width:210px;flex:1 1 210px}}
+.wftool .wfl{color:var(--muted);font-size:12px;white-space:nowrap}
 .wftool .wfg{display:inline-flex;align-items:center;gap:2px}
 .wftool .wfhint{flex-basis:100%;font-size:11.5px;color:var(--muted)}
 .wftool button{font:inherit}
@@ -610,7 +612,8 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .nd-dil{display:flex;align-items:center;gap:2px;font-size:11.5px;color:var(--muted)}
 .nd-dil input{width:3.6em;min-height:24px;padding:1px 4px;font-size:11.5px}
 #sumTable .ndc{border-left:1px solid var(--line2)}
-#sumTable th:first-child,#sumTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:1}
+#sumTable th:first-child,#sumTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;box-shadow:inset -1px 0 0 var(--line)}
+#sumTable tr:hover td:first-child{background:var(--hover)}
 .grp > *{min-width:0}
 .muted{color:var(--muted)}
 .warnc{color:var(--t-con);font-weight:600}
@@ -634,7 +637,7 @@ details.koff #knownList,details.koff #knownList + .btns{opacity:.5}
 .tagbtn.g[aria-pressed="true"]{background:#7F3C8D;color:#ffffff;box-shadow:none}
 .tagbtn.c[aria-pressed="true"]{background:#D62728;color:#ffffff;box-shadow:none}
 .tagbtn.a[aria-pressed="true"],.tagbtn.r[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);box-shadow:none}
-.bchip{font:inherit;font-size:12px;border:1px solid var(--line2);background:var(--field);color:var(--ink);border-radius:999px;padding:1px 4px 1px 8px;margin:1px 2px;cursor:pointer;display:inline-flex;align-items:center;gap:2px}
+.bchip{font:inherit;font-size:12px;border:1px solid var(--line2);background:var(--field);color:var(--ink);border-radius:999px;min-height:24px;padding:2px 6px 2px 8px;margin:1px 2px;cursor:pointer;display:inline-flex;align-items:center;gap:2px}
 .bchip.t{border-color:#1B9E77;color:var(--t-ok);background:rgba(27,158,119,.1);font-weight:600}
 .bchip.g{border-color:#7F3C8D;color:var(--t-tag);background:rgba(127,60,141,.1);font-weight:600}
 .bchip.c{border-color:#D62728;color:var(--t-con);background:rgba(214,39,40,.08);font-weight:600}
@@ -700,7 +703,7 @@ dialog.cl-archive-dlg::backdrop{display:none}
   .paper{padding:10px;min-height:0;overflow-x:auto;justify-content:flex-start}
   .canvas-body{padding:10px}
   .export{justify-content:flex-start;gap:8px}
-  header.top .top-act{margin-left:-10px}
+  header.top .top-act{margin-left:0}
   .paper > svg{width:auto;max-width:none;max-height:none;flex:none;margin-inline:auto}
   header.top p{font-size:12.5px}
 }
@@ -803,7 +806,7 @@ button,input,select,textarea{font-family:inherit}
   #paper svg{max-width:100%!important;max-height:none!important;width:100%;height:auto;cursor:default}
   .tablewrap{overflow:visible}
   .itab{font-size:10.5pt}
-  #sumTable th:first-child,#sumTable td:first-child{position:static;background:transparent}
+  #sumTable th:first-child,#sumTable td:first-child{position:static;background:transparent;box-shadow:none}
   #methodsText{border:0;padding:0;background:transparent;color:#000;resize:none;height:auto;min-height:14em;overflow:visible;white-space:pre-wrap}
 }
 </style>
@@ -854,7 +857,7 @@ button,input,select,textarea{font-family:inherit}
   <div class="home-org" id="homeOrg">
     <div class="home-toolbar" id="homeToolbar" role="toolbar" aria-label="Project organization">
       <div class="home-tb-acts">
-        <button type="button" class="btn primary" id="homeNewProj">New Project</button>
+        <button type="button" class="btn" id="homeNewProj">New Project</button>
         <button type="button" class="btn" id="homeNewFolder">New Folder</button>
         <button type="button" class="btn" id="homeMove">Move</button>
         <button type="button" class="btn" id="homeRename">Rename</button>
@@ -1117,7 +1120,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Induction<select id="pr-indKind" data-prep="indKind"><option value="IPTG">IPTG (mM)</option><option value="arabinose">L-arabinose (%)</option><option value="rhamnose">L-rhamnose (%)</option><option value="auto">Autoinduction</option><option value="other">Other (type it)</option></select></label>
           <label class="f" id="prIndAmt">Amount<input type="text" id="pr-inducer" data-prep="inducer" placeholder="e.g. 0.5"></label>
         </div>
-        <div class="row">
+        <div class="row3">
           <label class="f">Temperature (°C)<input type="text" id="pr-temp" data-prep="temp" placeholder="e.g. 18"></label>
           <label class="f">Time (h)<input type="text" id="pr-time" data-prep="time" placeholder="e.g. 16"></label>
           <label class="f">Cells (g, wet)<input type="number" id="pr-pellet" data-prep="pellet" min="0" step="0.1"></label>
@@ -1179,7 +1182,7 @@ button,input,select,textarea{font-family:inherit}
           <label class="f">Time (h)<input type="text" id="pr-clvTime" data-prep="clvTime" placeholder="e.g. 16"></label>
         </div>
         <details class="cardtext" id="clvMore"><summary>Dialysis setup (optional)</summary>
-          <div class="row">
+          <div class="row3">
             <label class="f">MWCO (kDa)<input type="text" id="pr-mwco" data-prep="mwco" placeholder="e.g. 10"></label>
             <label class="f">Buffer volume (L)<input type="number" id="pr-dialVol" data-prep="dialVol" min="0" step="0.5"></label>
             <label class="f">Buffer changes<input type="text" id="pr-dialChanges" data-prep="dialChanges" placeholder="e.g. 1"></label>
@@ -1233,7 +1236,7 @@ button,input,select,textarea{font-family:inherit}
         <datalist id="dl-device"><option value="Amicon Ultra-15"><option value="Amicon Ultra-4"><option value="Amicon Ultra-0.5"><option value="Vivaspin 20"><option value="PD-10 desalting column"><option value="0.22 µm syringe filter"></datalist>
       </details>
       <details class="sub" data-sub="pfin" open><summary>Final sample and quality</summary>
-        <div class="row">
+        <div class="row3">
           <label class="f" title="Measured on the final sample, for example by NanoDrop A280">Concentration (mg/mL)<input type="number" id="pr-finConc" data-prep="finConc" min="0" step="any"></label>
           <label class="f">Volume (mL)<input type="number" id="pr-finVol" data-prep="finVol" min="0" step="any"></label>
           <label class="f">A260/A280<input type="number" id="pr-finRatio" data-prep="finRatio" min="0" step="0.01" placeholder="e.g. 0.57"></label>
@@ -7276,10 +7279,10 @@ function render(){
   tabs.hidden = figs.length < 2;
   /* run tabs drop the words every run name starts with ("Human NADK ..."), the full name stays in the tooltip */
   const tabName = x => { if (x.kind !== 'run') return x.name; if (!PROJ || !x.run.inWf) return shortRunName(x.run); const t = stepTitle(x.run), dup = runs.filter(r => r.inWf && stepTitle(r) === t).length > 1; return dup ? `${t} ${runs.filter(r => r.inWf && stepTitle(r) === t).indexOf(x.run) + 1}` : t; };
-  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
+  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
   if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
   tabs.classList.toggle('ovf', !tabs.hidden && tabs.scrollWidth > tabs.clientWidth + 2);
-  if (tabs._cur !== cur && !tabs.hidden) { tabs._cur = cur; const at = tabs.querySelector('[aria-pressed="true"]');
+  if (tabs._cur !== cur && !tabs.hidden) { tabs._cur = cur; const at = tabs.querySelector('[aria-selected="true"]');
     if (at) { const l = at.offsetLeft - tabs.offsetLeft, r = l + at.offsetWidth; if (l < tabs.scrollLeft) tabs.scrollLeft = l - 8; else if (r > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = r - tabs.clientWidth + 8; } }
   $('#saveAll').hidden = figs.length < 2;
   list.querySelectorAll('.run,.gelc').forEach(el => el.classList.toggle('sel', el.dataset.id === cur));
@@ -11025,7 +11028,7 @@ function refreshPaperFig(){
   const figs = figures(), tabs = $('#figtabs');
   tabs.hidden = figs.length < 2;
   const tabName = x => { if (x.kind !== 'run') return x.name; if (!PROJ || !x.run.inWf) return shortRunName(x.run); const t = stepTitle(x.run), dup = runs.filter(r => r.inWf && stepTitle(r) === t).length > 1; return dup ? `${t} ${runs.filter(r => r.inWf && stepTitle(r) === t).indexOf(x.run) + 1}` : t; };
-  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" aria-pressed="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
+  const tabHtml = figs.map(x => `<button type="button" role="tab" class="figtab" data-fig="${x.id}" aria-selected="${x.id === cur}" tabindex="${x.id === cur ? 0 : -1}" title="${esc(x.name)}">${esc(tabName(x))}</button>`).join('');
   if (tabs._h !== tabHtml) { tabs._h = tabHtml; tabs.innerHTML = tabHtml; }
   const kind = f ? f.kind : 'none';
   $('#sumPanel').hidden = kind !== 'workflow' || (!runs.some(r => r.inWf && (poolRows(r) || ndForRun(r))) && !hasAssaySummaryData() && !hasFracYieldData());
@@ -12577,8 +12580,11 @@ function sortHomeItems(arr, sortKey){
 }
 function syncHomeSelUI(){
   const bar = $('#homeSelBar'), cnt = $('#homeSelCount');
+  const n = homeSelected.size, eff = n || (!homeShowArchive && homeCurFolder !== 'root' ? 1 : 0);
+  const mv = $('#homeMove'), rn = $('#homeRename');
+  if (mv) mv.disabled = eff === 0;
+  if (rn) rn.disabled = eff !== 1;
   if (!bar || !cnt) return;
-  const n = homeSelected.size;
   bar.hidden = n === 0;
   cnt.textContent = n ? `${n} selected` : '';
 }
