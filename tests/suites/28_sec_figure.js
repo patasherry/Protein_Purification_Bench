@@ -318,6 +318,62 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
     } finally { await close4(); }
   });
 
+  /* #1705: SEC calibration curve (buildCalSVG) repels standard and sample peak labels with leader lines and zero clipping */
+  await T.t('sec_calibration_curve_label_repulsion', async () => {
+    const {p: p5, errs: errs5, close: close5} = await open(), h5 = H(p5);
+    try {
+      await p5.click('#homeQuick');
+      await h5.wait(350);
+      const rows = ['Chrom.1,,Chrom.1,', 'UV 1_280,,Fraction,', 'ml,mAU,ml,Fraction'];
+      for (let i = 0; i <= 250; i++) {
+        const x = i * 0.1;
+        const y = 160 * Math.exp(-0.5 * ((x - 14.5) / 0.32) ** 2);
+        rows.push(`${x.toFixed(2)},${y.toFixed(3)},,`);
+      }
+      await p5.setInputFiles('#file', {name: 'sec_Superdex_200_66kda.csv', mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n'))});
+      await h5.wait(900);
+      await p5.evaluate(() => {
+        for (const id of ['o-secStds', 'sec-v0', 'sec-set']) {
+          const el = document.getElementById(id);
+          let d = el && el.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); }
+        }
+        const st = document.getElementById('o-secStds');
+        if (st && !st.checked) { st.checked = true; st.dispatchEvent(new Event('input', {bubbles: true})); st.dispatchEvent(new Event('change', {bubbles: true})); }
+      });
+      await h5.wait(250);
+      await p5.selectOption('#sec-set', 'cyHMW'); await p5.dispatchEvent('#sec-set', 'change');
+      await h5.wait(200);
+      await p5.fill('#sec-v0', '8.0'); await p5.dispatchEvent('#sec-v0', 'change');
+      await p5.fill('#sec-vt', '24.0'); await p5.dispatchEvent('#sec-vt', 'change');
+      const ves = [9.2, 10.2, 12.3, 14.2, 15.4];
+      for (let i = 0; i < ves.length; i++) {
+        await p5.fill(`#ss-v${i}`, String(ves[i]));
+        await p5.dispatchEvent(`#ss-v${i}`, 'change');
+      }
+      await h5.wait(300);
+      if ((await p5.locator('#intTable tr').count()) < 2) { await p5.click('#intAuto'); await h5.wait(400); }
+      const calTab = p5.locator('.figtab[data-fig^="cal:"]').first();
+      T.check('cal_curve_tab_present', (await calTab.count()) > 0 && await calTab.isVisible(), 'SEC calibration tab visible');
+      await calTab.click();
+      await h5.wait(300);
+      const svg = await h5.exportSvg(), boxes = await h5.svgBoxes(svg);
+      const overlaps = [];
+      for (let i = 0; i < boxes.texts.length; i++) {
+        for (let j = i + 1; j < boxes.texts.length; j++) {
+          const a = boxes.texts[i], b = boxes.texts[j];
+          const iw = Math.min(a.right, b.right) - Math.max(a.x, b.x);
+          const ih = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
+          if (iw > 0.5 && ih > 0.5) overlaps.push(`${a.t.trim()} × ${b.t.trim()} (${iw.toFixed(1)}x${ih.toFixed(1)})`);
+        }
+      }
+      const hasCon = boxes.texts.some(t => /Conalbumin\s*\(75\)/.test(t.t));
+      const hasSample = boxes.texts.some(t => /\b6\d\s*kDa\b/.test(t.t));
+      T.check('cal_curve_labels_present', hasCon && hasSample, JSON.stringify(boxes.texts.map(x => x.t)));
+      T.check('cal_curve_no_clipped_text', boxes.clipped.length === 0, 'clipped: ' + boxes.clipped.join(' | '));
+      T.check('cal_curve_zero_text_overlaps', overlaps.length === 0 && !errs5.length, `overlaps (${overlaps.length}): ${overlaps.join('; ')} errs=${errs5.join(' | ')}`);
+    } finally { await close5(); }
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();

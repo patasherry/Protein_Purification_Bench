@@ -766,6 +766,37 @@ async function txt(root, sel) {
         }
       }
       T.check('solo/png-600dpi-export', hasTab && /^assay_.*_600dpi\.png$/.test(pngName) && pngDpiOk, pngName + ' dpiOk=' + pngDpiOk);
+      T.check('track/error-bar-definition-text', mTrack.texts.some(t => /Mean ± SD \(n = \d+\)/.test(t.t.trim())), JSON.stringify(mTrack.texts.map(t => t.t)));
+
+      // 5e. #1705 Multi-series (WT vs Mutant) kinetics curves, distinct marker glyphs, per-series legend & Mean ± SD (n = 3)
+      if (hasTab) {
+        const pasteBox = p.locator('#assayPaste');
+        if (!(await pasteBox.isVisible())) await p.click('#assayPasteToggle');
+        const multiCsv = [
+          'Series,[S] (mM),Rep1,Rep2,Rep3',
+          'WT,0.1,46,50,54',
+          'WT,0.25,95,100,105',
+          'WT,1.0,154,160,166',
+          'WT,4.0,185,190,195',
+          'Mutant,0.1,10,12,14',
+          'Mutant,0.25,25,28,31',
+          'Mutant,1.0,66,70,74',
+          'Mutant,4.0,96,100,104'
+        ].join('\n');
+        await p.fill('#assayPaste', multiCsv);
+        await p.click('#assayPasteGo');
+        await h.wait(300);
+        const aTab2 = p.locator('.figtab[data-fig^="assay:"]').first();
+        if (await aTab2.isVisible()) { await aTab2.click(); await h.wait(250); }
+        const svgMulti = await h.exportSvg();
+        const bMulti = await h.svgBoxes(svgMulti);
+        const multiTexts = bMulti.texts.map(x => x.t.trim());
+        T.check('multi/err-bar-def-mean-sd-n3', multiTexts.includes('Mean ± SD (n = 3)'), JSON.stringify(multiTexts));
+        T.check('multi/series-legend-wt-and-mutant', multiTexts.some(t => /^WT:.*Km/.test(t)) && multiTexts.some(t => /^Mutant:.*Km/.test(t)), JSON.stringify(multiTexts));
+        T.check('multi/two-curves-and-distinct-glyphs', (svgMulti.match(/class="assay-fit-curve"/g) || []).length === 2 && /<circle class="assay-pt"/.test(svgMulti) && /<rect class="assay-pt"/.test(svgMulti), 'expected 2 fit curves + circle & rect glyphs');
+        T.check('multi/no-clipped-text', bMulti.clipped.length === 0, JSON.stringify(bMulti.clipped));
+      }
+
       T.check('figure/no-page-errors', !errs.length, errs.join('; '));
     } finally {
       await close();
