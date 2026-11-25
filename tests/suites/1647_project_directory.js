@@ -588,7 +588,66 @@ const {open, H, suite, fs, path, src} = require('../lib/harness');
     }
   });
 
+  await T.t('over-5mb-explorer-attachment-and-hollow-import', async () => {
+    const {p: p3, errs: errs3, close: close3} = await open(), h3 = H(p3);
+    const {p: p4, errs: errs4, close: close4} = await open(), h4 = H(p4);
+    try {
+      await h3.newProject('Large Attachment Project');
+      await p3.click('#openDirBtn');
+      await h3.wait(250);
+
+      const bigBuf = Buffer.alloc(5557452, 0x42); // ~5.3 MB (> 5242880 bytes)
+      await p3.setInputFiles('#dirFileInput', [{name: 'large_capture.bin', mimeType: 'application/octet-stream', buffer: bigBuf}]);
+      await h3.wait(500);
+
+      const upToasts = await h3.toasts();
+      const fileRow3 = p3.locator('#dirContent .dir-row[data-dir-type="file"], #dirContent .dir-card[data-dir-type="file"]').first();
+      const rowText3 = await fileRow3.innerText();
+      const openDisabled3 = await fileRow3.locator('[data-dir-open]').isDisabled();
+      T.check('explorer-5mb-upload-warns-and-badges',
+        upToasts.some(t => /browser only/i.test(t) && /5 MB/i.test(t)) &&
+        /Browser only \(>5 MB\)/.test(rowText3) && !openDisabled3,
+        `toasts=${upToasts.join(' | ')} | row="${rowText3}" | disabled=${openDisabled3}`);
+
+      await p3.click('#projExplorerClose');
+      await h3.wait(200);
+
+      const [expDl] = await Promise.all([p3.waitForEvent('download', {timeout: 10000}), p3.click('#projSave')]);
+      await h3.wait(250);
+      const saveToasts = await h3.toasts();
+      const expJsonPath = await expDl.path();
+      const expJson = JSON.parse(fs.readFileSync(expJsonPath, 'utf8'));
+      const expFile = expJson.directory && expJson.directory.files && expJson.directory.files[0];
+      T.check('explorer-5mb-export-omits-blob-and-warns',
+        saveToasts.some(t => />5 MB/i.test(t) && /\.json/i.test(t)) &&
+        expFile && !expFile.dataUrl && !expFile._dataUrl,
+        `toasts=${saveToasts.join(' | ')}`);
+
+      await p4.setInputFiles('#projFile', expJsonPath);
+      await h4.wait(1500);
+      await p4.click('#openDirBtn');
+      await h4.wait(300);
+
+      const fileRow4 = p4.locator('#dirContent .dir-row[data-dir-type="file"], #dirContent .dir-card[data-dir-type="file"]').first();
+      const rowText4 = await fileRow4.innerText();
+      const openBtn4 = fileRow4.locator('[data-dir-open]');
+      const openDisabled4 = await openBtn4.isDisabled();
+      await openBtn4.click({force: true}).catch(() => {});
+      await h4.wait(250);
+      const impToasts4 = await h4.toasts();
+
+      T.check('explorer-5mb-imported-hollow-shows-badge-and-disables-open',
+        /Not in \.json \(>5 MB\)/.test(rowText4) && openDisabled4 && !impToasts4.some(t => /could not read/i.test(t)),
+        `row="${rowText4}" disabled=${openDisabled4} toasts=${impToasts4.join(' | ')}`);
+      T.check('no-page-errors-5mb-matrix', !errs3.length && !errs4.length, [...errs3, ...errs4].join(' | '));
+    } finally {
+      await close3();
+      await close4();
+    }
+  });
+
   T.check('no-page-errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
 })();
+
