@@ -35,6 +35,21 @@ const {open, H, suite, src, fs, path, APP} = require('../lib/harness');
     const runTraces = newTraces.filter(t => t.kind === 'run');
     T.check('trace_added', runTraces.length > 0, `Added a run trace. Found: ${JSON.stringify(newTraces)}`);
 
+    const uiPolish = await p.evaluate(() => {
+      const h2 = document.querySelector('#dataPanel > h2');
+      const h2Cs = h2 ? getComputedStyle(h2) : null;
+      const h2After = h2 ? getComputedStyle(h2, '::after') : null;
+      const tabs = [...document.querySelectorAll('#figtabs [role="tab"]')];
+      return {
+        h2Cursor: h2Cs ? h2Cs.cursor : '',
+        h2AfterContent: h2After ? h2After.content : '',
+        tabCount: tabs.length,
+        tabsAriaOk: tabs.length >= 1 && tabs.every(t => t.hasAttribute('aria-selected') && !t.hasAttribute('aria-pressed'))
+      };
+    });
+    T.check('data_heading_non_collapsible', uiPolish.h2Cursor === 'default' && uiPolish.h2AfterContent === 'none', JSON.stringify(uiPolish));
+    T.check('figtabs_aria_selected_without_pressed', uiPolish.tabsAriaOk, JSON.stringify(uiPolish));
+
     // 4. SVG and PNG export work
     const download = async (selector, timeout = 10000) => {
       const loc = p.locator(selector);
@@ -99,6 +114,22 @@ const {open, H, suite, src, fs, path, APP} = require('../lib/harness');
     const {p: p2, errs: errs2, close: close2} = await open(), h2 = H(p2);
     try {
       await h2.wait(400);
+      const homeCta = await p2.evaluate(() => {
+        const vis = e => !!(e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden');
+        const prims = [...document.querySelectorAll('#home .btn.primary')].filter(vis).map(e => e.id || e.textContent.trim());
+        const mv = document.querySelector('#homeMove'), rn = document.querySelector('#homeRename');
+        const emp = document.querySelector('#projList .empty-p');
+        return {
+          prims,
+          formVis: vis(document.querySelector('#newProj')) && vis(document.querySelector('#npName')) && vis(document.querySelector('#homeNewProj')),
+          mvDisabled: !!(mv && mv.disabled),
+          rnDisabled: !!(rn && rn.disabled),
+          emptyAlign: emp ? getComputedStyle(emp).textAlign : 'center'
+        };
+      });
+      T.check('home_single_primary_cta_and_disabled_selection_actions',
+        homeCta.prims.length === 1 && homeCta.formVis && homeCta.mvDisabled && homeCta.rnDisabled && homeCta.emptyAlign === 'center',
+        JSON.stringify(homeCta));
       const homeImportTxt = await p2.$eval('#homeImport', e => e.textContent.trim());
       T.check('home_import_btn_label', homeImportTxt === 'Open project (.json)', `got "${homeImportTxt}"`);
 

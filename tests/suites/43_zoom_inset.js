@@ -759,6 +759,51 @@ const insetCount = p => p.evaluate(() => document.querySelectorAll('#paper svg [
     } finally { await close(); }
   });
 
+  /* A workflow step can show its magnified window as a large second panel beside the full chromatogram ("As: Large panel"), while other
+     steps keep the inset. Measured on the exported SVG: the large panel's plot is about as big as the full trace's, sits wholly to the
+     right of it, collides with nothing, and the choice is saved with the project. */
+  await T.t('wf-panel', async () => {
+    const {p, errs, close} = await open({width: 1600, height: 1100}), h = H(p);
+    try {
+      await h.newProject('wf large zoom panel');
+      for (const k of ['his', 'q', 's200']) { await h.addRun(src(k)); await h.suggest(); }
+      await h.step('figure'); await h.wait(700);
+      const pick = async (ch, style) => {
+        const pt = await p.evaluate(c => { const e = [...document.querySelectorAll('#paper svg text')].find(x => new RegExp('^' + c + '\\s').test(x.textContent)); if (!e) return null; const r = e.getBoundingClientRect(); return {x: r.left + 30, y: r.top + 60}; }, ch);
+        if (!pt) return null;
+        await p.mouse.click(pt.x, pt.y); await h.wait(300);
+        const before = await p.evaluate(() => { const s = document.querySelector('#wfTool select[data-wfzs]'); return s ? {disabled: s.disabled, opts: [...s.options].map(o => o.value)} : null; });
+        await p.evaluate(() => { const el = document.querySelector('#wfTool input[data-wfz]'); if (el) { el.checked = true; el.dispatchEvent(new Event('input', {bubbles: true})); } });
+        await h.wait(400);
+        const sel = await p.$('#wfTool select[data-wfzs]'); let enabled = false;
+        if (sel) { enabled = !(await sel.isDisabled()); if (style) { await sel.selectOption(style); await h.wait(600); } }
+        await p.keyboard.press('Escape'); await h.wait(300);
+        return {before, enabled};
+      };
+      const a = await pick('A'), b = await pick('B'), c = await pick('C', 'panel');
+      T.check('wf-panel/choice-offered', !!(c && c.before && c.before.disabled && c.enabled && c.before.opts.join() === 'inset,panel'), JSON.stringify(c));
+      const svg = await h.exportSvg(), m = await h.svgBoxes(svg);
+      const g = await inspectSvg(p, svg, () => {
+        const ov = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))*Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+        return [...document.querySelectorAll('svg .zoom-inset')].map(ins => {
+          const host = ins.parentElement, main = host.querySelector(':scope > [data-plot="main"]'), mp = main && main.querySelector('clipPath[id$="plot-area"]:not([id*="zi-"]) rect'), zp = ins.querySelector('clipPath[id$="zi-plot-area"] rect');
+          if (!main || !mp || !zp) return {bad: 'missing parts'};
+          const bgd = !!ins.querySelector('.zoom-inset-bg'), mt = [...main.querySelectorAll('text')].filter(t => t.textContent.trim()).map(t => t.getBoundingClientRect()), zt = [...ins.querySelectorAll('text')].filter(t => t.textContent.trim()).map(t => t.getBoundingClientRect());
+          const ir = ins.getBoundingClientRect(), mRight = Math.max(...mt.map(r => r.right));
+          return {inset: bgd, wr: +zp.getAttribute('width')/+mp.getAttribute('width'), hr: +zp.getAttribute('height')/+mp.getAttribute('height'), leftOfZoom: ir.left - mRight, hits: zt.reduce((n, r) => n + mt.filter(q => ov(r, q) > 0.5).length, 0)};
+        });
+      });
+      const big = g.filter(x => !x.bad && !x.inset), small = g.filter(x => !x.bad && x.inset);
+      T.check('wf-panel/one-large-panel-two-insets', g.length === 3 && big.length === 1 && small.length === 2, JSON.stringify(g));
+      T.check('wf-panel/panel-as-big-as-trace', big.length === 1 && big[0].wr >= 0.8 && big[0].hr >= 0.9, big.length ? `width ${big[0].wr.toFixed(2)}, height ${big[0].hr.toFixed(2)} of the full trace` : 'no large panel');
+      T.check('wf-panel/panel-beside-not-over', big.length === 1 && big[0].leftOfZoom >= 0, big.length ? `gap to the full trace's rightmost text ${big[0].leftOfZoom.toFixed(1)} px` : 'no large panel');
+      T.check('wf-panel/no-collisions', big.length === 1 && big[0].hits === 0 && m.clipped.length === 0 && errs.length === 0, JSON.stringify({hits: big.length && big[0].hits, clipped: m.clipped.slice(0, 3), errs: errs.slice(0, 3)}));
+      const dl = p.waitForEvent('download', {timeout: 10000}).catch(() => null); await p.click('#projSave'); const d = await dl; let saved = null;
+      if (d) { const fp = path.join(require('os').tmpdir(), 'wf_panel_' + Date.now() + '.json'); await d.saveAs(fp); const fsm = require('fs'), j = JSON.parse(fsm.readFileSync(fp, 'utf8')); fsm.rmSync(fp, {force: true}); saved = JSON.stringify(j).match(/"wfZoomStyle":"(\w+)"/g); }
+      T.check('wf-panel/choice-saved-with-project', !!(saved && saved.length === 1 && saved[0].includes('panel')), JSON.stringify(saved));
+    } finally { await close(); }
+  });
+
   T.done();
 
 })();
