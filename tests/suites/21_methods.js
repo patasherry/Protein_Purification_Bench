@@ -193,6 +193,36 @@ const F = {gb: src('gb'), imac: src('his'), q: src('q'), sec: path.join(DATA, 's
       const stepSelTr = await p.evaluate(() => document.querySelector('.tl li.cur button')?.dataset.step || '');
       T.check('transform-field-focused-and-navigated', (activeIdTr === 'pr-trPlasmid' || activeIdTr === 'pr-strain2') && stepSelTr === 'transform', `activeId=${activeIdTr} step=${stepSelTr}`);
     }
+
+    // #1712: GenBank + IMAC + pooled fractions without manual UV path -> 'UV path' gap chip focuses #up<runId>, #sumBasis surfaces bench yield, and upstream summaries name OD600 / Clarification
+    await h.gb(F.gb);
+    await h.step('expr');
+    const expSum = (await p.locator('#expMore > summary').textContent()).trim();
+    T.check('expMore-summary-names-od600', expSum === 'OD600, starter, harvest and figure details (optional)', expSum);
+    await setField('#pr-cultureL', '2');
+    await setField('#pr-pellet', '8');
+    await h.step('lysis');
+    const lysSum = (await p.locator('#lysMore > summary').textContent()).trim();
+    T.check('lysMore-summary-names-clarification', lysSum === 'Clarification spin, additives and sonication settings (optional)', lysSum);
+
+    const runStep = (await h.timeline()).find(x => x.k.startsWith('run:'));
+    const runId = runStep ? runStep.k.slice(4) : '';
+    await h.step('figure'); await h.wait(300);
+
+    const sumBasisTxt = (await p.locator('#sumBasis').textContent()).trim();
+    T.check('sumBasis-surfaces-bench-yield', /mg\/L culture/.test(sumBasisTxt) && /mg\/g cells/.test(sumBasisTxt), sumBasisTxt);
+
+    const gapsTxt = (await gapsEl.textContent()) || '';
+    const uvBtn = p.locator('#methodsGaps button.gap-btn[data-gap="UV path"]').first();
+    T.check('uv-path-gap-normalized', (await uvBtn.count()) === 1 && !/assumed,\s*check/i.test(gapsTxt), gapsTxt);
+    if ((await uvBtn.count()) > 0) {
+      await uvBtn.click(); await h.wait(350);
+      const activeUv = await p.evaluate(() => document.activeElement ? document.activeElement.id : '');
+      const stepUv = await p.evaluate(() => document.querySelector('.tl li.cur button')?.dataset.step || '');
+      T.check('uv-path-gap-focuses-up-runId', activeUv === 'up' + runId && stepUv === 'run:' + runId, `active=${activeUv} expected=up${runId} step=${stepUv}`);
+    } else {
+      T.check('uv-path-gap-focuses-up-runId', false, 'UV path gap button missing');
+    }
   });
 
   /* #1468: Methods text respects run/step volume unit (µL vs mL) for between-step and manual steps (UI/DOM only) */
