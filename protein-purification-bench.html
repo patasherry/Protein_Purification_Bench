@@ -1995,6 +1995,15 @@ tidyLists();
 function saveOpt(){ try { localStorage.setItem('hplc-fig-opt', JSON.stringify(opt)); } catch(e) {} }
 
 let wfSel = null, wfSelKey = '', gelMovedAt = 0;
+const undoStack = [];
+const isFormFocus = el => !!(el && el.closest && (el.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') || el.isContentEditable));
+function pushUndo(entry){
+  if (!entry || typeof entry.fn !== 'function') return;
+  const now = Date.now(), top = undoStack[undoStack.length - 1];
+  if (entry.key && top && top.key === entry.key && now - (top.at || 0) < 1200) { top.at = now; return; }
+  if (undoStack.length >= 25) undoStack.shift();
+  undoStack.push({label: entry.label || 'change', fn: entry.fn, key: entry.key || '', bandSnap: entry.bandSnap || '', at: now});
+}
 let rawFiles = [];
 let traces = [], runs = [], gels = [], uid = 1, G = null, cur = 'overlay', marking = null, tagMode = '', srcDiag = {}, customTagSeq = opt.tagPreset === 'custom' ? (opt.tagSeq || '') : '';
 
@@ -5066,8 +5075,15 @@ function gelBands(g){
   g._bands = {key, pix: g.pix, lanes}; return lanes;
 }
 /* band edit history: every add, remove, mark or clear is undoable, and Reset goes back to plain detection */
-function bandSnap(g){ (g.bandHist || (g.bandHist = [])).push(JSON.stringify({edits: g.edits || {added: [], removed: []}, tags: g.tags || []})); if (g.bandHist.length > 60) g.bandHist.shift(); }
-function bandUndo(g){ const h = g.bandHist && g.bandHist.pop(); if (!h) return false; const o = JSON.parse(h); g.edits = o.edits; g.tags = o.tags; g._bands = null; return true; }
+function bandSnap(g){
+  const snap = JSON.stringify({edits: g.edits || {added: [], removed: []}, tags: g.tags || []});
+  (g.bandHist || (g.bandHist = [])).push(snap); if (g.bandHist.length > 60) g.bandHist.shift();
+  pushUndo({label: 'gel band edit', bandSnap: snap, fn: () => {
+    if (g.bandHist && g.bandHist.length && g.bandHist[g.bandHist.length - 1] === snap) g.bandHist.pop();
+    const o = JSON.parse(snap); g.edits = o.edits; g.tags = o.tags; g._bands = null; render();
+  }});
+}
+function bandUndo(g){ const h = g.bandHist && g.bandHist.pop(); if (!h) return false; if (undoStack.length && undoStack[undoStack.length - 1].bandSnap === h) undoStack.pop(); const o = JSON.parse(h); g.edits = o.edits; g.tags = o.tags; g._bands = null; return true; }
 function bandHalf(g, b){ const h = g.pix ? g.pix.h : 1; return Math.max(0.006, 0.6*(b.hr - b.hl + 1)/2/h)*(g.crop.b - g.crop.t); }
 /* remove one band: a hand-added band drops its own entry, a detected one is remembered as removed. Marks on that band in this
    lane go too, and a gel-wide mark is blocked here so it cannot jump to the neighbouring band */
@@ -7855,12 +7871,12 @@ $('#wfTool').addEventListener('input', e => { const it = wfItem(wfSel); if (!it)
 $('#wfTool').addEventListener('keydown', e => { if (e.key === 'Escape' || (e.key === 'Enter' && e.target.tagName === 'INPUT')) { wfSel = null; renderWfTool(); } });
 $('#wfTool').addEventListener('click', e => { const b = e.target.closest('[data-wf]'); if (!b) return; const it = wfItem(wfSel); if (!it) return; const [f, d] = b.dataset.wf.split(':');
   if (f === 'close') { wfSel = null; renderWfTool(); return; }
-  if (f === 'reset') { wfSet(it, 'off', {dx: 0, dy: 0}); return; }
+  if (f === 'reset') { if (it.ox || it.oy) { const id = wfSel, ox = it.ox, oy = it.oy; pushUndo({label: 'panel reset', fn: () => { const curIt = wfItem(id) || it; wfSet(curIt, 'off', {dx: ox, dy: oy}); }}); } wfSet(it, 'off', {dx: 0, dy: 0}); return; }
   if (f === 'edit') { const k = it.step; wfSel = null; renderWfTool(); selectStep(k); return; }
   const cur0 = f === 'w' ? it.w : it.gz; wfSet(it, f, Math.round(Math.min(f === 'w' ? 3 : 3, Math.max(f === 'w' ? 0.4 : 0.3, cur0 + 0.15*(+d)))*100)/100); });
 paper.addEventListener('click', e => { if (!PROJ || !G || !G.pos || Date.now() - gelMovedAt < 350) return; const f = curFig(); if (!f || f.kind !== 'workflow') return;
   const p = svgPoint(e); if (!p) return; const q = G.pos.slice().reverse().find(x => p.x >= x.x && p.x <= x.x + x.w && p.y >= x.y && p.y <= x.y + x.h);
-  wfSel = q && wfItem(q.id) ? q.id : null; renderWfTool(); if (wfSel) { const t = $('#wfT'); if (t && matchMedia('(pointer: fine)').matches) t.focus(); } });
+  wfSel = q && wfItem(q.id) ? q.id : null; renderWfTool(); if (wfSel && isFormFocus(document.activeElement)) document.activeElement.blur(); });
 addEventListener('resize', () => { if (wfSel) renderWfTool(); });
 /* drag across a run chromatogram to add an integration region */
 const dragBox = $('#dragBox'), wrap = $('#paperwrap'); let drag = null;
@@ -7887,9 +7903,11 @@ paper.addEventListener('pointerdown', e => {
   e.preventDefault(); e.stopImmediatePropagation();
   if (paper.setPointerCapture) paper.setPointerCapture(e.pointerId);
   const insetEl = e.target.closest && e.target.closest('.zoom-inset'), insetRect = insetEl && insetEl.getBoundingClientRect();
+  const snapL = zi.zObj.zoomInsetLayout ? JSON.parse(JSON.stringify(zi.zObj.zoomInsetLayout)) : null;
+  const snapVals = {X: zi.zObj.zoomInsetX, Y: zi.zObj.zoomInsetY, W: zi.zObj.zoomInsetW, H: zi.zObj.zoomInsetH};
   insetDrag = {
     action, p0, x0: zi.x, y0: zi.y, w0: zi.w, h0: zi.h,
-    aspect: insetRect && insetRect.width > 0 && insetRect.height > 0 ? insetRect.width/insetRect.height : zi.w/zi.h, figW: zi.figW, figH: zi.figH, zObj: zi.zObj, pointerId: e.pointerId
+    aspect: insetRect && insetRect.width > 0 && insetRect.height > 0 ? insetRect.width/insetRect.height : zi.w/zi.h, figW: zi.figW, figH: zi.figH, zObj: zi.zObj, pointerId: e.pointerId, snapL, snapVals, moved: false
   };
 }, true);
 window.addEventListener('pointermove', e => {
@@ -7904,6 +7922,15 @@ window.addEventListener('pointermove', e => {
   }
   const d = insetDrag; if (e.pointerId !== d.pointerId) return; const p = svgPoint(e); if (!p) return;
   const dx = p.x - d.p0.x, dy = p.y - d.p0.y, shift = e.shiftKey;
+  if (!d.moved && Math.hypot(dx, dy) > 0.5) {
+    d.moved = true;
+    const zObj = d.zObj, snapL = d.snapL, snapVals = d.snapVals, lab = d.action === 'move' ? 'zoom inset move' : 'zoom inset resize';
+    pushUndo({label: lab, fn: () => {
+      if (snapL) zObj.zoomInsetLayout = JSON.parse(JSON.stringify(snapL)); else delete zObj.zoomInsetLayout;
+      ['X', 'Y', 'W', 'H'].forEach(k => { zObj['zoomInset' + k] = snapVals[k]; });
+      render(); saveOpt();
+    }});
+  }
   if (d.action === 'move') {
     let newX = Math.max(0, Math.min(d.figW - d.w0, d.x0 + dx));
     let newY = Math.max(0, Math.min(d.figH - d.h0, d.y0 + dy));
@@ -8015,11 +8042,17 @@ paper.addEventListener('pointerdown', e => {
   if (e.target && e.target.closest && e.target.closest('.zoom-inset')) return;
   const f = curFig(), svg = paper.querySelector('svg'); if (!f || f.kind !== 'workflow' || !svg) return;
   const p = svgPoint(e), q = p && G.pos.find(x => x.id === wfSel), it = q && wfItem(wfSel), m = svg.getScreenCTM(); if (!it || !m || !(p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h)) return;
-  wfDrag = {it, cx: e.clientX, cy: e.clientY, k: 1/m.a, ox: it.ox, oy: it.oy, minX: it.ox - q.x, minY: it.oy - q.y, on: false};
+  wfDrag = {it, id: wfSel, cx: e.clientX, cy: e.clientY, k: 1/m.a, ox: it.ox, oy: it.oy, minX: it.ox - q.x, minY: it.oy - q.y, on: false};
   wfDragCursor(e);
 }, true);
 window.addEventListener('pointermove', e => {
-  const d = wfDrag; if (!d) { wfDragCursor(e); return; } if (!d.on) { if (Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < 4) { wfDragCursor(e); return; } d.on = true; }
+  const d = wfDrag; if (!d) { wfDragCursor(e); return; }
+  if (!d.on) {
+    if (Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < 4) { wfDragCursor(e); return; }
+    d.on = true;
+    const id = d.id, ox = d.ox, oy = d.oy, it0 = d.it;
+    pushUndo({label: 'panel move', fn: () => { const curIt = wfItem(id) || it0; wfSet(curIt, 'off', {dx: ox, dy: oy}); }});
+  }
   wfDragCursor(e);
   const o = {dx: Math.max(d.minX, d.ox + (e.clientX - d.cx)*d.k), dy: Math.max(d.minY, d.oy + (e.clientY - d.cy)*d.k)}; gelMovedAt = Date.now();
   cancelAnimationFrame(wfRaf); wfRaf = requestAnimationFrame(() => { const it = wfItem(wfSel); if (it) wfSet(it, 'off', o); });
@@ -8047,8 +8080,11 @@ window.addEventListener('pointerup', () => {
   const g = d.c.g, inv = X => g.xlo + (X - g.L)/(g.R - g.L)*(g.xhi - g.xlo);
   const a = inv(Math.min(d.x0, d.x1)), b = inv(Math.max(d.x0, d.x1));
   if (d.zoom) {
-    const ro = d.c.run || opt; ro.zoomWinA = a; ro.zoomWinB = b; syncControls();
+    const ro = d.c.run || opt, prevA = ro.zoomWinA, prevB = ro.zoomWinB;
+    pushUndo({label: 'zoom window', fn: () => { ro.zoomWinA = prevA; ro.zoomWinB = prevB; syncControls(); render(); }});
+    ro.zoomWinA = a; ro.zoomWinB = b; syncControls();
   } else if (d.c.run) {
+    snapRunInteg(d.c.run, 'add peak region');
     d.c.run.integ = (d.c.run.integ || []).concat([{a, b}]);
   }
   render();
@@ -8418,11 +8454,16 @@ function renderIntTable(run){
     const mb = $('#intMore'); mb.hidden = !extra.some(Boolean) && !tb.querySelector('.xrow'); mb.textContent = tb.classList.contains('all') ? 'Fewer columns' : `${extra.filter(Boolean).length} more columns`; }
 }
 $('#intMore').addEventListener('click', () => { $('#intTable').classList.toggle('all'); render(); });
+function snapRunInteg(r, label){
+  if (!r) return;
+  const prev = JSON.parse(JSON.stringify(r.integ || []));
+  pushUndo({label, fn: () => { r.integ = JSON.parse(JSON.stringify(prev)); render(); }});
+}
 $('#intTable').addEventListener('change', e => { const el = e.target; if (el.dataset.ri === undefined) return; const r = curRun(); if (!r) return;
-  const reg = r.integ[+el.dataset.ri]; if (reg && isFinite(+el.value)) { reg[el.dataset.rk] = +el.value; reg.auto = false; } render(); });
-$('#intTable').addEventListener('click', e => { const b = e.target.closest('[data-rdel]'); if (!b) return; const r = curRun(); if (!r) return; r.integ.splice(+b.dataset.rdel, 1); render(); });
-$('#intAuto').addEventListener('click', () => { const r = curRun(); if (!r) { if (cur === 'overlay') { traces.filter(t => t.visible).forEach(detectPeaks); renderList(); render(); } return; } const n = autoIntegrate(r); render(); toast(n ? `Found ${n} peak${n > 1 ? 's' : ''}. Adjust start and end in the table if needed.` : 'No peaks above the detection prominence'); });
-$('#intClear').addEventListener('click', () => { const r = curRun(); if (!r) { if (cur === 'overlay') { traces.filter(t => t.visible).forEach(t => { t.peaks = []; }); renderList(); render(); } return; } r.integ = []; render(); });
+  const reg = r.integ[+el.dataset.ri]; if (reg && isFinite(+el.value)) { snapRunInteg(r, 'peak region edit'); reg[el.dataset.rk] = +el.value; reg.auto = false; } render(); });
+$('#intTable').addEventListener('click', e => { const b = e.target.closest('[data-rdel]'); if (!b) return; const r = curRun(); if (!r) return; snapRunInteg(r, 'remove peak region'); r.integ.splice(+b.dataset.rdel, 1); render(); });
+$('#intAuto').addEventListener('click', () => { const r = curRun(); if (!r) { if (cur === 'overlay') { const prev = traces.map(t => ({t, peaks: JSON.parse(JSON.stringify(t.peaks || []))})); traces.filter(t => t.visible).forEach(detectPeaks); pushUndo({label: 'peak detection', fn: () => { prev.forEach(x => { x.t.peaks = JSON.parse(JSON.stringify(x.peaks)); }); renderList(); render(); }}); renderList(); render(); } return; } const prev = JSON.parse(JSON.stringify(r.integ || [])); const n = autoIntegrate(r); if (JSON.stringify(r.integ || []) !== JSON.stringify(prev)) pushUndo({label: 'peak detection', fn: () => { r.integ = JSON.parse(JSON.stringify(prev)); render(); }}); render(); toast(n ? `Found ${n} peak${n > 1 ? 's' : ''}. Adjust start and end in the table if needed.` : 'No peaks above the detection prominence'); });
+$('#intClear').addEventListener('click', () => { const r = curRun(); if (!r) { if (cur === 'overlay') { const vis = traces.filter(t => t.visible && t.peaks && t.peaks.length); if (vis.length) { const prev = vis.map(t => ({t, peaks: JSON.parse(JSON.stringify(t.peaks))})); pushUndo({label: 'clear peaks', fn: () => { prev.forEach(x => { x.t.peaks = JSON.parse(JSON.stringify(x.peaks)); }); renderList(); render(); }}); } traces.filter(t => t.visible).forEach(t => { t.peaks = []; }); renderList(); render(); } return; } if ((r.integ || []).length) snapRunInteg(r, 'clear regions'); r.integ = []; render(); });
 function buildIntCsvString(){
   const clean = typeof cleanSeq === 'function' ? cleanSeq : s => String(s || '').replace(/^>.*$/gm, '').toUpperCase().replace(/[^A-Z]/g, '');
   const hasSeq = !!(clean(opt.protSeq) || clean(opt.tagSeq)), man = manEps();
@@ -13074,7 +13115,7 @@ function leaveWorkspace(){
 function showHome(){ leaveWorkspace().then(() => { if (MODE === 'home') renderHome(); }); setSaveState(''); document.body.classList.remove('proj'); $('#home').hidden = false; document.querySelector('.app').hidden = true; window.scrollTo(0, 0); applyProjUI(); renderHome(); }
 function enterApp(){ $('#home').hidden = true; document.querySelector('.app').hidden = false; window.scrollTo(0, 0); }
 function resetWorkspace(){ rawFiles = []; runs = []; traces = []; gels = []; struct = null; ndSamples = []; assays = []; srcDiag = {}; uid = 1; ndUid = 1; prep = JSON.parse(JSON.stringify(PREP_DEF)); prep.on = true;
-  QKEYS.forEach(k => { opt[k] = DEF[k]; }); customTagSeq = ''; cur = 'overlay'; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null; clAll = false; clDoneOpen = false; tlHtml = ''; }
+  QKEYS.forEach(k => { opt[k] = DEF[k]; }); customTagSeq = ''; cur = 'overlay'; marking = null; tagMode = ''; nextHidden.clear(); projUndo = null; undoStack.length = 0; clAll = false; clDoneOpen = false; tlHtml = ''; }
 const newPid = () => 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function newProject(name, protein, include){
   const targetHomeFolder = MODE === 'home' && !homeShowArchive && homeCurFolder && homeCurFolder !== 'root' ? homeCurFolder : 'root';
@@ -16078,6 +16119,44 @@ $('#tl').addEventListener('click', e => { const fo = e.target.closest('[data-cld
     else if (w.startsWith('btw:')) addBtw(w.slice(4));
     renderSteps(); return; }
   const b = e.target.closest('[data-step]'); if (b) selectStep(b.dataset.step); });
+$('#tl').addEventListener('keydown', e => {
+  const curBtn = e.target && e.target.closest && e.target.closest('.tl-i[data-step]');
+  if (!curBtn) return;
+  const delta = {ArrowDown: 1, ArrowUp: -1, Home: -1e9, End: 1e9}[e.key];
+  if (!delta) return;
+  const btns = [...$('#tl').querySelectorAll('.tl-i[data-step]')].filter(b => !b.hidden && b.getClientRects().length > 0 && getComputedStyle(b).display !== 'none');
+  if (!btns.length) return;
+  e.preventDefault(); e.stopPropagation();
+  const curIdx = Math.max(0, btns.indexOf(curBtn));
+  const nextIdx = delta < -1 ? 0 : delta > 1 ? btns.length - 1 : Math.max(0, Math.min(btns.length - 1, curIdx + delta));
+  const nextKey = btns[nextIdx].dataset.step;
+  selectStep(nextKey);
+  const nb = [...$('#tl').querySelectorAll('.tl-i[data-step]')].find(b => b.dataset.step === nextKey);
+  if (nb) nb.focus();
+});
+window.addEventListener('keydown', e => {
+  const ae = document.activeElement;
+  if (isFormFocus(ae)) return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+    if (!undoStack.length) return;
+    e.preventDefault();
+    const u = undoStack.pop();
+    u.fn();
+    toast('Undid ' + u.label);
+    return;
+  }
+  if (PROJ && wfSel && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (ae && ae.closest && ae.closest('#tl, #figtabs, #bandTable, #projList, #homeTree, dialog[open]')) return;
+    const f = curFig(); if (!f || f.kind !== 'workflow') return;
+    const step = e.shiftKey ? 5 : 1, d = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step]}[e.key];
+    if (!d) return;
+    const it = wfItem(wfSel); if (!it) return;
+    e.preventDefault();
+    const id = wfSel, ox = it.ox, oy = it.oy;
+    pushUndo({label: 'panel nudge', key: 'nudge:' + id, fn: () => { const curIt = wfItem(id) || it; wfSet(curIt, 'off', {dx: ox, dy: oy}); }});
+    wfSet(it, 'off', {dx: ox + d[0], dy: oy + d[1]});
+  }
+});
 /* the between-columns fields edit the pool the current step follows */
 function syncBtw(){ const rid = curStep.startsWith('btw:') ? curStep.slice(4) : '', b = (prep.btw || {})[rid] || {}, r = runs.find(x => x.id === rid), u = runVolUnit(r);
   { const p = r ? poolRows(r) : null; $('#btw-vIn').placeholder = p && xUnit(r) !== 'min' && p.vol > 0 ? `auto: ${fmt(p.vol, 1)}` : ''; }

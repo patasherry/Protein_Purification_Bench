@@ -892,6 +892,33 @@ async function suitabilityAndDualUvAndSecAxis() {
   }
 }
 
+async function intClearUndoTest() {
+  const {src} = require('../lib/harness');
+  const {p, errs, close} = await open(), h = H(p);
+  try {
+    await h.newProject('Int clear undo');
+    await h.addRun(src('his'));
+    await detect(p);
+    const before = (await h.peakTable()).slice(1).filter(r => /^P\d+$/.test(r[0] || ''));
+    await p.click('#intClear');
+    await h.wait(250);
+    const cleared = (await h.peakTable()).slice(1).filter(r => /^P\d+$/.test(r[0] || ''));
+    await p.evaluate(() => { if (document.activeElement && document.activeElement.matches && document.activeElement.matches('input,textarea,select')) document.activeElement.blur(); });
+    await p.keyboard.press('Control+z');
+    await h.wait(300);
+    const restored = (await h.peakTable()).slice(1).filter(r => /^P\d+$/.test(r[0] || ''));
+    const toasts = await h.toasts();
+    T.check(
+      'int_undo/clear_and_ctrl_z_restores_rows',
+      before.length > 0 && cleared.length === 0 && restored.length === before.length && toasts.some(t => /Undid clear regions/i.test(t)),
+      `before=${before.length}, cleared=${cleared.length}, restored=${restored.length}, toasts=${toasts.join(' | ')}`
+    );
+  } finally {
+    T.check('int_undo/no_page_errors', !errs.length, errs.join(' | '));
+    await close();
+  }
+}
+
 (async () => {
   await T.t('overlap', overlap);
   await T.t('axis_tick_collision', axisTickCollision);
@@ -906,5 +933,6 @@ async function suitabilityAndDualUvAndSecAxis() {
   await T.t('pool_dip_same_span', poolDipSameSpan);
   await T.t('seq_derived_peak_mass_and_wl_guard', seqDerivedPeakMassAndWlGuard);
   await T.t('suitability_and_dual_uv_and_sec_axis', suitabilityAndDualUvAndSecAxis);
+  await T.t('int_clear_undo', intClearUndoTest);
   T.done();
 })();
