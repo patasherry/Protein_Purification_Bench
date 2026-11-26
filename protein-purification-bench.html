@@ -11905,7 +11905,7 @@ function renderSec(){
 function onSec(el){
   const c = activeCal(); if (!c) return; const k = el.dataset.sec;
   if (k === 'cal') { const f = curFig(); if (f && f.kind === 'run') f.run.secCal = el.value; else if (f && f.kind === 'overlay') opt.ovSecCal = el.value; else if (f && f.kind === 'workflow') runs.filter(isSec).forEach(r => r.secCal = el.value); renderList(); }
-  else if (k === 'col') { const p = SEC_COLUMNS[el.value]; c.col = el.value; if (p && el.value !== 'custom') { c.name = p.name; if (c.unit === 'mL') { c.vt = p.vt; c.v0 = Math.round(p.vt*0.36*100)/100; c.v0est = true; } } }
+  else if (k === 'col') { if (el.value !== c.col) { const p = SEC_COLUMNS[el.value]; (c.stds || []).forEach(q => { q.ve = ''; }); c.col = el.value; if (p && el.value !== 'custom') { c.name = p.name; if (c.unit === 'mL') { c.vt = p.vt; c.v0 = Math.round(p.vt*0.36*100)/100; c.v0est = true; } else { c.v0 = c.vt = ''; c.v0est = false; } } else { c.v0 = c.vt = ''; c.v0est = false; } $('#secStdList')._k = ''; toast('Column changed, so measured V₀, Vₜ and standard elution volumes were cleared. Enter calibration values again for this column.'); } }
   else if (k === 'unit') { if (c.unit !== el.value) { const had = c.v0 !== '' || c.vt !== '' || (c.stds || []).some(q => q.ve !== ''); c.unit = el.value; c.v0 = c.vt = ''; (c.stds || []).forEach(q => { q.ve = ''; }); if (had) toast(`Units changed to ${el.value}, so V₀, Vₜ and the standard volumes were cleared. Enter them again in ${el.value}.`); } }
   else if (k === 'v0' || k === 'vt') { c[k] = el.value === '' ? '' : +el.value; if (k === 'v0') c.v0est = false; }
   else if (k === 'flow') { c.flow = el.value === '' ? '' : +el.value; const f = curFig(); if (f && f.kind === 'run' && f.run) f.run.mFlow = el.value; }
