@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1.1-gel-load-ext",
+  "targetFiles": [
+    "protein-purification-bench.html",
+    "tests/suites/25_gels.js"
+  ],
+  "stainThresholds": {
+    "coomassie_r250": {
+      "label": "Coomassie R-250",
+      "lodNg": 10,
+      "ldrMinNg": 10,
+      "ldrMaxNg": 200,
+      "ldrMaxUg": 0.2,
+      "opticalMode": "transillumination",
+      "supportsOd": true,
+      "minTrp": 0
+    },
+    "coomassie_g250": {
+      "label": "Colloidal Coomassie G-250",
+      "lodNg": 8,
+      "ldrMinNg": 8,
+      "ldrMaxNg": 500,
+      "ldrMaxUg": 0.5,
+      "opticalMode": "transillumination",
+      "supportsOd": true,
+      "minTrp": 0
+    },
+    "sypro_ruby": {
+      "label": "SYPRO Ruby / Fluorescent",
+      "lodNg": 1,
+      "ldrMinNg": 1,
+      "ldrMaxNg": 1000,
+      "ldrMaxUg": 1.0,
+      "opticalMode": "fluorescence",
+      "supportsOd": false,
+      "minTrp": 0
+    },
+    "stain_free": {
+      "label": "Stain-Free / TCE (UV)",
+      "lodNg": 200,
+      "ldrMinNg": 200,
+      "ldrMaxNg": 2000,
+      "ldrMaxUg": 2.0,
+      "opticalMode": "fluorescence",
+      "supportsOd": false,
+      "minTrp": 2
+    },
+    "silver": {
+      "label": "Silver Stain",
+      "lodNg": 2,
+      "ldrMinNg": 4,
+      "ldrMaxNg": 60,
+      "ldrMaxUg": 0.06,
+      "opticalMode": "transillumination",
+      "supportsOd": true,
+      "minTrp": 0
+    },
+    "other": {
+      "label": "Other / Unspecified",
+      "lodNg": null,
+      "ldrMinNg": null,
+      "ldrMaxNg": null,
+      "ldrMaxUg": null,
+      "opticalMode": "unspecified",
+      "supportsOd": true,
+      "minTrp": 0
+    }
+  },
+  "bufferGuardrails": {
+    "finalBufferMinX": 0.8,
+    "finalBufferMaxX": 1.5,
+    "sdsToProteinMassRatio": 1.4,
+    "safeSdsExcessFactor": 3.0,
+    "kdsSolubilityLimitMm": 1.4,
+    "potassiumWarningMm": 30,
+    "guanidineMaxCompatibleMm": 600
+  },
+  "gelSchemaExtensionExample": {
+    "stain": "coomassie_g250",
+    "sigMode": "linear",
+    "srgbLin": false,
+    "prepDef": {
+      "vSamp": 20,
+      "vBuf": 5,
+      "cBuf": 6,
+      "vLoad": 5,
+      "preDil": 1
+    },
+    "lanePrep": {
+      "1": {
+        "vFracMl": 10.0
+      }
+    }
+  },
+  "workedExampleVerification": {
+    "inputs": {
+      "vFracMl": 10.0,
+      "vSamp": 20.0,
+      "vBuf": 5.0,
+      "cBuf": 6.0,
+      "vLoad": 5.0,
+      "preDil": 1.0
+    },
+    "expected": {
+      "vMix": 25.0,
+      "fSamp": 0.8,
+      "dfBuf": 1.25,
+      "cBufFinal": 1.2,
+      "vEff": 4.0,
+      "fracLoadedPct": 0.04,
+      "scaleTotal": 2500.0
+    }
+  }
+}
