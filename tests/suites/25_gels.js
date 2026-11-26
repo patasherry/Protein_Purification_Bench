@@ -1095,5 +1095,158 @@ await T.t('offline-tiff16-deflate-and-lzw-retry', async () => {
   }
 });
 
+await T.t('loading_normalization', async () => {
+  const a = await start(), p = a.p, h = H(p);
+  try {
+    // 1. Worked example (10 mL peak, 20 uL + 5 uL 6X, 5 uL load -> V_eff = 4.00 uL, 1.20X, 0.04%, 2500x scale)
+    const im = await image(p);
+    const gWork = gel(im, {
+      stain: 'coomassie_g250',
+      sigMode: 'linear',
+      prepDef: {vSamp: 20, vBuf: 5, cBuf: 6, vLoad: 5, preDil: 1},
+      lanePrep: {1: {vFracMl: 10}}
+    });
+    await load(p, project(gWork));
+    const rows = await csv(p), head = rows[0], col = k => head.indexOf(k), r1 = lane(rows, 2)[0];
+    T.check('norm.v_eff_4uL', col('v_eff_uL') >= 14 && Math.abs(+r1[col('v_eff_uL')] - 4.0) < 1e-3, String(r1 && r1[col('v_eff_uL')]));
+    T.check('norm.cbuf_1.2X', col('c_buf_final_X') >= 14 && Math.abs(+r1[col('c_buf_final_X')] - 1.2) < 1e-2, String(r1 && r1[col('c_buf_final_X')]));
+    T.check('norm.vfrac_10mL', col('v_frac_mL') >= 14 && Math.abs(+r1[col('v_frac_mL')] - 10.0) < 1e-3, String(r1 && r1[col('v_frac_mL')]));
+    T.check('norm.frac_0.04pct', col('frac_loaded_pct') >= 14 && Math.abs(+r1[col('frac_loaded_pct')] - 0.04) < 1e-4, String(r1 && r1[col('frac_loaded_pct')]));
+    const aPerUl = +r1[col('area_per_uL')], aTotFrac = +r1[col('area_total_frac')];
+    T.check('norm.area_scaling_2500x', aPerUl > 0 && Math.abs((aTotFrac / aPerUl) - 10000) < 5, `${aTotFrac} / ${aPerUl}`);
+
+    // 2. Project save/reload round-trip preserves new gel keys
+    const [saved] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.evaluate(() => document.querySelector('#projSave').click())]);
+    const json = JSON.parse(fs.readFileSync(await saved.path(), 'utf8'));
+    T.check('norm.roundtrip_prepDef', json.gels[0].prepDef && json.gels[0].prepDef.vSamp === 20 && json.gels[0].lanePrep && json.gels[0].lanePrep['1'] && json.gels[0].lanePrep['1'].vFracMl === 10 && json.gels[0].stain === 'coomassie_g250' && json.gels[0].sigMode === 'linear', JSON.stringify(json.gels[0].prepDef));
+    await load(p, json);
+    T.check('norm.roundtrip_csv_identical', JSON.stringify(rows) === JSON.stringify(await csv(p)));
+
+    // 3. Beer-Lambert OD synthetic gel (true 85% target + 3x5% contaminants on I0=235) vs linear fluorescence & sRGB linearization
+    const odImg = await p.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 300; c.height = 360;
+      const x = c.getContext('2d'), im = x.createImageData(300, 360);
+      const bands = [[120, 1.19, 7], [180, 0.07, 7], [230, 0.07, 7], [280, 0.07, 7]];
+      for (let y = 0; y < 360; y++) for (let a = 0; a < 300; a++) {
+        const l = Math.floor(a / 100), dx = Math.abs(a % 100 - 50), w = Math.exp(-0.5 * (dx / 24) ** 8);
+        let od = 0;
+        if (l === 0) od = [[72, 0.5, 4], [145, 0.5, 4], [216, 0.5, 4], [288, 0.5, 4]].reduce((s, [m, hh, z]) => s + hh * Math.exp(-0.5 * ((y - m) / z) ** 2), 0) * w;
+        else od = bands.reduce((s, [m, hh, z]) => s + hh * Math.exp(-0.5 * ((y - m) / z) ** 2), 0) * w;
+        const v = Math.round(Math.max(0, Math.min(255, 235 * Math.pow(10, -od))));
+        const j = 4 * (300 * y + a); im.data[j] = im.data[j + 1] = im.data[j + 2] = v; im.data[j + 3] = 255;
+      }
+      x.putImageData(im, 0, 0); return c.toDataURL('image/png');
+    });
+    await load(p, project(gel(odImg, {sigMode: 'od', tags: [{kind: 'target', lane: 1, y: 120 / 360}]})));
+    const odRows = await csv(p), odColMode = odRows[0].indexOf('signal_mode'), odPur = +lane(odRows, 2)[0][10];
+    T.check('norm.od_recovers_85pct', Math.abs(odPur - 85.0) <= 1.5 && lane(odRows, 2)[0][odColMode] === 'od', `${odPur} (${lane(odRows, 2)[0][odColMode]})`);
+
+    const hasLoadUi = (await p.locator('details[data-sub="gload"]').count()) > 0;
+    if (hasLoadUi) {
+      await p.evaluate(() => { const d = document.querySelector('details[data-sub="gload"]'); if (d) d.open = true; });
+      await p.selectOption('#g-sigMode', '');
+      await p.selectOption('#g-stain', 'sypro_ruby');
+      await h.wait(300);
+      const flRows = await csv(p), flPur = +lane(flRows, 2)[0][10];
+      T.check('norm.fluorescent_stain_switches_linear', lane(flRows, 2)[0][flRows[0].indexOf('signal_mode')] === 'linear' && flPur < odPur - 5, `${flPur} vs ${odPur}`);
+
+      await p.selectOption('#g-stain', 'coomassie_g250');
+      await p.check('#g-srgbLin');
+      await h.wait(300);
+      const [savedLin] = await Promise.all([p.waitForEvent('download', {timeout: 10000}), p.evaluate(() => document.querySelector('#projSave').click())]);
+      const jsonLin = JSON.parse(fs.readFileSync(await savedLin.path(), 'utf8'));
+      T.check('norm.srgb_linearization_persists', jsonLin.gels[0].srgbLin === true, String(jsonLin.gels[0].srgbLin));
+    } else {
+      T.check('norm.fluorescent_stain_switches_linear', false, 'gload UI absent');
+      T.check('norm.srgb_linearization_persists', false, 'gload UI absent');
+    }
+
+    // 4. Expression S/P solubility volume normalization (20 mL supernatant vs 5 mL resuspended pellet with equal raw band areas -> 80% soluble)
+    const expProj = Object.assign(project(gel(im, {
+      nLanes: 3,
+      labels: 'M, S, P',
+      assign: ['marker', 'expr', 'expr'],
+      marks: [{kda: 100, y: 0.2}, {kda: 10, y: 0.8}],
+      prepDef: {vSamp: 20, vBuf: 5, cBuf: 6, vLoad: 5, preDil: 1},
+      lanePrep: {1: {vFracMl: 20}, 2: {vFracMl: 5}}
+    }), {protKda: 100 * Math.pow(0.1, (120.5 / 360 - 0.2) / 0.6)}), {
+      prep: {on: true, expr: true, strain: 'BL21(DE3)', medium: 'LB', cultureL: 1}
+    });
+    const expApp = await open();
+    try {
+      const ep = expApp.p, eh = H(ep);
+      await ep.setInputFiles('#projFile', {name: 'expr_sol_norm.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(expProj))});
+      await eh.wait(600);
+      await eh.step('figure');
+      await ep.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) b.open = true; });
+      await eh.wait(250);
+      const expMeth = await eh.methods();
+      T.check('norm.solubility_volume_normalized_80pct', /80% soluble \(fraction-volume normalized\)/.test(expMeth), expMeth);
+
+      // 5. Phase 2 UI: auto-populated pool volume from run, inline buffer & Stain-Free Trp warnings, and Gassmann et al. Methods text
+      if ((await ep.locator('details[data-sub="gload"]').count()) > 0) {
+        await ep.click('#homeBtn');
+        await eh.wait(400);
+        await eh.newProject('Gel Load UI');
+        await eh.addRun(src('his'));
+        await eh.pool('T1-T6');
+        await eh.step('construct');
+        const protBox = ep.locator('#protSeq');
+        if (!(await protBox.isVisible())) {
+          await ep.evaluate(() => { const s = [...document.querySelectorAll('#panel > .grp')].find(g => g.querySelector('#protSeq')); if (s) s.classList.remove('collapsed'); });
+        }
+        await ep.fill('#protSeq', 'ACDEFGHIKLMNPQRSTVY'.repeat(5));
+        await ep.dispatchEvent('#protSeq', 'input');
+        await eh.wait(250);
+        const runStep = await ep.locator('#tl [data-step^="run:"]').first().getAttribute('data-step');
+        await eh.step(runStep);
+        const imBuf = Buffer.from(im.split(',')[1], 'base64');
+        await ep.setInputFiles('#gelFile', {name: 'pool_load_gel.png', mimeType: 'image/png', buffer: imBuf});
+        await eh.wait(700);
+        await ep.fill('#g-n', '3');
+        await ep.dispatchEvent('#g-n', 'input');
+        await ep.fill('#g-labels', 'M, Pool, E2');
+        await ep.dispatchEvent('#g-labels', 'input');
+        await eh.wait(350);
+        const runOpt = await ep.locator('#la1 option').evaluateAll(os => (os.find(o => /^\d+\. /.test(o.textContent)) || {}).value || '');
+        if (runOpt) { await ep.selectOption('#la1', runOpt); await eh.wait(250); }
+        await ep.evaluate(() => { const d = document.querySelector('details[data-sub="gload"]'); if (d) d.open = true; });
+        await eh.wait(150);
+        await ep.fill('#gp-vSamp', '20'); await ep.dispatchEvent('#gp-vSamp', 'input');
+        await ep.fill('#gp-vBuf', '5'); await ep.dispatchEvent('#gp-vBuf', 'input');
+        await ep.fill('#gp-cBuf', '6'); await ep.dispatchEvent('#gp-cBuf', 'input');
+        await ep.fill('#gp-vLoad', '5'); await ep.dispatchEvent('#gp-vLoad', 'input');
+        await eh.wait(300);
+        const uiRows = await csv(ep), uiHead = uiRows[0], poolRow = lane(uiRows, 2)[0];
+        T.check('norm.auto_pool_vfrac_populated', poolRow && +poolRow[uiHead.indexOf('v_frac_mL')] > 0 && +poolRow[uiHead.indexOf('est_load_ug')] > 0, JSON.stringify(poolRow));
+
+        await ep.fill('#gp-cBuf', '2'); await ep.dispatchEvent('#gp-cBuf', 'input');
+        await ep.selectOption('#g-stain', 'stain_free');
+        await eh.wait(300);
+        const warnText = await ep.locator('#gloadWarns').textContent();
+        T.check('norm.buffer_warning_chip', /0\.40X.*0\.8X–1\.5X/.test(warnText), warnText);
+        T.check('norm.stain_free_trp_warning', /0 Trp.*<2 required for Stain-Free/.test(warnText), warnText);
+
+        await eh.step('figure');
+        await ep.evaluate(() => { const b = document.getElementById('methodsBox'); if (b) b.open = true; });
+        await eh.wait(250);
+        const uiMeth = await eh.methods();
+        T.check('norm.methods_gassmann_sentence', /Gassmann et al\. \(Electrophoresis 2009, 30, 1845–1855\)/.test(uiMeth) && /4\.0 µL neat sample equivalent/.test(uiMeth), uiMeth);
+      } else {
+        T.check('norm.auto_pool_vfrac_populated', false, 'gload UI absent');
+        T.check('norm.buffer_warning_chip', false, 'gload UI absent');
+        T.check('norm.stain_free_trp_warning', false, 'gload UI absent');
+        T.check('norm.methods_gassmann_sentence', false, 'gload UI absent');
+      }
+      T.check('norm.ui_no_errors', !expApp.errs.length, expApp.errs.join(' | '));
+    } finally {
+      await expApp.close();
+    }
+    T.check('norm.no_errors', !a.errs.length, a.errs.join(' | '));
+  } finally {
+    await a.close();
+  }
+});
+
 T.done();})();
 

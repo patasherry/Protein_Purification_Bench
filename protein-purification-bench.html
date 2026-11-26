@@ -555,6 +555,13 @@ label.f.condmissing>input{border-color:var(--warn)}
 .lrow.amb select{border-color:var(--warn);box-shadow:inset 3px 0 0 var(--warn)}
 .lrow input,.lrow select{padding:4px 6px;font-size:12.5px;min-height:28px}
 .lrow select{padding-right:24px}
+.lprow{display:grid;grid-template-columns:1.6em minmax(0,1.1fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,.75fr);gap:5px;align-items:center;font-size:12px}
+.lprow>span:first-child{font-size:12px;color:var(--faint);text-align:right}
+.lprow .lplab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.lprow input{padding:3px 5px;font-size:12px;min-height:26px}
+.lprow-h{font-size:11px;color:var(--muted)}
+.gload-warns{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.gload-warns .delta-badge{margin-left:0;white-space:normal;line-height:1.35;border-radius:8px;padding:3px 8px}
 .intp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:8px;overflow-y:auto}
 .intp-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:13.5px}
 .intp-head strong{font-weight:600}
@@ -1632,6 +1639,39 @@ button,input,select,textarea{font-family:inherit}
       <div class="known" id="knownList"></div>
       <div class="btns"><button class="btn" id="knownAdd" type="button">Add a protein</button><button class="btn quiet" id="knownReset" type="button">Restore the default list</button></div>
       <p class="hint">Off until you turn it on. A band is flagged only when it is a distinct, unsaturated band inside the marked ladder, its size fits one entry (within the ladder's local accuracy), it is not one of your protein's own forms (cleaved, tagged, free tag, dimer), and the lane is from a step where that protein is plausible (E. coli co-purifiers up to IMAC, proteases and free tag after cleavage). Arrows need the band in two lanes or at 10% of one. Flags read "size ≈ ArnA" because a matching size is not an identification. Confirm by western blot or mass spec when it matters. The default list is native E. coli proteins that co-purify on IMAC, plus common purification additives. Your list is saved in this browser.</p>
+      </details>
+      <details class="sub" data-sub="gload"><summary>7. Sample loading and stain<span class="st" id="st-load"></span></summary>
+      <div class="row">
+        <label class="f">Stain
+          <select id="g-stain" data-gel="stain">
+            <option value="other">Other / Unspecified</option>
+            <option value="coomassie_r250">Coomassie R-250</option>
+            <option value="coomassie_g250">Colloidal Coomassie G-250</option>
+            <option value="sypro_ruby">SYPRO Ruby / Fluorescent</option>
+            <option value="stain_free">Stain-Free / TCE (UV)</option>
+            <option value="silver">Silver Stain</option>
+          </select>
+        </label>
+        <label class="f">Signal mode
+          <select id="g-sigMode" data-gel="sigMode">
+            <option value="">Auto (OD for stain, Linear for fluorescence)</option>
+            <option value="od">Beer-Lambert OD (−log₁₀ I/I₀)</option>
+            <option value="linear">Linear intensity</option>
+          </select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="g-srgbLin" data-gel="srgbLin">Linearize 8-bit sRGB gamma (IEC 61966-2-1)</label>
+      <div class="row">
+        <label class="f">Sample (µL)<input type="number" min="0" step="any" id="gp-vSamp" data-gprep="vSamp" placeholder="e.g. 20"></label>
+        <label class="f">Loading buffer (µL)<input type="number" min="0" step="any" id="gp-vBuf" data-gprep="vBuf" placeholder="e.g. 5"></label>
+        <label class="f">Buffer stock (X)<input type="number" min="0" step="any" id="gp-cBuf" data-gprep="cBuf" placeholder="e.g. 6"></label>
+        <label class="f">Loaded (µL)<input type="number" min="0" step="any" id="gp-vLoad" data-gprep="vLoad" placeholder="e.g. 5"></label>
+        <label class="f">Pre-dilution (×)<input type="number" min="0.01" step="any" id="gp-preDil" data-gprep="preDil" placeholder="1"></label>
+      </div>
+      <p class="hint" id="gloadSummary" hidden></p>
+      <div class="gload-warns" id="gloadWarns" hidden></div>
+      <div class="lanes" id="lanePrepTable" aria-label="Per-lane fraction volumes and loading"></div>
+      <p class="hint">Neat sample equivalent loaded per lane is V_eff = V_load × (V_sample / (V_sample + V_buffer)) / pre-dilution. Fraction and pool volumes fill automatically from linked chromatography runs or NanoDrop pools when left blank, scaling band areas to whole fractions and normalizing expression S/P solubility across unequal volumes.</p>
       </details>
     </section>
 
@@ -4758,10 +4798,117 @@ function autoAssign(g){
 function lanesFor(g, id){ return gelLabels(g).map((_, i) => i).filter(i => laneAssign(g, i) === id); }
 function poolLabelSet(r){ return new Set([...shadeSet(r)].map(i => ((r.fracs[i] || {}).label || '').toUpperCase())); }
 const poolDark = () => opt.palette === 'gray' ? '#333333' : lerpHex(/^#[0-9a-f]{6}$/i.test(opt.poolColor) ? opt.poolColor : '#E69F00', '#000000', 0.35);
+const STAIN_CFG = {
+  coomassie_r250: {name: 'Coomassie R-250',           lodNg: 10,  ldrMinNg: 10,  maxUg: 0.20, odOk: true,  minTrp: 0},
+  coomassie_g250: {name: 'Colloidal Coomassie G-250', lodNg: 8,   ldrMinNg: 8,   maxUg: 0.50, odOk: true,  minTrp: 0},
+  sypro_ruby:     {name: 'SYPRO Ruby / Fluorescent',  lodNg: 1,   ldrMinNg: 1,   maxUg: 1.00, odOk: false, minTrp: 0},
+  stain_free:     {name: 'Stain-Free / TCE',          lodNg: 200, ldrMinNg: 200, maxUg: 2.00, odOk: false, minTrp: 2},
+  silver:         {name: 'Silver Stain',              lodNg: 2,   ldrMinNg: 4,   maxUg: 0.06, odOk: true,  minTrp: 0},
+  other:          {name: 'Other / Unspecified',       lodNg: null,ldrMinNg: null,maxUg: null, odOk: true,  minTrp: 0}
+};
+function srgbToLin255(v){
+  const c = Math.max(0, Math.min(1, v / 255));
+  return 255 * (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+}
+function effGelSigMode(g){
+  if (g && g.invert) return 'linear';
+  if (g && (g.sigMode === 'od' || g.sigMode === 'linear')) return g.sigMode;
+  const st = STAIN_CFG[g && g.stain] || STAIN_CFG.other;
+  return st.odOk ? 'od' : 'linear';
+}
+function gelLaneAuto(g, laneIdx){
+  if (!g || laneAssign(g, laneIdx) === 'marker') return {autoFracMl: null, concMgMl: null, protSeq: ''};
+  const F = protForms(), cx = laneCtx(g, laneIdx);
+  const protSeq = F.length ? ((cx.post || !F[1]) ? F[0].seq : F[1].seq) : (cleanSeq(opt.protSeq) || (prep && prep.gb && constructModel() ? constructModel().protSeq : '') || '');
+  const labs = gelLabels(g), lab = String(labs[laneIdx] || '').trim(), rawA = g.assign && g.assign[laneIdx], asg = laneAssign(g, laneIdx);
+  let autoFracMl = null, concMgMl = null, r = runs.find(x => x.id === asg), colonSub = null;
+  if (!r && typeof rawA === 'string' && rawA.includes(':')) { const [rid, sub] = rawA.split(':'); r = runs.find(x => x.id === rid); colonSub = sub && sub.trim(); }
+  const toMl = (dv, run) => !(dv > 0) ? null : xUnit(run) === 'min' ? (uvFlow(run) > 0 ? dv * uvFlow(run) : null) : volMl(dv, run);
+  if (r) {
+    if (colonSub != null) {
+      const uv = uvOf(r); if (uv && uv.xs && uv.xs.length >= 2) {
+        const fi = /^\d+$/.test(colonSub) ? +colonSub : fracIdx(r, colonSub, null, shadeSet(r));
+        const seg = fracSegments(r, uv.xs[uv.xs.length - 1]).find(s => s.i === fi && !s.waste);
+        if (seg && seg.b > seg.a) { autoFracMl = toMl(seg.b - seg.a, r); const fc = clipXY(uv.xs, uv.ys, seg.a, seg.b), mg = fc.xs.length >= 2 ? massOf(trapArea(fc.xs, fc.ys, intBaseOf(uv.xs, uv.ys, opt.intBase)), r) : null; if (mg > 0 && autoFracMl > 0) concMgMl = mg / autoFracMl; }
+      }
+    } else if (/\b(conc|concentrated|final)\b/i.test(lab)) {
+      const ms = poolMeas(r);
+      autoFracMl = numOr(r.ndFinalVol, 0) > 0 ? +r.ndFinalVol : (prep.btw && prep.btw[r.id] && numOr(prep.btw[r.id].vOut, 0) > 0 ? volMl(+prep.btw[r.id].vOut, r) : (ms && ms.vMl > 0 ? ms.vMl : ndPoolVol(r)));
+      if (ms && ms.c > 0) concMgMl = ms.c;
+    } else if (lab && !MARKER_RE.test(lab)) {
+      const t = laneTarget(r, lab);
+      if (t) {
+        if (/^pool|\bpool(ed)?\b/i.test(lab)) {
+          const pr = poolRows(r), nd = ndForRun(r);
+          autoFracMl = numOr(r.ndVol, 0) > 0 ? +r.ndVol : (pr && pr.volMl > 0 ? pr.volMl : toMl(t.b - t.a, r));
+          concMgMl = nd && nd.P && nd.P.m > 0 ? nd.P.m : (pr && pr.conc > 0 ? pr.conc : (pr && pr.mg > 0 && autoFracMl > 0 ? pr.mg / autoFracMl : null));
+        } else {
+          autoFracMl = toMl(t.b - t.a, r);
+          const uv = uvOf(r); if (uv && uv.xs && uv.xs.length >= 2 && autoFracMl > 0) { const fc = clipXY(uv.xs, uv.ys, t.a, t.b), mg = fc.xs.length >= 2 ? massOf(trapArea(fc.xs, fc.ys, intBaseOf(uv.xs, uv.ys, opt.intBase)), r) : null; if (mg > 0) concMgMl = mg / autoFracMl; }
+        }
+      }
+    }
+  } else if (isManId(asg)) {
+    const m = manSteps().find(x => x.id === asg); if (m) { if (numOr(m.vol, 0) > 0) autoFracMl = +m.vol; if (numOr(m.conc, 0) > 0) concMgMl = +m.conc; }
+  } else if (asg === 'lysis' && /^(lys|lysate|clarified|sup|supernatant|s|sol|soluble)$/i.test(lab)) {
+    if (numOr(prep.lysVol, 0) > 0) autoFracMl = +prep.lysVol;
+  }
+  return {autoFracMl: autoFracMl > 0 ? autoFracMl : null, concMgMl: concMgMl > 0 ? concMgMl : null, protSeq};
+}
+function gelAutoKey(g){
+  if (!g) return '';
+  return gelLabels(g).map((_, i) => {
+    if (laneAssign(g, i) === 'marker') return '';
+    const a = gelLaneAuto(g, i);
+    return (a.autoFracMl != null ? a.autoFracMl.toFixed(6) : '') + ':' + (a.concMgMl != null ? a.concMgMl.toFixed(6) : '') + ':' + (a.protSeq ? a.protSeq.length + '_' + (a.protSeq.match(/W/gi) || []).length : '');
+  }).join(';');
+}
+function laneLoadInfo(g, laneIdx, autoFracMl, concMgMl, protSeq){
+  if (autoFracMl === undefined && concMgMl === undefined && protSeq === undefined && g) {
+    const au = gelLaneAuto(g, laneIdx); autoFracMl = au.autoFracMl; concMgMl = au.concMgMl; protSeq = au.protSeq;
+  }
+  const def = (g && g.prepDef) || {};
+  const ov  = (g && g.lanePrep && g.lanePrep[laneIdx]) || {};
+  const pick = k => (ov[k] != null && ov[k] !== '' && +ov[k] > 0) ? +ov[k] : (def[k] != null && def[k] !== '' && +def[k] > 0 ? +def[k] : null);
+  const vSamp  = pick('vSamp');
+  const vBuf   = pick('vBuf');
+  const cBuf   = pick('cBuf');
+  const vLoad  = pick('vLoad');
+  const preDil = pick('preDil') || 1;
+  const hasManualFrac = ov.vFracMl != null && ov.vFracMl !== '' && +ov.vFracMl > 0;
+  const vFracMl = hasManualFrac ? +ov.vFracMl : (autoFracMl > 0 ? +autoFracMl : null);
+  const vFracAuto = !hasManualFrac && (autoFracMl > 0);
+  const conc = (ov.conc != null && ov.conc !== '' && +ov.conc > 0) ? +ov.conc : (concMgMl > 0 ? +concMgMl : null);
+  const vMix = (vSamp && vBuf) ? vSamp + vBuf : null;
+  const fSamp = vMix ? vSamp / vMix : null;
+  const dfBuf = fSamp ? 1 / fSamp : null;
+  const cBufFinal = (vMix && cBuf) ? cBuf * (vBuf / vMix) : null;
+  const vEff = (vLoad && fSamp) ? (vLoad * fSamp) / preDil : (vLoad && !vBuf ? vLoad / preDil : null);
+  const fracLoadedPct = (vEff && vFracMl) ? 100 * vEff / (vFracMl * 1000) : null;
+  const scaleTotal = (vEff && vFracMl) ? (vFracMl * 1000) / vEff : null;
+  const estLaneUg = (vEff && conc > 0) ? conc * vEff : null;
+  const stain = STAIN_CFG[g && g.stain] || STAIN_CFG.other;
+  const warns = [];
+  if (cBufFinal != null && (cBufFinal < 0.8 || cBufFinal > 1.5)) warns.push(`Final loading buffer is ${cBufFinal.toFixed(2)}X (recommended 0.8X–1.5X)`);
+  if (estLaneUg != null && stain.maxUg != null && estLaneUg > stain.maxUg) warns.push(`Estimated load (${estLaneUg.toFixed(2)} µg) exceeds ${stain.name} linear limit (${stain.maxUg} µg/band)`);
+  if (stain.minTrp > 0 && protSeq) {
+    const trp = (String(protSeq).match(/W/gi) || []).length;
+    if (trp < stain.minTrp) warns.push(`Protein has ${trp} Trp (<${stain.minTrp} required for Stain-Free)`);
+  }
+  if (!stain.odOk && g && !g.invert && g.sigMode === 'od') warns.push(`${stain.name} is a fluorescence stain; Linear intensity mode is recommended over Beer-Lambert OD`);
+  return {vSamp, vBuf, cBuf, vLoad, preDil, vFracMl, vFracAuto, autoFracMl: autoFracMl > 0 ? +autoFracMl : null, concMgMl: conc, vMix, fSamp, dfBuf, cBufFinal, vEff, fracLoadedPct, scaleTotal, estLaneUg, warns};
+}
+function molarCleavagePct(areaCut, areaUncut, mwCut, mwUncut){
+  if (!(areaCut >= 0 && areaUncut >= 0 && areaCut + areaUncut > 0)) return null;
+  if (!(mwCut > 0 && mwUncut > 0)) return 100 * areaCut / (areaCut + areaUncut);
+  const nCut = areaCut / mwCut, nUncut = areaUncut / mwUncut;
+  return 100 * nCut / (nCut + nUncut);
+}
 function makeGel(name, canvas, existingId){
   const id = existingId != null && String(existingId).trim() !== '' ? existingId : nextUid('g');
   return Object.assign({}, ENTITY_CODECS.Gel.def, {id, name, src: canvas, thumb: canvas.toDataURL('image/jpeg', 0.6), assign: [],
-    preset: LADDERS[opt.ladder] ? opt.ladder : 'biorad', ladder: (LADDERS[opt.ladder] || LADDERS.biorad).v, marks: [], tags: [], edits: {added: [], removed: []}, out: null, hist: null, crop: {l:0, r:1, t:0, b:1},
+    preset: LADDERS[opt.ladder] ? opt.ladder : 'biorad', ladder: (LADDERS[opt.ladder] || LADDERS.biorad).v, marks: [], tags: [], edits: {added: [], removed: []},
+    stain: 'other', sigMode: '', srgbLin: false, prepDef: {}, lanePrep: {}, out: null, hist: null, crop: {l:0, r:1, t:0, b:1},
     rawHiClip: !(canvas && canvas._rawHiClip === false), rawLoClip: !(canvas && canvas._rawLoClip === false)});
 }
 function processGel(g){
@@ -4777,14 +4924,16 @@ function processGel(g){
   const c2 = document.createElement('canvas'); c2.width = ow; c2.height = oh; const x2 = c2.getContext('2d');
   x2.imageSmoothingQuality = 'high'; x2.drawImage(c1, cx, cy, cw, ch, 0, 0, ow, oh);
   const img = x2.getImageData(0, 0, ow, oh), d = img.data, hist = new Uint32Array(256), dk = new Float32Array(ow*oh), dq = new Float32Array(ow*oh);
-  const bl = +g.black, wh = Math.max(bl + 1, +g.white), k = 255/(wh - bl);
+  const bl = +g.black, wh = Math.max(bl + 1, +g.white), k = 255/(wh - bl), lin = !!(g && g.srgbLin);
   for (let i=0;i<d.length;i+=4){
-    const gray = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]; hist[gray|0]++; dk[i/4] = g.invert ? gray : 255 - gray; dq[i/4] = g.invert ? gray : -Math.log10(Math.max(gray, 1)/255)*255;
+    const gray = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]; hist[gray|0]++;
+    const mGray = lin ? (0.2126*srgbToLin255(d[i]) + 0.7152*srgbToLin255(d[i+1]) + 0.0722*srgbToLin255(d[i+2])) : gray;
+    dk[i/4] = g.invert ? mGray : 255 - mGray; dq[i/4] = g.invert ? mGray : -Math.log10(Math.max(mGray, lin ? 1/12.92 : 1)/255)*255;
     if (g.color) for (let j=0;j<3;j++){ let v = (d[i+j] - bl)*k; v = v < 0 ? 0 : v > 255 ? 255 : v; d[i+j] = g.invert ? 255 - v : v; }
     else { let v = (gray - bl)*k; v = v < 0 ? 0 : v > 255 ? 255 : v; if (g.invert) v = 255 - v; d[i] = d[i+1] = d[i+2] = v; }
   }
   x2.putImageData(img, 0, 0);
-  g.pix = {w: ow, h: oh, d: dk, q: dq}; g._bands = null;
+  g.pix = {w: ow, h: oh, d: dk, q: dq, srgbLin: lin}; g._bands = null;
   let tot = 0; for (let i=0; i<256; i++) tot += hist[i];
   let acc = 0, med = 128; for (let i=0; i<256; i++){ acc += hist[i]; if (acc >= tot * 0.5) { med = i; break; } }
   g.rawMedian = med;
@@ -4973,9 +5122,9 @@ function laneTrack(g, i){
   return (g._track.lanes[i] = off);
 }
 function laneProfile(g, i){
-  const P = g.pix, n = gelLabels(g).length, lw = P.w/n, tr = laneTrack(g, i);
-  const pr = new Float64Array(P.h);
-  for (let y=0;y<P.h;y++){ const x0 = Math.max(0, Math.floor((i + DET.laneLo)*lw + tr[y])), x1 = Math.min(P.w, Math.ceil((i + DET.laneHi)*lw + tr[y])); let t = 0; const o = y*P.w; const src = P.q || P.d; for (let x=x0;x<x1;x++) t += src[o + x]; pr[y] = x1 > x0 ? t/(x1 - x0) : 0; }
+  const P = g.pix, n = gelLabels(g).length, lw = P.w/n, tr = laneTrack(g, i), useOd = effGelSigMode(g) === 'od';
+  const pr = new Float64Array(P.h), src = (useOd && P.q) ? P.q : P.d;
+  for (let y=0;y<P.h;y++){ const x0 = Math.max(0, Math.floor((i + DET.laneLo)*lw + tr[y])), x1 = Math.min(P.w, Math.ceil((i + DET.laneHi)*lw + tr[y])); let t = 0; const o = y*P.w; for (let x=x0;x<x1;x++) t += src[o + x]; pr[y] = x1 > x0 ? t/(x1 - x0) : 0; }
   const k = Math.max(1, Math.round(P.h*DET.smooth)), sm = new Float64Array(P.h);
   for (let y=0;y<P.h;y++){ let t = 0, c = 0; for (let j=Math.max(0,y-k); j<=Math.min(P.h-1,y+k); j++){ t += pr[j]; c++; } sm[y] = t/c; }
   /* rolling-minimum background, then smoothed, so broad smears and uneven staining are removed */
@@ -5109,12 +5258,12 @@ function calibBad(g){ const m = g.marks.filter(k => k.kda > 0).slice().sort((a, 
 function gelBands(g){
   if (!g.pix) return [];
   const ed = g.edits || (g.edits = {added: [], removed: []});
-  const key = gelLabels(g).join(',') + '|' + numOr(opt.bandSens, 8) + '|' + g.marks.map(m => m.kda + ':' + m.y.toFixed(4)).join(',') + '|' + JSON.stringify(g.assign || []) + '|' + lanesFor(g, 'marker').join(',') + '|' + JSON.stringify(ed);
+  const key = gelLabels(g).join(',') + '|' + numOr(opt.bandSens, 8) + '|' + g.marks.map(m => m.kda + ':' + m.y.toFixed(4)).join(',') + '|' + JSON.stringify(g.assign || []) + '|' + lanesFor(g, 'marker').join(',') + '|' + JSON.stringify(ed) + '|' + effGelSigMode(g) + '|' + !!g.srgbLin + '|' + (g.stain || 'other') + '|' + JSON.stringify(g.prepDef || {}) + '|' + JSON.stringify(g.lanePrep || {}) + '|' + gelAutoKey(g);
   if (g._bands && ((g._bands.key === key && g._bands.pix === g.pix) || g._live)) return g._bands.lanes;
   const cal = calib(g), labs = gelLabels(g);
   let gelMax = 0; if (DET.gelRel > 0) labs.forEach((l, i) => { if (laneAssign(g, i) !== 'marker') gelMax = Math.max(gelMax, arrMax(laneProfile(g, i))); });
   const lanes = labs.map((l, i) => { if (laneAssign(g, i) === 'marker') return {i, label: l, marker: true, bands: []};
-    const r = detectBands(g, i, numOr(opt.bandSens, 8), gelMax), tolE = 0.006*(g.crop.b - g.crop.t);
+    const r = detectBands(g, i, numOr(opt.bandSens, 8), gelMax), tolE = 0.006*(g.crop.b - g.crop.t), ld = laneLoadInfo(g, i);
     let bands = r.bands.filter(b => !ed.removed.some(x => x.lane === i && Math.abs(x.y - b.yRot) <= Math.max(tolE, Math.min(x.half || 0, bandHalf(g, b)))));
     ed.added.filter(x => x.lane === i).forEach(x => { const b = bandAt(g, r.sig, x.y); if (!bands.some(q => Math.abs(q.yRot - b.yRot) <= tolE)) bands.push(b); });
     bands.sort((a, b) => a.row - b.row);
@@ -5124,8 +5273,8 @@ function gelBands(g){
       j = e + 1; }
       bands.forEach(b => { b.area = 0; for (let y = b.l; y <= b.r; y++) b.area += r.sig[y]; }); }
     /* a band the user removed is taken out of the lane total too, so removing an artifact changes % of lane and purity */
-    const total = Math.max(bands.reduce((t, b) => t + b.area, 0), r.total - r.bands.reduce((t, b) => t + (bands.includes(b) ? 0 : b.area), 0)); bands.sort((a, b) => a.row - b.row).forEach(b => { b.pct = total > 0 ? 100*b.area/total : 0; b.mw = cal ? cal(b.yRot) : null; });
-    return {i, label: l, bands, total}; });
+    const total = Math.max(bands.reduce((t, b) => t + b.area, 0), r.total - r.bands.reduce((t, b) => t + (bands.includes(b) ? 0 : b.area), 0)); bands.sort((a, b) => a.row - b.row).forEach(b => { b.pct = total > 0 ? 100*b.area/total : 0; b.mw = cal ? cal(b.yRot) : null; b.areaConc = ld.vEff ? b.area / ld.vEff : null; b.areaPool = ld.scaleTotal ? b.area * ld.scaleTotal : null; b.estUg = ld.estLaneUg != null ? ld.estLaneUg * (b.pct / 100) : null; });
+    return {i, label: l, bands, total, load: ld}; });
   g._bands = {key, pix: g.pix, lanes}; return lanes;
 }
 /* band edit history: every add, remove, mark or clear is undoable, and Reset goes back to plain detection */
@@ -5304,7 +5453,7 @@ function lanePurity(g, ln){
     const ms = [F[0].mass/1000].concat(F[1] && tagStep && opt.tagCounts !== false ? [F[1].mass/1000] : []);
     ln.bands.forEach(b => { if (!tagRaw(g, ln.i, b) && b.mw != null && ms.some(m => Math.abs(Math.log(b.mw/m)) < Math.log(1.08))) { tgt += b.area; est = true; mws.push(b.mw); } }); } }
   let flagged = 0; if (opt.knownCount) ln.bands.forEach(b => { if (!tagOf(g, ln.i, b) && knownShown(g, ln.i, b).some(k => k.kind === 'contam' || k.kind === 'freetag')) { con += b.area; flagged++; } });
-  const F0 = protForms(), cp = cleavePlan(g), mC = F0[1] ? F0[0].mass/1000 : cp ? cp.P : mws[0] || 1, mT = F0[1] ? F0[1].mass/1000 : cp ? cp.P + cp.T : tmws[0] || mC, cMol = (u, t) => 100*(u/mC)/((u/mC) + (t/mT));
+  const F0 = protForms(), cp = cleavePlan(g), mC = F0[1] ? F0[0].mass/1000 : cp ? cp.P : mws[0] || 1, mT = F0[1] ? F0[1].mass/1000 : cp ? cp.P + cp.T : tmws[0] || mC, cMol = (u, t) => molarCleavagePct(u, t, mC, mT);
   let cleaved = (g.tags || []).some(t => t.kind === 'tagged' && (t.lane == null || t.lane === ln.i)) && un + tg > 0 ? cMol(un, tg) : null, cleavedEst = false;
   if (cleaved == null && cp) { let cu = un, cg = tg;
     const sumo = /sumo/i.test(opt.tagPreset || ''), dist = (b, kda, app) => b.mw != null ? Math.min(Math.abs(Math.log(b.mw/kda)), app ? Math.abs(Math.log(b.mw/app)) : Infinity) : Infinity;
@@ -6420,7 +6569,7 @@ function cleaveQuant(){
     const post = idx.filter(i => CLV_POST.test(String(labs[i] || '').trim())).pop(); if (post == null || sat.has(post)) return;
     const bs = ln[post] ? ln[post].bands : [], sumo = /sumo/i.test(opt.tagPreset || ''), dist = (b, kda, app) => b.mw != null ? Math.min(Math.abs(Math.log(b.mw/kda)), app ? Math.abs(Math.log(b.mw/app)) : Infinity) : Infinity;
     let c = 0, t = 0; bs.forEach(b => { const tg = tagOf(g, post, b); if (tg) { if (tg.kind === 'target') c += b.area; else if (tg.kind === 'tagged') t += b.area; } else { const dC = dist(b, mC), dT = dist(b, mT, sumo ? mT + 4 : 0); if (dC < Math.log(1.06) && dC <= dT) c += b.area; else if (dT < Math.log(1.06)) t += b.area; } });
-    if (t + c <= 0) return; out = {pct: 100*(c/mC)/((c/mC) + (t/mT)), lane: String(labs[post]).trim()}; });
+    if (t + c <= 0) return; out = {pct: molarCleavagePct(c, t, mC, mT), lane: String(labs[post]).trim()}; });
   return out; }
 function exprQuant(){
   const out = {level: null, sol: null, solLanes: false, legend: []};
@@ -6431,7 +6580,7 @@ function exprQuant(){
     const iI = idx.filter(i => EXP_I.test(lab(i))).pop(), iS = idx.find(i => EXP_S.test(lab(i))), iP = idx.find(i => EXP_P.test(lab(i)));
     if (iS != null || iP != null) out.solLanes = true;
     if (iI != null && out.level == null && calib(g)) { const a = at(iI); if (a && a.pct > 0) out.level = {pct: a.pct, lane: lab(iI)}; }
-    if (iS != null && iP != null && out.sol == null && calib(g)) { const a = at(iS), b = at(iP); if (a && b && a.area + b.area > 0) out.sol = {pct: 100*a.area/(a.area + b.area), s: lab(iS), p: lab(iP)}; }
+    if (iS != null && iP != null && out.sol == null && calib(g)) { const a = at(iS), b = at(iP); if (a && b) { const ldS = laneLoadInfo(g, iS), ldP = laneLoadInfo(g, iP), volNorm = !!(ldS.scaleTotal && ldP.scaleTotal), sVal = volNorm ? a.area * ldS.scaleTotal : a.area, pVal = volNorm ? b.area * ldP.scaleTotal : b.area; if (sVal + pVal > 0) out.sol = {pct: 100 * sVal / (sVal + pVal), s: lab(iS), p: lab(iP), volNorm}; } }
     const L = {u: 'uninduced', ui: 'uninduced', i: 'induced', s: 'soluble', p: 'insoluble', t: 'total', tc: 'total cell', wcl: 'whole cell lysate', m: 'marker'};
     idx.forEach(i => { const k = lab(i).toLowerCase(); if (L[k] && !out.legend.some(x => x[0] === lab(i))) out.legend.push([lab(i), L[k]]); }); });
   return out;
@@ -7213,11 +7362,19 @@ function methodsText(){
     if (smN > 2) parts.push(`${parts.length ? 'displayed traces were smoothed' : 'Chromatogram traces were smoothed'} with a ${smN}-point Savitzky–Golay filter`);
     if (parts.length) P.push(parts.join('; ') + '.');
   }
+  { const gs = gels.filter(g => g && g.pix); if (gs.length) {
+    const g0 = gs[0], stNames = [...new Set(gs.map(g => g.stain && g.stain !== 'other' && STAIN_CFG[g.stain] ? STAIN_CFG[g.stain].name : '').filter(Boolean))];
+    const modes = [...new Set(gs.map(effGelSigMode))], modeTxt = modes.length === 1 ? (modes[0] === 'od' ? 'Beer–Lambert optical density (−log₁₀(I/I₀))' : 'linear pixel intensity') : 'Beer–Lambert optical density or linear pixel intensity';
+    const srgbTxt = gs.some(g => g.srgbLin) ? ' after IEC 61966-2-1 sRGB gamma linearization' : '';
+    const ld0 = laneLoadInfo(g0, -1, null, null, '');
+    const prepTxt = ld0.vEff != null ? (ld0.vSamp && ld0.vBuf ? `; samples (${fmtAuto(ld0.vSamp)} µL mixed with ${fmtAuto(ld0.vBuf)} µL${ld0.cBuf ? ` ${fmtAuto(ld0.cBuf)}X` : ''} loading buffer${ld0.cBufFinal != null ? `, ${fmt(ld0.cBufFinal, 2)}X final` : ''}${ld0.preDil && ld0.preDil !== 1 ? `, ${fmtAuto(ld0.preDil)}× pre-diluted` : ''}) were loaded at ${fmtAuto(ld0.vLoad)} µL per lane (${fmtAuto(+ld0.vEff.toFixed(3))} µL neat sample equivalent)` : `; samples were loaded at ${fmtAuto(ld0.vLoad)} µL per lane (${fmtAuto(+ld0.vEff.toFixed(3))} µL neat sample equivalent)`) : '';
+    P.push(`SDS-PAGE band densitometry${stNames.length ? ` (${stNames.join(', ')})` : ''} was quantified from ${modeTxt}${srgbTxt} with rolling-minimum local background subtraction following Gassmann et al. (Electrophoresis 2009, 30, 1845–1855)${prepTxt}.`);
+  } }
   const actMR = assays.length ? assayMethodsParts(lc, v) : null;
   if (actMR && actMR.P.length) P.push(...actMR.P);
   /* results, kept apart from the methods, with how each number was measured */
   const R = [], q = prep.on ? exprQuant() : {}, cq = prep.cleave ? cleaveQuant() : null, ys = finalYields();
-  if (q.level || q.sol) R.push(`By SDS-PAGE, the tagged protein was about ${q.level ? `${fmt(q.level.pct, 0)}% of total cell protein` : ''}${q.level && q.sol ? ' and about ' : ''}${q.sol ? `${fmt(q.sol.pct, 0)}% soluble` : ''}.`);
+  if (q.level || q.sol) R.push(`By SDS-PAGE, the tagged protein was about ${q.level ? `${fmt(q.level.pct, 0)}% of total cell protein` : ''}${q.level && q.sol ? ' and about ' : ''}${q.sol ? `${fmt(q.sol.pct, 0)}% soluble${q.sol.volNorm ? ' (fraction-volume normalized)' : ''}` : ''}.`);
   if (cq) R.push(`About ${fmt(cq.pct, 0)}% of the fusion was cleaved, by SDS-PAGE.`);
   if (ys.length) {
     wf.forEach(r => { if (r.prep === 'manual') { const a = manMg(r.man); if (a !== null) R.push(`After the ${r.name} step, the sample held ${sig2(a)} mg (${fmtAuto(+r.man.conc)} mg/mL in ${fmtAuto(+r.man.vol)} mL).`); return; } const bw = btwOf(r), kp = btwMg(r); if (bw && kp) { const bSs = ndFinalOf(r).length ? ndFinalOf(r) : ndUsedOf(r), epStr = poolMeas(r).nd ? epPhrase(ndEpsUsed(r, bSs)) : '', u = bw.unit || runVolUnit(r), bwV = numOr(bw.vOut, null) ?? (poolMeas(r).poolFallback ? poolMeas(r).v : 0); R.push(`After ${lc(stepTitle(r))}, ${bw.how === 'conc' ? 'concentration' : 'that step'} left ${sig2(kp.mg)} mg (${(ms => ms.nd ? `${fmt(ms.c, 2)} mg/mL in ${fmtAuto(bwV)} ${u} by NanoDrop${ndA205(bSs) ? ' A205' : ''}${ms.nd.n > 1 ? (Number.isFinite(ms.nd.sd) ? `, ± ${fmt(ms.nd.sd, 2)} SD, mean of ${ms.nd.n} readings` : `, mean of ${ms.nd.n} readings`) : ''}${epStr}` : `${fmtAuto(+bw.conc)} mg/mL in ${fmtAuto(bwV)} ${u}`)(poolMeas(r))}).`); } });
@@ -7537,6 +7694,7 @@ function stepStatus(g){
   { const g0 = curGel(); let nf = 0; if (opt.knownOn && g0 && g0.pix) gelBands(g0).forEach(ln => { if (!ln.marker) ln.bands.forEach(b => { if (!tagOf(g0, ln.i, b) && knownShown(g0, ln.i, b).length) nf++; }); });
     set('st-known', opt.knownOn ? `${(opt.known || []).filter(k => k.on).length} active${g0 && g0.pix ? `, ${nf} flagged` : ''}` : 'off'); }
   { const ko = $('#knownOpts'), kc = $('#o-knownCount'), d = document.querySelector('details[data-sub="gknown"]'); if (ko) ko.hidden = !opt.knownOn; if (kc) kc.closest('label').hidden = !opt.knownOn; if (d) d.classList.toggle('koff', !opt.knownOn); }
+  syncGelLoadStatus(g);
 }
 function render(){
   document.body.classList.toggle('secstds', !!opt.secStds);
@@ -7655,11 +7813,57 @@ function renderKnown(){
     <button type="button" class="xbtn" data-kdel="${i}" aria-label="Remove ${esc(k.name)}">×</button></div>`).join('') || '<p class="hint">No known proteins. Add one below.</p>';
 }
 function renderLaneTable(){
-  const g = curGel(), el = $('#laneTable'); if (!g) { el.innerHTML = ''; return; }
+  const g = curGel(), el = $('#laneTable'); if (!g) { el.innerHTML = ''; renderLanePrepTable(); return; }
   const labs = gelLabels(g), short = t => t.length > 24 ? t.slice(0, 23) + '…' : t;
   el.innerHTML = labs.map((l, i) => { const a = laneAssign(g, i);
     const am = !(g.assign || [])[i] && a === '' && g._auto && g._auto.amb && g._auto.amb[i];
     return `<div class="lrow${am ? ' amb' : ''}"${am ? ` title="${esc(l)} is a fraction in ${am.length} runs. Pick the run it came from, or set the runs' pooled fractions."` : ''}><span>${i + 1}</span><input type="text" id="ln${i}" data-lane="${i}" data-lk="label" value="${esc(l)}" aria-label="Lane ${i + 1} label"><select id="la${i}" data-lane="${i}" data-lk="assign" aria-label="Lane ${i + 1} belongs to"${(() => { const rk = runs.findIndex(r => r.id === a); if (rk >= 0) return ` title="${esc(runs[rk].name)}"`; if (a === 'marker') return ' title="Ladder"'; if (a === '') return ' title="Not shown with a run"'; const m = (typeof a === 'string' && /^m\d+$/.test(a) && manSteps().some(mx => mx.id === a)) ? manSteps().find(x => x.id === a) : null; return ` title="${esc(PREP_NAME[a] || (m ? m.name || MAN_NAME[m.kind] || 'Other step' : a))}"`; })()}><option value="marker" ${a === 'marker' ? 'selected' : ''}>Ladder</option><option value="" ${a === '' ? 'selected' : ''}>Not shown with a run</option>${PREP_OPT().replace(`value="${a}"`, `value="${a}" selected`)}${runs.map((r, k) => `<option value="${r.id}" title="${esc(r.name)}" ${a === r.id ? 'selected' : ''}>${k + 1}. ${esc(short(shortRunName(r)))}</option>`).join('')}</select></div>`; }).join('');
+  renderLanePrepTable();
+}
+function renderLanePrepTable(){
+  const g = curGel(), el = $('#lanePrepTable'); if (!el) return;
+  if (!g) { el._sk = ''; el.innerHTML = ''; return; }
+  const labs = gelLabels(g), samp = labs.map((l, i) => ({l, i})).filter(x => laneAssign(g, x.i) !== 'marker');
+  const sKey = g.id + '|' + samp.map(x => x.i + ':' + x.l).join('\x00');
+  if (el._sk !== sKey) {
+    el._sk = sKey;
+    el.innerHTML = samp.length ? `<div class="lprow lprow-h"><span>#</span><span>Lane</span><span>Frac vol (mL)</span><span>Load (µL)</span><span>Neat / %</span></div>` + samp.map(({l, i}) => `<div class="lprow" data-lprow="${i}"><span>${i + 1}</span><span class="lplab" title="${esc(l || 'Lane ' + (i + 1))}">${esc(l || 'Lane ' + (i + 1))}</span><input type="number" min="0" step="any" id="glp-vfrac-${i}" data-glane="${i}" data-glk="vFracMl" aria-label="Lane ${i + 1} fraction volume (mL)"><input type="number" min="0" step="any" id="glp-vload-${i}" data-glane="${i}" data-glk="vLoad" aria-label="Lane ${i + 1} loaded volume (µL)"><span class="lprow-h" id="glp-info-${i}"></span></div>`).join('') : '';
+  }
+  const def = g.prepDef || {}, lp = g.lanePrep || {};
+  samp.forEach(({i}) => {
+    const ld = laneLoadInfo(g, i), ov = lp[i] || {};
+    const vf = document.getElementById('glp-vfrac-' + i), vl = document.getElementById('glp-vload-' + i), inf = document.getElementById('glp-info-' + i);
+    if (vf) { vf.placeholder = ld.autoFracMl > 0 ? `${fmtAuto(+ld.autoFracMl.toFixed(3))} (auto)` : 'mL'; const wv = ov.vFracMl != null ? String(ov.vFracMl) : ''; if (vf !== document.activeElement && vf.value !== wv) vf.value = wv; }
+    if (vl) { vl.placeholder = def.vLoad > 0 ? String(def.vLoad) : 'µL'; const wv = ov.vLoad != null ? String(ov.vLoad) : ''; if (vl !== document.activeElement && vl.value !== wv) vl.value = wv; }
+    if (inf) inf.textContent = [ld.vEff != null ? fmtAuto(+ld.vEff.toFixed(2)) + ' µL' : '', ld.fracLoadedPct != null ? fmtAuto(+ld.fracLoadedPct.toFixed(3)) + '%' : ''].filter(Boolean).join(' · ');
+  });
+}
+function gelLoadWarnings(g){
+  if (!g) return [];
+  const ws = new Set(); let anySamp = false;
+  gelLabels(g).forEach((_, i) => { if (laneAssign(g, i) === 'marker') return; anySamp = true; laneLoadInfo(g, i).warns.forEach(w => ws.add(w)); });
+  if (!anySamp) laneLoadInfo(g, -1, null, null, cleanSeq(opt.protSeq)).warns.forEach(w => ws.add(w));
+  return [...ws];
+}
+function syncGelLoadStatus(g){
+  renderLanePrepTable();
+  const sumEl = $('#gloadSummary'), warnEl = $('#gloadWarns'), stEl = $('#st-load');
+  if (!g) { if (sumEl) sumEl.hidden = true; if (warnEl) warnEl.hidden = true; return; }
+  const ld0 = laneLoadInfo(g, -1, null, null, ''), warns = gelLoadWarnings(g);
+  if (sumEl) {
+    const parts = [];
+    if (ld0.vMix != null) parts.push(`Mix ${fmtAuto(+ld0.vMix.toFixed(2))} µL (${ld0.cBufFinal != null ? ld0.cBufFinal.toFixed(2) + 'X final, ' : ''}${(ld0.fSamp * 100).toFixed(0)}% sample)`);
+    if (ld0.vEff != null) parts.push(`V_eff = ${ld0.vEff.toFixed(2)} µL neat sample/lane`);
+    sumEl.textContent = parts.join(' → '); sumEl.hidden = !parts.length;
+  }
+  if (warnEl) {
+    warnEl.innerHTML = warns.map(w => `<span class="delta-badge warn">${esc(w)}</span>`).join('');
+    warnEl.hidden = !warns.length;
+  }
+  if (stEl) {
+    const stName = g.stain && g.stain !== 'other' && STAIN_CFG[g.stain] ? STAIN_CFG[g.stain].name : (effGelSigMode(g) === 'od' ? 'Beer-Lambert OD' : 'linear');
+    stEl.textContent = stName + (ld0.vEff != null ? `, V_eff ${fmtAuto(+ld0.vEff.toFixed(2))} µL` : '') + (warns.length ? `, ${warns.length} warning${warns.length > 1 ? 's' : ''}` : '');
+  }
 }
 function onLane(el){
   const g = curGel(); if (!g) return; const i = +el.dataset.lane;
@@ -7929,7 +8133,14 @@ function syncControls(){
     else el.value = v;
   });
   renderKnown();
-  if (g) { document.querySelectorAll('[data-gel]').forEach(el => { const v = g[el.dataset.gel]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v; }); renderLaneTable(); }
+  if (g) {
+    document.querySelectorAll('[data-gel]').forEach(el => { const k = el.dataset.gel, v = k === 'stain' ? (g.stain || 'other') : k === 'sigMode' ? (g.sigMode || '') : g[k]; if (el.type === 'checkbox') el.checked = !!v; else el.value = v != null ? v : ''; });
+    const pd = g.prepDef || {}; document.querySelectorAll('[data-gprep]').forEach(el => { const v = pd[el.dataset.gprep]; el.value = v != null ? v : ''; });
+    renderLaneTable();
+  } else {
+    document.querySelectorAll('[data-gprep]').forEach(el => { el.value = ''; });
+    renderLanePrepTable();
+  }
 }
 let gelRaf = 0;
 function onGel(el){
@@ -7948,7 +8159,9 @@ function onGel(el){
   if (k === 'labels' && g.autoCropped && !g.trimTouched) { clearTimeout(g._recrop); g._recrop = setTimeout(() => {
     const n = String(g.labels || '').split(',').map(t => t.trim()).filter(Boolean).length; if (n < 2 || n === +g.nLanes) return;
     if (!applyAutoCrop(g, true).err) { ['cl','cr','ct','cb','nLanes'].forEach(q => { const f = document.querySelector(`[data-gel="${q}"]`); if (f) f.value = g[q]; }); renderLaneTable(); renderList(); render(); toast(`Crop refitted to ${g.nLanes} lanes.`); } }, 700); }
-  if (['rot','fine','cl','cr','ct','cb','black','white','invert','color'].includes(k)) {
+  if (k === 'srgbLin') { processGel(g); render(); }
+  else if (k === 'stain' || k === 'sigMode') { g._bands = null; render(); }
+  else if (['rot','fine','cl','cr','ct','cb','black','white','invert','color'].includes(k)) {
     const geom = ['rot','fine','cl','cr','ct','cb'].includes(k);
     /* while a slider moves, redraw the image only and keep the last bands and ladder; the full analysis runs once it stops */
     g._live = true; cancelAnimationFrame(gelRaf); gelRaf = requestAnimationFrame(() => { processGel(g); render(); });
@@ -7956,19 +8169,21 @@ function onGel(el){
   } else render();
 }
 /* numbers typed into a field are held to its min and max, and to a sensible ceiling, so a stray 1e6 cannot freeze the page */
-const SANE_MAX = {w: 40, h: 40, wfW: 40, wfH: 20, wfPad: 72, wfGelH: 20, fs: 72, lw: 10, stack: 1000, runPad: 500, gelGap: 400, peakMax: 200, peakDec: 4, prom: 100, intProm: 100, path: 100, tagTol: 10, knownTol: 25, knownMin: 50, bandSens: 60, gelSide: 90, tagKda: 500, protKda: 2000, sbValue: 1e6, nLanes: 30};
+const SANE_MAX = {w: 40, h: 40, wfW: 40, wfH: 20, wfPad: 72, wfGelH: 20, fs: 72, lw: 10, stack: 1000, runPad: 500, gelGap: 400, peakMax: 200, peakDec: 4, prom: 100, intProm: 100, path: 100, tagTol: 10, knownTol: 25, knownMin: 50, bandSens: 60, gelSide: 90, tagKda: 500, protKda: 2000, sbValue: 1e6, nLanes: 30, vSamp: 1e5, vBuf: 1e5, cBuf: 100, vLoad: 1e4, preDil: 1e6, vFracMl: 1e6};
 function saneNum(el, v, key){
   if (v === '' || !isFinite(v)) return v === '' ? '' : null;
   const lo = el.min !== '' ? +el.min : -Infinity, hi = Math.min(el.max !== '' ? +el.max : Infinity, SANE_MAX[key] != null ? SANE_MAX[key] : Infinity);
   return Math.min(hi, Math.max(lo, v));
 }
-document.addEventListener('change', e => { const el = e.target; if (!el || el.type !== 'number' || el.value === '') return; const key = el.dataset.opt || el.dataset.gel || el.dataset.k; if (!key) return;
+document.addEventListener('change', e => { const el = e.target; if (!el || el.type !== 'number' || el.value === '') return; const key = el.dataset.opt || el.dataset.gel || el.dataset.k || el.dataset.gprep || el.dataset.glk; if (!key) return;
   const v = saneNum(el, +el.value, key); if (v !== null && v !== +el.value) el.value = v; }, true);
 function onOpt(e){
   const el = e.target;
   if (el.dataset && el.dataset.known !== undefined) { const k = opt.known[+el.dataset.known]; if (!k) return; const f = el.dataset.kf;
     k[f] = f === 'on' ? el.checked : f === 'kda' ? numOr(el.value, k.kda) : el.value; if (f !== 'on' && f !== 'kind') k.src = k.src && !/edited/.test(k.src) ? k.src + ', edited' : (k.src || 'added by you'); render(); return; }
   if (el.dataset && el.dataset.lane !== undefined) { onLane(el); return; }
+  if (el.dataset && el.dataset.gprep) { const g = curGel(); if (!g) return; g.prepDef = g.prepDef || {}; const k = el.dataset.gprep; if (el.value === '') delete g.prepDef[k]; else { const v = saneNum(el, +el.value, k); if (v === null) return; g.prepDef[k] = v; } g._bands = null; render(); return; }
+  if (el.dataset && el.dataset.glane !== undefined) { const g = curGel(); if (!g) return; const i = +el.dataset.glane, k = el.dataset.glk; g.lanePrep = g.lanePrep || {}; if (el.value === '') { if (g.lanePrep[i]) { delete g.lanePrep[i][k]; if (!Object.keys(g.lanePrep[i]).length) delete g.lanePrep[i]; } } else { const v = saneNum(el, +el.value, k); if (v === null) return; (g.lanePrep[i] || (g.lanePrep[i] = {}))[k] = v; } g._bands = null; render(); return; }
   if (el.dataset && el.dataset.sec !== undefined) { onSec(el); return; }
   if (el.dataset && el.dataset.gel) { onGel(el); return; }
   const k = el.dataset && el.dataset.opt; if (!k) return;
@@ -8013,7 +8228,7 @@ $('#panel').addEventListener('input', e => { if (e.target.type === 'range') rang
 $('#gelSizeReset').addEventListener('click', () => { opt.gelScale = 100; saveOpt(); syncControls(); rangeVals(); render(); });
 document.querySelectorAll('details.sub[data-sub]').forEach(d => { try { const v = localStorage.getItem('hfb-sub-' + d.dataset.sub); if (v === '1') d.open = true; else if (v === '0') d.open = false; } catch (e) {}
   d.addEventListener('toggle', () => { if (d.dataset.sub === 'gcrop') { if (!d._usr) return; d._usr = 0; } try { localStorage.setItem('hfb-sub-' + d.dataset.sub, d.open ? '1' : '0'); } catch (e) {} }); });
-$('#panel').addEventListener('change', e => { if (e.target.type === 'radio' || e.target.id === 'o-cysOx') onOpt(e); });
+$('#panel').addEventListener('change', e => { if (e.target.type === 'radio' || e.target.id === 'o-cysOx' || e.target.id === 'g-stain' || e.target.id === 'g-sigMode') onOpt(e); });
 $('#panel').addEventListener('click', e => { const b = e.target.closest('[data-epsconv]'); if (!b) return; const man = manEps(), mw = epsMwDa(); if (!(man > 100) || !(mw > 0)) return; const v = +(man/mw).toFixed(3); if (numOr(opt.eps, 0) > 100) opt.eps = v; if (numOr(opt.extinction, 0) > 100) opt.extinction = v; saveOpt(); syncControls(); renderList(); render(); });
 $('#o-dpi').addEventListener('change', onOpt);
 $('#resetRange').addEventListener('click', () => { const ro = rangeObj(); RANGE.forEach(k => ro[k] = ''); ro.zoomWinA = ''; ro.zoomWinB = ''; syncControls(); render(); });
@@ -8048,7 +8263,8 @@ function renderBandTable(g){
   const darkHint = isDark ? 'Dark background: check Invert (#g-invert) under Crop and contrast. ' : '';
   const note = darkHint + (anySat ? 'Saturated bands read low, so a shorter exposure gives truer percentages. ' : '') + (!cal ? (g.marks.length >= 2 ? 'Check the ladder: ' + (calibBad(g).length ? 'marks ' + calibBad(g).join(', ') + ' kDa are at the same position or out of order. ' : '') + 'Each band must have a distinct position, with sizes decreasing from top to bottom.' : 'Find or mark the ladder to get sizes in kDa.') : !anyT ? 'Mark the target band to estimate purity.' : !anyC && opt.purBase === 'tagged' ? 'Mark one contaminant band to calculate purity.' : '');
   const r2 = ladderRSquared(g), fit = r2 == null ? '' : `<tr><td colspan="${cols}" class="empty-row">Ladder calibration linear fit R&sup2;: ${fmt(r2, 3)}</td></tr>`;
-  el.innerHTML = head + rows + fit + (note ? `<tr><td colspan="${cols}" class="empty-row">${note}</td></tr>` : '');
+  const loadWarns = gelLoadWarnings(g), warnRow = loadWarns.length ? `<tr><td colspan="${cols}" class="empty-row warnc">${esc(loadWarns.join(' · '))}</td></tr>` : '';
+  el.innerHTML = head + rows + fit + warnRow + (note ? `<tr><td colspan="${cols}" class="empty-row">${note}</td></tr>` : '');
   const bdh = $('#bandDarkHint'); if (bdh) bdh.hidden = !isDark;
   renderRecoveryMatrix(g);
 }
@@ -8094,12 +8310,12 @@ $('#g-autoLadder').addEventListener('click', () => {
 });
 function buildBandCsvString(g){
   if (!g) return '';
-  const q = csvQuote, bl = gelBands(g), fys = bl.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean);
-  const lines = [['Gel','Lane','Label','Goes with','Band','Estimated size (kDa)','% of lane','Saturated','Marked as','Possible identity (size match)','Lane purity (%)','Purity basis','Cleaved in lane (%)','Position (fraction of trimmed height)'].concat(anyFY ? ['Fraction protein (mg)','Fraction yield (%)'] : []).join(',')];
-  bl.forEach((ln, idx) => { if (ln.marker) return; const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a), fy = fys[idx];
+  const q = csvQuote, bl = gelBands(g), fys = bl.map(ln => ln.marker ? null : laneFracYield(g, ln.i)), anyFY = fys.some(Boolean), sigM = effGelSigMode(g);
+  const lines = [['Gel','Lane','Label','Goes with','Band','Estimated size (kDa)','% of lane','Saturated','Marked as','Possible identity (size match)','Lane purity (%)','Purity basis','Cleaved in lane (%)','Position (fraction of trimmed height)'].concat(anyFY ? ['Fraction protein (mg)','Fraction yield (%)'] : []).concat(['v_eff_uL','c_buf_final_X','v_frac_mL','frac_loaded_pct','area_per_uL','area_total_frac','est_load_ug','signal_mode']).join(',')];
+  bl.forEach((ln, idx) => { if (ln.marker) return; const a = laneAssign(g, ln.i), r = runs.find(x => x.id === a), fy = fys[idx], ld = ln.load || laneLoadInfo(g, ln.i);
     const pu = lanePurity(g, ln), basis = opt.purBase === 'tagged' ? 'target + marked contaminants' : 'all stain in lane';
     ln.bands.forEach((b, k) => { const t = tagOf(g, ln.i, b);
-      lines.push([q(g.name), ln.i + 1, q(ln.label), q(r ? r.name : ''), k + 1, b.mw == null ? '' : mwText(g, b.mw), b.pct.toFixed(2), b.sat ? 'yes' : '', t ? ({target: 'target (untagged)', tagged: 'tagged form', contam: 'contaminant'})[t.kind] : '', q(t ? '' : knownFor(g, ln.i, b).map(k => k.name).join(' / ')), pu && pu.purity != null ? pu.purity.toFixed(1) : '', pu && pu.purity != null ? q(basis) : '', pu && pu.cleaved != null ? pu.cleaved.toFixed(1) : '', ((b.yRot - g.crop.t)/(g.crop.b - g.crop.t)).toFixed(4)].concat(anyFY ? [fy && fy.mg != null ? fy.mg.toFixed(4) : '', fy && fy.yield != null ? fy.yield.toFixed(2) : ''] : []).join(',')); }); });
+      lines.push([q(g.name), ln.i + 1, q(ln.label), q(r ? r.name : ''), k + 1, b.mw == null ? '' : mwText(g, b.mw), b.pct.toFixed(2), b.sat ? 'yes' : '', t ? ({target: 'target (untagged)', tagged: 'tagged form', contam: 'contaminant'})[t.kind] : '', q(t ? '' : knownFor(g, ln.i, b).map(k => k.name).join(' / ')), pu && pu.purity != null ? pu.purity.toFixed(1) : '', pu && pu.purity != null ? q(basis) : '', pu && pu.cleaved != null ? pu.cleaved.toFixed(1) : '', ((b.yRot - g.crop.t)/(g.crop.b - g.crop.t)).toFixed(4)].concat(anyFY ? [fy && fy.mg != null ? fy.mg.toFixed(4) : '', fy && fy.yield != null ? fy.yield.toFixed(2) : ''] : []).concat([ld.vEff != null && isFinite(ld.vEff) ? ld.vEff.toFixed(3) : '', ld.cBufFinal != null && isFinite(ld.cBufFinal) ? ld.cBufFinal.toFixed(2) : '', ld.vFracMl != null && isFinite(ld.vFracMl) ? ld.vFracMl.toFixed(3) : '', ld.fracLoadedPct != null && isFinite(ld.fracLoadedPct) ? ld.fracLoadedPct.toFixed(4) : '', b.areaConc != null && isFinite(b.areaConc) ? b.areaConc.toFixed(2) : '', b.areaPool != null && isFinite(b.areaPool) ? b.areaPool.toFixed(1) : '', b.estUg != null && isFinite(b.estUg) ? b.estUg.toFixed(3) : '', sigM]).join(',')); }); });
   return lines.length < 2 ? '' : lines.join('\r\n');
 }
 $('#bandCsv').addEventListener('click', () => {
@@ -12097,10 +12313,12 @@ const ENTITY_CODECS = {
     }
   },
   Gel: {
-    def: {rot: 0, fine: 0, cl: 0, cr: 0, ct: 0, cb: 0, black: 0, white: 255, invert: false, color: false, nLanes: 10, labels: 'M, 1, 2, 3, 4, 5, 6, 7, 8, 9', assign: [], preset: 'biorad', ladder: LADDERS.biorad.v, marks: [], tags: [], edits: {added: [], removed: []}, runId: '', crop: {l: 0, r: 1, t: 0, b: 1}, rawHiClip: true, rawLoClip: true},
+    def: {rot: 0, fine: 0, cl: 0, cr: 0, ct: 0, cb: 0, black: 0, white: 255, invert: false, color: false, nLanes: 10, labels: 'M, 1, 2, 3, 4, 5, 6, 7, 8, 9', assign: [], preset: 'biorad', ladder: LADDERS.biorad.v, marks: [], tags: [], edits: {added: [], removed: []}, stain: 'other', sigMode: '', srgbLin: false, prepDef: {}, lanePrep: {}, runId: '', crop: {l: 0, r: 1, t: 0, b: 1}, rawHiClip: true, rawLoClip: true},
     toJSON(g, forFile){
       const o = plain(g);
       ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist'].forEach(k => delete o[k]);
+      o.prepDef = g && g.prepDef && typeof g.prepDef === 'object' && !Array.isArray(g.prepDef) ? clonePlain(g.prepDef) : {};
+      o.lanePrep = g && g.lanePrep && typeof g.lanePrep === 'object' && !Array.isArray(g.lanePrep) ? clonePlain(g.lanePrep) : {};
       if (forFile) {
         let img = g._img || g.image || '';
         if (!img && g.src) { try { /* always PNG: a JPEG copy of a large gel read differently after export and import (#1324, #1426). JPEG only if the browser cannot make the PNG. */
@@ -12130,6 +12348,11 @@ const ENTITY_CODECS = {
         assign: sg && Array.isArray(sg.assign) ? clonePlain(sg.assign) : [],
         tags: sg && Array.isArray(sg.tags) ? clonePlain(sg.tags) : [],
         edits: sg && sg.edits && typeof sg.edits === 'object' && !Array.isArray(sg.edits) ? {added: Array.isArray(sg.edits.added) ? clonePlain(sg.edits.added) : [], removed: Array.isArray(sg.edits.removed) ? clonePlain(sg.edits.removed) : []} : {added: [], removed: []},
+        stain: sg && sg.stain && STAIN_CFG[sg.stain] ? sg.stain : 'other',
+        sigMode: sg && (sg.sigMode === 'od' || sg.sigMode === 'linear') ? sg.sigMode : '',
+        srgbLin: !!(sg && sg.srgbLin),
+        prepDef: sg && sg.prepDef && typeof sg.prepDef === 'object' && !Array.isArray(sg.prepDef) ? clonePlain(sg.prepDef) : {},
+        lanePrep: sg && sg.lanePrep && typeof sg.lanePrep === 'object' && !Array.isArray(sg.lanePrep) ? clonePlain(sg.lanePrep) : {},
         rawHiClip: !(sg && sg.rawHiClip === false),
         rawLoClip: !(sg && sg.rawLoClip === false)
       });
