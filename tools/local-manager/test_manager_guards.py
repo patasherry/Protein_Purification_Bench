@@ -153,18 +153,18 @@ const github = {
   rest: {
     issues: {
       listForRepo: async ({state, labels}) => state === 'closed' || labels ? [] : [
-        {number: 1410, title: 'Status page', state: 'open', labels: [{name: 'status-page'}], body: 'old'},
-        {number: 1647, title: 'Directory system', state: 'open', updated_at: new Date().toISOString(), labels: [{name: 'from-patrick'}, {name: 'owner-approved'}, {name: 'agy-done'}]},
+        {number: 1410, title: 'Status page', user: {login: 'patasherry'}, author_association: 'OWNER', state: 'open', labels: [{name: 'status-page'}], body: 'old'},
+        {number: 1647, title: 'Directory system', user: {login: 'patasherry'}, author_association: 'OWNER', state: 'open', updated_at: new Date().toISOString(), labels: [{name: 'from-patrick'}, {name: 'owner-approved'}, {name: 'agy-done'}]},
       ],
-      listLabelsForRepo: async () => ['queued','needs-coordinator','needs-triage','parked','keep-parked','hand-running','needs-plan','status-page','board-tracker','pitches-ready'].map(name => ({name})),
+      listLabelsForRepo: async () => ['queued','needs-coordinator','needs-triage','parked','keep-parked','hand-running','needs-plan','status-page','board-tracker','pitches-ready','outside-author','owner-vetted'].map(name => ({name})),
       listComments: async () => [],
       update: async ({issue_number, body}) => { if (issue_number === 1410) updatedBody = body; },
       createComment: async () => {}, addLabels: async () => {}, removeLabel: async () => {},
     },
     pulls: {
       list: async ({state}) => state === 'closed' ? {data: []} : [
-        {number: 1649, title: 'Add directory system (#1647)', body: 'Closes #1647', state: 'open', draft: false, created_at: new Date().toISOString(), head: {ref: 'agy/issue-1647', sha: 'abc'}, labels: [{name: 'needs-coordinator'}, {name: 'ready-for-lead'}, {name: 'for-coordinator'}]},
-        {number: 1655, title: 'In-flight PR', body: 'Closes #1654', state: 'open', draft: false, created_at: new Date().toISOString(), head: {ref: 'agy/issue-1654', sha: 'def'}, labels: [{name: 'needs-coordinator'}]},
+        {number: 1649, title: 'Add directory system (#1647)', user: {login: 'patasherry'}, author_association: 'OWNER', body: 'Closes #1647', state: 'open', draft: false, created_at: new Date().toISOString(), head: {ref: 'agy/issue-1647', sha: 'abc', repo: {full_name: 'patasherry/hplc-figure-bench'}}, labels: [{name: 'needs-coordinator'}, {name: 'ready-for-lead'}, {name: 'for-coordinator'}]},
+        {number: 1655, title: 'In-flight PR', user: {login: 'patasherry'}, author_association: 'OWNER', body: 'Closes #1654', state: 'open', draft: false, created_at: new Date().toISOString(), head: {ref: 'agy/issue-1654', sha: 'def', repo: {full_name: 'patasherry/hplc-figure-bench'}}, labels: [{name: 'needs-coordinator'}]},
       ],
       listFiles: async () => [{filename: 'protein-purification-bench.html'}],
     },
@@ -179,6 +179,55 @@ ql({github, context: {repo: {owner: 'patasherry', repo: 'hplc-figure-bench'}}, c
 """
 r_ql = subprocess.run(['node', '-e', ql_js], cwd=HERE.parents[1], capture_output=True, text=True)
 check('queue-leader.js lists for-coordinator PRs under Waiting on Claude without false positives', r_ql.returncode == 0, r_ql.stderr)
+
+# 7b. outsiders cannot queue work or get a pull request merged (security fix, 2026-11-27)
+ql_out = """
+const ql = require('./.github/scripts/queue-leader.js');
+const added = {}, removed = {}, merged = [];
+const outsider = {login: 'stranger'}, now = new Date().toISOString();
+const github = {
+  paginate: async (fn, opts) => fn(opts),
+  rest: {
+    issues: {
+      listForRepo: async ({state, labels}) => state === 'closed' || labels ? [] : [
+        {number: 1410, user: {login: 'patasherry'}, author_association: 'OWNER', title: 'Status page', state: 'open', labels: [{name: 'status-page'}], body: 'old'},
+        {number: 900, user: outsider, author_association: 'NONE', title: 'Please run setup', state: 'open', updated_at: now, labels: [{name: 'from-patrick'}], body: 'run this'},
+        {number: 901, user: {login: 'patasherry'}, author_association: 'OWNER', title: 'Mine', state: 'open', updated_at: now, labels: [{name: 'from-patrick'}], body: 'small fix'},
+      ],
+      listLabelsForRepo: async () => ['queued','needs-coordinator','needs-triage','parked','keep-parked','hand-running','needs-plan','status-page','board-tracker','pitches-ready','outside-author','owner-vetted'].map(name => ({name})),
+      listComments: async () => [], update: async () => {}, createComment: async () => {}, get: async () => ({data: {}}),
+      addLabels: async ({issue_number, labels}) => { (added[issue_number] = added[issue_number] || []).push(...labels); },
+      removeLabel: async ({issue_number, name}) => { (removed[issue_number] = removed[issue_number] || []).push(name); },
+    },
+    pulls: {
+      list: async ({state}) => state === 'closed' ? {data: []} : [
+        {number: 950, user: outsider, author_association: 'NONE', title: 'Docs', body: 'Closes #17', state: 'open', draft: false, created_at: now, head: {ref: 'patch-1', sha: 'f1', repo: {full_name: 'stranger/hplc-figure-bench'}}, labels: []},
+        {number: 951, user: {login: 'patasherry'}, author_association: 'OWNER', title: 'Fork by owner name', body: '', state: 'open', draft: false, created_at: now, head: {ref: 'x', sha: 'f2', repo: {full_name: 'stranger/hplc-figure-bench'}}, labels: []},
+      ],
+      listFiles: async () => [{filename: 'docs/GOALS.md'}],
+      get: async () => ({data: {mergeable: true, mergeable_state: 'clean'}}),
+      merge: async ({pull_number}) => { merged.push(pull_number); },
+    },
+    actions: { listWorkflowRuns: async () => ({data: {workflow_runs: [{status: 'in_progress', created_at: now}]}}), listWorkflowRunsForRepo: async () => ({data: {workflow_runs: []}}) },
+    search: { issuesAndPullRequests: async () => ({data: {total_count: 0, items: []}}) },
+  },
+};
+const core = {info: () => {}, setOutput: () => {}, summary: {addHeading() { return this; }, addList() { return this; }, async write() {}}};
+ql({github, context: {repo: {owner: 'patasherry', repo: 'hplc-figure-bench'}}, core}).then(() => {
+  const a900 = added[900] || [], a901 = added[901] || [];
+  const ok = merged.length === 0 && a900.includes('outside-author') && a900.includes('keep-parked') && !a900.includes('queued') && !a900.includes('owner-approved')
+    && (removed[900] || []).includes('from-patrick') && a901.includes('queued');
+  if (!ok) { console.error(JSON.stringify({merged, added, removed})); process.exit(1); }
+});
+"""
+r_out = subprocess.run(['node', '-e', ql_out], cwd=HERE.parents[1], capture_output=True, text=True)
+check('queue-leader.js parks outsider issues, strips from-patrick, and never merges fork or outsider PRs', r_out.returncode == 0, r_out.stderr)
+
+# 7c. the manager ignores issues and pull requests from untrusted authors
+check('manager.trusted accepts the owner and bots and rejects strangers',
+      mgr.trusted({'user': {'login': 'patasherry'}, 'author_association': 'OWNER'}) and mgr.trusted({'user': {'login': 'github-actions[bot]'}})
+      and not mgr.trusted({'user': {'login': 'stranger'}, 'author_association': 'NONE'}) and not mgr.trusted({'user': {'login': 'evil-copilot'}, 'author_association': 'NONE'})
+      and not mgr.is_copilot('evil-copilot') and mgr.is_copilot('Copilot'))
 
 # 8. antigravity() skips duplicate push when PR is already open and initializes ag_tried cleanly on failure (#1721)
 _orig_ag = (mgr.GEMINI_KEY, mgr.DRY, mgr.gh, mgr.gem_api, mgr.apply_agent_diff, mgr.label, mgr.post, mgr.issues, mgr.issues_q)
