@@ -670,6 +670,23 @@ const files = {
     }
   });
 
+  /* #1811: a reverse-strand CDS across the origin of a 1000 bp plasmid, with no /translation. complement(join(901..1000,1..80))
+     and the INSDC form join(complement(1..80),complement(901..1000)) are the same feature and must give the same protein. */
+  await T.t('join_of_complements', async () => {
+    const orf = 'ATG' + 'GCTGAAAAATCTACCAACCAG'.repeat(8) + 'GGTGGT' + 'TAA', want = 'M' + 'AEKSTNQ'.repeat(8) + 'GG';
+    const circ = Array.from({length: 1000}, (_, i) => 'GC'[i % 2]); rc(orf).split('').forEach((c, k) => { circ[(900 + k) % 1000] = c; });
+    const seq = circ.join(''), lines = []; for (let i = 0; i < 1000; i += 60) lines.push(String(i + 1).padStart(9) + ' ' + seq.slice(i, i + 60).toLowerCase().match(/.{1,10}/g).join(' '));
+    const rec = loc => `LOCUS       pJOINC  1000 bp    DNA     circular SYN 01-JAN-2000\nDEFINITION  Synthetic test plasmid.\nFEATURES             Location/Qualifiers\n     CDS             ${loc}\n                     /label="revORF"\nORIGIN\n${lines.join('\n')}\n//\n`;
+    const prot = async loc => { const P = await open(), hh = H(P.p); P.p.on('dialog', d => d.accept());
+      try { await hh.newProject('GenBank join of complements');
+        await P.p.click('#tl [data-step=construct]'); await P.p.waitForTimeout(300); if (await P.p.$eval('#gbPasteBox', e => e.hidden)) await P.p.click('#gbPaste');
+        await P.p.fill('#gbText', rec(loc)); await P.p.click('#gbPasteGo'); await P.p.waitForTimeout(1000);
+        return await P.p.$eval('#protSeq', e => e.value.replace(/\s/g, '')); } finally { await P.close(); } };
+    const outer = await prot('complement(join(901..1000,1..80))'), insdc = await prot('join(complement(1..80),complement(901..1000))');
+    T.check('join_complement.outer_form_translates', outer === want, `got ${outer.slice(0, 20)}... (${outer.length})`);
+    T.check('join_complement.insdc_form_translates', insdc === want, `got ${insdc.slice(0, 20)}... (${insdc.length})`);
+  });
+
   T.check('no page errors', !errs.length, errs.join(' | '));
   await close();
   T.done();
