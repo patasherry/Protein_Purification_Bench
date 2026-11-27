@@ -165,10 +165,17 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 *   **TIFF Gel Support:** Built-in offline reader for uncompressed and Deflate 8/16-bit TIFFs; `pako` 2.1.0 (`cdnjs.cloudflare.com`) and `UTIF` 3.1.0 (`cdn.jsdelivr.net`) loaded on demand only when an LZW or specialized TIFF image is opened.
 *   **PDB Structures:** Structure files fetched on demand from RCSB Protein Data Bank (`files.rcsb.org/download/`) when a PDB code is loaded.
 
+## License and Citation
+
+Protein Purification Bench is released under the [MIT License](LICENSE). To cite it in a publication, use [CITATION.cff](CITATION.cff) (GitHub shows a "Cite this repository" button for it) and name the commit or date of the copy you used.
+
+The two libraries the app loads on demand for some TIFF images keep their own licenses: `pako` (MIT and Zlib) and `UTIF` (MIT).
+
 ## Repository Layout
 
 *   `protein-purification-bench.html`: Single-file web application (HTML, CSS, and JavaScript).
 *   `README.md`: User-facing documentation.
+*   `LICENSE` / `CITATION.cff`: The MIT license and how to cite the app.
 *   `AGENTS.md` / `CLAUDE.md`: Shared instructions and rules for coding agents.
 *   `.github/workflows/`: GitHub Actions for automated browser tests and PR reviews.
 *   `tests/`: Automated Playwright browser test suite and synthetic test datasets.
