@@ -8976,6 +8976,21 @@ function renderOverlayPeakTable(){
   const body = rows.map(r => `<tr><td><span class="sw" style="background:${esc(r.trace.color)}"></span>${esc(r.trace.name)}</td><td>${esc(r.peak)}</td><td>${r.rt}</td><td>${fmtAuto(r.height)}</td><td>${fmtAuto(r.area)}</td><td>${r.pct == null ? '—' : fmt(r.pct, 1)}</td></tr>`).join('');
   tb.innerHTML = head + (body || '<tr><td colspan="6" class="empty-row">No peaks in the visible window.</td></tr>');
 }
+/* a flat-topped peak (#1815): the UV detector clipped, so the area and the mass from it are lower bounds. The top counts as flat when
+   the points within 0.3% of the maximum around the apex number 5 or more and span at least a quarter of the width at half height;
+   a clean peak's top is under a tenth of it, however finely sampled */
+function uvFlatTop(xs, ys, a, b){
+  if (!xs || !ys) return false; const lo = Math.min(a, b), hi = Math.max(a, b); let i0 = -1, i1 = -1, im = -1;
+  for (let i = 0; i < xs.length; i++) { if (!(xs[i] >= lo && xs[i] <= hi)) continue; if (i0 < 0) i0 = i; i1 = i; if (im < 0 || ys[i] > ys[im]) im = i; }
+  if (im < 0 || i1 - i0 < 10) return false;
+  let mn = Infinity; for (let i = i0; i <= i1; i++) mn = Math.min(mn, ys[i]);
+  const mx = ys[im], amp = mx - mn; if (!(amp > 0)) return false;
+  const tol = Math.max(Math.abs(mx), amp) * 0.003; let p0 = im, p1 = im;
+  while (p0 > i0 && mx - ys[p0 - 1] <= tol) p0--; while (p1 < i1 && mx - ys[p1 + 1] <= tol) p1++;
+  const half = mn + amp / 2; let h0 = im, h1 = im; while (h0 > i0 && ys[h0 - 1] >= half) h0--; while (h1 < i1 && ys[h1 + 1] >= half) h1++;
+  const pw = xs[p1] - xs[p0], hw = xs[h1] - xs[h0];
+  return p1 - p0 + 1 >= 5 && hw > 0 && pw / hw >= 0.25;
+}
 function renderIntTable(run){
   const cl = $('#intClear'); if (cl) cl.textContent = 'Clear regions';
   const rows = integRows(run), pool = poolRows(run), man = manEps(), E = ndEpsFor(run.id), hasEps = (man > 0 && man <= 100) || (!(man > 100) && !!(E && E.e > 0)), hasMg = (!massWhy(run) && hasEps) || !!(pool && pool.measured), gs = opt.intMethod === 'gauss', u = xUnit(run);
@@ -8987,7 +9002,8 @@ function renderIntTable(run){
   const ratAt = r => peakRatio260(dual, r);
   const cols = 13 + (rat ? 1 : 0) + (hasMg ? 1 : 0) + (hasTheo ? 1 : 0) + (gs ? 1 : 0) + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0);
   const head = `<tr><th>Region</th><th>Start (${u})</th><th>End (${u})</th><th>${sec ? (u === 'min' ? 'Elution time' : 'Ve') : gs ? 'Center' : 'Apex'} (${u})</th>${hasKav ? '<th title="(Ve − V0)/(Vt − V0)">Kav</th>' : ''}${hasMw ? '<th>Apparent mass (kDa)</th>' : ''}${hasOl ? '<th title="Apparent MW divided by the monomer mass. SEC sizes are typically good to 10 to 20%, and shape shifts them, so treat this as a guide to the oligomer state">× monomer</th>' : ''}<th>Height (mAU)</th><th>FWHM (${u})</th><th>Area (mAU·${u})</th><th>% of regions</th>${hasMg ? '<th>Protein (mg)</th>' : ''}${hasTheo ? '<th title="Theoretical mass from Beer-Lambert: flow × area × MW / (ε × path)">Theo. mass</th>' : ''}${rat ? '<th title="Ratio of absorbance at 260 and 280 nm at the peak. Around 0.57 for pure protein, higher when nucleic acid or bound nucleotide is present">A₂₆₀/A₂₈₀</th>' : ''}<th title="Cytiva UNICORN peak asymmetry at 10% height (As = b₀.₁₀ / a₀.₁₀)">As</th><th title="USP &lt;621&gt; / Ph. Eur. 2.2.46 tailing factor at 5% height (Tf = (a₀.₀₅ + b₀.₀₅) / 2a₀.₀₅)">Tf</th><th title="Half-height theoretical plates (N = 5.545 × (tR / FWHM)²)">Plates</th><th title="Half-height resolution from previous peak (Rs = 1.177 × ΔtR / (FWHM₁ + FWHM₂))">Rs</th>${gs ? '<th>Fit R²</th>' : ''}<th></th></tr>`;
-  const body = rows.map((r, k) => { const ri = run.integ.indexOf(r.reg), si = r.sec || {};
+  const uvF = uvOf(run), flats = [];
+  const body = rows.map((r, k) => { const ri = run.integ.indexOf(r.reg), si = r.sec || {}, flat = !!uvF && uvFlatTop(uvF.xs, uvF.ys, r.a, r.b); if (flat) flats.push(r.name);
     const mwCell = si.void ? 'void' : si.mw == null ? '' : `${si.extrap ? '~' : ''}${kdaRound(si.mw)}`, olCell = si.void || si.ratio == null ? '' : si.olig ? `${fmt(si.ratio, 1)}×` : `${fmt(si.ratio, 1)}× (below monomer)`;
     const tiny = r.gauss && rows.reduce((t, q) => t + Math.max(0, q.area || 0), 0)*0.01 > (r.area || 0);
     const lowR2 = gs && r.r2 != null && r.r2 < 0.96;
@@ -8995,7 +9011,7 @@ function renderIntTable(run){
       <td><input type="number" step="0.01" id="ia${k}" data-ri="${ri}" data-rk="a" value="${fmt(r.a, 2)}" aria-label="${r.name} start"></td>
       <td><input type="number" step="0.01" id="ib${k}" data-ri="${ri}" data-rk="b" value="${fmt(r.b, 2)}" aria-label="${r.name} end"></td>
       <td${lowR2 ? ` class="warnc" title="Fit R² = ${fmt(r.r2, 3)} (< 0.96): symmetric Gaussian center (${fmt(r.apex, 2)} ${u}) shifts from empirical apex (${fmt(r.empApex ?? r.apex, 2)} ${u})"` : ''}>${fmt(r.apex, 2)}</td>${hasKav ? `<td>${si.kav == null ? '' : fmt(si.kav, 3)}</td>` : ''}${hasMw ? `<td>${mwCell}</td>` : ''}${hasOl ? `<td>${olCell}</td>` : ''}<td>${fmtAuto(r.height)}</td><td>${r.fwhm == null ? '—' : fmt(r.fwhm, 2)}</td><td>${fmtAuto(r.area)}</td><td>${r.pct == null ? '' : fmt(r.pct, 1)}</td>
-      ${hasMg ? `<td${r.scaled && r.mg != null ? ' title="Peak mass rescaled using the pool NanoDrop mass (concentration × measured volume)"' : ''}>${r.mg == null ? '' : (r.scaled ? '≈' : '') + fmt(r.mg, 2)}</td>` : ''}${hasTheo ? `<td>${theoCell(r.theoMass, r.ndMass)}</td>` : ''}${rat ? `<td>${ratAt(r)}</td>` : ''}<td>${r.as == null ? '—' : fmt(r.as, 2)}</td><td>${r.tf == null ? '—' : fmt(r.tf, 2)}</td><td>${r.plates == null ? '—' : r.plates}</td><td>${r.rs == null ? '—' : fmt(r.rs, 2)}</td>${gs ? `<td${r.r2 != null && r.r2 < 0.98 ? ' class="warnc" title="Below 0.98, so one Gaussian may not describe this peak. Split it, or use trapezoid areas"' : ''}>${r.r2 == null ? '' : fmt(r.r2, 3)}</td>` : ''}<td><button type="button" class="xbtn" data-rdel="${ri}" aria-label="Remove ${r.name}">×</button></td></tr>`; }).join('');
+      ${hasMg ? `<td${flat && r.mg != null ? ' class="warnc" title="The peak top is flat, so the UV detector was probably saturated: this mass is a lower bound. Dilute the load or use a shorter path length"' : r.scaled && r.mg != null ? ' title="Peak mass rescaled using the pool NanoDrop mass (concentration × measured volume)"' : ''}>${r.mg == null ? '' : (flat ? '≥' : r.scaled ? '≈' : '') + fmt(r.mg, 2)}</td>` : ''}${hasTheo ? `<td>${theoCell(r.theoMass, r.ndMass)}</td>` : ''}${rat ? `<td>${ratAt(r)}</td>` : ''}<td>${r.as == null ? '—' : fmt(r.as, 2)}</td><td>${r.tf == null ? '—' : fmt(r.tf, 2)}</td><td>${r.plates == null ? '—' : r.plates}</td><td>${r.rs == null ? '—' : fmt(r.rs, 2)}</td>${gs ? `<td${r.r2 != null && r.r2 < 0.98 ? ' class="warnc" title="Below 0.98, so one Gaussian may not describe this peak. Split it, or use trapezoid areas"' : ''}>${r.r2 == null ? '' : fmt(r.r2, 3)}</td>` : ''}<td><button type="button" class="xbtn" data-rdel="${ri}" aria-label="Remove ${r.name}">×</button></td></tr>`; }).join('');
   const blank = n => '<td></td>'.repeat(n);
   const poolTheo = pool ? theoPeakMass(pool.area, run) : null, poolNdUg = pool && pool.measured && pool.mg != null ? pool.mg * 1000 : null;
   const pr = pool ? `<tr class="pool" title="UV area across the pooled fractions, same baseline as the regions"><td><span class="sw" style="background:${esc(opt.poolColor)}"></span>Pool ${esc(pool.label)}</td><td>${fmt(pool.a, 2)}</td><td>${fmt(pool.b, 2)}</td>${blank(1 + (hasKav ? 1 : 0) + (hasMw ? 1 : 0) + (hasOl ? 1 : 0) + 2)}<td>${fmtAuto(pool.area)}</td><td></td>${hasMg ? `<td>${pool.mg == null ? '' : fmt(pool.mg, 2)}</td>` : ''}${hasTheo ? `<td>${theoCell(poolTheo, poolNdUg)}</td>` : ''}${rat ? '<td></td>' : ''}${blank(4 + (gs ? 1 : 0) + 1)}</tr>` : '';
@@ -9003,7 +9019,7 @@ function renderIntTable(run){
   const mgWhy = (hasEps || man > 100) && !hasMg ? massWhy(run) : '', mgNote = mgWhy ? `<tr><td colspan="${cols}" class="empty-row">No protein mg: ${esc(mgWhy)}.</td></tr>` : hasEps && !massWhy(run) && pathAssumed(run) ? `<tr><td colspan="${cols}" class="empty-row">Protein mg use an assumed UV path of ${esc(fmtAuto(effPathMm()))} mm. Enter the real path on the run card.</td></tr>` : '';
   const scaleNote = hasMg && rows.some(r => r.scaled && r.mg != null) ? `<tr><td colspan="${cols}" class="empty-row">≈ Peak masses overlapping the pool are rescaled using the pool NanoDrop mass (concentration × measured volume), including any loss during concentration.</td></tr>` : '';
   const skewNote = gs && rows.some(r => r.r2 != null && r.r2 < 0.96) ? `<tr><td colspan="${cols}" class="empty-row warnc">Gaussian fit R² &lt; 0.96: fitted peak center shifts from the empirical apex on skewed or tailed peaks; switch Peak areas from to trapezoid for empirical apex values.</td></tr>` : '';
-  $('#intTable').innerHTML = head + (body + pr || `<tr><td colspan="${cols}" class="empty-row">No regions yet. Drag across the chromatogram, or click Detect peaks.</td></tr>`) + note + mgNote + scaleNote + skewNote;
+  $('#intTable').innerHTML = head + (body + pr || `<tr><td colspan="${cols}" class="empty-row">No regions yet. Drag across the chromatogram, or click Detect peaks.</td></tr>`) + note + mgNote + scaleNote + skewNote + (flats.length ? `<tr><td colspan="${cols}" class="hint flatnote">${esc(flats.join(', '))}: flat top, so the UV detector was probably saturated. Area and mass are lower bounds (shown with ≥).</td></tr>` : '');
   /* FWHM, suitability metrics and fit quality wait behind More columns; A260/A280 stays visible */
   { const tb = $('#intTable'), hd = [...(tb.rows[0] || {cells: []}).cells].map(c => c.textContent), extra = hd.map(t => /^(FWHM\b|Fit R|Height\b|As$|Tf$|Plates$|Rs$)/.test(t));
     [...tb.rows].forEach(r => { if (r.cells.length !== hd.length) return; [...r.cells].forEach((c, i) => c.classList.toggle('xc', !!extra[i])); });
