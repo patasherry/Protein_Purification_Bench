@@ -173,8 +173,29 @@ def label(n, add=(), remove=()):
         gh(f'repos/{REPO}/issues/{n}/labels', 'POST', {'labels': list(add)})
 
 
+# Who the manager takes work from (security fix, 2026-11-27). The repository is public, so an issue or pull request
+# written by anyone else must never reach a worker or be merged. Trusted: the owner and his collaborators, the
+# Actions bot (the queue leader files follow-up issues), and the coding-agent bot accounts, matched by exact login.
+# An outside issue the owner has read and wants worked carries `owner-vetted` (only people with triage access can add labels).
+TRUSTED_BOTS = set(cfg.get('trusted_bots', ['github-actions[bot]', 'Copilot', 'copilot-swe-agent[bot]', 'claude[bot]']))
+TRUSTED_ROLES = {'OWNER', 'MEMBER', 'COLLABORATOR'}
+VETTED = 'owner-vetted'
+
+
+def trusted(x):
+    """True when an issue, pull request or comment was written by the owner, a collaborator or a trusted bot."""
+    u = (x or {}).get('user') or {}
+    return u.get('login') in TRUSTED_BOTS or u.get('login') == REPO.split('/')[0] or x.get('author_association') in TRUSTED_ROLES
+
+
+def is_copilot(login):
+    """Copilot's bot accounts by exact login. A substring test let any account with 'copilot' in its name pass as Copilot."""
+    return login in ('Copilot', 'copilot-swe-agent[bot]')
+
+
 def issues(lab):
-    return [i for i in gh(f'repos/{REPO}/issues?state=open&labels={lab}&per_page=100') if 'pull_request' not in i]
+    return [i for i in gh(f'repos/{REPO}/issues?state=open&labels={lab}&per_page=100') if 'pull_request' not in i
+            and (trusted(i) or VETTED in {l['name'] for l in i.get('labels', [])})]
 
 
 def comments(n):
@@ -1376,7 +1397,13 @@ def gate(s):
         n, sha = pr['number'], pr['head']['sha']
         pr_labels = {l['name'] for l in pr.get('labels', [])}
         # Copilot's cloud agent leaves a finished PR as a draft and asks the owner to review it, and GitHub holds its tests for a person to approve
-        cop_done = 'copilot' in pr['user']['login'].lower() and not pr['title'].startswith('[WIP]') and bool(pr.get('requested_reviewers'))
+        # never gate, rebuild or merge a pull request from a fork or from an author outside the trusted list (security fix, 2026-11-27)
+        if not trusted(pr) or (pr.get('head', {}).get('repo') or {}).get('full_name') != REPO:
+            if s['gated'].get(str(n)) != sha:
+                log(f'PR #{n}: from an untrusted author or a fork, not gated or merged')
+                s['gated'][str(n)] = sha
+            continue
+        cop_done = is_copilot(pr['user']['login']) and not pr['title'].startswith('[WIP]') and bool(pr.get('requested_reviewers'))
         if (pr.get('draft') and not cop_done) or 'for-coordinator' in pr_labels or s['gated'].get(str(n)) == sha:
             continue
         # Judge emptiness before waiting for tests. An empty PR touches neither the app nor tests/, so the Test suite
@@ -1442,7 +1469,7 @@ def gate(s):
         # Antigravity (API route and CLI) is the first worker since Jules went, so a PR of its that fails the gate goes back to the
         # queue with the notes, up to MAX_SENDBACKS, as the first worker's always did. Counting it as a retry worker sent every
         # failed Antigravity PR straight to for-claude-code, which Codex's heavy model and then Claude Code serve.
-        cop = 'copilot' in pr['user']['login'].lower() or COPILOT_CLI_MARK in (pr.get('body') or '') or OC_MARK in (pr.get('body') or '') or BG['codex']['mark'] in (pr.get('body') or '')
+        cop = is_copilot(pr['user']['login']) or COPILOT_CLI_MARK in (pr.get('body') or '') or OC_MARK in (pr.get('body') or '') or BG['codex']['mark'] in (pr.get('body') or '')
         mine = hand or bool(re.search(r'Generated (?:with|by) \[Claude Code\]|claude\.ai/code/session_', pr.get('body') or '')) or CC_MARK in (pr.get('body') or '')  # hand-started PRs, the lead's rebuilds and Claude Code jobs are not sent back to the queue
         if probs and issue and not hand and all(p.startswith(JUNK_ONLY) for p in probs) and CLEAN_MARK not in (pr.get('body') or ''):
             new = clean_rebuild(full, fobjs, issue)  # only stray files or a conflict: fix it here instead of a worker retry
@@ -4152,8 +4179,8 @@ def copilot(s):
     prs = gh(f'repos/{REPO}/pulls?state=all&sort=created&direction=desc&per_page=50')
     for i in issues('copilot-running'):
         n = i['number']
-        pr = next((p for p in prs if re.search(rf'(?:closes|fixes|resolves)\s+#{n}\b', p.get('body') or '', re.I) and 'copilot' in p['user']['login'].lower()), None)
-        why = next((x['body'] for x in gh(f'repos/{REPO}/issues/{n}/comments?per_page=100') if 'copilot' in x['user']['login'].lower() and 'unable to start' in x['body']), None)
+        pr = next((p for p in prs if re.search(rf'(?:closes|fixes|resolves)\s+#{n}\b', p.get('body') or '', re.I) and is_copilot(p['user']['login'])), None)
+        why = next((x['body'] for x in gh(f'repos/{REPO}/issues/{n}/comments?per_page=100') if is_copilot(x['user']['login']) and 'unable to start' in x['body']), None)
         if not pr and why:  # Copilot took the job but refused to start (for example out of GitHub AI Credits): hand it back now and pause Copilot a day
             back = 'for-claude-code' if c.get(f'{n}_retry') else QUEUE
             try:

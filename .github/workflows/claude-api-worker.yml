@@ -83,6 +83,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.PPB_TOKEN || secrets.HFB_TOKEN }}
+          persist-credentials: false  # the token is not left in .git/config while Claude runs; the Ship step pushes with it explicitly
       - uses: actions/setup-node@v4
         if: steps.pick.outputs.issue
         with:
@@ -140,7 +141,7 @@ jobs:
           git commit -q -m "Fix #$N (Claude API worker)
 
           Co-Authored-By: Claude <noreply@anthropic.com>"
-          git push -q -f origin claude/issue-$N
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" claude/issue-$N
           title=$(gh api repos/$REPO/issues/$N --jq .title)
           { echo "Closes #$N"; [ "$FIRST" = true ] && echo "Made by the Claude API worker as a first try for an audit finding."; echo; cat "$T/pr_body.md" 2>/dev/null || echo "(Claude wrote no description.)"; echo; echo "🤖 Generated with [Claude Code](https://claude.com/claude-code) by the Claude API worker (run ${{ github.run_id }})."; } > "$T/body.md"
           pr=$(jq -n --arg t "$title" --rawfile b "$T/body.md" --arg h "claude/issue-$N" '{title:$t, head:$h, base:"main", body:$b}' | gh api repos/$REPO/pulls --input - --jq .number)

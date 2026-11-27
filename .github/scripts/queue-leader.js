@@ -29,17 +29,24 @@ const PARK_LOW = 3, PARK_WAIT_DAYS = 2, PARK_PER_DAY = 2, KEEP = 'keep-parked';
 /* a label that says whose move it is. An open issue with none of these, and no open PR, is invisible to every worker. */
 const isState = l => /^(for-|needs-|awaiting-|relay|paste-)/.test(l) || /-running$/.test(l) || ['queued', 'jules-queue', 'parked', 'ux-report', 'ready-for-lead', 'status-page', 'board-tracker', 'pitches-ready'].includes(l);
 const QUEUE_OLD = 'jules-queue';
-const SAFE = f => /^(tests\/|docs\/|\.github\/ISSUE_TEMPLATE\/)/.test(f) || f === 'README.md' || f === 'tests/README.md';
-/* a few edits outside those folders are routine for test and docs PRs: adding a suite to the Test suite matrix, or adding up to 3 lines to AGENTS.md */
-const changed = patch => String(patch || '').split('\n').filter(l => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
-const SAFE_FILE = f => SAFE(f.filename)
-  || (f.filename === '.github/workflows/tests.yml' && changed(f.patch).length > 0 && changed(f.patch).every(l => /^[+-]\s*(suite: \[|names = \{)/.test(l)))
-  || (f.filename === 'AGENTS.md' && f.deletions === 0 && f.additions <= 3);
+/* Issue templates, AGENTS.md and workflows are never auto-merged (security fix, 2026-11-27): templates grant labels, and
+   AGENTS.md is the rulebook every agent obeys. Changes to them go to the coordinator. */
+const SAFE = f => /^(tests\/|docs\/)/.test(f) || f === 'README.md' || f === 'tests/README.md';
+const SAFE_FILE = f => SAFE(f.filename);
+/* Who the automation takes work from (security fix, 2026-11-27). The repository is public, so issues, pull requests and
+   report comments written by anyone else must never be merged, queued or turned into new issues. Trusted: the owner and
+   his collaborators, the Actions bot, and the coding-agent bots by exact login. An outside issue the owner has read and
+   wants worked gets `owner-vetted` from him (only people with triage access can add labels). */
+const TRUSTED_BOTS = new Set(['github-actions[bot]', 'Copilot', 'copilot-swe-agent[bot]', 'claude[bot]']);
+const TRUSTED_ROLES = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+const VETTED = 'owner-vetted', OUTSIDE = 'outside-author';
+const trustedBy = (x, owner) => Boolean(x && x.user && (TRUSTED_BOTS.has(x.user.login) || x.user.login === owner || TRUSTED_ROLES.has(x.author_association)));
 
 module.exports = async ({github, context, core}) => {
   const {owner, repo} = context.repo, log = [];
   const say = m => { log.push(m); core.info(m); };
   const labels = i => (i.labels || []).map(l => typeof l === 'string' ? l : l.name);
+  const trusted = x => trustedBy(x, owner), allowed = i => trusted(i) || labels(i).includes(VETTED);
   /* the cloud manager stands in for the PC manager while the PC is off. GitHub rarely fires its schedule, so the leader
      starts it when its last run is over 10 minutes old (it stands aside by itself while the PC runs) */
   let woke = false;
@@ -56,7 +63,7 @@ module.exports = async ({github, context, core}) => {
     for (const name of [L.queue, QUEUE_OLD]) for (const i of await issues(name)) if (!seen.has(i.number)) seen.set(i.number, i);
     return [...seen.values()]; };
   const ensureLabels = async () => { const have = new Set((await github.paginate(github.rest.issues.listLabelsForRepo, {owner, repo, per_page: 100})).map(l => l.name));
-    const want = {[L.queue]: '0E8A16', [L.fail]: 'D93F0B', [L.triage]: 'C5DEF5', [L.parked]: 'EEEEEE', [KEEP]: 'EEEEEE', [HAND]: 'BFD4F2', [L.plan]: 'FBCA04', [L.status]: '1D76DB', 'board-tracker': '5319E7', 'pitches-ready': 'FBCA04'};
+    const want = {[OUTSIDE]: 'B60205', [VETTED]: '0E8A16', [L.queue]: '0E8A16', [L.fail]: 'D93F0B', [L.triage]: 'C5DEF5', [L.parked]: 'EEEEEE', [KEEP]: 'EEEEEE', [HAND]: 'BFD4F2', [L.plan]: 'FBCA04', [L.status]: '1D76DB', 'board-tracker': '5319E7', 'pitches-ready': 'FBCA04'};
     for (const [name, color] of Object.entries(want)) if (!have.has(name)) await github.rest.issues.createLabel({owner, repo, name, color}); };
   const setLabels = async (n, add, remove) => { for (const r of remove) await github.rest.issues.removeLabel({owner, repo, issue_number: n, name: r}).catch(() => {});
     if (add.length) await github.rest.issues.addLabels({owner, repo, issue_number: n, labels: add}); };
@@ -92,7 +99,7 @@ module.exports = async ({github, context, core}) => {
     say(`#${i.number}: no check named, held for a plan`); }
   /* an issue a worker handed back (ag-returned), one held in needs-plan/parked/needs-owner, or one already routed, is not the leader's to act on */
   const routable = i => { const ls = labels(i);
-    return !ls.some(l => l === 'ag-returned' || l === 'for-antigravity' || l === L.plan || l === L.parked || l === 'needs-previous' || l === 'owner-declined') && !(ls.includes('needs-owner') && !ls.includes('owner-approved')); };
+    return allowed(i) && !ls.some(l => l === 'ag-returned' || l === 'for-antigravity' || l === L.plan || l === L.parked || l === 'needs-previous' || l === 'owner-declined') && !(ls.includes('needs-owner') && !ls.includes('owner-approved')); };
   if (agAvailable) {
     for (const i of await queued()) {
       if (!routable(i)) continue;
@@ -107,6 +114,8 @@ module.exports = async ({github, context, core}) => {
   /* ---------- 2. merge safe PRs ---------- */
   const prs = await github.paginate(github.rest.pulls.list, {owner, repo, state: 'open', per_page: 100});
   for (const p of prs) { if (p.draft) continue;
+    /* only pull requests from a branch of this repository by a trusted author are ever merged here */
+    if (!trusted(p) || !p.head.repo || p.head.repo.full_name !== `${owner}/${repo}`) { say(`PR #${p.number}: untrusted author or a fork, not merged`); continue; }
     const fobj = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: p.number, per_page: 100}), files = fobj.map(f => f.filename);
     const labels = p.labels.map(l => l.name);
     if (labels.includes('awaiting-owner')) continue; /* a Direction board idea: Patrick OKs it on the PR, and the local manager merges it */
@@ -116,7 +125,7 @@ module.exports = async ({github, context, core}) => {
       say(`PR #${p.number}: empty (no files changed), flagged for the coordinator`); } continue; }
     if (!fobj.every(SAFE_FILE)) { if (!labels.includes(L.fail)) { await setLabels(p.number, [L.fail], []); say(`PR #${p.number}: changes the app or workflows, flagged for the coordinator`); } continue; }
     const runs = (await github.rest.actions.listWorkflowRunsForRepo({owner, repo, head_sha: p.head.sha, per_page: 20})).data.workflow_runs.filter(r => r.name === 'Test suite');
-    const cs = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number: p.number, per_page: 100}), rep = cs.reverse().find(c => c.body.includes('<!-- test-suite-report -->'));
+    const cs = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number: p.number, per_page: 100}), rep = cs.reverse().find(c => c.body.includes('<!-- test-suite-report -->') && trusted(c));
     const testsTouched = files.some(f => f.startsWith('tests/'));
     if (testsTouched && !(runs.length && runs[0].status === 'completed' && runs[0].conclusion === 'success' && rep && /No regressions/.test(rep.body))) continue;
     /* GitHub works out mergeability in the background: ask a few times before giving up for this run */
@@ -160,6 +169,15 @@ module.exports = async ({github, context, core}) => {
     for (const p of livePrs) { for (const m of `${p.title}\n${p.body || ''}`.matchAll(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi)) prOf.set(+m[1], p.number);
       const b = /issue-(\d+)/.exec(p.head.ref); if (b) prOf.set(+b[1], p.number); }
     for (const i of open) { const ls = labels(i); if (TRACKERS.has(i.number) || ls.includes(L.status) || ls.includes('board-tracker')) continue;
+      /* an issue from outside: strip every label that could start work or claim the owner's approval, park it for good, and
+         touch it no further until the owner adds owner-vetted */
+      if (!allowed(i)) {
+        if (!ls.includes(OUTSIDE)) {
+          const drop = ls.filter(l => l === L.mine || l === 'owner-approved' || l === 'board-approved' || l === L.queue || l === QUEUE_OLD || /^for-/.test(l));
+          await setLabels(i.number, [OUTSIDE, L.parked, KEEP], drop);
+          await github.rest.issues.createComment({owner, repo, issue_number: i.number, body: 'Thanks for the report. Issues from outside the project are not picked up by the automation. The owner will read it and decide.'});
+          say(`#${i.number}: from an outside author, parked for the owner`); }
+        i.labels = ls.filter(l => l !== L.mine && l !== 'owner-approved' && l !== L.queue).concat([OUTSIDE, L.parked, KEEP]); continue; }
       const others = ls.filter(l => isState(l) && l !== L.parked && l !== L.triage);
       if (ls.includes('owner-declined')) {
         const drop = ls.filter(l => l === L.parked || l === L.queue || l === QUEUE_OLD);
