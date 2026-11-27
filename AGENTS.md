@@ -58,6 +58,8 @@ The app loads only these external resources. Do not add new ones without saying 
 - `pako` 2.1.0 from cdnjs and `UTIF` 3.1.0 from jsDelivr, loaded on demand to read TIFF gel images.
 - RCSB PDB (`files.rcsb.org/download/`) when the user requests a PDB structure.
 
+The stand-alone page sets a Content-Security-Policy at the top of the script that lists where script may send data (`connect-src`) and load images from (`img-src`). A new network use must be added there too, or the browser blocks it. `tests/suites/52_csp.js` checks it.
+
 ## Scientific values
 
 Do not change scientific constants without a cited source in the PR description. These include protein ladder sizes (`LADDERS`), known contaminant masses (`KNOWN_DEFAULT`), extinction coefficient and molecular weight calculations, SEC calibration math, and peak integration methods.
