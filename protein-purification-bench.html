@@ -16973,7 +16973,14 @@ function toast(msg, act){ const box = $('#toast'); const dup = [...box.children]
   }
   const hd = document.querySelector('header.top'); box.style.setProperty('--tt', Math.max(16, hd ? Math.round(hd.getBoundingClientRect().bottom) + 8 : 0) + 'px'); box.appendChild(pill); box.hidden = false;
   while (box.children.length > 3) box.firstChild.remove();
-  setTimeout(gone, act ? 6000 : Math.min(6000, 2600 + msg.length*25)); }
+  /* #1823 (WCAG 2.2.1): a toast with a button (Undo) or one explaining a failure stays longer, and none closes while the pointer
+     or keyboard focus is on it, so the time it shows adjusts to the reader */
+  const err = /^(Could not|Cannot|Can't|Not saved|Not |No |Failed|Unable)/.test(msg);
+  let left = act ? 12000 : err ? Math.max(10000, Math.min(15000, 4000 + msg.length*40)) : Math.min(6000, 2600 + msg.length*25), t0 = Date.now(), tm = setTimeout(gone, left);
+  const hold = () => { if (!tm) return; clearTimeout(tm); tm = 0; left = Math.max(1500, left - (Date.now() - t0)); };
+  const go = () => { if (tm || pill.matches(':hover') || pill.contains(document.activeElement)) return; t0 = Date.now(); tm = setTimeout(gone, left); };
+  pill.addEventListener('mouseenter', hold); pill.addEventListener('focusin', hold);
+  pill.addEventListener('mouseleave', () => setTimeout(go, 0)); pill.addEventListener('focusout', () => setTimeout(go, 0)); }
 
 /* ---------- example data ---------- */
 function exampleTraces(){
