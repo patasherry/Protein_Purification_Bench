@@ -11787,15 +11787,25 @@ function ndHeader(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) {
 function looksNanoDrop(text){ const L = text.split(/\r?\n/).filter(l => l.trim()); return !!ndHeader(L) || (L.slice(0, 80).some(l => /^wavelength/i.test(l.trim()) && /absorbance/i.test(l)) && L.some(l => /^a?\s?260\s*\/\s*a?280\b/i.test(l.trim()))); }
 function isNanoDropHead(lines){ for (let i = 0; i < Math.min(lines.length, 80); i++) { const l = lines[i], d = (l.match(/\t/g) || []).length >= 2 ? '\t' : (l.match(/;/g) || []).length > (l.match(/,/g) || []).length ? ';' : ','; const H = splitRow(l, d); if (H.some(h => ND_NAME.test(h)) && H.some(h => ND_HEAD.test(h))) return true; if (/^(wavelength|wl|nm)/i.test(H[0] || '') && H.length > 1 && H.some(h => isWl(h) || /\b(abs|absorbance|a280)\b/i.test(h))) return true; } return false; }
 const ndNum = (v, d) => { let s = String(v ?? '').replace(/\s/g, ''); if (d === ';') { const m = s.match(/^[+-]?(\d*)(?:\.(\d{3}))*,(\d+)(?:[eE][+-]?\d+)?$/); s = m ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '.'); } else { const m = s.match(/^[+-]?(\d*),(\d+)(?:[eE][+-]?\d+)?$/); s = m && !(m[2].length === 3 && /^[1-9]\d{0,2}$/.test(m[1])) ? s.replace(',', '.') : s.replace(/,/g, ''); } return measurementNumber(s); };
+/* one decimal convention per file (#1803): NanoDrop writes 3 decimals, so "1,234" alone could be a thousands separator, but a
+   file that also has "0,57" or "12,3" uses decimal commas throughout, and then every comma is a decimal point. A file that
+   also writes "1,234.5", "1,234,567" or "0.57" uses commas for thousands, so it keeps the per-cell reading (dates such as
+   27.11.2026 are evidence of neither) */
+const ndDecComma = cells => { const v = cells.map(c => String(c ?? '').replace(/\s/g, ''));
+  if (v.some(x => /^[+-]?\d*\.\d+$/.test(x) || /^[+-]?\d{1,3}(?:,\d{3})+\.\d+$/.test(x) || /^[+-]?\d{1,3}(?:,\d{3}){2,}$/.test(x))) return false;
+  return v.some(x => { const m = x.match(/^[+-]?(\d+),(\d+)$/); return !!m && (m[2].length !== 3 || /^0+$/.test(m[1])); }); };
 const CRUDE_RE = /lys|load|flow|\bft\b|supernat|pellet|crude|input|clarif/i;
 function ndNew(o){ const id = o && o.id != null && String(o.id).trim() !== '' ? o.id : nextUid('nd'); return Object.assign({}, ENTITY_CODECS.NanoDrop.def, {id}, o, {id}); }
 /* NanoDrop One per-sample file: name, date, a "Wavelength (nm) / 10mm Absorbance" header, calibration comments, A260/A280 and A280 lines, then the spectrum */
 function parseNDSingle(lines){
   const hi = lines.findIndex(l => /^wavelength/i.test(l.trim()) && /absorbance/i.test(l)); if (hi < 0) return null;
   const s = ndNew({name: lines[0].trim(), when: hi > 1 ? lines[1].trim() : ''}), wl = [], ab = [];
-  lines.slice(hi + 1).forEach(l => { const c = l.split(/\t|,/).map(x => x.trim()); if (!c[0] || c[0].startsWith('//')) return; const v = ndNum(c[1]);
+  /* one delimiter per file (#1802): a tab file can carry decimal commas ("A280\t1,234"), so splitting on commas too cut every value */
+  const body = lines.slice(hi + 1), dl = body.some(l => l.includes('\t')) ? '\t' : ',', rows = body.map(l => l.split(dl).map(x => x.trim()));
+  const nd = dl === '\t' && ndDecComma(rows.map(c => c[1])) ? ';' : dl;
+  rows.forEach(c => { if (!c[0] || c[0].startsWith('//')) return; const v = ndNum(c[1], nd);
     if (/^a?260\s*\/\s*a?280$/i.test(c[0])) s.r280 = v; else if (/^a?260\s*\/\s*a?230$/i.test(c[0])) s.r230 = v; else if (/^a\s?280$/i.test(c[0])) s.a280 = v;
-    else { const w = ndNum(c[0]); if (w != null && v != null && w >= 190 && w <= 850) { wl.push(w); ab.push(v); } } });
+    else { const w = ndNum(c[0], nd); if (w != null && v != null && w >= 190 && w <= 850) { wl.push(w); ab.push(v); } } });
   if (wl.length > 10) { s.spec = {wl, ab}; const at = x => { const i = wl.findIndex(w => Math.abs(w - x) < 0.3); return i < 0 ? null : ab[i]; }; if (s.a280 == null) s.a280 = at(280); s.a230 = at(230); s.a340 = at(340); s.a260 = at(260);
     if (s.r230 == null && s.a230 > 0 && s.a260 != null) s.r230 = s.a260/s.a230; if (s.r280 == null && s.a280 > 0 && s.a260 != null) s.r280 = s.a260/s.a280; }
   s.hide = CRUDE_RE.test(s.name); return s.a280 != null ? [s] : [];
@@ -11804,14 +11814,16 @@ function parseNDSingle(lines){
    text lines (name, date) above its Wavelength header, so the previous block's spectrum ends where those lines begin */
 function parseNDSingleBlocks(lines){
   const hs = lines.reduce((a, l, i) => (/^wavelength/i.test(l.trim()) && /absorbance/i.test(l) && a.push(i), a), []); if (hs.length < 2) return null;
-  const text = l => { const c = l.split(/\t|,/)[0].trim(); return !c.startsWith('//') && ndNum(c) == null && !/^a?\s?2[368]0(\s*\/\s*a?2[38]0)?$/i.test(c); };
+  const text = l => { const c = l.split(l.includes('\t') ? '\t' : ',')[0].trim(); return !c.startsWith('//') && ndNum(c) == null && !/^a?\s?2[368]0(\s*\/\s*a?2[38]0)?$/i.test(c); };
   const starts = hs.map((h, k) => { const lo = k ? hs[k - 1] + 1 : 0; let st = h; while (st > lo && h - st < 2 && text(lines[st - 1])) st--; return k ? st : 0; });
   return starts.flatMap((st, k) => (parseNDSingle(lines.slice(st, k + 1 < starts.length ? starts[k + 1] : lines.length)) || []).map(s => Object.assign(s, {row: k})));
 }
 function parseNanoDrop(text){
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.trim()), many = parseNDSingleBlocks(lines); if (many) return many; const one = parseNDSingle(lines); if (one) return one;
   const hd = ndHeader(lines); if (!hd) return [];
-  const {H, d} = hd, data = lines.slice(hd.i + 1).map(l => splitRow(l, d));
+  const {H} = hd, data = lines.slice(hd.i + 1).map(l => splitRow(l, hd.d));
+  /* decimal commas in a tab or quoted-comma table (#1803): read every cell of that file as decimal-comma, so "1,234" next to "0,532" is 1.234, not 1234 */
+  const d = hd.d !== ';' && ndDecComma(data.flat()) ? ';' : hd.d;
   /* spectra laid out as rows: one column per sample, one row per wavelength */
   if (hd.rows === 'wavelengths') { return H.slice(1).map((nm, k) => { const wl = [], ab = []; data.forEach(r => { const w = ndNum(r[0], d), v = ndNum(r[k + 1], d); if (w != null && v != null) { wl.push(w); ab.push(v); } });
       const at = x => { const i = wl.findIndex(w => Math.abs(w - x) < 0.6); return i < 0 ? null : ab[i]; }, a280 = at(280), a260 = at(260);
