@@ -116,7 +116,10 @@ const H = p => ({
 });
 /* ---------- results ---------- */
 function suite(name){ const res = {suite: name, app: APP, started: new Date().toISOString(), checks: []};
-  const check = (id, ok, detail) => { res.checks.push({id, ok: !!ok, detail: detail == null ? '' : String(detail).slice(0, 600)}); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}/${id}${detail != null && !ok ? ' :: ' + String(detail).slice(0, 300) : ''}`); return !!ok; };
+  /* a repeated id gets " #2", " #3"... (#1832): compare.js keys results by id, so a repeat used to overwrite an earlier
+     failure with a later pass and hide it from the regression comparison */
+  const seen = new Map();
+  const check = (id, ok, detail) => { const n = (seen.get(id) || 0) + 1; seen.set(id, n); if (n > 1) id = `${id} #${n}`; res.checks.push({id, ok: !!ok, detail: detail == null ? '' : String(detail).slice(0, 600)}); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}/${id}${detail != null && !ok ? ' :: ' + String(detail).slice(0, 300) : ''}`); return !!ok; };
   const near = (a, b, tol) => Math.abs(+a - +b) <= tol;
   const done = () => { res.finished = new Date().toISOString(); fs.writeFileSync(path.join(RES, name + '.json'), JSON.stringify(res, null, 1)); server.close(); return res; };
   /* wrap a test so a thrown error is a failed check, not a crashed suite */
