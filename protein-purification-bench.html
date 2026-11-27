@@ -2972,10 +2972,16 @@ const estimatePeakMasses = peakMasses;
 const xUnit = run => { const u = (typeof run === 'string' ? run : (run && (run.xUnit || run.xu))) || ''; if (/min/i.test(u)) return 'min'; if (/µl|ul/i.test(u)) return 'µL'; return 'mL'; };
 const volMl = (v, run) => v == null ? v : xUnit(run) === 'µL' ? v*1e-3 : v;
 const runVolUnit = run => xUnit(run) === 'µL' ? 'µL' : 'mL';
-const SEC_RE = /(^|[^a-z])(sec|superdex|superose|gel ?filtration|size ?exclusion|hiload|s200|s75|s6|sd ?200|sd ?75|sepharose ?6|sephacryl|yarra|tskgel|advancebio sec)([^a-z]|$)/i;
+/* #1812: HiLoad and Sepharose name ion-exchange and HIC columns too ("HiLoad 16/10 Q Sepharose HP", "HiTrap Phenyl Sepharose 6
+   Fast Flow"), so on their own they no longer mean SEC. A name of a SEC matrix (Superdex, Superose, Sephacryl, ...) always does;
+   a weaker hint (SEC, S200, a HiLoad x/60 or x/600 column, Sepharose 6 CL or 6B) does unless the name also names a non-SEC medium */
+const SEC_STRONG_RE = /(^|[^a-z])(superdex|superose|sephacryl|gel ?filtration|size ?exclusion|yarra|tskgel|advancebio sec)([^a-z]|$)/i;
+const SEC_RE = /(^|[^a-z])(sec|superdex|superose|gel ?filtration|size ?exclusion|hiload[\s_-]*\d+[\/_\s-]*600?|s200|s75|s6|sd ?200|sd ?75|sepharose ?(?:cl-?)?6 ?(?:cl|b)|sephacryl|yarra|tskgel|advancebio sec)([^a-z]|$)/i;
+const NOT_SEC_RE = /(^|[^a-z])(q|sp|deae|cm|anx|phenyl|butyl|octyl|capto|mono ?[qs]|source ?\d*[qs]|histrap|his ?trap|heparin|ni-?nta|imac|desalting|fast ?flow|ff)([^a-z]|$)/i;
 /* a run is auto-detected as SEC only on a strong signal: the file, method or column name says so. A flat gradient and conductivity prove nothing (isocratic runs, desalting), so use the SEC switch on the run card for those */
 function secGuess(r){
-  return SEC_RE.test((r.file || '') + ' ' + (r.method || '') + ' ' + (r.name || '') + ' ' + (r.colLog || ''));
+  const t = (r.file || '') + ' ' + (r.method || '') + ' ' + (r.name || '') + ' ' + (r.colLog || '');
+  return SEC_STRONG_RE.test(t) || (SEC_RE.test(t) && !NOT_SEC_RE.test(t));
 }
 const isSec = r => !!r && (r.secMode === 'on' ? true : r.secMode === 'off' ? false : !!r.secAuto);
 /* size exclusion counts elution volume from the injection. A run logged from the method start (injX) is moved back by it while it is SEC, and put back when it is not. injShift is the amount applied now; integrated regions and the zoom window move with it */
