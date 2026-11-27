@@ -164,6 +164,7 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 *   **Fonts:** Instrument Sans from Google Fonts (`fonts.googleapis.com` and `fonts.gstatic.com`).
 *   **TIFF Gel Support:** Built-in offline reader for uncompressed and Deflate 8/16-bit TIFFs; `pako` 2.1.0 (`cdnjs.cloudflare.com`) and `UTIF` 3.1.0 (`cdn.jsdelivr.net`) loaded on demand only when an LZW or specialized TIFF image is opened.
 *   **PDB Structures:** Structure files fetched on demand from RCSB Protein Data Bank (`files.rcsb.org/download/`) when a PDB code is loaded.
+*   **Content Security Policy:** When the page is opened on its own, it tells the browser that script may only send data to RCSB (and load images from the page itself), so nothing in a project can be sent anywhere else.
 
 ## Repository Layout
 

@@ -10,7 +10,7 @@ const git = (...a) => { const r = spawnSync('git', ['-C', repo, ...a], {encoding
 /* section name (as in the app's `---------- name ----------` markers) -> suites. First match wins per rule, all matching rules add up.
    Coarse on purpose: a wrong guess costs a few minutes here, and the full run on the PR catches what this misses. */
 const MAP = [
-  [/^markup and styles$/, ['01_name', '40_visual', '44_panel_more', '31_wf_full', '1664_gel_and_moreopts_subcategories', '51_readme_labels']],
+  [/^markup and styles$/, ['01_name', '40_visual', '44_panel_more', '31_wf_full', '1664_gel_and_moreopts_subcategories', '51_readme_labels', '52_csp']],
   [/^(parsing|UNICORN|traces and runs|loading)/, ['10_data_truth', '11_unicorn_zip', '17_cross_format', '18_hplc_load']],
   [/^(runs: windows|peak integration)/, ['14_peaks', '20_science', '45_yield_semantic']],
   [/^(size exclusion|SEC panel)/, ['15_import_sec', '26_sec_calibration', '27_sec_mass_calculation', '28_sec_figure']],

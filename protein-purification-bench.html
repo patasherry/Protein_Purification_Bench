@@ -1975,6 +1975,13 @@ button,input,select,textarea{font-family:inherit}
 <script>
 (function(){
 "use strict";
+/* Content Security Policy for the stand-alone page (#1817). It limits where page script can send data or load images from,
+   so injected markup cannot ship projects to an outside server with fetch or an image beacon. It does not limit which
+   scripts run, so fonts and the on-demand TIFF libraries load as before. A page hosted with window.claude keeps its host's
+   own policy, because the host's code and endpoints are not ours to list. Update connect-src with any new network use. */
+if (!(window.claude && typeof window.claude.use === 'function')) { try { const m = document.createElement('meta'); m.httpEquiv = 'Content-Security-Policy';
+  m.content = "connect-src 'self' blob: data: https://files.rcsb.org; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'";
+  document.head.appendChild(m); } catch (e) {} }
 const $ = s => document.querySelector(s);
 const DEF = {pdbCode:'', protSeq:'', protSrc:'', tagSeq:'', tagPos:'N', mode:'overlay', stack:60, flip:false, xmin:'', xmax:'', ymin:'', ymax:'',
   baseline:'none', smooth:0, normalize:false,
