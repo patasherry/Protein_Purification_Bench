@@ -1,5 +1,5 @@
 // Performance budgets suite: measures key UI interaction durations and ensures they stay within budget.
-const {open, H, suite, path, DATA, RES, fs} = require('../lib/harness');
+const {open, H, suite, path, DATA, RES, fs, src} = require('../lib/harness');
 
 function makePNG(w, h) {
   const zlib = require('zlib');
@@ -151,6 +151,17 @@ function makePNG(w, h) {
       }
     }
     T.check('reopen-project', ms != null && ms < 10000, ms != null ? `${ms} ms (budget: 10000 ms)` : 'timeout waiting for project reopen');
+  });
+
+  // 7. Fill labels from runs with a protein, a tag, a run and a gel loaded (#1809: took 12 s after #1800)
+  await T.t('fill-labels-with-gel', async () => {
+    const b = await open(), hb = H(b.p);
+    try {
+      await hb.newProject('Perf fill labels'); await hb.gb(src('gb')); await hb.addRun(src('his')); await hb.suggest();
+      await b.p.setInputFiles('#gelFile', src('gel')); await hb.wait(2500);
+      const ms = await b.p.evaluate(() => { const e = document.querySelector('#g-fill'); if (!e) return null; const t = performance.now(); e.click(); return Math.round(performance.now() - t); });
+      T.check('fill-labels-with-gel', ms != null && ms < 2000, ms != null ? `${ms} ms (budget: 2000 ms)` : 'no Fill labels button');
+    } finally { await b.close(); }
   });
 
   T.check('no-page-errors', !errs.length, errs.join(' | '));
