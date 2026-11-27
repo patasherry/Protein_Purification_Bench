@@ -691,6 +691,32 @@ async function fresh(id, fn){
     T.check('nd/trpless-withholds-a280-keeps-a205', vals['Pool A1-A3'] === '' && vals['Pool A1-A3 A205'] === '0.48 mg/mL', JSON.stringify(vals));
   });
 
+  // #1803: a tab table with decimal commas. "0,532" shows the file uses decimal commas, so "1,234" is 1.234, not 1234.
+  await fresh('decimal-comma-table', async (p, h) => {
+    await h.newProject('Decimal comma table');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.step('final');
+    await p.setInputFiles(SEL.nd, F.nd('decimal-comma.tsv', [['Pool A', '1,234', '1,234'], ['Pool B', '0,532', '0,532']], false));
+    await p.locator(SEL.row).nth(1).waitFor();
+    const rows = await p.$$eval(SEL.row, els => els.map(el => ({name: el.querySelector('input[data-ndk="name"]')?.value, value: el.querySelector('.nd-v')?.textContent.trim()})));
+    T.check('nd/decimal-comma-table', JSON.stringify(rows) === JSON.stringify([{name: 'Pool A', value: '1.23 mg/mL'}, {name: 'Pool B', value: '0.53 mg/mL'}]), JSON.stringify(rows));
+  });
+
+  // #1802: a NanoDrop One single-sample file with decimal commas and tabs. Splitting on commas cut A280 1,234 to 1 and the ratio to 0.
+  await fresh('decimal-comma-single-sample', async (p, h) => {
+    await h.newProject('Decimal comma single sample');
+    await h.addRun(path.join(DATA, 'chrom/valid_unicorn.zip'));
+    await h.step('final');
+    const spec = []; for (let w = 220; w <= 350; w++) spec.push(`${w}\t${(w === 280 ? 1.234 : w === 260 ? 0.703 : Math.max(0.01, 1.2 * Math.exp(-(((w - 280) / 25) ** 2)))).toFixed(3).replace('.', ',')}`);
+    const f = path.join(require('../lib/harness').RES, 'nd_single_decimal_comma.tsv');
+    fs.writeFileSync(f, ['Decimal comma pool', '27.11.2026 10:15', 'Wavelength (nm)\t10mm Absorbance', '// calibration comment', 'A260/A280\t0,57', 'A280\t1,234', ...spec].join('\n'));
+    await p.setInputFiles(SEL.nd, f);
+    await p.locator(SEL.row).first().waitFor();
+    const row = await p.$eval(SEL.row, el => ({value: el.querySelector('.nd-v')?.textContent.trim(), ratio: el.querySelector('.nd-r')?.textContent.trim()}));
+    T.check('nd/decimal-comma-single-sample/value', row.value === '1.23 mg/mL', JSON.stringify(row));
+    T.check('nd/decimal-comma-single-sample/ratio', /0\.57/.test(row.ratio || ''), JSON.stringify(row));
+  });
+
   T.done();
 })();
 
