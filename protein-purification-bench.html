@@ -12305,6 +12305,10 @@ const ENTITY_CODECS = {
       const rc = Object.assign({}, ENTITY_CODECS.Run.def, clonePlain(r));
       rc.fracs = Array.isArray(r.fracs) ? clonePlain(r.fracs) : r.fracs ? [clonePlain(r.fracs)] : [];
       rc.integ = Array.isArray(r.integ) ? clonePlain(r.integ) : [];
+      /* phase marks and extra curves from a file (#1821): a partial, hand-edited or older project could carry them in a shape the
+         figure code cannot draw, which crashed render and left the project blank. Keep only well-formed ones. */
+      rc.phases = Array.isArray(r.phases) ? r.phases.filter(e => e && typeof e === 'object' && isFinite(+e.x)).map(e => Object.assign({}, clonePlain(e), {x: +e.x})) : [];
+      Object.keys(rc).forEach(k => { const v = rc[k]; if (k !== 'uvs' && v && typeof v === 'object' && !Array.isArray(v) && ('xs' in v || 'ys' in v) && !(Array.isArray(v.xs) && Array.isArray(v.ys) && v.xs.length === v.ys.length)) rc[k] = null; });
       if (typeof rc.peaks === 'string') rc.peaks = parsePeaks(rc.peaks);
       if (!Object.prototype.hasOwnProperty.call(r, 'injX') && Object.prototype.hasOwnProperty.call(r, 'injShift')) rc.injX = r.injShift;
       if ((!Object.prototype.hasOwnProperty.call(rc, 'injShift') || rc.injShift == null) && Object.prototype.hasOwnProperty.call(rc, 'injX') && rc.injX != null) {
