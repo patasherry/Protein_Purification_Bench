@@ -5475,18 +5475,32 @@ function laneIntensityPurity(g, laneI){
     if (t.kind === 'target' || (t.kind === 'tagged' && opt.tagCounts !== false)) tgt += b.area; });
   return tgt > 0 ? 100*tgt/ln.total : null;
 }
+/* how much of the peak region a [a, b] lane's fractions cover: null when its label names no fractions of the run */
+function laneSpanOverlap(g, i, run, a, b){
+  const t = String(gelLabels(g)[i] || '').trim(); if (!t || MARKER_RE.test(t) || !Array.isArray(run.fracs) || !run.fracs.length) return null;
+  const sset = shadeSet(run), parts = t.split(RANGE_SPLIT_RE); let ia = fracIdx(run, parts[0], null, sset), ib = parts.length > 1 ? fracIdx(run, parts[1], ia) : ia;
+  if (ia < 0 || ib < 0) return null; if (ia > ib) [ia, ib] = [ib, ia];
+  const uv = uvOf(run); if (!uv || !uv.xs || !uv.xs.length) return null;
+  let ov = 0; fracSegments(run, uv.xs[uv.xs.length - 1]).forEach(s => { if (s.i >= ia && s.i <= ib) ov += Math.max(0, Math.min(b, s.b) - Math.max(a, s.a)); });
+  return ov;
+}
+/* #1814: each peak takes the purity of the lane whose fractions overlap it most, not of the first lane assigned to the run
+   (often the load or flow-through), and a saturated lane gives no purity, as in the summary table */
 function recoveryMatrixRows(g){
-  const used = new Set(), out = [];
-  gelBands(g).forEach(ln => { const rid = laneAssign(g, ln.i), run = runs.find(r => r.id === rid); if (!run || used.has(rid)) return;
-    used.add(rid); const purity = laneIntensityPurity(g, ln.i);
-    integRows(run).forEach(p => out.push({name: p.name, mg: p.mg, purity, recovered: p.mg != null && purity != null ? p.mg*purity/100 : null}));
-  });
+  const out = [], sat = gelSaturatedIdx(g), byRun = new Map();
+  gelBands(g).forEach(ln => { const rid = laneAssign(g, ln.i); if (!rid || ln.marker || !runs.some(r => r.id === rid)) return; if (!byRun.has(rid)) byRun.set(rid, []); byRun.get(rid).push(ln.i); });
+  byRun.forEach((idx, rid) => { const run = runs.find(r => r.id === rid);
+    integRows(run).forEach(p => { const reg = p.reg || {}, a = Math.min(reg.a, reg.b), b = Math.max(reg.a, reg.b); let best = null, bestOv = 0;
+      if (isFinite(a) && isFinite(b)) idx.forEach(i => { const ov = laneSpanOverlap(g, i, run, a, b); if (ov != null && ov > bestOv) { best = i; bestOv = ov; } });
+      if (best == null) best = idx[0];
+      const saturated = sat.has(best), purity = saturated ? null : laneIntensityPurity(g, best);
+      out.push({name: p.name, mg: p.mg, purity, saturated, lane: best, recovered: p.mg != null && purity != null ? p.mg*purity/100 : null}); }); });
   return out;
 }
 function renderRecoveryMatrix(g){
   const box = $('#recoveryMatrix'), table = $('#recoveryMatrixTable'); if (!box || !table) return;
   const rows = g && g.pix ? recoveryMatrixRows(g) : []; box.hidden = !rows.length;
-  table.innerHTML = rows.length ? '<tr><th>Peak Name</th><th>Estimated Mass (mg)</th><th>Gel Purity (%)</th><th>Recovered Pure Mass (mg)</th></tr>' + rows.map(r => `<tr><td>${esc(r.name)}</td><td>${r.mg == null ? '–' : fmt(r.mg, 2)}</td><td>${r.purity == null ? '–' : fmt(r.purity, 1) + '%'}</td><td>${r.recovered == null ? '–' : fmt(r.recovered, 2)}</td></tr>`).join('') : '';
+  table.innerHTML = rows.length ? '<tr><th>Peak Name</th><th>Estimated Mass (mg)</th><th>Gel Purity (%)</th><th>Recovered Pure Mass (mg)</th></tr>' + rows.map(r => `<tr><td>${esc(r.name)}</td><td>${r.mg == null ? '–' : fmt(r.mg, 2)}</td><td>${r.saturated ? 'saturated' : r.purity == null ? '–' : fmt(r.purity, 1) + '%'}</td><td>${r.recovered == null ? '–' : fmt(r.recovered, 2)}</td></tr>`).join('') : '';
 }
 /* Cross-reference a run fraction with its assigned SDS-PAGE gel lane to compute target protein mass (mg) and specific recovery yield (%):
    targetMass = (purityPct / 100) * totalFractionMass; yieldPct = (targetMass / refMass) * 100 (#1678). Returns null when required data are missing. */
@@ -5520,6 +5534,8 @@ function calcFractionYield(run, fracIndex){
     });
   });
   if (!hit) return null;
+  /* a saturated lane under-counts the target band, so it gives no yield (#1814), as in the summary table */
+  if (gelSaturatedIdx(hit.g).has(hit.lane)) return null;
   const ln = gelBands(hit.g)[hit.lane];
   if (!ln || ln.marker || !Array.isArray(ln.bands) || !ln.bands.length) return null;
   const purity = laneIntensityPurity(hit.g, hit.lane);
