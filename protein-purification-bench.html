@@ -9760,7 +9760,15 @@ $('#pdbFile').addEventListener('change', e => { const f = e.target.files[0]; e.t
 $('#protEnt').addEventListener('change', e => { if (!struct) return; struct.ent = e.target.value; const en = struct.ents.find(x => x.id === struct.ent); if (en) { opt.protSeq = en.seq; opt.protSrc = struct.code; } saveOpt(); syncControls(); render(); });
 ['#o-tagPreset', '#o-tagPreset2'].forEach(sel => $(sel).addEventListener('change', e => { if (opt.tagPreset !== e.target.value) { if (opt.tagPreset === 'custom' && e.target.value !== 'custom' && opt.tagSeq) customTagSeq = opt.tagSeq; opt.tagPreset = e.target.value; } opt.tagSeq = opt.tagPreset === 'custom' ? customTagSeq : ''; syncControls(); saveOpt(); render(); }));
 /* the three forms a purification sees: untagged, tagged, and the tag on its own */
+/* protForms is called once per lane and band on every gel render, and each call works out pI by bisection for three
+   sequences: cache it on everything it reads (#1809: Fill labels took 12 s with a gel loaded). Callers get copies. */
+let protFormsMemo = {key: null, val: []};
 function protForms(){
+  const key = [opt.protSeq, opt.tagSeq, opt.tagPreset, opt.tagPos, opt.cysOx].map(String).join('\u0001');
+  if (protFormsMemo.key !== key) protFormsMemo = {key, val: protFormsCalc()};
+  return protFormsMemo.val.map(x => Object.assign({}, x));
+}
+function protFormsCalc(){
   const p = cleanSeq(opt.protSeq), tg = cleanSeq(opt.tagSeq) || TAG_SEQ[opt.tagPreset] || '', name = (TAG_PRESETS[opt.tagPreset] || ['tag'])[0];
   if (!p) return [];
   if (!tg) return [{k: 'Untagged', seq: p}].map(x => Object.assign(x, {mass: seqMass(x.seq), pi: seqPI(x.seq), a280: seqA280(x.seq), unk: seqUnknowns(x.seq)}));
