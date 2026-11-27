@@ -2,7 +2,8 @@
 // Usage: node compare.js [new.html] [suite filters...]
 //   new.html defaults to the app in the repository root (your working copy).
 //   The baseline is BASE=/path/old.html or BASE=<git ref>; default origin/main.
-// Output: results/compare.md with regressions (pass on baseline, fail on new), fixes, and checks that exist in only one run.
+// Output: results/compare.md with regressions (pass on baseline, fail on new, or passed on baseline and missing on new, or a new
+//   :threw/crashed/time-budget failure), fixes, and checks that exist in only one run.
 const { spawnSync } = require('child_process'); const fs = require('fs'); const path = require('path');
 const APPF = require('./lib/app'), arg = process.argv[2] && /\.html?$/i.test(process.argv[2]) ? process.argv[2] : null;
 const NEW = path.resolve(arg || APPF), filt = process.argv.slice(arg ? 3 : 2);
@@ -25,8 +26,13 @@ const run = (app, tag) => { const out = path.join(__dirname, 'results', tag); fs
   const R = {}; fs.readdirSync(path.join(__dirname, 'results')).filter(f => /^(?:\d+|test)_.*\.json$/.test(f)).forEach(f => { const j = JSON.parse(fs.readFileSync(path.join(__dirname, 'results', f), 'utf8')); if (!Array.isArray(j.checks)) return; fs.copyFileSync(path.join(__dirname, 'results', f), path.join(out, f)); j.checks.forEach(c => { R[j.suite + '/' + c.id] = c; }); }); return R; };
 console.log('== baseline'); const A = run(BASE, 'baseline'); console.log('== new'); const B = run(NEW, 'new');
 const keys = [...new Set([...Object.keys(A), ...Object.keys(B)])].sort(), reg = [], fix = [], onlyA = [], onlyB = [], stillFail = [];
-keys.forEach(k => { const a = A[k], b = B[k]; if (a && !b) onlyA.push(k); else if (!a && b) onlyB.push(k + (b.ok ? '' : ' (FAIL: ' + b.detail + ')')); else if (a.ok && !b.ok) reg.push(`${k} :: ${b.detail}`); else if (!a.ok && b.ok) fix.push(k); else if (!a.ok && !b.ok) stillFail.push(k + ' (FAIL: ' + String(b.detail || '').slice(0, 200) + ')'); });
+/* #1808: a check that passed on the baseline and is gone on the new build is a regression (its block threw, its suite
+   crashed or stopped early), and so is a new failure that only exists because something threw, crashed or ran out of time.
+   Suites run from the same files on both sides, so a renamed check does not vanish this way. */
+const broke = (k, b) => !b.ok && /(?::threw|\/crashed|\/time-budget)$/.test(k);
+keys.forEach(k => { const a = A[k], b = B[k]; if (a && !b) { if (a.ok) reg.push(`${k} :: vanished on new (its block threw, its suite crashed or stopped early)`); else onlyA.push(k); }
+  else if (!a && b) { if (broke(k, b)) reg.push(`${k} :: ${b.detail}`); else onlyB.push(k + (b.ok ? '' : ' (FAIL: ' + b.detail + ')')); } else if (a.ok && !b.ok) reg.push(`${k} :: ${b.detail}`); else if (!a.ok && b.ok) fix.push(k); else if (!a.ok && !b.ok) stillFail.push(k + ' (FAIL: ' + String(b.detail || '').slice(0, 200) + ')'); });
 const md = [`# Suite comparison\n\nBaseline: ${BASE}\nNew: ${NEW}\n`, `## Selectors the suite uses that the new build lacks (${missing.length})\n` + (missing.map(x => '- #' + x).join('\n') || 'none'),
-  `## Regressions: pass on baseline, fail on new (${reg.length})\n` + (reg.map(x => '- ' + x).join('\n') || 'none'), `## Fixed by the new build (${fix.length})\n` + (fix.map(x => '- ' + x).join('\n') || 'none'),
-  `## Failing on both (${stillFail.length})\n` + (stillFail.map(x => '- ' + x).join('\n') || 'none'), `## Checks only on baseline, e.g. a suite crashed on new (${onlyA.length})\n` + (onlyA.map(x => '- ' + x).join('\n') || 'none'), `## Checks only on new (${onlyB.length})\n` + (onlyB.map(x => '- ' + x).join('\n') || 'none')].join('\n\n');
+  `## Regressions: pass on baseline, fail or vanish on new (${reg.length})\n` + (reg.map(x => '- ' + x).join('\n') || 'none'), `## Fixed by the new build (${fix.length})\n` + (fix.map(x => '- ' + x).join('\n') || 'none'),
+  `## Failing on both (${stillFail.length})\n` + (stillFail.map(x => '- ' + x).join('\n') || 'none'), `## Checks only on baseline, failing there (${onlyA.length})\n` + (onlyA.map(x => '- ' + x).join('\n') || 'none'), `## Checks only on new (${onlyB.length})\n` + (onlyB.map(x => '- ' + x).join('\n') || 'none')].join('\n\n');
 fs.writeFileSync(path.join(__dirname, 'results', 'compare.md'), md); console.log('\n' + md.split('\n').filter(l => l.startsWith('## ')).join('\n')); console.log('\nFull report: results/compare.md');
