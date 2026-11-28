@@ -302,7 +302,14 @@ const {open, H, suite, fs, path, src} = require('../lib/harness');
     await h.wait(300);
     await p.click('#dirToggleArchive');
     await h.wait(300);
-    await p.click(`#dirContent [data-dir-name="${upFileName}"] [data-dir-del-perm]`);
+    // #1822: the first click only arms the button, so one misclick beside Restore deletes nothing
+    const delBtn = p.locator(`#dirContent [data-dir-name="${upFileName}"] [data-dir-del-perm]`);
+    await delBtn.click();
+    await h.wait(300);
+    const armed = await p.locator(`#dirContent [data-dir-name="${upFileName}"]`).isVisible();
+    T.check('permanent-delete-needs-second-click', armed && /Click again/.test(armed ? await delBtn.textContent() : ''), armed ? await delBtn.textContent() : 'deleted on the first click');
+    await h.wait(700);
+    if (await delBtn.isVisible()) await delBtn.click();
     await h.wait(300);
     T.check('permanent-delete-after-archive', !(await p.locator(`#dirContent [data-dir-name="${upFileName}"]`).isVisible()), 'Archived file permanently deleted');
     await p.click('#dirToggleArchive');

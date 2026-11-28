@@ -620,5 +620,29 @@ const num = s => { const m = String(s == null ? '' : s).replace(/[≈~,]/g, '').
       await o.close();
     }
   });
+  /* #1822: Delete calibration offers Undo, which brings the calibration back */
+  await T.t('delete_calibration_undo', async () => {
+    const o = await open(), p2 = o.p, h2 = H(p2);
+    try {
+      const openFolds = loc => loc.evaluate(e => { let d = e.closest('details'); while (d) { d.open = true; d = d.parentElement && d.parentElement.closest('details'); } });
+      await h2.newProject('SEC delete undo');
+      await h2.addRun(path.join(DATA, 'qa/sec_Superdex_200_Increase_3.2_300.csv'));
+      const rs = (await h2.timeline()).find(x => /^run:/.test(x.k)); if (rs) await h2.step(rs.k);
+      if (await p2.isVisible('#moreBtn') && /More options/i.test(await p2.locator('#moreBtn').textContent().catch(() => ''))) { await p2.click('#moreBtn').catch(() => {}); await h2.wait(300); }
+      const sc = p2.locator('#o-secStds'); await openFolds(sc); if (!(await sc.isChecked())) { await sc.check({force: true}); await h2.wait(300); }
+      const names = () => p2.$$eval('#sec-cal option', os => os.map(x => x.textContent.trim()));
+      await openFolds(p2.locator('#sec-new')); await p2.locator('#sec-new').click({force: true}); await h2.wait(300);
+      const before = await names();
+      await p2.locator('#sec-delCal').click({force: true}); await h2.wait(300);
+      const after = await names();
+      const undo = p2.locator('#toast .toast-btn', {hasText: 'Undo'});
+      T.check('delete_calibration_undo.offered', await undo.count() > 0, 'no Undo button after Delete calibration');
+      if (await undo.count()) { await undo.first().click(); await h2.wait(300); }
+      const back = await names();
+      T.check('delete_calibration_undo.deleted', after.length === before.length - 1, JSON.stringify({before, after}));
+      T.check('delete_calibration_undo.restored', JSON.stringify(back) === JSON.stringify(before), JSON.stringify({before, back}));
+      T.check('delete_calibration_undo.no page errors', !o.errs.length, o.errs.join(' | '));
+    } finally { await o.close(); }
+  });
   T.done();
 })();

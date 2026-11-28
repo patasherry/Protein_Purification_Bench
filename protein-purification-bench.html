@@ -12218,7 +12218,11 @@ $('#sec-addStd').addEventListener('click', () => { const c = activeCal(); if (!c
 $('#sec-new').addEventListener('click', () => { const r = curRun(), c = newSecCal(r ? secColumnGuess(r) : 'custom', r ? xUnit(r) : 'mL'); c.name = c.name + ' ' + (secCals().filter(x => x.col === c.col).length + 1); secCals().push(c);
   const f = curFig(); if (f && f.kind === 'run') f.run.secCal = c.id; else if (f && f.kind === 'overlay') opt.ovSecCal = c.id; saveOpt(); renderList(); renderSec(); render(); });
 $('#sec-delCal').addEventListener('click', () => { const c = activeCal(); if (!c) return; const L = secCals(); if (L.length <= 1 && runs.some(isSec)) { toast('Keep at least one calibration while SEC runs are loaded. Clear its standards instead.'); return; }
-  L.splice(L.indexOf(c), 1); runs.forEach(r => { if (r.secCal === c.id) r.secCal = ''; }); if (opt.ovSecCal === c.id) opt.ovSecCal = ''; saveOpt(); renderList(); renderSec(); render(); toast('Calibration deleted'); });
+  /* deleting is undoable (#1822): the calibration, the runs that used it and the overlay choice come back as they were */
+  const at = L.indexOf(c), using = runs.filter(r => r.secCal === c.id), ov = opt.ovSecCal === c.id;
+  L.splice(at, 1); using.forEach(r => { r.secCal = ''; }); if (ov) opt.ovSecCal = ''; saveOpt(); renderList(); renderSec(); render();
+  toast('Calibration deleted', {label: 'Undo', fn: () => { const L2 = secCals(); if (L2.some(x => x.id === c.id)) return; L2.splice(Math.min(at, L2.length), 0, c);
+    using.forEach(r => { if (runs.includes(r) && !r.secCal) r.secCal = c.id; }); if (ov && !opt.ovSecCal) opt.ovSecCal = c.id; saveOpt(); renderList(); renderSec(); render(); toast('Calibration restored'); }}); });
 $('#sec-viewCal').addEventListener('click', () => {
   const c = activeCal(), f = curFig(); if (!c) return;
   if (f && f.kind === 'cal') {
@@ -14322,6 +14326,7 @@ async function restoreDirItem(type, id){
   if (it) toast(`Restored "${it.name}"`);
 }
 
+let dirDelArm = '', dirDelAt = 0;
 function deleteDirItemPerm(type, id){
   if (!PROJ || !PROJ.directory) return;
   if (type === 'folder') {
@@ -14802,7 +14807,10 @@ $('#dirContent').addEventListener('click', async e => {
   }
   const delP = e.target.closest('[data-dir-del-perm]');
   if (delP) {
-    deleteDirItemPerm(delP.dataset.dirType, delP.dataset.dirDelPerm);
+    /* arm twice, as the home list does (#1822): one misclick beside Restore must not destroy a folder or preparation for good */
+    const id = delP.dataset.dirDelPerm;
+    if (dirDelArm !== id || Date.now() - dirDelAt < 600) { if (dirDelArm !== id) { dirDelArm = id; dirDelAt = Date.now(); } delP.textContent = 'Delete? Click again'; setTimeout(() => { if (dirDelArm === id) { dirDelArm = ''; if (delP.isConnected) delP.textContent = 'Delete'; } }, 4000); return; }
+    dirDelArm = ''; deleteDirItemPerm(delP.dataset.dirType, id);
     return;
   }
 });
