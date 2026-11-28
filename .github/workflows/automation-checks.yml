@@ -1,15 +1,13 @@
 name: Automation checks
 
 # The manager, the reviewer and the queue leader run the whole project, and until 2026-11-12 nothing checked them: one of the
-# manager's own tests had been failing on main unseen. This runs on every pull request that touches them. No AI, no tokens.
+# manager's own tests had been failing on main unseen. It runs on every pull request and every push to main, because some of
+# its checks depend on files outside the automation (a new suite must be in the quick.js map): with a path filter, main
+# went red unseen again in November 2026 (#1829). It takes about a minute. No AI, no tokens.
 on:
   pull_request:
-    paths:
-      - 'tools/**'
-      - '.github/scripts/**'
-      - 'tests/quick.js'
-      - 'tests/tools/**'
-      - '.github/workflows/automation-checks.yml'
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
