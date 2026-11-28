@@ -1081,5 +1081,22 @@ await T.t('below-limit-saturation-diagnostics', async () => {
   }
 });
 
+/* #1821: a run without a phases list, or with a damaged curve, must not blank the project when Method phases is on */
+await T.t('run-without-phases-renders', async () => { const {p, errs, close} = await open(), h = H(p);
+  const d = JSON.parse(fs.readFileSync(path.join(DATA, 'legacy_project.json'), 'utf8'));
+  delete d.runs[0].phases; d.runs[0].grad = {xs: [1, 2, 3], ys: 5}; d.runs[0].cond = 'not a curve';
+  d.opt = Object.assign({}, d.opt, {phases: true});
+  await p.locator('#homeQuick').evaluate(e => e.click());
+  await p.setInputFiles('#projFile', {name: 'partial.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(d))});
+  await p.waitForTimeout(3000);
+  const tl = await h.timeline(), r = tl.find(x => x.k.startsWith('run:'));
+  if (r) { await h.step(r.k); await p.waitForTimeout(800); }
+  const fig = await p.evaluate(() => { const s = document.querySelector('#paper svg'); return s ? s.querySelectorAll('path').length : -1; });
+  T.check('partial-run.timeline-has-run', !!r, JSON.stringify(tl.map(x => x.k)));
+  T.check('partial-run.figure-drawn', fig > 0, `${fig} paths in the figure`);
+  T.check('partial-run.no-page-errors', !errs.length, errs.join(' | '));
+  await close();
+});
+
 T.done(); })();
 
