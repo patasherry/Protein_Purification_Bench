@@ -26,7 +26,7 @@ const MAP = [
   [/^projects/, ['01_name', '32_project_ux', '47_export_project', '30_robust', '45_yield_semantic', '25_gels', '19_assays', '1647_project_directory', '1673_home_folders']],
   [/^(cloning workflow|agarose)/, ['1402_cloning_engine', '29_agarose', '1665_agarose_gel_subcategories']],
   [/^the step timeline/, ['31_wf_full', '44_panel_more', '21_methods', '18_hplc_load', '1402_cloning_engine']],
-  [/^export$/, ['01_name', '50_export', '47_export_project']],
+  [/^export$/, ['01_name', '50_export', '47_export_project', '54_toasts']],
   [/^(helpers|example data)/, ['20_science', '05_quick']]
 ];
 const all = fs.readdirSync(path.join(__dirname, 'suites')).filter(f => f.endsWith('.js')).map(f => f.replace(/\.js$/, ''));
