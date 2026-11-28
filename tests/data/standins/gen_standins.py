@@ -113,7 +113,7 @@ if __name__ == '__main__':
     # QA fixtures that used to be copies of real files
     q = open(out('iex_q_6ml.csv'), 'rb').read().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
     open(os.path.join(QA, 'bom_crlf_Q.csv'), 'wb').write(b'\xef\xbb\xbf' + q)
-    open(os.path.join(QA, 'Prøtein_αβ_ÄKTA_µ' + 'x'*180 + '.csv'), 'wb').write(q)
+    # the 200-character unicode file name is written by 30_robust.js at run time (#1842), not tracked in git
     z = open(os.path.join(DATA, 'chrom', 'sec_Sup6_basic_unicorn7.zip'), 'rb').read()
     open(os.path.join(QA, 'corrupt_unicorn.zip'), 'wb').write(z[:len(z)//3])
     buf = io.BytesIO(); gel(2, 600, 400).save(buf, 'PNG'); png = buf.getvalue()
