@@ -1,10 +1,10 @@
 // 30 robustness (QA): bad inputs, seeded operation fuzz with invariants, persistence round trips, performance budgets.
 // UI and DOM only. App-specific selectors not in the harness are collected in SEL below, so a rewrite needs one edit here.
-const {open, H, suite, path, ROOT, DATA, fs, src} = require('../lib/harness');
+const {open, H, suite, path, ROOT, DATA, fs, src, bigCsv} = require('../lib/harness');
 const Q = path.join(DATA, 'qa'), CH = path.join(DATA, 'chrom');
 const F = {his: src('his'), q: src('q'),
   ortho: src('ortho'), s200: src('s200'), zip: src('secZip'),
-  nd: src('nd'), ndSpec: src('ndSpec'), big: path.join(Q, 'akta_200k_HisTrap_5mL.csv')};
+  nd: src('nd'), ndSpec: src('ndSpec'), big: bigCsv()};
 const SEL = {move: d => `#ssActs [data-move="${d}"]`, remove: '#ssActs [data-remove]', wfTitle: '#wfT', layout: l => `label[for="wf-${l}"]`, cropSel: '.trace.run.sel [data-k=crop]',
   tabs: '.figtab', exportBtn: '#projSave', importFile: '#projFile', home: '#homeBtn', card: '.pcard[data-pid]', cardName: '.pn', methodsBox: '#methodsBox', ndBtnFile: '#btwNdFile', projName: '#projName'};
 const T = suite('30_robust');
