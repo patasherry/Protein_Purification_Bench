@@ -1,0 +1,3 @@
+# Test fixtures are byte-exact inputs. Some exist to test Windows line endings (CRLF), a UTF-8 BOM or other encodings,
+# so git must not normalise them (#1831).
+tests/data/** -text
