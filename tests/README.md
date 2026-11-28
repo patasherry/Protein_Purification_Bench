@@ -116,3 +116,5 @@ PPB_PRIVATE_DATA=/path/to/private/folder node run.js
 ```
 
 Never commit real chromatograms, gel photos, plasmid maps, or sequence files to this repository.
+
+Check ids are unique within a suite: a repeated id is saved as `id #2`, `id #3` and so on, because `compare.js` keys results by `suite/id` and would otherwise let a later pass hide an earlier failure. Give each scenario its own id where you can.
