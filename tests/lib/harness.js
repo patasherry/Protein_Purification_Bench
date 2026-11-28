@@ -128,4 +128,15 @@ function suite(name){ const res = {suite: name, app: APP, started: new Date().to
 }
 /* does box a sit inside box b, allowing tol px of slack: the containment test figure-layout checks need */
 const fits = (a, b, tol) => a.x >= b.x - (tol||0) && a.y >= b.y - (tol||0) && a.right <= b.right + (tol||0) && a.bottom <= b.bottom + (tol||0);
-module.exports = {open, H, suite, APP, ROOT, DATA, RES, path, fs, src, real, PRIV, fits};
+/* the 200k-point UNICORN-style CSV (UV, %B and fractions) for the performance and robustness suites, written to results/ on
+   first use (#1843). At 6.4 MB it was the largest file in the repository, and every regeneration added a copy to history.
+   Same content as the block that used to be in data/qa/gen_qa.py. */
+function bigCsv(){
+  const f = path.join(RES, 'akta_200k_HisTrap_5mL.csv'); if (fs.existsSync(f) && fs.statSync(f).size > 6e6) return f;
+  const N = 200000, dx = 100 / N, out = ['Chrom.1,,Chrom.1,,Chrom.1,', 'UV,,Gradient Concentration,,Fraction,', 'ml,mAU,ml,%B,ml,Fraction'];
+  for (let i = 0; i < N; i++) { const x = i * dx, uv = 2 + 800 * Math.exp(-0.5 * ((x - 50) / 3) ** 2), g = x < 20 ? 0 : Math.min(100, 100 * (x - 20) / 60);
+    const fr = i < 30 ? `${(20 + 2 * i).toFixed(3)},"A${i + 1}"` : ',';
+    out.push(`${x.toFixed(4)},${uv.toFixed(3)},${x.toFixed(4)},${g.toFixed(2)},${fr},`); }
+  fs.writeFileSync(f + '.tmp', out.join('\r\n') + '\r\n'); fs.renameSync(f + '.tmp', f); return f;
+}
+module.exports = {open, H, suite, APP, ROOT, DATA, RES, path, fs, src, real, PRIV, fits, bigCsv};

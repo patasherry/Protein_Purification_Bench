@@ -1,5 +1,5 @@
 // Performance budgets suite: measures key UI interaction durations and ensures they stay within budget.
-const {open, H, suite, path, DATA, RES, fs, src} = require('../lib/harness');
+const {open, H, suite, path, DATA, RES, fs, src, bigCsv} = require('../lib/harness');
 
 function makePNG(w, h) {
   const zlib = require('zlib');
@@ -62,7 +62,7 @@ function makePNG(w, h) {
 
   // 2. Loading 200k run
   await T.t('load-200k', async () => {
-    const bigFile = path.join(DATA, 'qa', 'akta_200k_HisTrap_5mL.csv');
+    const bigFile = bigCsv();
     const n0 = (await h.timeline()).length;
     const t0 = Date.now();
     await p.setInputFiles('#file', bigFile);
