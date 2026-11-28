@@ -45,7 +45,10 @@ await T.t('bad', async () => { const {p, errs, close} = await open(), h = H(p); 
   await accept('decimal-comma', path.join(Q, 'decimal_comma.csv'), 'semicolon-separated HPLC trace with decimal commas');
   const L0 = (await h.timeline()).length; await accept('bom-crlf', path.join(Q, 'bom_crlf_Q.csv'), 'UNICORN CSV with BOM and CRLF');
   T.check('ok.bom-crlf.is-run', (await h.timeline()).length === L0 + 1, 'BOM file should become a column step'); // BOM must not hide the UNICORN header
-  const long = fs.readdirSync(Q).find(f => f.startsWith('Prøtein')); await accept('unicode-long-name', path.join(Q, long), '200-char unicode file name');
+  /* the 200-character unicode name is made here, in the system temp folder (#1842): tracked in git, its 215-character path broke
+     Windows checkouts in ordinary folders. Same bytes as bom_crlf_Q.csv without the BOM. */
+  const long = path.join(require('os').tmpdir(), 'Prøtein_αβ_ÄKTA_µ' + 'x'.repeat(180) + '.csv'); fs.writeFileSync(long, fs.readFileSync(path.join(Q, 'bom_crlf_Q.csv')).subarray(3));
+  await accept('unicode-long-name', long, '200-char unicode file name');
   T.check('ok.unicode-long-name.no-hscroll', !(await h.hScroll()), 'a long tab or step name must not widen the page'); // layout holds
   /* the same file twice: either refused, or added with a toast saying it is a duplicate */
   { const c0 = await counts(p, h); await h.dropFiles(F.his); const ts = await takeToasts(p), c1 = await counts(p, h);
