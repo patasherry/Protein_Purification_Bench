@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use Protein Purification Bench to make figures for a publication, please cite it as below, with the commit or date of the copy you used."
+title: "Protein Purification Bench"
+abstract: "A single-file browser application for publication-quality protein purification figures: HPLC and ÄKTA chromatograms, SDS-PAGE gels with densitometry, SEC calibration, NanoDrop readings and a step-by-step purification workflow figure."
+type: software
+authors:
+  - given-names: Patrick
+    family-names: Sherry
+    affiliation: "San Francisco State University"
+repository-code: "https://github.com/patasherry/hplc-figure-bench"
+license: MIT
+keywords:
+  - protein purification
+  - chromatography
+  - SDS-PAGE
+  - densitometry
+  - size exclusion chromatography
+  - scientific figures

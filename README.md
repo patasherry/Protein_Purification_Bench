@@ -166,10 +166,17 @@ Not built yet: calculators (primer dilution, molar ratios, recipe scaling), gene
 *   **PDB Structures:** Structure files fetched on demand from RCSB Protein Data Bank (`files.rcsb.org/download/`) when a PDB code is loaded.
 *   **Content Security Policy:** When the page is opened on its own, it tells the browser that script may only send data to RCSB (and load images from the page itself), so nothing in a project can be sent anywhere else.
 
+## License and Citation
+
+Protein Purification Bench is released under the [MIT License](LICENSE). To cite it in a publication, use [CITATION.cff](CITATION.cff) (GitHub shows a "Cite this repository" button for it) and name the commit or date of the copy you used.
+
+The two libraries the app loads on demand for some TIFF images keep their own licenses: `pako` (MIT and Zlib) and `UTIF` (MIT).
+
 ## Repository Layout
 
 *   `protein-purification-bench.html`: Single-file web application (HTML, CSS, and JavaScript).
 *   `README.md`: User-facing documentation.
+*   `LICENSE` / `CITATION.cff`: The MIT license and how to cite the app.
 *   `AGENTS.md` / `CLAUDE.md`: Shared instructions and rules for coding agents.
 *   `.github/workflows/`: GitHub Actions for automated browser tests and PR reviews.
 *   `tests/`: Automated Playwright browser test suite and synthetic test datasets.
