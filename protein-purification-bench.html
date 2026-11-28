@@ -854,6 +854,7 @@ button,input,select,textarea{font-family:inherit}
   <div class="home-intro">
     <h2 id="homeTitle">Purification Projects</h2>
     <p>Scientific workspace for protein purification data, chromatography, and gel figures.</p>
+    <p class="hint app-version" id="appVersion"></p>
   </div>
   <form class="newproj" id="newProj" autocomplete="off">
     <label class="f">Project name<input type="text" id="npName" required placeholder="e.g. Target-A, prep 1" spellcheck="false"></label>
@@ -12363,6 +12364,10 @@ function renderNext(){ const n = nextStep(), bar = $('#nextBar'); if (!n || next
 $('#nextHide').addEventListener('click', () => { const k = $('#nextBar').dataset.k; if (k === 'undoOpen') projUndo = null; else nextHidden.add(k); renderNext(); });
 /* ---------- projects: everything in one JSON file ---------- */
 const SCHEMA_VERSION = 1;
+/* the build a figure or project came from (#1844): shown on Home and written into every saved and exported project as appVersion,
+   so results made before a scientific fix can be told apart. Calendar version; bump it when a change to reported numbers merges. */
+const APP_VERSION = '2026.11.27';
+{ const v = document.getElementById('appVersion'); if (v) v.textContent = 'Version ' + APP_VERSION; }
 const plain = o => { const out = {}; Object.keys(o).forEach(k => { if (k[0] === '_' || typeof o[k] === 'function') return; if ((k === 'injX' || k === 'injShift' || k === 'pathFromFile' || k === 'shift' || k === 'poolConc' || k === 'poolFinalVol' || k === 'ndFinalVol') && !Object.prototype.hasOwnProperty.call(o, k)) return; out[k] = o[k]; }); return out; };
 function clonePlain(v){
   if (Array.isArray(v)) return v.map(clonePlain);
@@ -12613,7 +12618,7 @@ function projectData(){
   /* The name shown to the user is Protein Purification Bench. This schema field stays 'HPLC Figure Bench' for good:
      change it and every project file saved before the rename fails to import, and every file saved after it fails to
      open in an older copy. The same goes for the 'hplc-fig-opt' settings key and the 'hfb-projects' database. */
-  return Object.assign({app: 'HPLC Figure Bench', version: 1, schemaVersion: SCHEMA_VERSION, saved: new Date().toISOString()},
+  return Object.assign({app: 'HPLC Figure Bench', version: 1, appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION, saved: new Date().toISOString()},
     PROJ ? {name: PROJ.name, step: curStep} : {},
     {cur, opt: Object.assign({}, plain(opt), Array.isArray(opt.secCals) ? {secCals: opt.secCals.map(c => ENTITY_CODECS.SecCal.toJSON(c))} : {}),
      runs: runs.map(r => ENTITY_CODECS.Run.toJSON(r, true)),
@@ -12771,7 +12776,7 @@ function snapshot(){
 }
 /* the project as small JSON, with the heavy parts (run curves, gel images, the structure, spectra) uploaded once and referenced */
 async function packCloud(S, P){
-  const st = {app: 'HPLC Figure Bench', version: 2, schemaVersion: SCHEMA_VERSION, cur: S.cur || cur, opt: S.opt, prep: S.prep, step: S.step, srcDiag: S.srcDiag || {}, directory: S.directory || null, runs: [], traces: [], gels: [], struct: null, nanodrop: [], assays: Array.isArray(S.assays) ? S.assays : [], rawFiles: []}, refs = [];
+  const st = {app: 'HPLC Figure Bench', version: 2, appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION, cur: S.cur || cur, opt: S.opt, prep: S.prep, step: S.step, srcDiag: S.srcDiag || {}, directory: S.directory || null, runs: [], traces: [], gels: [], struct: null, nanodrop: [], assays: Array.isArray(S.assays) ? S.assays : [], rawFiles: []}, refs = [];
   for (const {obj: r, o} of S.runs) { if (!r.blobId) { const h = {}; RUN_HEAVY.forEach(k => { if (k in r) h[k] = r[k]; }); r.blobId = await upJSON(h); } const c = Object.assign({}, o, {blobId: r.blobId}); RUN_HEAVY.forEach(k => delete c[k]); st.runs.push(c); refs.push(r.blobId); }
   for (const {obj: t, o} of S.traces) { if (!t.blobId) t.blobId = await upJSON({rows: t.rows}); const c = Object.assign({}, o, {blobId: t.blobId}); delete c.rows; st.traces.push(c); refs.push(t.blobId); }
   for (const {obj: g, o} of S.gels) { if (!g.imageId) g.imageId = await upPNG(g.src); const c = Object.assign({}, o, {imageId: g.imageId}); ['src', 'thumb', 'out', 'pix', 'hist', 'crop', 'cropPrev', 'bandHist', 'image'].forEach(k => delete c[k]); st.gels.push(c); refs.push(g.imageId); }
@@ -12894,7 +12899,7 @@ async function unpackLocal(st){
     }));
   }
   if (names.length) toast(`Could not load ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and more' : ''}. They are kept and will load next time.`);
-  return {app: 'HPLC Figure Bench', version: 2, schemaVersion: st.schemaVersion, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, directory: st.directory || null, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, assays: Array.isArray(st.assays) ? st.assays : [], step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
+  return {app: 'HPLC Figure Bench', version: 2, appVersion: APP_VERSION, schemaVersion: st.schemaVersion, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, directory: st.directory || null, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, assays: Array.isArray(st.assays) ? st.assays : [], step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
 }
 async function unpackCloud(st){
   const get = id => fetch('/_blob/' + id).then(r => { if (!r.ok) throw new Error('missing'); return r.json(); }), names = [], lost = {runs: [], traces: [], gels: [], struct: null, nd: []};
@@ -12920,7 +12925,7 @@ async function unpackCloud(st){
     }));
   }
   if (names.length) toast(`Could not load ${names.slice(0, 3).join(', ')}${names.length > 3 ? ' and more' : ''}. They are kept and will load next time.`);
-  return {app: 'HPLC Figure Bench', version: 2, schemaVersion: st.schemaVersion, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, directory: st.directory || null, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, assays: Array.isArray(st.assays) ? st.assays : [], step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
+  return {app: 'HPLC Figure Bench', version: 2, appVersion: APP_VERSION, schemaVersion: st.schemaVersion, cur: st.cur || 'overlay', opt: st.opt, prep: st.prep, srcDiag: st.srcDiag || {}, directory: st.directory || null, runs: runs2, traces: tr2, gels: gels2, struct: s2, nanodrop: nd2, assays: Array.isArray(st.assays) ? st.assays : [], step: st.step, rawFiles: Array.isArray(st.rawFiles) ? st.rawFiles : [], _lost: lost};
 }
 function projProtein(){ const m = cleanSeq(opt.protSeq) || prep.gb ? constructModel() : null; return String(opt.targetName || '').trim() || (m && m.pn !== 'protein' ? m.pn : ''); }
 function stepDots(){ return stepList().filter(s => !s.add).map(s => s.warn ? 2 : s.done ? 1 : 0); }

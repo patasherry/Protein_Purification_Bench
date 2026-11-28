@@ -64,6 +64,8 @@ The stand-alone page sets a Content-Security-Policy at the top of the script tha
 
 Do not change scientific constants without a cited source in the PR description. These include protein ladder sizes (`LADDERS`), known contaminant masses (`KNOWN_DEFAULT`), extinction coefficient and molecular weight calculations, SEC calibration math, and peak integration methods.
 
+When a change to a reported number merges, set `APP_VERSION` near `SCHEMA_VERSION` to that day's date (`YYYY.MM.DD`). It is shown on Home and saved in every project as `appVersion`, so results made before the fix can be told apart.
+
 Figure defaults follow publication conventions: the Okabe-Ito colorblind-safe palette, Arial, 600 dpi, and journal column widths in `PRESETS`. Keep them unless the task says otherwise.
 
 ## Testing
