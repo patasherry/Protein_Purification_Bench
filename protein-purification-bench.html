@@ -12704,7 +12704,9 @@ function idbOpen(){ return new Promise((res, rej) => { if (!window.indexedDB) re
     if (!q.result.objectStoreNames.contains('projects')) q.result.createObjectStore('projects', {keyPath: 'id'});
     if (!q.result.objectStoreNames.contains('blobs')) q.result.createObjectStore('blobs', {keyPath: 'id'});
   }; q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
-function idbDo(mode, fn, store = 'projects'){ return new Promise((res, rej) => { const tx = STORE.idb.transaction(store, mode), st = tx.objectStore(store), q = fn(st); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); }); }
+function idbDo(mode, fn, store = 'projects'){ return new Promise((res, rej) => { const tx = STORE.idb.transaction(store, mode), st = tx.objectStore(store), q = fn(st); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error);
+  /* a transaction that fails at commit (a full disk) fires abort without error: without this the save never settled and every later save queued behind it (#1819) */
+  tx.onabort = () => rej(tx.error || new DOMException('The save was cancelled by the browser', 'AbortError')); }); }
 const newBlobId = () => 'b-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function putLocalBlob(id, data){ await idbDo('readwrite', st => st.put({id, data}), 'blobs'); return id; }
 async function getLocalBlob(id){ if (!id) return null; const r = await idbDo('readonly', st => st.get(id), 'blobs'); return r ? r.data : null; }
@@ -12988,9 +12990,11 @@ async function saveOne(P, S, force){
       if (now && now.refs) { const keep = new Set(pk.refs || []); now.refs.filter(id => !keep.has(id)).forEach(id => idbDo('readwrite', st => st.delete(id), 'blobs').catch(() => {})); }
     }
     const n = lostCount(P); show(n ? `Saved. ${n} item${n === 1 ? '' : 's'} did not load and ${n === 1 ? 'is' : 'are'} kept for next time` : STORE.mode === 'cloud' ? 'Saved' : 'Saved in this browser');
-  } catch (e) { const c = e && e.code;
-    show(c === 'quota_exceeded' ? 'Not saved: storage is full. Export a project and delete old projects' : c === 'not_granted' || c === 'invalid_argument' ? 'Not saved: you can view this page but not save to it. Use Export project' : 'Not saved yet, will retry', true);
-    if ((!c || c === 'unavailable' || c === 'store_unavailable') && PROJ === P) { clearTimeout(saveT); saveT = setTimeout(() => flushSave(force), 8000); } }
+  } catch (e) { const c = e && typeof e.code === 'string' ? e.code : '';
+    /* cloud errors carry a string code; a browser storage error is a DOMException whose name says what happened (#1819) */
+    const full = c === 'quota_exceeded' || (e && e.name === 'QuotaExceededError');
+    show(full ? 'Not saved: storage is full. Export a project and delete old projects' : c === 'not_granted' || c === 'invalid_argument' ? 'Not saved: you can view this page but not save to it. Use Export project' : 'Not saved yet, will retry', true);
+    if (!full && (!c || c === 'unavailable' || c === 'store_unavailable') && PROJ === P) { clearTimeout(saveT); saveT = setTimeout(() => flushSave(force), 8000); } }
 }
 function hashStr(s){ let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 async function storeLoad(id){

@@ -23,7 +23,7 @@ const MAP = [
   [/^NanoDrop/, ['16_nanodrop']],
   [/^activity assays/, ['19_assays', '21_methods']],
   [/^(UI$|collapsible panel|More options|what to do next|home$)/, ['05_quick', '44_panel_more', '48_empty_start', '31_wf_full', '1664_gel_and_moreopts_subcategories', '1673_home_folders']],
-  [/^projects/, ['01_name', '32_project_ux', '47_export_project', '30_robust', '45_yield_semantic', '25_gels', '19_assays', '1647_project_directory', '1673_home_folders']],
+  [/^projects/, ['01_name', '32_project_ux', '47_export_project', '30_robust', '45_yield_semantic', '25_gels', '19_assays', '1647_project_directory', '1673_home_folders', '53_storage_errors']],
   [/^(cloning workflow|agarose)/, ['1402_cloning_engine', '29_agarose', '1665_agarose_gel_subcategories']],
   [/^the step timeline/, ['31_wf_full', '44_panel_more', '21_methods', '18_hplc_load', '1402_cloning_engine']],
   [/^export$/, ['01_name', '50_export', '47_export_project', '54_toasts']],
