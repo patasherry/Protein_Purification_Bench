@@ -23,7 +23,7 @@ jobs:
       - name: Test suite dependencies and browser
         working-directory: tests
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
       - uses: actions/setup-python@v5
         with:
