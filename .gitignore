@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
-**/node_modules/
+# no trailing slash, so a symlinked node_modules is ignored too (one was committed in #1873)
+**/node_modules
 tests/results/
 tests/tests_log.txt
 tests/package-lock.json
