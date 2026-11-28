@@ -210,5 +210,17 @@ async function fresh(id, fn){
     T.check('sec/calibration-name-displayed', calname && calname.includes('Superose 6 Increase 10/300 GL'), 'SEC calibration preset full name is visible when option is truncated: ' + calname);
   });
 
+  /* #1812: HiLoad and Sepharose also name ion-exchange and HIC columns, so they alone must not switch a run to SEC */
+  await fresh('sec-detect-column-names', async (p, h) => {
+    const csv = fs.readFileSync(require('../lib/harness').src('his'));
+    const names = {'HiLoad_16_10_Q_Sepharose_HP.csv': false, 'HiLoad_26_10_Phenyl_Sepharose_HP.csv': false, 'HiTrap_Phenyl_Sepharose_6_Fast_Flow.csv': false,
+      'HiLoad_16_600_Superdex_200_pg.csv': true};
+    await h.newProject('SEC detection by column name');
+    for (const n of Object.keys(names)) await h.addRun({name: n, mimeType: 'text/csv', buffer: csv});
+    const runs = (await saved(p)).runs || [];
+    for (const [n, want] of Object.entries(names)) { const r = runs.find(x => x.file === n.replace(/\.csv$/, ''));
+      T.check(`sec-detect/${n.replace(/\.csv$/, '')}`, !!r && !!r.secAuto === want, r ? `secAuto ${r.secAuto}, expected ${want}` : 'run not loaded'); }
+  });
+
   T.done();
 })();
