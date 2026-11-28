@@ -47,8 +47,8 @@
 | 14886–16443 | `cloning workflow: stages, attempts and lineage` | The cloning engine: stage kinds and templates as data (`CL_KIND`, `CL_TPL`), attempts, flags, lineage and the `#clonePanel` |
 | 16444–16602 | `the step timeline` | Step-by-step purification timeline editor and step metadata sheet |
 | 16603–16907 | `quick fill: standard biochemistry procedures, one click per step; every field stays editable` |  |
-| 16908–17034 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
-| 17035–17055 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
+| 16908–17041 | `export` | Exporting figures to High-DPI PNG, SVG, and bundled ZIP archives |
+| 17042–17062 | `example data` | Built-in demo chromatogram curves and gel images for instant testing |
 
 ---
 
