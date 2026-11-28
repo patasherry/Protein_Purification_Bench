@@ -1101,5 +1101,29 @@ await T.t('run-without-phases-renders', async () => { const {p, errs, close} = a
   await close();
 });
 
+/* a project file whose ids and colours carry markup must not inject it into the page, and must still open with its references intact */
+await T.t('project-file-markup-is-inert', async () => { const {p, errs, close} = await open(), h = H(p);
+  const d = JSON.parse(require('fs').readFileSync(path.join(__dirname, '..', 'data', 'legacy_project.json'), 'utf8'));
+  const bad = tag => `"><img data-pwn="${tag}" src="x" onerror="window.__pwn=(window.__pwn||[]).concat('${tag}')">`;
+  const runId = 'r1' + bad('runid');
+  d.runs[0].id = runId; d.runs[0].color = '#123456' + bad('runcolor'); d.gels[0].id = 'g1' + bad('gelid');
+  d.nanodrop = [{id: 'nd1' + bad('ndid'), name: 'Pool', a280: 1.2, conc: 1.2, runId}];
+  await p.locator('#homeQuick').evaluate(e => e.click());
+  await p.setInputFiles('#projFile', {name: 'crafted.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(d))});
+  await p.waitForTimeout(3000);
+  const tl = await h.timeline(), r = tl.find(x => x.k.startsWith('run:'));
+  if (r) { await h.step(r.k); await p.waitForTimeout(800); }
+  const fired = await p.evaluate(() => ({pwn: window.__pwn || [], els: document.querySelectorAll('[data-pwn]').length}));
+  T.check('project-file-markup.no-script-ran', !fired.pwn.length, JSON.stringify(fired.pwn));
+  T.check('project-file-markup.no-element-injected', fired.els === 0, `${fired.els} injected elements`);
+  T.check('project-file-markup.run-still-opens', !!r, JSON.stringify(tl.map(x => x.k)));
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#projSave')]);
+  const ex = JSON.parse(require('fs').readFileSync(await dl.path(), 'utf8')), run = (ex.runs || [])[0] || {}, nd = (ex.nanodrop || [])[0] || {};
+  T.check('project-file-markup.saved-ids-clean', !/[<>"]/.test(String(run.id)) && !/[<>"]/.test(String(nd.id)) && !/[<>"]/.test(String(((ex.gels || [])[0] || {}).id)), JSON.stringify([run.id, nd.id]));
+  T.check('project-file-markup.reference-follows-renamed-id', !!run.id && nd.runId === run.id, JSON.stringify({run: run.id, ndRun: nd.runId}));
+  T.check('project-file-markup.no-page-errors', !errs.length, errs.join(' | '));
+  await close();
+});
+
 T.done(); })();
 

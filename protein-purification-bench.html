@@ -12520,11 +12520,29 @@ const ENTITY_CODECS = {
     }
   }
 };
+/* ids and colours from a project file reach HTML and SVG attributes unescaped, so a crafted or damaged file could inject
+   markup that runs and is saved with the project: an id holding an HTML-special character is renamed everywhere the file
+   uses it (as a value or a key), and a colour that is not a colour is cleared so the default applies. Real ids are short
+   tokens (r1, g1, nd3) and real colours come from the palette or a colour picker, so neither is ever touched. */
+const UNSAFE_ID = /[<>"'`&\\\u0000-\u001f]/, OK_COLOR = /^(?:#[0-9a-f]{3,8}|[a-z]{3,20}|(?:rgb|hsl)a?\([0-9.,%\s]+\)|)$/i, COLOR_KEY = /^colou?r$|Colou?r$/;
+function safeProjectStrings(o){
+  const bad = new Map(); let n = 0;
+  const scan = x => { if (Array.isArray(x)) x.forEach(scan); else if (x && typeof x === 'object') Object.keys(x).forEach(k => { const v = x[k];
+    if (k === 'id' && typeof v === 'string' && UNSAFE_ID.test(v) && !bad.has(v)) bad.set(v, `imp${++n}_${Math.random().toString(36).slice(2, 8)}`);
+    if (COLOR_KEY.test(k) && typeof v === 'string' && !OK_COLOR.test(v.trim())) x[k] = '';
+    scan(v); }); };
+  scan(o); if (!bad.size) return o;
+  const fix = x => { if (Array.isArray(x)) x.forEach((v, i) => { if (typeof v === 'string' && bad.has(v)) x[i] = bad.get(v); else fix(v); });
+    else if (x && typeof x === 'object') Object.keys(x).forEach(k => { let v = x[k]; if (typeof v === 'string' && bad.has(v)) v = bad.get(v); else fix(v);
+      if (bad.has(k)) { delete x[k]; x[bad.get(k)] = v; } else x[k] = v; }); };
+  fix(o); return o;
+}
 function migrateProject(rawData){
   const isO = o => !!o && typeof o === 'object' && !Array.isArray(o), hasXY = c => isO(c) && Array.isArray(c.xs) && Array.isArray(c.ys);
   if (!isO(rawData)) return {app: 'HPLC Figure Bench', version: 1, schemaVersion: SCHEMA_VERSION, runs: [], traces: [], gels: [], struct: null, nanodrop: [], assays: [], rawFiles: [], srcDiag: {}, prep: ENTITY_CODECS.Prep.fromJSON(null), opt: null, directory: null};
   let skipped = 0;
   const keep = (list, ok) => { const a = Array.isArray(list) ? list : []; const out = a.filter(ok); skipped += a.length - out.length; return out; };
+  rawData = safeProjectStrings(clonePlain(rawData));
   const out = clonePlain(rawData);
   delete out._lost;
   const rawRuns = keep(rawData.runs, r => isO(r) && r.id && Array.isArray(r.uvs) && r.uvs.length && r.uvs.every(hasXY));
