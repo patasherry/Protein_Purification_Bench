@@ -9,7 +9,7 @@ Before writing or editing browser tests, read [AGENT_TIPS.md](../docs/AGENT_TIPS
 
 ```
 cd tests
-npm install                        # once
+npm ci                             # once: installs the exact versions in package-lock.json
 npx playwright install chromium    # once
 node run.js                        # run every suite against the app in repo root
 ONLY=25 node run.js                # run a single suite matching a pattern using ONLY=
